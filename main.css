@@ -274,6 +274,7 @@ body {
 	background: hsla(0, 0%, 10%, 0.8);
     white-space: pre-wrap;
     tab-size: 4;
+    -moz-tab-size: 4;
 
 	font: 16px monospace;
 	color: white;

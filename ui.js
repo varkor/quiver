@@ -112,6 +112,11 @@ class Quiver {
         this.reverse_dependencies.get(edge).add(target);
     }
 
+    /// Returns whether the quiver is empty.
+    is_empty() {
+        return this.dependencies.size === 0;
+    }
+
     /// Return a string containing the graph in a specific format.
     /// Currently, the supported formats are:
     /// - "tikzcd"
@@ -135,10 +140,18 @@ QuiverExport.tikzcd = new class extends QuiverExport {
     export(quiver) {
         let output = "";
 
-        // Early exit for empty quivers. (Technically, if cells have been placed and removed,
-        // we won't exit directly, but this is really for error handling, so this doesn't matter.)
-        if (quiver.cells.length === 0) {
-            return output;
+        // Wrap tikzcd code with `\begin{tikzcd} ... \end{tikzcd}`.
+        const wrap_boilerplate = (output) => {
+            return `\\begin{tikzcd}\n${
+                output.length > 0 ? `${
+                    output.split("\n").map(line => `\t${line}`).join("\n")
+                }\n` : ""
+            }\\end{tikzcd}`;
+        };
+
+        // Early exit for empty quivers.
+        if (quiver.is_empty()) {
+            return wrap_boilerplate(output);
         }
 
         // We handle the export in two stages: vertices and edges. These are fundamentally handled
@@ -173,12 +186,16 @@ QuiverExport.tikzcd = new class extends QuiverExport {
             if (y - prev.y > 0) {
                 output += ` ${"\\\\\n".repeat(y - prev.y)}`;
             }
+            // This variable is really unnecessary, but it allows us to remove
+            //  a leading space on a line, which makes things prettier.
+            let first_in_row = true;
             for (const [x, vertex] of Array.from(row).sort()) {
                 if (x - prev.x > 0) {
-                    output += ` ${"&".repeat(x - prev.x)} `;
+                    output += `${!first_in_row ? " " : ""}${"&".repeat(x - prev.x)} `;
                 }
                 output += `{${vertex.label}}`;
                 prev.x = x;
+                first_in_row = false;
             }
             prev.x = offset.x;
         }
@@ -252,11 +269,7 @@ QuiverExport.tikzcd = new class extends QuiverExport {
             output = output.slice(0, -1);
         }
 
-        // Surround the tikzcd code with `\begin{tikzcd} ... \end{tikzcd}`.
-        output = `\\begin{tikzcd}\n${
-            output.split("\n").map(line => `\t${line}`).join("\n")
-        }\n\\end{tikzcd}`;
-        return output;
+        return wrap_boilerplate(output);
     }
 };
 
