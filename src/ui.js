@@ -921,13 +921,13 @@ class Panel {
             // and one for the unchecked version.
             const backgrounds = [];
             // The length of the arrow.
-            const ARROW_LENGTH = 24;
+            const ARROW_LENGTH = 28;
             // The radius of the box representing the text along the arrow.
-            const RADIUS = 3;
+            const RADIUS = 4;
             // The horizontal offset of the box representing the text from the arrowhead.
             const X_OFFSET = 2;
             // The vetical offset of the box representing the text from the arrow.
-            const Y_OFFSET = 6;
+            const Y_OFFSET = 8;
 
             let y_offset;
             switch (value) {
@@ -990,28 +990,44 @@ class Panel {
             ).element
         );
 
+        // The button to reverse an edge.
+        this.element.appendChild(
+            new DOM.Element("button", { disabled: true }).add("⇌ Reverse").listen("click", () => {
+                for (const selected of ui.selection) {
+                    if (selected.level > 0) {
+                        selected.reverse(ui);
+                    }
+                }
+                this.update(ui);
+            }).element
+        );
+
         // The export button.
         this.element.appendChild(
-            new DOM.Element("button").add("Export to LaTeX").listen("click", () => {
-                // Handle export button interaction: export the quiver.
-                if (this.export === null) {
-                    // Get the tikzcd diagram code.
-                    const output = ui.quiver.export("tikzcd");
-                    // Create the export pane.
-                    this.export = new DOM.Element("div", { class: "export" }).add(output).element;
-                    ui.element.appendChild(this.export);
-                    // Select the code for easy copying.
-                    const selection = window.getSelection();
-                    const range = document.createRange();
-                    range.selectNodeContents(this.export);
-                    selection.removeAllRanges();
-                    selection.addRange(range);
-                    // Disable cell data editing while the export pane is visible.
-                    this.update(ui);
-                } else {
-                    this.dismiss_export_pane(ui);
-                }
-            }).element
+            new DOM.Element("div", { class: "bottom" }).add(
+                new DOM.Element("button").add("Export to LaTeX").listen("click", () => {
+                    // Handle export button interaction: export the quiver.
+                    if (this.export === null) {
+                        // Get the tikzcd diagram code.
+                        const output = ui.quiver.export("tikzcd");
+                        // Create the export pane.
+                        this.export = new DOM.Element("div", { class: "export" })
+                            .add(output)
+                            .element;
+                        ui.element.appendChild(this.export);
+                        // Select the code for easy copying.
+                        const selection = window.getSelection();
+                        const range = document.createRange();
+                        range.selectNodeContents(this.export);
+                        selection.removeAllRanges();
+                        selection.addRange(range);
+                        // Disable cell data editing while the export pane is visible.
+                        this.update(ui);
+                    } else {
+                        this.dismiss_export_pane(ui);
+                    }
+                })
+            ).element
         );
     }
 
@@ -1020,6 +1036,7 @@ class Panel {
         const input = this.element.querySelector('label input[type="text"]');
         const label_alignments = this.element.querySelectorAll('input[name="label-alignment"]');
         const slider = this.element.querySelector('input[type="range"]');
+        const reverse_button = this.element.querySelector('button');
         if (this.export === null) {
             if (ui.selection.size === 1) {
                 const cell = ui.selection.values().next().value;
@@ -1043,12 +1060,14 @@ class Panel {
                     // Update the actual `value` attribute so that we can reference it in the CSS.
                     slider.setAttribute("value", slider.value);
                     slider.disabled = false;
+                    reverse_button.disabled = false;
                 }
             } else {
                 input.value = "";
                 input.disabled = true;
                 slider.value = 0;
                 slider.disabled = true;
+                reverse_button.disabled = true;
             }
             for (const option of label_alignments) {
                 option.disabled = false;
@@ -1059,6 +1078,7 @@ class Panel {
                 option.disabled = true;
             }
             slider.disabled = true;
+            reverse_button.disabled = true;
         }
     }
 
@@ -1542,7 +1562,25 @@ class Edge extends Cell {
             width,
             height,
         });
-    };
+    }
+
+    /// Reverses the edge, swapping the `source` and `target`.
+    reverse(ui) {
+        // Flip all the dependency relationships.
+        for (const cell of ui.quiver.reverse_dependencies.get(this)) {
+            const dependencies = ui.quiver.dependencies.get(cell);
+            dependencies.set(this, { source: "target", target: "source" }[dependencies.get(this)]);
+        }
+        // Reverse the label alignment and edge offset.
+        // Note that since we do this, the position of the edge will remain the same, which means
+        // we don't need to rerender any of this edge's dependencies.
+        this.options.label_alignment =
+            { left: "right", centre: "centre", right: "left" }[this.options.label_alignment];
+        this.options.offset = -this.options.offset;
+        // Swap the `source` and `target`.
+        [this.source, this.target] = [this.target, this.source];
+        this.render(ui);
+    }
 }
 // The following are constant shared between multiple methods, so we store them in the
 // class variables for `Edge`.
