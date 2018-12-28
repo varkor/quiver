@@ -513,7 +513,7 @@ class UI {
         this.element.appendChild(this.panel.element);
 
         // Stop trying to connect or move cells when the mouse is released.
-        document.addEventListener("mouseup", () => {
+        document.addEventListener("mouseup", (event) => {
             if (event.button === 0) {
                 this.switch_mode(UIState.default);
             }
@@ -586,9 +586,8 @@ class UI {
                     }}` : "";
                     const vertex = new Vertex(this, label, this.position_from_event(event));
                     this.select(vertex);
-                    this.queue(() => {
-                        this.panel.element.querySelector('label input[type="text"]').focus();
-                    });
+                    event.preventDefault();
+                    this.panel.element.querySelector('label input[type="text"]').focus();
                 }
             }
         });
@@ -675,12 +674,6 @@ class UI {
                 this.element.classList.add(this.state.name);
             }
         }
-    }
-
-    /// Queue an HTML event with `setTimeout`. This is sometimes necessary when triggering
-    /// UI state changes, such as triggering focus on elements.
-    queue(f) {
-        setTimeout(f, 0);
     }
 
     /// A helper method for getting a position from an event.
@@ -1067,25 +1060,24 @@ class Cell {
             });
         }
 
+        // We record whether a cell was already selected when we click on it, because
+        // we only want to trigger a label input focus if we click on a cell that is
+        // already selected. Clicking on an unselected cell should not focus the input,
+        // or we wouldn't be able to immediately delete a cell with Backspace, as the
+        // input field would capture it.
+        let was_previously_selected;
         content_element.addEventListener("mousedown", (event) => {
             if (event.button === 0) {
                 event.stopPropagation();
 
-                // If the cell is not already selected, we'll select it.
-                if (!ui.selection.has(this)) {
-                    // Deselect all other nodes.
-                    ui.deselect();
-                    ui.select(this);
-                    const state = new UIState.Connect(ui, this);
-                    if (state.valid_connection(null)) {
-                        ui.switch_mode(state);
-                        this.element.classList.add("source");
-                    }
-                } else {
-                    // Otherwise, we'll focus the label input.
-                    ui.queue(() => {
-                        ui.panel.element.querySelector('label input[type="text"]').focus();
-                    });
+                was_previously_selected = ui.selection.has(this);
+                // Deselect all other nodes.
+                ui.deselect();
+                ui.select(this);
+                const state = new UIState.Connect(ui, this);
+                if (state.valid_connection(null)) {
+                    ui.switch_mode(state);
+                    this.element.classList.add("source");
                 }
             }
         });
@@ -1117,8 +1109,16 @@ class Cell {
         content_element.addEventListener("mouseup", (event) => {
             if (event.button === 0) {
                 if (ui.in_mode(UIState.Connect)) {
+                    // Connect two cells if the source is different to the target.
                     if (ui.state.target === this) {
                         ui.state.connect(ui);
+                    }
+                    // Focus the label input for a cell if we've just ended releasing
+                    // the mouse on top of the source. (This includes when we've
+                    // dragged the cursor, rather than just having clicked, but this
+                    // tends to work as expected).
+                    if (ui.state.source === this && was_previously_selected) {
+                        ui.panel.element.querySelector('label input[type="text"]').focus();
                     }
                 }
             }
