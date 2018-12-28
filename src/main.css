@@ -223,6 +223,25 @@ body {
     outline: none;
 }
 
+.panel .vertical input[type="radio"] {
+    position: relative;
+    display: block;
+    width: 100%; height: 32px;
+    left: 50%;
+    transform: translateX(-50%);
+    margin: 0;
+}
+
+.panel .vertical input[type="radio"]:first-child {
+    border-radius: 2px 2px 0 0;
+}
+
+.panel .vertical input[type="radio"]:last-child {
+    margin-top: -1px;
+
+    border-radius: 0 0 2px 2px;
+}
+
 .panel input[type="radio"]:hover {
     background-color: hsl(0, 0%, 18%);
 }
