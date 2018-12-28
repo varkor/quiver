@@ -512,15 +512,9 @@ class UI {
         this.panel.initialise(this);
         this.element.appendChild(this.panel.element);
 
-        // Stop trying to connect cells when the mouse is released.
+        // Stop trying to connect or move cells when the mouse is released.
         document.addEventListener("mouseup", () => {
             if (event.button === 0) {
-                if (this.in_mode(UIState.Connect)) {
-                    this.state.source.element.classList.remove("source");
-                    if (this.state.target !== null) {
-                        this.state.target.element.classList.remove("target");
-                    }
-                }
                 this.switch_mode(UIState.default);
             }
         });
@@ -557,6 +551,10 @@ class UI {
                     }
                     break;
                 case "Escape":
+                    // Stop trying to connect cells.
+                    if (this.in_mode(UIState.Connect)) {
+                        this.switch_mode(UIState.default);
+                    }
                     // Close any open panes.
                     this.panel.dismiss_export_pane(this);
                     break;
