@@ -239,6 +239,93 @@ body {
     border-color: hsl(0, 0%, 28%);
 }
 
+.panel input[type="range"] {
+    -webkit-appearance: none;
+    vertical-align: middle;
+    width: 60%;
+
+    background: transparent;
+    outline: none;
+
+    font: inherit;
+    color: inherit;
+}
+
+.panel input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 20px; height: 20px;
+    margin-top: calc(-4px);
+
+    background: hsl(0, 0%, 16%);
+    border: hsl(0, 0%, 28%) solid 1px;
+    border-radius: 20px;
+}
+
+.panel input[type="range"]::after {
+    content: attr(value);
+    display: inline-block;
+    width: 20px;
+
+    text-align: right;
+}
+
+.panel input[type="range"]::-moz-range-thumb {
+    width: 20px; height: 20px;
+    margin-top: calc(-4px);
+
+    background: hsl(0, 0%, 16%);
+    border: hsl(0, 0%, 28%) solid 1px;
+    border-radius: 20px;
+}
+
+.panel input[type="range"]:hover::-webkit-slider-thumb {
+    background: hsl(0, 0%, 18%);
+}
+
+.panel input[type="range"]:hover::-moz-range-thumb {
+    background: hsl(0, 0%, 18%);
+}
+
+.panel input[type="range"]::-webkit-slider-runnable-track {
+    width: 100%; height: 14px;
+
+    background: hsl(0, 0%, 16%);
+    border: hsl(0, 0%, 28%) solid 1px;
+    border-radius: 14px;
+}
+
+.panel input[type="range"]::-moz-range-track {
+    width: 100%; height: 14px;
+
+    background: hsl(0, 0%, 16%);
+    border: hsl(0, 0%, 28%) solid 1px;
+    border-radius: 14px;
+}
+
+.panel input[type="range"]:active::-webkit-slider-thumb {
+    background: hsl(0, 0%, 14%);
+}
+
+.panel input[type="range"]:active::-moz-range-thumb {
+    background: hsl(0, 0%, 14%);
+}
+
+.panel input[type="range"]:disabled::after {
+    visibility: hidden;
+}
+
+.panel input[type="range"]:disabled::-webkit-slider-thumb,
+.panel input[type="range"]:disabled::-webkit-slider-runnable-track {
+    background: hsl(0, 0%, 20%);
+    border-color: hsl(0, 0%, 28%);
+}
+
+.panel input[type="range"]:disabled::-moz-range-thumb,
+.panel input[type="range"]:disabled::-moz-range-track {
+    background: hsl(0, 0%, 20%);
+    border-color: hsl(0, 0%, 28%);
+}
+
 .panel button {
     display: block;
 	position: absolute;

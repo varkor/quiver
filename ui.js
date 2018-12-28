@@ -37,8 +37,8 @@ DOM.Element = class {
     }
 
     /// Adds an event listener.
-    listen(event, f) {
-        this.element.addEventListener(event, f);
+    listen(type, f) {
+        this.element.addEventListener(type, event => f(event, this.element));
         return this;
     }
 };
@@ -50,8 +50,7 @@ DOM.SVGElement = class extends DOM.Element {
     }
 };
 
-/// A directed n-pseudograph (in the manner of an n-category, where (k + 1)-cells can connect
-/// k-cells).
+/// A directed n-pseudograph, in which (k + 1)-cells can connect k-cells.
 class Quiver {
     constructor() {
         /// An array of array of cells. `cells[k]` is the array of k-cells.
@@ -229,20 +228,21 @@ QuiverExport.tikzcd = new class extends QuiverExport {
 
             for (const edge of quiver.cells[level]) {
                 const parameters = [];
+                const label_parameters = [];
                 let align = "";
                 // We only need to give edges names if they're depended on by another edge.
                 if (quiver.dependencies.get(edge).size > 0) {
-                    parameters.push(`name=${index}`);
+                    label_parameters.push(`name=${index}`);
                     names.set(edge, index++);
-                    // In this case, because we have an argument list, we have to also change
+                    // In this case, because we have a parameter list, we have to also change
                     // the syntax for alignment (technically, we can always use the quotation
                     // mark for swap, but it's simpler to be consistent with `description`).
                     switch (edge.options.label_alignment) {
                         case "centre":
-                            parameters.push("description");
+                            label_parameters.push("description");
                             break;
                         case "right":
-                            parameters.push("swap");
+                            label_parameters.push("swap");
                             break;
                     }
                 } else {
@@ -258,12 +258,21 @@ QuiverExport.tikzcd = new class extends QuiverExport {
                             break;
                     }
                 }
+                if (edge.options.offset > 0) {
+                    parameters.push(`shift right=${edge.options.offset}`);
+                }
+                if (edge.options.offset < 0) {
+                    parameters.push(`shift left=${-edge.options.offset}`);
+                }
+
                 output += `\\arrow[${style}` +
                     `"${edge.label}"${align}${
-                        parameters.length > 0 ? `{${parameters.join(", ")}}` : ""
+                        label_parameters.length > 0 ? `{${label_parameters.join(", ")}}` : ""
                     }, ` +
                     `from=${cell_reference(edge.source)}, ` +
-                    `to=${cell_reference(edge.target)}] `;
+                    `to=${cell_reference(edge.target)}` +
+                    (parameters.length > 0 ? `, ${parameters.join(", ")}` : "") +
+                    "] ";
             }
             // Remove the trailing space.
             output = output.slice(0, -1);
@@ -401,6 +410,7 @@ UIState.Connect = class extends UIState {
                 // Lock on to the target if present, otherwise simply draw the edge
                 // to the position of the cursor.
                 this.target !== null ? this.target.position : position,
+                {},
                 this.target !== null,
                 null,
             );
@@ -960,6 +970,26 @@ class Panel {
         create_alignment_option("centre");
         create_alignment_option("right");
 
+        // The offset slider.
+        this.element.appendChild(
+            new DOM.Element("label").add("Offset: ").add(
+                new DOM.Element(
+                    "input",
+                    { type: "range", min: -3, value: 0, max: 3, step: 1, disabled: true }
+                ).listen("input", (_, slider) => {
+                    for (const selected of ui.selection) {
+                        if (selected.level > 0) {
+                            // Update the actual `value` attribute so that we can
+                            // reference it in the CSS.
+                            slider.setAttribute("value", slider.value);
+                            selected.options.offset = parseInt(slider.value);
+                            selected.render(ui);
+                        }
+                    }
+                })
+            ).element
+        );
+
         // The export button.
         this.element.appendChild(
             new DOM.Element("button").add("Export to LaTeX").listen("click", () => {
@@ -989,6 +1019,7 @@ class Panel {
     update(ui) {
         const input = this.element.querySelector('label input[type="text"]');
         const label_alignments = this.element.querySelectorAll('input[name="label-alignment"]');
+        const slider = this.element.querySelector('input[type="range"]');
         if (this.export === null) {
             if (ui.selection.size === 1) {
                 const cell = ui.selection.values().next().value;
@@ -1001,16 +1032,23 @@ class Panel {
 
                     // Rotate the label alignment buttons to reflect the direction of the arrow
                     // (at least to the nearest multiple of 90°).
-                    const angle = cell.target.position.sub(cell.source.position).angle();
+                    const angle = cell.angle();
                     for (const option of label_alignments) {
                         option.style.transform = `rotate(${
                             Math.round(2 * angle / Math.PI) * 90
                         }deg)`;
                     }
+
+                    slider.value = cell.options.offset;
+                    // Update the actual `value` attribute so that we can reference it in the CSS.
+                    slider.setAttribute("value", slider.value);
+                    slider.disabled = false;
                 }
             } else {
                 input.value = "";
                 input.disabled = true;
+                slider.value = 0;
+                slider.disabled = true;
             }
             for (const option of label_alignments) {
                 option.disabled = false;
@@ -1020,6 +1058,7 @@ class Panel {
             for (const option of label_alignments) {
                 option.disabled = true;
             }
+            slider.disabled = true;
         }
     }
 
@@ -1218,6 +1257,7 @@ class Edge extends Cell {
 
         this.options = Object.assign({
             label_alignment: "left",
+            offset: 0,
         }, options);
 
         this.render(ui);
@@ -1278,8 +1318,16 @@ class Edge extends Cell {
             this.element.appendChild(buffer);
         }
 
-        // Set the edges's position. This is important only for the cells that depend on this one.
-        this.position = this.source.position.add(this.target.position).div(2);
+        // Set the edge's position. This is important only for the cells that depend on this one,
+        // so that they can be drawn between the correct positions.
+        const normal = this.angle() + Math.PI / 2;
+        this.position = this.source.position
+            .add(this.target.position)
+            .div(2)
+            .add(new Position(
+                Math.cos(normal) * this.options.offset * Edge.OFFSET_DISTANCE / ui.cell_size,
+                Math.sin(normal) * this.options.offset * Edge.OFFSET_DISTANCE / ui.cell_size,
+            ));
 
         // Draw the edge itself.
         this.draw_edge(
@@ -1289,6 +1337,7 @@ class Edge extends Cell {
             this.level,
             this.source.position,
             this.target.position,
+            this.options,
             true,
             null,
         );
@@ -1310,9 +1359,20 @@ class Edge extends Cell {
     /// Draw an edge on an existing SVG with respect to a parent `element`.
     /// Note that this does not clear the SVG beforehand.
     /// Returns the direction of the arrow.
-    draw_edge(ui, element, svg, level, source_position, target_position, offset_from_target, gap) {
+    draw_edge(
+        ui,
+        element,
+        svg,
+        level,
+        source_position,
+        target_position,
+        options,
+        offset_from_target,
+        gap,
+    ) {
         // Constants for parameters of the arrow shapes.
         const SVG_PADDING = Edge.SVG_PADDING;
+        const OFFSET_DISTANCE = Edge.OFFSET_DISTANCE;
         // How much (vertical) space to give around the SVG.
         const EDGE_PADDING = 4;
         // How much space to leave between the cells this edge spans. (Less for other edges.)
@@ -1343,6 +1403,7 @@ class Edge extends Cell {
         element.style.transform = `
             translate(-${SVG_PADDING}px, -${arrow.height / 2 + EDGE_PADDING}px)
             rotate(${direction}rad)
+            translateY(${(options.offset || 0) * OFFSET_DISTANCE}px)
         `;
 
         return direction;
@@ -1412,6 +1473,11 @@ class Edge extends Cell {
         return new Dimension(width, height);
     }
 
+    /// Returns the angle of this edge.
+    angle() {
+        return this.target.position.sub(this.source.position).angle();
+    }
+
     /// Update the `label` transformation (translation and rotation) as well as
     /// the edge clearing size for `centre` alignment in accordance with the
     /// dimensions of the label.
@@ -1423,7 +1489,7 @@ class Edge extends Cell {
             return Math.PI / 2 - Math.abs(Math.PI / 2 - ((angle % Math.PI) + Math.PI) % Math.PI);
         };
 
-        const angle = this.target.position.sub(this.source.position).angle();
+        const angle = this.angle();
 
         // How much to offset the label from the edge.
         const LABEL_OFFSET = 16;
@@ -1478,11 +1544,13 @@ class Edge extends Cell {
         });
     };
 }
+// The following are constant shared between multiple methods, so we store them in the
+// class variables for `Edge`.
 // How much (horizontal and vertical) space in the SVG to give around the arrow
 // (to account for artefacts around the drawing).
-// This is a constant shared between multiple methods, so we store it in the
-// class variables for `Edge`.
 Edge.SVG_PADDING = 4;
+// How much space to leave between adjacent parallel arrows.
+Edge.OFFSET_DISTANCE = 8;
 
 // Initialise MathJax.
 window.MathJax = {
