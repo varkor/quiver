@@ -220,13 +220,13 @@ QuiverExport.tikzcd = new class extends QuiverExport {
                 output += "\n";
             }
 
-            // tikzcd only has supported for 1-cells and 2-cells.
-            // Anything else requires custom support, so for now
-            // we only special-case 2-cells. Everything else is
-            // drawn as if it is a 1-cell.
-            let style = level === 2 ? "Rightarrow, " : "";
-
             for (const edge of quiver.cells[level]) {
+                // tikzcd only has supported for 1-cells and 2-cells.
+                // Anything else requires custom support, so for now
+                // we only special-case 2-cells. Everything else is
+                // drawn as if it is a 1-cell.
+                const style = edge.options.style.level === 2 ? "Rightarrow, " : "";
+
                 const parameters = [];
                 const label_parameters = [];
                 let align = "";
@@ -410,7 +410,7 @@ UIState.Connect = class extends UIState {
                 // Lock on to the target if present, otherwise simply draw the edge
                 // to the position of the cursor.
                 this.target !== null ? this.target.position : position,
-                {},
+                { style: { name: "cell", level: this.source.level + 1 } },
                 this.target !== null,
                 null,
             );
@@ -443,6 +443,7 @@ UIState.Connect = class extends UIState {
         const options = {
             label_alignment:
                 ui.panel.element.querySelector('input[name="label-alignment"]:checked').value,
+            // The default settings for the other options are fine.
         };
         // If *every* existing connection to source and target has a consistent label alignment,
         // then `align` will be a singleton, in which case we use that element as the alignment.
@@ -900,9 +901,11 @@ class Panel {
         const alignments = new DOM.Element("div", { class: "options" }).element;
         this.element.appendChild(alignments);
         const create_alignment_option = (value) => {
-            const button =
-                new DOM.Element("input", { type: "radio", name: "label-alignment", value }).element;
-            button.addEventListener("change", () => {
+            const button = new DOM.Element("input", {
+                type: "radio",
+                name: "label-alignment",
+                value,
+            }).listen("change", (_, button) => {
                 if (button.checked) {
                     for (const selected of ui.selection) {
                         if (selected.level > 0) {
@@ -911,7 +914,7 @@ class Panel {
                         }
                     }
                 }
-            });
+            }).element;
             alignments.appendChild(button);
 
             // We're going to create background images for the label alignment buttons
@@ -949,7 +952,12 @@ class Panel {
                     stroke: colour,
                 }).element;
                 const gap = y_offset === 0 ? { length: RADIUS * 4, offset: X_OFFSET } : null;
-                const arrow = Edge.prototype.draw_arrow(svg, 1, ARROW_LENGTH, gap);
+                const arrow = Edge.prototype.draw_arrow(
+                    svg,
+                    { style: { name: "cell", level: 1 } },
+                    ARROW_LENGTH,
+                    gap,
+                );
                 const rect = new DOM.SVGElement("rect", {
                     x: arrow.width / 2 - X_OFFSET - RADIUS,
                     y: arrow.height / 2 + y_offset - RADIUS,
@@ -966,9 +974,10 @@ class Panel {
 
             return button;
         }
-        create_alignment_option("left").checked = true;
-        create_alignment_option("centre");
-        create_alignment_option("right");
+        for (const alignment of ["left", "centre", "right"]) {
+            create_alignment_option(alignment);
+        }
+        this.element.querySelector('input[name="label-alignment"]').checked = true;
 
         // The offset slider.
         this.element.appendChild(
@@ -1001,6 +1010,55 @@ class Panel {
                 this.update(ui);
             }).element
         );
+
+        // The list of edge styles.
+        // The label alignment options.
+        const styles = new DOM.Element("div", { class: "options vertical" }).element;
+        this.element.appendChild(styles);
+        const create_style_option = (value, style) => {
+            const button = new DOM.Element("input", {
+                type: "radio",
+                name: "edge-style",
+                value,
+                disabled: true,
+            }).listen("change", (_, button) => {
+                if (button.checked) {
+                    for (const selected of ui.selection) {
+                        if (selected.level > 0) {
+                            selected.options.style = style;
+                            selected.render(ui);
+                        }
+                    }
+                }
+            }).element;
+            styles.appendChild(button);
+
+            // We're going to create background images for the style buttons representing
+            // each of the styles, in the same manner as for the label alignment buttons.
+            const backgrounds = [];
+            // The length of the arrow.
+            const ARROW_LENGTH = 72;
+
+            for (const colour of ["black", "grey"]) {
+                const svg = new DOM.SVGElement("svg", {
+                    xmlns: "http://www.w3.org/2000/svg",
+                }, {
+                    stroke: colour,
+                }).element;
+                Edge.prototype.draw_arrow(svg, { style }, ARROW_LENGTH);
+                backgrounds.push(`url(data:image/svg+xml;utf8,${encodeURI(svg.outerHTML)})`);
+            }
+            button.style.backgroundImage = backgrounds.join(", ");
+
+            return button;
+        }
+        for (const [value, style] of [
+            ["1-cell", { name: "cell", level: 1 }],
+            ["2-cell", { name: "cell", level: 2 }],
+        ]) {
+            create_style_option(value, style);
+        }
+        this.element.querySelector('input[name="edge-style"]').checked = true;
 
         // The export button.
         this.element.appendChild(
@@ -1037,6 +1095,7 @@ class Panel {
         const label_alignments = this.element.querySelectorAll('input[name="label-alignment"]');
         const slider = this.element.querySelector('input[type="range"]');
         const reverse_button = this.element.querySelector('button');
+        const edge_styles = this.element.querySelectorAll('input[name="edge-style"]');
         if (this.export === null) {
             if (ui.selection.size === 1) {
                 const cell = ui.selection.values().next().value;
@@ -1060,7 +1119,21 @@ class Panel {
                     // Update the actual `value` attribute so that we can reference it in the CSS.
                     slider.setAttribute("value", slider.value);
                     slider.disabled = false;
+
                     reverse_button.disabled = false;
+
+                    let edge_style_value;
+                    switch (cell.options.style.name) {
+                        case "cell":
+                            edge_style_value = `${cell.options.style.level}-cell`;
+                            break;
+                    }
+                    this.element.querySelector(
+                        `input[name="edge-style"][value="${edge_style_value}"]`
+                    ).checked = true;
+                    for (const option of edge_styles) {
+                        option.disabled = false;
+                    }
                 }
             } else {
                 input.value = "";
@@ -1068,6 +1141,9 @@ class Panel {
                 slider.value = 0;
                 slider.disabled = true;
                 reverse_button.disabled = true;
+                for (const option of edge_styles) {
+                    option.disabled = true;
+                }
             }
             for (const option of label_alignments) {
                 option.disabled = false;
@@ -1079,6 +1155,9 @@ class Panel {
             }
             slider.disabled = true;
             reverse_button.disabled = true;
+            for (const option of edge_styles) {
+                option.disabled = true;
+            }
         }
     }
 
@@ -1278,6 +1357,7 @@ class Edge extends Cell {
         this.options = Object.assign({
             label_alignment: "left",
             offset: 0,
+            style: { name: "cell", level: this.level },
         }, options);
 
         this.render(ui);
@@ -1410,7 +1490,7 @@ class Edge extends Cell {
             return 0;
         }
 
-        const arrow = this.draw_arrow(svg, level, length, gap);
+        const arrow = this.draw_arrow(svg, options, length, gap);
 
         // Transform the `element` so that the arrow points in the correct direction.
         const direction = Math.atan2(offset_delta.top, offset_delta.left);
@@ -1431,66 +1511,70 @@ class Edge extends Cell {
 
     /// Draws an arrow on to an SVG. `length` must be nonnegative.
     /// Note that this does not clear the SVG beforehand.
-    draw_arrow(svg, level, length, gap = null) {
-        // Constants for parameters of the arrow shapes.
-        const SVG_PADDING = Edge.SVG_PADDING;
-        // How much spacing to leave between lines for k-cells where k > 1.
-        const SPACING = 6;
-        // How wide the arrowhead should be (for a horizontal arrow).
-        const HEAD_WIDTH = SPACING + (level - 1) * 2;
-        // How tall the arrowhead should be (for a horizontal arrow).
-        const HEAD_HEIGHT = (level + 1) * SPACING;
+    draw_arrow(svg, options, length, gap = null) {
+        switch (options.style.name) {
+            case "cell":
+                const level = options.style.level;
+                // Constants for parameters of the arrow shapes.
+                const SVG_PADDING = Edge.SVG_PADDING;
+                // How much spacing to leave between lines for k-cells where k > 1.
+                const SPACING = 6;
+                // How wide the arrowhead should be (for a horizontal arrow).
+                const HEAD_WIDTH = SPACING + (level - 1) * 2;
+                // How tall the arrowhead should be (for a horizontal arrow).
+                const HEAD_HEIGHT = (level + 1) * SPACING;
 
-        // We scale the arrowhead size so that it transitions smoothly from nothing.
-        const head_width = Math.min(length, HEAD_WIDTH);
-        const head_height = HEAD_HEIGHT * (head_width / HEAD_WIDTH);
+                // We scale the arrowhead size so that it transitions smoothly from nothing.
+                const head_width = Math.min(length, HEAD_WIDTH);
+                const head_height = HEAD_HEIGHT * (head_width / HEAD_WIDTH);
 
-        // Set up the SVG dimensions to fit the edge.
-        const [width, height] = [length + SVG_PADDING * 2, head_height + SVG_PADDING * 2];
-        svg.setAttribute("width", width);
-        svg.setAttribute("height", height);
-        Object.assign(svg.style, {
-            fill: "none",
-            stroke: svg.style.stroke || "black",
-            strokeWidth: "1.5px",
-            strokeLinecap: "round",
-            strokeLinejoin: "round",
-        });
+                // Set up the SVG dimensions to fit the edge.
+                const [width, height] = [length + SVG_PADDING * 2, head_height + SVG_PADDING * 2];
+                svg.setAttribute("width", width);
+                svg.setAttribute("height", height);
+                Object.assign(svg.style, {
+                    fill: svg.style.fill || "none",
+                    stroke: svg.style.stroke || "black",
+                    strokeWidth: svg.style.strokeWidth || "1.5px",
+                    strokeLinecap: svg.style.strokeLinecap || "round",
+                    strokeLinejoin: svg.style.strokeLinejoin || "round",
+                });
 
-        // A function for finding the width of an arrowhead at a certain y position, so that we can
-        // draw multiple lines to a curved arrow head perfectly.
-        const x = y => head_width * (1 - (1 - 2 * Math.abs(y) / head_height) ** 2) ** 0.5;
+                // A function for finding the width of an arrowhead at a certain y position, so that we can
+                // draw multiple lines to a curved arrow head perfectly.
+                const x = y => head_width * (1 - (1 - 2 * Math.abs(y) / head_height) ** 2) ** 0.5;
 
-        // Draw all the lines.
-        for (let i = 0; i < level; ++i) {
-            let y = (i + (1 - level) / 2) * SPACING;
-            // This edge case is necessary simply for very short edges.
-            if (Math.abs(y) <= head_height / 2) {
-                const line = new DOM.SVGElement("path", {
-                    d: `
-                        M ${SVG_PADDING} ${SVG_PADDING + head_height / 2 + y}
-                        l ${length - x(y)} 0
-                    `.trim().replace(/\s+/g, " "),
-                }).element;
-                if (gap !== null) {
-                    line.style.strokeDasharray = `${(length - gap.length) / 2}, ${gap.length}`;
-                    line.style.strokeDashoffset = gap.offset;
+                // Draw all the lines.
+                for (let i = 0; i < level; ++i) {
+                    let y = (i + (1 - level) / 2) * SPACING;
+                    // This edge case is necessary simply for very short edges.
+                    if (Math.abs(y) <= head_height / 2) {
+                        const line = new DOM.SVGElement("path", {
+                            d: `
+                                M ${SVG_PADDING} ${SVG_PADDING + head_height / 2 + y}
+                                l ${length - x(y)} 0
+                            `.trim().replace(/\s+/g, " "),
+                        }).element;
+                        if (gap !== null) {
+                            line.style.strokeDasharray = `${(length - gap.length) / 2}, ${gap.length}`;
+                            line.style.strokeDashoffset = gap.offset;
+                        }
+                        svg.appendChild(line);
+                    }
                 }
-                svg.appendChild(line);
-            }
+
+                // Draw the arrow head.
+                svg.appendChild(new DOM.SVGElement("path", {
+                    d: `
+                        M ${SVG_PADDING + length} ${SVG_PADDING + head_height / 2}
+                        a ${head_width} ${head_height / 2} 0 0 1 -${head_width} -${head_height / 2}
+                        M ${SVG_PADDING + length} ${SVG_PADDING + head_height / 2}
+                        a ${head_width} ${head_height / 2} 0 0 0 -${head_width} ${head_height / 2}
+                    `.trim().replace(/\s+/g, " ")
+                }).element);
+
+                return new Dimension(width, height);
         }
-
-        // Draw the arrow head.
-        svg.appendChild(new DOM.SVGElement("path", {
-            d: `
-                M ${SVG_PADDING + length} ${SVG_PADDING + head_height / 2}
-                a ${head_width} ${head_height / 2} 0 0 1 -${head_width} -${head_height / 2}
-                M ${SVG_PADDING + length} ${SVG_PADDING + head_height / 2}
-                a ${head_width} ${head_height / 2} 0 0 0 -${head_width} ${head_height / 2}
-            `.trim().replace(/\s+/g, " ")
-        }).element);
-
-        return new Dimension(width, height);
     }
 
     /// Returns the angle of this edge.
@@ -1586,7 +1670,7 @@ class Edge extends Cell {
 // class variables for `Edge`.
 // How much (horizontal and vertical) space in the SVG to give around the arrow
 // (to account for artefacts around the drawing).
-Edge.SVG_PADDING = 4;
+Edge.SVG_PADDING = 6;
 // How much space to leave between adjacent parallel arrows.
 Edge.OFFSET_DISTANCE = 8;
 
