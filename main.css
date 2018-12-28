@@ -176,14 +176,14 @@ body {
 .panel input[type="text"] {
     padding: 2px 4px;
 
-	background: hsl(0, 0%, 16%);
+    background: hsl(0, 0%, 16%);
     border: hsl(0, 0%, 28%) solid 1px;
     border-radius: 2px;
     outline: none;
 
-	font-size: inherit;
-	font-family: monospace;
-	color: hsl(0, 0%, 96%);
+    font-size: inherit;
+    font-family: monospace;
+    color: hsl(0, 0%, 96%);
 }
 
 .panel input[type="text"]:hover {
@@ -217,7 +217,7 @@ body {
     background-position: center;
     /* We use stacked backgrounds for the background image, */
     /* to allow us to change the image directly via CSS. */
-    background-size: 0%, 100%;
+    background-size: 0%, auto;
     border: hsl(0, 0%, 28%) solid 1px;
     border-radius: 2px;
     outline: none;
@@ -229,12 +229,12 @@ body {
 
 .panel input[type="radio"]:checked {
     background-color: hsl(0, 0%, 96%);
-    background-size: 100%, 0%;
+    background-size: auto, 0%;
     border-color: hsl(200, 100%, 40%);
 }
 
 .panel input[type="radio"]:disabled {
-    background-size: 0%, 100%;
+    background-size: 0%, auto;
     background-color: hsl(0, 0%, 20%);
     border-color: hsl(0, 0%, 28%);
 }
@@ -326,43 +326,55 @@ body {
     border-color: hsl(0, 0%, 28%);
 }
 
+.panel .bottom {
+    position: absolute;
+    width: 100%;
+    left: 0; bottom: 0;
+    padding: 0 8px;
+}
+
 .panel button {
+    position: relative;
     display: block;
-	position: absolute;
-	width: calc(100% - 8px * 2); height: 30px;
-    left: 8px; bottom: 8px;
+    width: 100%; height: 30px;
+    margin: 8px 0;
 
     background: transparent;
-    border: transparent solid 1px;
+    border: hsl(0, 0%, 36%) solid 1px;
     border-radius: 2px;
     outline: none;
 
-	font: inherit;
+    font: inherit;
     color: hsl(0, 0%, 96%);
 }
 
 .panel button:hover {
     background: hsl(0, 0%, 24%);
-    border-color: hsl(0, 0%, 36%);
 }
 
 .panel button:active {
     background: hsl(0, 0%, 16%);
-    border-color: hsl(0, 0%, 36%);
+}
+
+.panel button:disabled {
+    background: transparent;
+    border-color: hsl(0, 0%, 28%);
+
+    color: hsl(0, 0%, 28%);
 }
 
 .export {
-	position: fixed;
-	width: 80%; height: 100%;
-	left: 0;
+    position: fixed;
+    width: 80%; height: 100%;
+    left: 0;
     z-index: 1;
     padding: 20px 24px;
 
-	background: hsla(0, 0%, 10%, 0.8);
+    background: hsla(0, 0%, 10%, 0.8);
     white-space: pre-wrap;
     tab-size: 4;
     -moz-tab-size: 4;
 
-	font: 16px monospace;
-	color: white;
+    font: 16px monospace;
+    color: white;
 }
