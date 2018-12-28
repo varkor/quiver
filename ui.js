@@ -606,11 +606,11 @@ class UI {
                     insertion_point.classList.remove("revealed");
                     const label = this.debug ? `\\mathscr{${
                         String.fromCharCode("A".charCodeAt(0) + Math.floor(Math.random() * 26))
-                    }}` : "";
+                    }}` : "\\bullet";
                     const vertex = new Vertex(this, label, this.position_from_event(event));
                     this.select(vertex);
                     event.preventDefault();
-                    this.panel.element.querySelector('label input[type="text"]').focus();
+                    this.panel.element.querySelector('label input[type="text"]').select();
                 }
             }
         });
