@@ -295,6 +295,13 @@ QuiverExport.tikzcd = new class extends QuiverExport {
                         break;
                 }
 
+                // tikzcd tends to place arrows between arrows directly contiguously
+                // without adding some spacing manually.
+                if (level > 1) {
+                    parameters.push("shorten <=1mm");
+                    parameters.push("shorten >=1mm");
+                }
+
                 output += `\\arrow[${style}` +
                     `${label}${
                         label_parameters.length > 0 ? `{${label_parameters.join(", ")}}` : ""
