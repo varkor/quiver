@@ -289,6 +289,10 @@ QuiverExport.tikzcd = new class extends QuiverExport {
                             case "squiggly":
                                 parameters.push("squiggly");
                                 break;
+
+                            case "none":
+                                parameters.push("phantom");
+                                break;
                         }
 
                         // Tail styles.
@@ -1187,6 +1191,7 @@ class Panel {
                 ["dashed", { name: "dashed" }],
                 ["dotted", { name: "dotted" }],
                 ["squiggly", { name: "squiggly" }],
+                ["none", { name: "none" }],
             ],
             "body-type",
             ["vertical", "arrow-style"],
@@ -1427,8 +1432,9 @@ class Panel {
                     if (style_is_arrow) {
                         for (const component of ["tail", "body", "head"]) {
                             let value;
-                            // The following makes the assumption that names are unique,
-                            // even between different components.
+                            // The following makes the assumption that the
+                            // distinguished names are unique, even between
+                            // different components.
                             switch (cell.options.style[component].name) {
                                 case "cell":
                                     value = `${cell.options.style[component].level}-cell`;
