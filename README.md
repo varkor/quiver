@@ -10,7 +10,7 @@ A graphical editor for commutative diagrams that exports to tikzcd.
 - Arrow styles, including:
     - Dashed and dotted edges.
     - Maps to arrows.
-    - Epimorphisms.
+    - Monomorphisms and epimorphisms.
     - Pullbacks and pushouts.
     - Adjunctions.
     - Equality.

@@ -277,9 +277,11 @@ QuiverExport.tikzcd = new class extends QuiverExport {
                                     style = "Rightarrow, ";
                                 }
                                 break;
+
                             case "dashed":
                                 parameters.push("dashed");
                                 break;
+
                             case "dotted":
                                 parameters.push("dotted");
                                 break;
@@ -291,6 +293,10 @@ QuiverExport.tikzcd = new class extends QuiverExport {
                             case "maps to":
                                 parameters.push("maps to");
                                 break;
+
+                            case "mono":
+                                parameters.push("tail");
+                                break;
                         }
 
                         // Head styles.
@@ -298,6 +304,7 @@ QuiverExport.tikzcd = new class extends QuiverExport {
                             case "none":
                                 parameters.push("no head");
                                 break;
+
                             case "epi":
                                 parameters.push("two heads");
                                 break;
@@ -1131,6 +1138,7 @@ class Panel {
             [
                 ["none", { name: "none" }],
                 ["maps to", { name: "maps to" }],
+                ["mono", { name: "mono"} ],
             ],
             "tail-type",
             ["vertical", "short", "arrow-style"],
@@ -1864,6 +1872,8 @@ class Edge extends Cell {
 
         // The maximum number of arrowheads.
         let heads = 1;
+        // How much to shorten the edge by, to make room for the tail.
+        let shorten = 0;
 
         switch (options.style.name) {
             case "arrow":
@@ -1876,6 +1886,11 @@ class Edge extends Cell {
                         // Adjust the arrow height for k-cells.
                         const tail_height = TAIL_HEIGHT * (0.5 + level * 0.5);
                         fit(Math.ceil(STROKE_WIDTH), tail_height);
+                        break;
+                    case "mono":
+                        // The `"mono"` style simply draws an arrowhead for the tail.
+                        fit(head_width, head_height);
+                        shorten = head_width;
                         break;
                 }
 
@@ -1925,8 +1940,8 @@ class Edge extends Cell {
                         if (Math.abs(y) <= head_height / 2) {
                             const line = new DOM.SVGElement("path", {
                                 d: `
-                                    M ${SVG_PADDING} ${SVG_PADDING + height / 2 + y}
-                                    l ${length - x(y)} 0
+                                    M ${SVG_PADDING + shorten} ${SVG_PADDING + height / 2 + y}
+                                    l ${length - shorten - x(y)} 0
                                 `.trim().replace(/\s+/g, " "),
                             }).element;
 
@@ -1952,6 +1967,21 @@ class Edge extends Cell {
                     }
                 }
 
+                // This function has been extracted because it is actually used to draw
+                // both arrowheads (in the usual case) and tails (for `"mono"`).
+                const draw_arrowhead = (x) => {
+                    svg.appendChild(new DOM.SVGElement("path", {
+                        d: `
+                            M ${SVG_PADDING + x} ${SVG_PADDING + height / 2}
+                            a ${head_width} ${head_height / 2} 0 0 1 -${head_width}
+                                -${head_height / 2}
+                            M ${SVG_PADDING + x} ${SVG_PADDING + height / 2}
+                            a ${head_width} ${head_height / 2} 0 0 0 -${head_width}
+                                ${head_height / 2}
+                        `.trim().replace(/\s+/g, " ")
+                    }).element);
+                };
+
                 // Draw the arrow tail.
                 switch (options.style.tail.name) {
                     case "maps to":
@@ -1961,31 +1991,20 @@ class Edge extends Cell {
                                 l ${0} ${tail_height}
                             `.trim().replace(/\s+/g, " ")
                         }).element);
+                        break;
 
+                    case "mono":
+                        draw_arrowhead(head_width);
                         break;
                 }
 
                 // Draw the arrow head.
-                let heads = 1;
                 switch (options.style.head.name) {
-                    case "epi":
-                        heads = 2;
                     case "arrowhead":
+                    case "epi":
                         for (let i = 0; i < heads; ++i) {
-                            svg.appendChild(new DOM.SVGElement("path", {
-                                d: `
-                                    M ${SVG_PADDING + width - i * HEAD_SPACING}
-                                        ${SVG_PADDING + height / 2}
-                                    a ${head_width} ${head_height / 2} 0 0 1 -${head_width}
-                                        -${head_height / 2}
-                                    M ${SVG_PADDING + width - i * HEAD_SPACING}
-                                        ${SVG_PADDING + height / 2}
-                                    a ${head_width} ${head_height / 2} 0 0 0 -${head_width}
-                                        ${head_height / 2}
-                                `.trim().replace(/\s+/g, " ")
-                            }).element);
+                            draw_arrowhead(width - i * HEAD_SPACING);
                         }
-
                         break;
                 }
 
