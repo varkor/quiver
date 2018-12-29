@@ -261,7 +261,7 @@ QuiverExport.tikzcd = new class extends QuiverExport {
                 }
 
                 let style = "";
-                let label = `"${edge.label}"${align}`;
+                let label = `"{${edge.label}}"${align}`;
 
                 switch (edge.options.style.name) {
                     case "cell":
@@ -288,7 +288,7 @@ QuiverExport.tikzcd = new class extends QuiverExport {
                                     anchor = "anchor=east, ";
                                     break;
                             }
-                            parameters.push(`"${edge.label}"{${anchor}inner sep=1.5mm}`);
+                            parameters.push(`"{${edge.label}}"{${anchor}inner sep=1.5mm}`);
                         }
                         parameters.push("phantom");
                         label_parameters.push(`rotate=${-edge.angle() * 180 / Math.PI}`);
