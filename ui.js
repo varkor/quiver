@@ -293,6 +293,13 @@ QuiverExport.tikzcd = new class extends QuiverExport {
                                 break;
                         }
 
+                        // Head styles.
+                        switch (edge.options.style.head.name) {
+                            case "none":
+                                parameters.push("no head");
+                                break;
+                        }
+
                         break;
 
                     case "adjunction":
@@ -1171,6 +1178,7 @@ class Panel {
             ui,
             [
                 ["arrowhead", { name: "arrowhead" }],
+                ["none", { name: "none" }],
             ],
             "head-type",
             ["vertical", "short", "arrow-style"],
@@ -1893,7 +1901,7 @@ class Edge extends Cell {
                     // A function for finding the width of an arrowhead at a certain y position,
                     // so that we can draw multiple lines to a curved arrow head perfectly.
                     const x = (y) => {
-                        if (head_height === 0) {
+                        if (head_height === 0 || options.style.head.name === "none") {
                             return 0;
                         }
                         return head_width * (1 - (1 - 2 * Math.abs(y) / head_height) ** 2) ** 0.5;
