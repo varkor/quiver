@@ -223,6 +223,26 @@ body {
     outline: none;
 }
 
+.panel .vertical {
+    display: inline-block;
+    width: calc(100% - (20% + 4px) * 2);
+    vertical-align: top;
+}
+
+.panel .vertical + .vertical:not(.centre) {
+    margin-left: 4px;
+}
+
+.panel .short {
+    width: 20%;
+}
+
+.panel .centre {
+    position: relative;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
 .panel .vertical input[type="radio"] {
     position: relative;
     display: block;
