@@ -14,6 +14,7 @@ A graphical editor for commutative diagrams that exports to tikzcd.
     - Pullbacks and pushouts.
     - Adjunctions.
     - Equality.
+    - Harpoons.
 
 ## Screenshots
 The interface:
