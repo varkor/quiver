@@ -7,6 +7,7 @@ A graphical editor for commutative diagrams that exports to tikzcd.
 - tikzcd (LaTeX) export.
 - Smart label alignment and edge offset.
 - Parallel (shifted) arrows.
+- Arrow styles, including dashed and dotted edges.
 
 ## Screenshots
 The interface:

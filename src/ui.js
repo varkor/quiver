@@ -293,6 +293,12 @@ QuiverExport.tikzcd = new class extends QuiverExport {
                         parameters.push("phantom");
                         label_parameters.push(`rotate=${-edge.angle() * 180 / Math.PI}`);
                         break;
+                    case "dashed":
+                        parameters.push("dashed");
+                        break;
+                    case "dotted":
+                        parameters.push("dotted");
+                        break;
                 }
 
                 // tikzcd tends to place arrows between arrows directly contiguously
@@ -1137,6 +1143,8 @@ class Panel {
             ["1-cell", { name: "cell", level: 1 }],
             ["2-cell", { name: "cell", level: 2 }],
             ["adjunction", { name: "adjunction" }],
+            ["dashed", { name: "dashed" }],
+            ["dotted", { name: "dotted" }],
         ]) {
             create_style_option(value, style);
         }
@@ -1209,8 +1217,8 @@ class Panel {
                         case "cell":
                             edge_style_value = `${cell.options.style.level}-cell`;
                             break;
-                        case "adjunction":
-                            edge_style_value = "adjunction";
+                        default:
+                            edge_style_value = cell.options.style.name;
                             break;
                     }
                     this.element.querySelector(
@@ -1624,7 +1632,10 @@ class Edge extends Cell {
 
         switch (options.style.name) {
             case "cell":
-                const level = options.style.level;
+            case "dashed":
+            case "dotted":
+                // Default to 1-cells if no `level` is present (as for dashed and dotted lines.)
+                const level = options.style.level || 1;
                 // How much spacing to leave between lines for k-cells where k > 1.
                 const SPACING = 6;
                 // How wide the arrowhead should be (for a horizontal arrow).
@@ -1639,8 +1650,8 @@ class Edge extends Cell {
                 // Set up the SVG dimensions to fit the edge.
                 [width, height] = [length + SVG_PADDING * 2, head_height + SVG_PADDING * 2];
 
-                // A function for finding the width of an arrowhead at a certain y position, so that we can
-                // draw multiple lines to a curved arrow head perfectly.
+                // A function for finding the width of an arrowhead at a certain y position, so that
+                // we can draw multiple lines to a curved arrow head perfectly.
                 const x = y => head_width * (1 - (1 - 2 * Math.abs(y) / head_height) ** 2) ** 0.5;
 
                 // Draw all the lines.
@@ -1654,10 +1665,24 @@ class Edge extends Cell {
                                 l ${length - x(y)} 0
                             `.trim().replace(/\s+/g, " "),
                         }).element;
+
+                        // Dashed and dotted lines.
+                        switch (options.style.name) {
+                            case "dashed":
+                                line.style.strokeDasharray = "6";
+                                break;
+                            case "dotted":
+                                line.style.strokeDasharray = "1 4";
+                                break;
+                        }
+
+                        // Explicit gaps.
                         if (gap !== null) {
-                            line.style.strokeDasharray = `${(length - gap.length) / 2}, ${gap.length}`;
+                            line.style.strokeDasharray
+                                = `${(length - gap.length) / 2}, ${gap.length}`;
                             line.style.strokeDashoffset = gap.offset;
                         }
+
                         svg.appendChild(line);
                     }
                 }
