@@ -221,15 +221,10 @@ QuiverExport.tikzcd = new class extends QuiverExport {
             }
 
             for (const edge of quiver.cells[level]) {
-                // tikzcd only has supported for 1-cells and 2-cells.
-                // Anything else requires custom support, so for now
-                // we only special-case 2-cells. Everything else is
-                // drawn as if it is a 1-cell.
-                const style = edge.options.style.level === 2 ? "Rightarrow, " : "";
-
                 const parameters = [];
                 const label_parameters = [];
                 let align = "";
+
                 // We only need to give edges names if they're depended on by another edge.
                 if (quiver.dependencies.get(edge).size > 0) {
                     label_parameters.push(`name=${index}`);
@@ -265,8 +260,43 @@ QuiverExport.tikzcd = new class extends QuiverExport {
                     parameters.push(`shift left=${-edge.options.offset}`);
                 }
 
+                let style = "";
+                let label = `"${edge.label}"${align}`;
+
+                switch (edge.options.style.name) {
+                    case "cell":
+                        // tikzcd only has supported for 1-cells and 2-cells.
+                        // Anything else requires custom support, so for now
+                        // we only special-case 2-cells. Everything else is
+                        // drawn as if it is a 1-cell.
+                        if (edge.options.style.level === 2) {
+                            style = "Rightarrow, ";
+                        }
+                        break;
+                    case "adjunction":
+                        label = "\"\\dashv\"";
+                        if (edge.label.trim() !== "") {
+                            let anchor = "";
+                            switch (edge.options.label_alignment) {
+                                case "left":
+                                    anchor = "anchor=west, ";
+                                    break;
+                                case "centre":
+                                    anchor = "description, ";
+                                    break;
+                                case "right":
+                                    anchor = "anchor=east, ";
+                                    break;
+                            }
+                            parameters.push(`"${edge.label}"{${anchor}inner sep=1.5mm}`);
+                        }
+                        parameters.push("phantom");
+                        label_parameters.push(`rotate=${-edge.angle() * 180 / Math.PI}`);
+                        break;
+                }
+
                 output += `\\arrow[${style}` +
-                    `"${edge.label}"${align}${
+                    `${label}${
                         label_parameters.length > 0 ? `{${label_parameters.join(", ")}}` : ""
                     }, ` +
                     `from=${cell_reference(edge.source)}, ` +
@@ -1055,6 +1085,7 @@ class Panel {
         for (const [value, style] of [
             ["1-cell", { name: "cell", level: 1 }],
             ["2-cell", { name: "cell", level: 2 }],
+            ["adjunction", { name: "adjunction" }],
         ]) {
             create_style_option(value, style);
         }
@@ -1126,6 +1157,9 @@ class Panel {
                     switch (cell.options.style.name) {
                         case "cell":
                             edge_style_value = `${cell.options.style.level}-cell`;
+                            break;
+                        case "adjunction":
+                            edge_style_value = "adjunction";
                             break;
                     }
                     this.element.querySelector(
@@ -1491,12 +1525,16 @@ class Edge extends Cell {
         }
 
         const arrow = this.draw_arrow(svg, options, length, gap);
+        // If the arrow is shorter than expected (for example, because we are using a
+        // fixed-width arrow style), then we need to make sure that it's still centred.
+        const width_shortfall = length + SVG_PADDING * 2 - arrow.width;
+        const margin = MARGIN + width_shortfall / 2;
 
         // Transform the `element` so that the arrow points in the correct direction.
         const direction = Math.atan2(offset_delta.top, offset_delta.left);
         const source_offset = ui.offset_from_position(source_position);
-        element.style.left = `${source_offset.left + Math.cos(direction) * MARGIN}px`;
-        element.style.top = `${source_offset.top + Math.sin(direction) * MARGIN}px`;
+        element.style.left = `${source_offset.left + Math.cos(direction) * margin}px`;
+        element.style.top = `${source_offset.top + Math.sin(direction) * margin}px`;
         [element.style.width, element.style.height] =
             new Offset(arrow.width, arrow.height + EDGE_PADDING * 2).to_CSS();
         element.style.transformOrigin = `${SVG_PADDING}px ${arrow.height / 2 + EDGE_PADDING}px`;
@@ -1511,12 +1549,25 @@ class Edge extends Cell {
 
     /// Draws an arrow on to an SVG. `length` must be nonnegative.
     /// Note that this does not clear the SVG beforehand.
+    /// Returns the (new) dimensions of the SVG.
     draw_arrow(svg, options, length, gap = null) {
+        // Constants for parameters of the arrow shapes.
+        const SVG_PADDING = Edge.SVG_PADDING;
+
+        // Set up the standard styles used for arrows.
+        Object.assign(svg.style, {
+            fill: svg.style.fill || "none",
+            stroke: svg.style.stroke || "black",
+            strokeWidth: svg.style.strokeWidth || "1.5px",
+            strokeLinecap: svg.style.strokeLinecap || "round",
+            strokeLinejoin: svg.style.strokeLinejoin || "round",
+        });
+
+        let width, height;
+
         switch (options.style.name) {
             case "cell":
                 const level = options.style.level;
-                // Constants for parameters of the arrow shapes.
-                const SVG_PADDING = Edge.SVG_PADDING;
                 // How much spacing to leave between lines for k-cells where k > 1.
                 const SPACING = 6;
                 // How wide the arrowhead should be (for a horizontal arrow).
@@ -1529,16 +1580,7 @@ class Edge extends Cell {
                 const head_height = HEAD_HEIGHT * (head_width / HEAD_WIDTH);
 
                 // Set up the SVG dimensions to fit the edge.
-                const [width, height] = [length + SVG_PADDING * 2, head_height + SVG_PADDING * 2];
-                svg.setAttribute("width", width);
-                svg.setAttribute("height", height);
-                Object.assign(svg.style, {
-                    fill: svg.style.fill || "none",
-                    stroke: svg.style.stroke || "black",
-                    strokeWidth: svg.style.strokeWidth || "1.5px",
-                    strokeLinecap: svg.style.strokeLinecap || "round",
-                    strokeLinejoin: svg.style.strokeLinejoin || "round",
-                });
+                [width, height] = [length + SVG_PADDING * 2, head_height + SVG_PADDING * 2];
 
                 // A function for finding the width of an arrowhead at a certain y position, so that we can
                 // draw multiple lines to a curved arrow head perfectly.
@@ -1573,8 +1615,34 @@ class Edge extends Cell {
                     `.trim().replace(/\s+/g, " ")
                 }).element);
 
-                return new Dimension(width, height);
+                break;
+
+            case "adjunction":
+                // The width of the ⊣ symbol.
+                const WIDTH = 16;
+                // The height of the ⊣ symbol.
+                const HEIGHT = 16;
+
+                // Set up the SVG dimensions to fit the edge.
+                [width, height] = [WIDTH + SVG_PADDING * 2, HEIGHT + SVG_PADDING * 2];
+
+                // Draw the ⊣ symbol.
+                svg.appendChild(new DOM.SVGElement("path", {
+                    d: `
+                        M ${SVG_PADDING} ${SVG_PADDING + HEIGHT / 2}
+                        l ${WIDTH} 0
+                        m 0 ${-HEIGHT / 2}
+                        l 0 ${HEIGHT}
+                    `.trim().replace(/\s+/g, " ")
+                }).element);
+
+                break;
         }
+
+        svg.setAttribute("width", width);
+        svg.setAttribute("height", height);
+
+        return new Dimension(width, height);
     }
 
     /// Returns the angle of this edge.
