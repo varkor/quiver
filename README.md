@@ -3,11 +3,17 @@ A graphical editor for commutative diagrams that exports to tikzcd.
 
 ## Features
 - An intuitive graphical interface for creating and modifying commutative diagrams.
-- Support for objects, morphisms, natural transformations and adjunctions.
+- Support for objects, morphisms, natural transformations.
 - tikzcd (LaTeX) export.
 - Smart label alignment and edge offset.
 - Parallel (shifted) arrows.
-- Arrow styles, including dashed and dotted edges, pullbacks and pushouts.
+- Arrow styles, including:
+    - Dashed and dotted edges.
+    - Maps to arrows.
+    - Epimorphisms.
+    - Pullbacks and pushouts.
+    - Adjunctions.
+    - Equality.
 
 ## Screenshots
 The interface:

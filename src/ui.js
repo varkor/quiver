@@ -298,6 +298,9 @@ QuiverExport.tikzcd = new class extends QuiverExport {
                             case "none":
                                 parameters.push("no head");
                                 break;
+                            case "epi":
+                                parameters.push("two heads");
+                                break;
                         }
 
                         break;
@@ -1179,6 +1182,7 @@ class Panel {
             [
                 ["arrowhead", { name: "arrowhead" }],
                 ["none", { name: "none" }],
+                ["epi", { name: "epi"} ],
             ],
             "head-type",
             ["vertical", "short", "arrow-style"],
@@ -1833,10 +1837,12 @@ class Edge extends Cell {
         const level = options.style.name === "arrow" && options.style.body.level || 1;
         // How much spacing to leave between lines for k-cells where k > 1.
         const SPACING = 6;
-        // How wide the arrowhead should be (for a horizontal arrow).
+        // How wide each arrowhead should be (for a horizontal arrow).
         const HEAD_WIDTH = SPACING + (level - 1) * 2;
-        // How tall the arrowhead should be (for a horizontal arrow).
+        // How tall each arrowhead should be (for a horizontal arrow).
         const HEAD_HEIGHT = (level + 1) * SPACING;
+        // The space between each head.
+        const HEAD_SPACING = 6;
         // The height of the vertical bar in the maps to tail.
         const TAIL_HEIGHT = SPACING * 2;
 
@@ -1856,6 +1862,9 @@ class Edge extends Cell {
         // This is necessary because we need to know the dimensions to centre things properly.
         const fit = (w, h) => [width, height] = [Math.max(width, w), Math.max(height, h)];
 
+        // The maximum number of arrowheads.
+        let heads = 1;
+
         switch (options.style.name) {
             case "arrow":
                 fit(length, Math.ceil(STROKE_WIDTH));
@@ -1871,8 +1880,10 @@ class Edge extends Cell {
                 }
 
                 switch (options.style.head.name) {
+                    case "epi":
+                        heads = 2;
                     case "arrowhead":
-                        fit(head_width, head_height);
+                        fit(head_width * heads + HEAD_SPACING * (heads - 1), head_height);
                         break;
                 }
 
@@ -1955,18 +1966,25 @@ class Edge extends Cell {
                 }
 
                 // Draw the arrow head.
+                let heads = 1;
                 switch (options.style.head.name) {
+                    case "epi":
+                        heads = 2;
                     case "arrowhead":
-                        svg.appendChild(new DOM.SVGElement("path", {
-                            d: `
-                                M ${SVG_PADDING + width} ${SVG_PADDING + height / 2}
-                                a ${head_width} ${head_height / 2} 0 0 1 -${head_width}
-                                    -${head_height / 2}
-                                M ${SVG_PADDING + width} ${SVG_PADDING + height / 2}
-                                a ${head_width} ${head_height / 2} 0 0 0 -${head_width}
-                                    ${head_height / 2}
-                            `.trim().replace(/\s+/g, " ")
-                        }).element);
+                        for (let i = 0; i < heads; ++i) {
+                            svg.appendChild(new DOM.SVGElement("path", {
+                                d: `
+                                    M ${SVG_PADDING + width - i * HEAD_SPACING}
+                                        ${SVG_PADDING + height / 2}
+                                    a ${head_width} ${head_height / 2} 0 0 1 -${head_width}
+                                        -${head_height / 2}
+                                    M ${SVG_PADDING + width - i * HEAD_SPACING}
+                                        ${SVG_PADDING + height / 2}
+                                    a ${head_width} ${head_height / 2} 0 0 0 -${head_width}
+                                        ${head_height / 2}
+                                `.trim().replace(/\s+/g, " ")
+                            }).element);
+                        }
 
                         break;
                 }
