@@ -300,6 +300,12 @@ QuiverExport.tikzcd = new class extends QuiverExport {
                             case "mono":
                                 parameters.push("tail");
                                 break;
+
+                            case "hook":
+                                parameters.push(`hook${
+                                    edge.options.style.tail.side === "top" ? "" : "'"
+                                }`);
+                                break;
                         }
 
                         // Head styles.
@@ -1148,6 +1154,8 @@ class Panel {
                 ["none", { name: "none" }],
                 ["maps to", { name: "maps to" }],
                 ["mono", { name: "mono"} ],
+                ["top-hook", { name: "hook", side: "top" }, ["short"]],
+                ["bottom-hook", { name: "hook", side: "bottom" }, ["short"]],
             ],
             "tail-type",
             ["vertical", "short", "arrow-style"],
@@ -1422,8 +1430,11 @@ class Panel {
                                 case "cell":
                                     value = `${cell.options.style[component].level}-cell`;
                                     break;
+                                case "hook":
                                 case "harpoon":
-                                    value = `${cell.options.style[component].side}-harpoon`;
+                                    value = `${
+                                        cell.options.style[component].side
+                                    }-${cell.options.style[component].name}`;
                                     break;
                                 default:
                                     value = cell.options.style[component].name;
@@ -1907,6 +1918,13 @@ class Edge extends Cell {
                         fit(head_width, head_height);
                         shorten = head_width;
                         break;
+                    case "hook":
+                        // The hook width is the same as the arrowhead.
+                        // We only need `head_width * 2` height, but we
+                        // need to double that to keep the arrow
+                        // aligned conveniently in the middle.
+                        fit(head_width, head_width * 4);
+                        shorten = head_width;
                 }
 
                 switch (options.style.head.name) {
@@ -2029,7 +2047,7 @@ class Edge extends Cell {
                         svg.appendChild(new DOM.SVGElement("path", {
                             d: `
                                 M ${SVG_PADDING} ${SVG_PADDING + (height - tail_height) / 2}
-                                l ${0} ${tail_height}
+                                l 0 ${tail_height}
                             `.trim().replace(/\s+/g, " ")
                         }).element);
                         break;
@@ -2037,6 +2055,17 @@ class Edge extends Cell {
                     case "mono":
                         draw_arrowhead(head_width);
                         break;
+
+                    case "hook":
+                        const flip = options.style.tail.side === "top" ? 1 : -1;
+                        svg.appendChild(new DOM.SVGElement("path", {
+                            d: `
+                                M ${SVG_PADDING + head_width}
+                                    ${SVG_PADDING + height / 2}
+                                a ${head_width} ${head_width} 0 0 ${flip === 1 ? 1 : 0} 0
+                                    ${-head_width * 2 * flip}
+                            `.trim().replace(/\s+/g, " ")
+                        }).element);
                 }
 
                 // Draw the arrow head.
@@ -2178,9 +2207,14 @@ class Edge extends Cell {
         this.options.label_alignment
             = { left: "right", centre: "centre", right: "left" }[this.options.label_alignment];
         this.options.offset = -this.options.offset;
-        if (this.options.style.name === "arrow" && this.options.style.head.name === "harpoon") {
-            this.options.style.head.side
-                = { top: "bottom", bottom: "top" }[this.options.style.head.side];
+        if (this.options.style.name === "arrow") {
+            const swap_sides = { top: "bottom", bottom: "top" };
+            if (this.options.style.tail.name === "hook") {
+                this.options.style.tail.side = swap_sides[this.options.style.tail.side];
+            }
+            if (this.options.style.head.name === "harpoon") {
+                this.options.style.head.side = swap_sides[this.options.style.head.side];
+            }
         }
 
         // Swap the `source` and `target`.

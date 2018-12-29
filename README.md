@@ -11,6 +11,7 @@ A graphical editor for commutative diagrams that exports to tikzcd.
     - Dashed and dotted edges.
     - Maps to arrows.
     - Monomorphisms and epimorphisms.
+    - Inclusions.
     - Pullbacks and pushouts.
     - Adjunctions.
     - Equality.
