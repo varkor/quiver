@@ -1899,7 +1899,7 @@ class Edge extends Cell {
         // This is necessary because we need to know the dimensions to centre things properly.
         const fit = (w, h) => [width, height] = [Math.max(width, w), Math.max(height, h)];
 
-        // The maximum number of arrowheads.
+        // The number of arrowheads.
         let heads = 1;
         // How much to shorten the edge by, to make room for the tail.
         let shorten = 0;
@@ -1931,6 +1931,9 @@ class Edge extends Cell {
                 }
 
                 switch (options.style.head.name) {
+                    case "none":
+                        heads = 0;
+                        break;
                     case "epi":
                         heads = 2;
                     case "arrowhead":
@@ -1985,13 +1988,16 @@ class Edge extends Cell {
                                 // The height of each triangle from the edge.
                                 const AMPLITUDE = 2;
                                 // Flat padding at the start of the edge (measured in
-                                // triangles). Twice as much padding is given at the end.
+                                // triangles).
                                 const PADDING = 1;
+                                // Twice as much padding is given at the end, plus extra
+                                // if there are multiple heads.
+                                const head_padding = PADDING + PADDING * heads;
 
                                 path.push(`l ${AMPLITUDE * 2 * PADDING} 0`);
                                 for (
                                     let l = AMPLITUDE * 2 * PADDING, flip = 1;
-                                    l < line_length - AMPLITUDE * 4 * PADDING;
+                                    l < line_length - AMPLITUDE * 2 * head_padding;
                                     l += AMPLITUDE * 2, flip = -flip
                                 ) {
                                     path.push(`l ${AMPLITUDE} ${AMPLITUDE * flip}`);
