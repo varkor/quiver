@@ -286,6 +286,9 @@ QuiverExport.tikzcd = new class extends QuiverExport {
                                 parameters.push("dotted");
                                 break;
 
+                            case "squiggly":
+                                parameters.push("squiggly");
+                                break;
                         }
 
                         // Tail styles.
@@ -1172,6 +1175,7 @@ class Panel {
                 ["2-cell", { name: "cell", level: 2 }],
                 ["dashed", { name: "dashed" }],
                 ["dotted", { name: "dotted" }],
+                ["squiggly", { name: "squiggly" }],
             ],
             "body-type",
             ["vertical", "arrow-style"],
@@ -1952,12 +1956,34 @@ class Edge extends Cell {
                         let y = (i + (1 - level) / 2) * SPACING;
                         // This edge case is necessary simply for very short edges.
                         if (Math.abs(y) <= head_height / 2) {
-                            const line = new DOM.SVGElement("path", {
-                                d: `
-                                    M ${SVG_PADDING + shorten} ${SVG_PADDING + height / 2 + y}
-                                    l ${length - shorten - x(y)} 0
-                                `.trim().replace(/\s+/g, " "),
-                            }).element;
+                            const path
+                                = [`M ${SVG_PADDING + shorten} ${SVG_PADDING + height / 2 + y}`];
+                            const line_length = length - shorten - x(y);
+
+                            if (options.style.body.name === "squiggly") {
+                                // The height of each triangle from the edge.
+                                const AMPLITUDE = 2;
+                                // Flat padding at the start of the edge (measured in
+                                // triangles). Twice as much padding is given at the end.
+                                const PADDING = 1;
+
+                                path.push(`l ${AMPLITUDE * 2 * PADDING} 0`);
+                                for (
+                                    let l = AMPLITUDE * 2 * PADDING, flip = 1;
+                                    l < line_length - AMPLITUDE * 4 * PADDING;
+                                    l += AMPLITUDE * 2, flip = -flip
+                                ) {
+                                    path.push(`l ${AMPLITUDE} ${AMPLITUDE * flip}`);
+                                    path.push(`l ${AMPLITUDE} ${AMPLITUDE * -flip}`);
+                                }
+                                path.push(`L ${SVG_PADDING + line_length + shorten} ${
+                                    SVG_PADDING + height / 2 + y
+                                }`);
+                            } else {
+                                path.push(`l ${line_length} 0`);
+                            }
+
+                            const line = new DOM.SVGElement("path", { d: path.join(" ") }).element;
 
                             // Dashed and dotted lines.
                             switch (options.style.body.name) {

@@ -15,6 +15,7 @@ A graphical editor for commutative diagrams that exports to tikzcd.
     - Adjunctions.
     - Equality.
     - Harpoons.
+    - Squiggly arrows.
 
 ## Screenshots
 The interface:
