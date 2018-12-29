@@ -707,11 +707,14 @@ class UI {
         });
 
         // Handle global key presses (such as keyboard shortcuts).
-        document.addEventListener("keydown", event => {
+        document.addEventListener("keydown", (event) => {
             switch (event.key) {
                 case "Backspace":
                     // Remove any selected cells.
                     if (!(document.activeElement instanceof HTMLInputElement)) {
+                        // Prevent Backspace triggering browser history navigation.
+                        event.preventDefault();
+
                         for (const cell of this.selection) {
                             // Remove this cell and its dependents from the quiver
                             // and then from the HTML.
