@@ -308,6 +308,12 @@ QuiverExport.tikzcd = new class extends QuiverExport {
                             case "epi":
                                 parameters.push("two heads");
                                 break;
+
+                            case "harpoon":
+                                parameters.push(`harpoon${
+                                    edge.options.style.head.side === "top" ? "" : "'"
+                                }`);
+                                break;
                         }
 
                         break;
@@ -1191,6 +1197,8 @@ class Panel {
                 ["arrowhead", { name: "arrowhead" }],
                 ["none", { name: "none" }],
                 ["epi", { name: "epi"} ],
+                ["top-harpoon", { name: "harpoon", side: "top" }, ["short"]],
+                ["bottom-harpoon", { name: "harpoon", side: "bottom" }, ["short"]],
             ],
             "head-type",
             ["vertical", "short", "arrow-style"],
@@ -1348,8 +1356,8 @@ class Panel {
             return button;
         };
 
-        for (const [value, data] of entries) {
-            create_option(value, data);
+        for (const [value, data, classes = []] of entries) {
+            create_option(value, data).classList.add(...classes);
         }
 
         options_list.querySelector(`input[name="${name}"]`).checked = true;
@@ -1404,11 +1412,14 @@ class Panel {
                     if (style_is_arrow) {
                         for (const component of ["tail", "body", "head"]) {
                             let value;
+                            // The following makes the assumption that names are unique,
+                            // even between different components.
                             switch (cell.options.style[component].name) {
                                 case "cell":
-                                    // We're making an implicit assumption that `component`
-                                    // is `"body"` here.
                                     value = `${cell.options.style[component].level}-cell`;
+                                    break;
+                                case "harpoon":
+                                    value = `${cell.options.style[component].side}-harpoon`;
                                     break;
                                 default:
                                     value = cell.options.style[component].name;
@@ -1900,6 +1911,9 @@ class Edge extends Cell {
                     case "arrowhead":
                         fit(head_width * heads + HEAD_SPACING * (heads - 1), head_height);
                         break;
+                    case "harpoon":
+                        fit(head_width, head_height / 2);
+                        break;
                 }
 
                 break;
@@ -1969,16 +1983,17 @@ class Edge extends Cell {
 
                 // This function has been extracted because it is actually used to draw
                 // both arrowheads (in the usual case) and tails (for `"mono"`).
-                const draw_arrowhead = (x) => {
+                const draw_arrowhead = (x, top = true, bottom = true) => {
                     svg.appendChild(new DOM.SVGElement("path", {
-                        d: `
+                        d: (top ? `
                             M ${SVG_PADDING + x} ${SVG_PADDING + height / 2}
                             a ${head_width} ${head_height / 2} 0 0 1 -${head_width}
                                 -${head_height / 2}
+                        ` : "") + (bottom ? `
                             M ${SVG_PADDING + x} ${SVG_PADDING + height / 2}
                             a ${head_width} ${head_height / 2} 0 0 0 -${head_width}
                                 ${head_height / 2}
-                        `.trim().replace(/\s+/g, " ")
+                        ` : "").trim().replace(/\s+/g, " ")
                     }).element);
                 };
 
@@ -2005,6 +2020,11 @@ class Edge extends Cell {
                         for (let i = 0; i < heads; ++i) {
                             draw_arrowhead(width - i * HEAD_SPACING);
                         }
+                        break;
+
+                    case "harpoon":
+                        const top = options.style.head.side === "top";
+                        draw_arrowhead(width, top, !top);
                         break;
                 }
 
@@ -2125,14 +2145,21 @@ class Edge extends Cell {
             const dependencies = ui.quiver.dependencies.get(cell);
             dependencies.set(this, { source: "target", target: "source" }[dependencies.get(this)]);
         }
-        // Reverse the label alignment and edge offset.
+
+        // Reverse the label alignment and edge offset as well as any oriented styles.
         // Note that since we do this, the position of the edge will remain the same, which means
         // we don't need to rerender any of this edge's dependencies.
         this.options.label_alignment
             = { left: "right", centre: "centre", right: "left" }[this.options.label_alignment];
         this.options.offset = -this.options.offset;
+        if (this.options.style.name === "arrow" && this.options.style.head.name === "harpoon") {
+            this.options.style.head.side
+                = { top: "bottom", bottom: "top" }[this.options.style.head.side];
+        }
+
         // Swap the `source` and `target`.
         [this.source, this.target] = [this.target, this.source];
+
         this.render(ui);
     }
 }

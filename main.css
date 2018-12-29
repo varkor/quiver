@@ -250,6 +250,8 @@ body {
     left: 50%;
     transform: translateX(-50%);
     margin: 0; margin-top: -1px;
+
+    border-radius: 0;
 }
 
 .panel .vertical input[type="radio"]:first-child {
@@ -260,6 +262,25 @@ body {
 
 .panel .vertical input[type="radio"]:last-child {
     border-radius: 0 0 2px 2px;
+}
+
+.panel .vertical input[type="radio"].short {
+    display: inline-block;
+    width: 50%;
+    left: 0;
+    transform: none;
+}
+
+.panel .vertical input[type="radio"].short + input[type="radio"].short {
+    border-left-color: transparent;
+}
+
+.panel .vertical input[type="radio"].short:nth-last-child(2) {
+    border-radius: 0 0 0 2px;
+}
+
+.panel .vertical input[type="radio"].short:last-child {
+    border-radius: 0 0 2px 0;
 }
 
 .panel input[type="radio"]:hover {
