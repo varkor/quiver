@@ -467,9 +467,10 @@ UIState.Connect = class extends UIState {
         }` : "";
         ui.deselect();
 
-        // We attempt to guess what the intended label alignment is, if the cells being connected
-        // form some path with existing connections. Otherwise we revert to the currently-selected
-        // label alignment in the panel.
+        // We attempt to guess what the intended label alignment is and what the intended edge
+        // offset is, if the cells being connected form some path with existing connections.
+        // Otherwise we revert to the currently-selected label alignment in the panel and the
+        // default offset (0).
         const options = {
             label_alignment:
                 ui.panel.element.querySelector('input[name="label-alignment"]:checked').value,
@@ -478,32 +479,69 @@ UIState.Connect = class extends UIState {
         // If *every* existing connection to source and target has a consistent label alignment,
         // then `align` will be a singleton, in which case we use that element as the alignment.
         // If it has `left` and `right` in equal measure (regardless of `centre`), then
-        // we will pick `centre`. Otherwise we keep the default.
+        // we will pick `centre`. Otherwise we keep the default. And similarly for `offset`.
         const align = new Map();
+        const offset = new Map();
         // We only want to pick `centre` when the source and target are equally constraining
         // (otherwise we end up picking `centre` far too often). So we check that they're both
         // being considered equally. This means `centre` is chosen only rarely, but often in
-        // the situations you want it.
+        // the situations you want it. (This has no analogue in `offset`.)
         let balance = 0;
-        const swap = alignment => ({ left: "right", centre: "centre", right: "left" }[alignment]);
-        const consider = (alignment, tip) => {
-            if (!align.has(alignment)) {
-                align.set(alignment, 0);
+
+        const swap = (options) => {
+            return {
+                label_alignment:
+                    { left: "right", centre: "centre", right: "left" }[options.label_alignment],
+                offset: -options.offset,
+            };
+        };
+
+        const conserve = (options, between) => {
+            return {
+                label_alignment: options.label_alignment,
+                // We ignore the offsets of edges that aren't directly `between` the
+                // source and target.
+                offset: between ? options.offset : null,
+            };
+        };
+
+        const consider = (options, tip) => {
+            if (!align.has(options.label_alignment)) {
+                align.set(options.label_alignment, 0);
             }
-            align.set(alignment, align.get(alignment) + 1);
+            align.set(options.label_alignment, align.get(options.label_alignment) + 1);
+            if (options.offset !== null) {
+                if (!offset.has(options.offset)) {
+                    offset.set(options.offset, 0);
+                }
+                offset.set(options.offset, offset.get(options.offset) + 1);
+            }
             balance += tip;
         };
-        const id = x => x;
-        for (const [edge, relationship] of ui.quiver.dependencies.get(this.source)) {
-            consider({ source: swap, target: id }[relationship](edge.options.label_alignment), -1);
+
+        const source_dependencies = ui.quiver.dependencies.get(this.source);
+        const target_dependencies = ui.quiver.dependencies.get(this.target);
+        for (const [edge, relationship] of source_dependencies) {
+            consider({
+                source: swap,
+                target: options => conserve(options, target_dependencies.has(edge)),
+            }[relationship](edge.options), -1);
         }
-        for (const [edge, relationship] of ui.quiver.dependencies.get(this.target)) {
-            consider({ source: id, target: swap }[relationship](edge.options.label_alignment), 1);
+        for (const [edge, relationship] of target_dependencies) {
+            consider({
+                source: options => conserve(options, source_dependencies.has(edge)),
+                target: swap,
+            }[relationship](edge.options), 1);
         }
+
         if (align.size === 1) {
             options.label_alignment = align.keys().next().value;
         } else if (align.size > 0 && align.get("left") === align.get("right") && balance === 0) {
             options.label_alignment = "centre";
+        }
+
+        if (offset.size === 1) {
+            options.offset = offset.keys().next().value;
         }
 
         // The edge itself does all the set up, such as adding itself to the page.

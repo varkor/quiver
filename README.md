@@ -5,7 +5,7 @@ A graphical editor for commutative diagrams that exports to tikzcd.
 - An intuitive graphical interface for creating and modifying commutative diagrams.
 - Support for objects, morphisms, natural transformations and adjunctions.
 - tikzcd (LaTeX) export.
-- Smart label alignment.
+- Smart label alignment and edge offset.
 - Parallel (shifted) arrows.
 
 ## Screenshots
