@@ -243,7 +243,7 @@ QuiverExport.tikzcd = new class extends QuiverExport {
                 } else {
                     switch (edge.options.label_alignment) {
                         case "centre":
-                            // Centering is done by using the `description` style.
+                            // Centring is done by using the `description` style.
                             align = " description";
                             break;
                         case "right":
@@ -273,8 +273,35 @@ QuiverExport.tikzcd = new class extends QuiverExport {
                             style = "Rightarrow, ";
                         }
                         break;
+                    case "dashed":
+                        parameters.push("dashed");
+                        break;
+                    case "dotted":
+                        parameters.push("dotted");
+                        break;
                     case "adjunction":
-                        label = "\"\\dashv\"";
+                    case "corner":
+                        parameters.push("phantom");
+
+                        let angle_offset = 0;
+
+                        switch (edge.options.style.name) {
+                            case "adjunction":
+                                label = "\"\\dashv\"";
+                                break;
+                            case "corner":
+                                label = "\"\\lrcorner\"";
+                                label_parameters.push("very near start");
+                                angle_offset = 45;
+                                break;
+                        }
+
+                        label_parameters.push(`rotate=${
+                            -edge.angle() * 180 / Math.PI + angle_offset
+                        }`);
+
+                        // We allow these sorts of edges to have labels attached,
+                        // even though it's a little unusual.
                         if (edge.label.trim() !== "") {
                             let anchor = "";
                             switch (edge.options.label_alignment) {
@@ -290,14 +317,7 @@ QuiverExport.tikzcd = new class extends QuiverExport {
                             }
                             parameters.push(`"{${edge.label}}"{${anchor}inner sep=1.5mm}`);
                         }
-                        parameters.push("phantom");
-                        label_parameters.push(`rotate=${-edge.angle() * 180 / Math.PI}`);
-                        break;
-                    case "dashed":
-                        parameters.push("dashed");
-                        break;
-                    case "dotted":
-                        parameters.push("dotted");
+
                         break;
                 }
 
@@ -366,7 +386,7 @@ class Position {
 
 /// An (width, height) pair. This is functionally equivalent to `Position`, but has different
 /// semantic intent.
-const Dimension = class extends Position {
+const Dimensions = class extends Position {
     get width() {
         return this.x;
     }
@@ -797,10 +817,10 @@ class UI {
     }
 
     /// A helper method for getting an HTML (left, top) position from a grid `Position`.
-    offset_from_position(position, account_for_centering = true) {
+    offset_from_position(position, account_for_centring = true) {
         return new Offset(
-            position.x * this.cell_size + (account_for_centering ? this.cell_size / 2 : 0),
-            position.y * this.cell_size + (account_for_centering ? this.cell_size / 2 : 0),
+            position.x * this.cell_size + (account_for_centring ? this.cell_size / 2 : 0),
+            position.y * this.cell_size + (account_for_centring ? this.cell_size / 2 : 0),
         );
     }
 
@@ -1032,29 +1052,31 @@ class Panel {
                     break;
             }
 
+            const svg = new DOM.SVGElement("svg", { xmlns: "http://www.w3.org/2000/svg" }).element;
+
+            const gap = y_offset === 0 ? { length: RADIUS * 4, offset: X_OFFSET } : null;
+
+            const { dimensions } = Edge.prototype.draw_arrow(
+                svg,
+                { style: { name: "cell", level: 1 } },
+                ARROW_LENGTH,
+                gap,
+            );
+
+            const rect = new DOM.SVGElement("rect", {
+                x: dimensions.width / 2 - X_OFFSET - RADIUS,
+                y: dimensions.height / 2 + y_offset - RADIUS,
+                width: RADIUS * 2,
+                height: RADIUS * 2,
+            }, {
+                stroke: "none",
+            }).element;
+
+            svg.appendChild(rect);
+
             for (const colour of ["black", "grey"]) {
-                const svg = new DOM.SVGElement("svg", {
-                    xmlns: "http://www.w3.org/2000/svg",
-                }, {
-                    stroke: colour,
-                }).element;
-                const gap = y_offset === 0 ? { length: RADIUS * 4, offset: X_OFFSET } : null;
-                const arrow = Edge.prototype.draw_arrow(
-                    svg,
-                    { style: { name: "cell", level: 1 } },
-                    ARROW_LENGTH,
-                    gap,
-                );
-                const rect = new DOM.SVGElement("rect", {
-                    x: arrow.width / 2 - X_OFFSET - RADIUS,
-                    y: arrow.height / 2 + y_offset - RADIUS,
-                    width: RADIUS * 2,
-                    height: RADIUS * 2,
-                }, {
-                    fill: colour,
-                    stroke: "none",
-                }).element;
-                svg.appendChild(rect);
+                svg.style.stroke = colour;
+                rect.style.fill = colour;
                 backgrounds.push(`url(data:image/svg+xml;utf8,${encodeURI(svg.outerHTML)})`);
             }
             button.style.backgroundImage = backgrounds.join(", ");
@@ -1126,13 +1148,20 @@ class Panel {
             // The length of the arrow.
             const ARROW_LENGTH = 72;
 
+            const svg = new DOM.SVGElement("svg", { xmlns: "http://www.w3.org/2000/svg" }).element;
+
+            const { alignment } = Edge.prototype.draw_arrow(svg, { style }, ARROW_LENGTH);
+            // Align the background according the alignment of the arrow
+            // (`"centre"` is default).
+            if (alignment !== "centre") {
+                // What percentage of the button to offset `"left"` or `"right"` aligned arrows.
+                const BACKGROUND_PADDING = 20;
+
+                button.style.backgroundPosition = `${alignment} ${BACKGROUND_PADDING}% center`
+            }
+
             for (const colour of ["black", "grey"]) {
-                const svg = new DOM.SVGElement("svg", {
-                    xmlns: "http://www.w3.org/2000/svg",
-                }, {
-                    stroke: colour,
-                }).element;
-                Edge.prototype.draw_arrow(svg, { style }, ARROW_LENGTH);
+                svg.style.stroke = colour;
                 backgrounds.push(`url(data:image/svg+xml;utf8,${encodeURI(svg.outerHTML)})`);
             }
             button.style.backgroundImage = backgrounds.join(", ");
@@ -1142,9 +1171,10 @@ class Panel {
         for (const [value, style] of [
             ["1-cell", { name: "cell", level: 1 }],
             ["2-cell", { name: "cell", level: 2 }],
-            ["adjunction", { name: "adjunction" }],
             ["dashed", { name: "dashed" }],
             ["dotted", { name: "dotted" }],
+            ["adjunction", { name: "adjunction" }],
+            ["corner", { name: "corner" }],
         ]) {
             create_style_option(value, style);
         }
@@ -1546,8 +1576,8 @@ class Edge extends Cell {
             path.setAttribute("mask", `url(#mask-${ui.unique_id(this)})`);
         }
         // We only want to actually clear part of the edge if the alignment is `centre`.
-        svg.querySelector(".clear").style.display =
-            this.options.label_alignment === "centre" ? "inline" : "none";
+        svg.querySelector(".clear").style.display
+            = this.options.label_alignment === "centre" ? "inline" : "none";
 
         // If the label has already been rendered, then clear the edge for it.
         // If it has not already been rendered, this is a no-op: it will be called
@@ -1589,22 +1619,36 @@ class Edge extends Cell {
             return 0;
         }
 
-        const arrow = this.draw_arrow(svg, options, length, gap);
+        const { dimensions, alignment } = this.draw_arrow(svg, options, length, gap);
         // If the arrow is shorter than expected (for example, because we are using a
-        // fixed-width arrow style), then we need to make sure that it's still centred.
-        const width_shortfall = length + SVG_PADDING * 2 - arrow.width;
-        const margin = MARGIN + width_shortfall / 2;
+        // fixed-width arrow style), then we need to make sure that it's still centred
+        // if the `alignment` is `"centre"`.
+        const width_shortfall = length + SVG_PADDING * 2 - dimensions.width;
+        let margin_adjustment;
+        switch (alignment) {
+            case "left":
+                margin_adjustment = 0;
+                break;
+            case "centre":
+                margin_adjustment = 0.5;
+                break;
+            case "right":
+                margin_adjustment = 1;
+                break;
+        }
+        const margin = MARGIN + width_shortfall * margin_adjustment;
 
         // Transform the `element` so that the arrow points in the correct direction.
         const direction = Math.atan2(offset_delta.top, offset_delta.left);
         const source_offset = ui.offset_from_position(source_position);
         element.style.left = `${source_offset.left + Math.cos(direction) * margin}px`;
         element.style.top = `${source_offset.top + Math.sin(direction) * margin}px`;
-        [element.style.width, element.style.height] =
-            new Offset(arrow.width, arrow.height + EDGE_PADDING * 2).to_CSS();
-        element.style.transformOrigin = `${SVG_PADDING}px ${arrow.height / 2 + EDGE_PADDING}px`;
+        [element.style.width, element.style.height]
+            = new Offset(dimensions.width, dimensions.height + EDGE_PADDING * 2).to_CSS();
+        element.style.transformOrigin
+            = `${SVG_PADDING}px ${dimensions.height / 2 + EDGE_PADDING}px`;
         element.style.transform = `
-            translate(-${SVG_PADDING}px, -${arrow.height / 2 + EDGE_PADDING}px)
+            translate(-${SVG_PADDING}px, -${dimensions.height / 2 + EDGE_PADDING}px)
             rotate(${direction}rad)
             translateY(${(options.offset || 0) * OFFSET_DISTANCE}px)
         `;
@@ -1614,7 +1658,8 @@ class Edge extends Cell {
 
     /// Draws an arrow on to an SVG. `length` must be nonnegative.
     /// Note that this does not clear the SVG beforehand.
-    /// Returns the (new) dimensions of the SVG.
+    /// Returns the (new) dimensions of the SVG and the intended alignment of the edge.
+    /// `{ dimensions, alignment }`
     draw_arrow(svg, options, length, gap = null) {
         // Constants for parameters of the arrow shapes.
         const SVG_PADDING = Edge.SVG_PADDING;
@@ -1628,7 +1673,7 @@ class Edge extends Cell {
             strokeLinejoin: svg.style.strokeLinejoin || "round",
         });
 
-        let width, height;
+        let width, height, alignment = "centre";
 
         switch (options.style.name) {
             case "cell":
@@ -1719,12 +1764,37 @@ class Edge extends Cell {
                 }).element);
 
                 break;
+
+            case "corner":
+                // The width and height of the ⌟ symbol.
+                const SIZE = 12;
+                // √2
+                const rt2 = 2 ** 0.5;
+
+                // Set up the SVG dimensions to fit the edge.
+                [width, height] = [SIZE / rt2 + SVG_PADDING * 2, SIZE * rt2 + SVG_PADDING * 2];
+                // We want to draw the symbol next to the vertex from which it is drawn.
+                alignment = "left";
+
+                // Draw the ⊣ symbol.
+                svg.appendChild(new DOM.SVGElement("path", {
+                    d: `
+                        M ${SVG_PADDING} ${SVG_PADDING}
+                        l ${SIZE / rt2} ${SIZE / rt2}
+                        l ${-SIZE / rt2} ${SIZE / rt2}
+                    `.trim().replace(/\s+/g, " ")
+                }).element);
+
+                break;
         }
 
         svg.setAttribute("width", width);
         svg.setAttribute("height", height);
 
-        return new Dimension(width, height);
+        return {
+            dimensions: new Dimensions(width, height),
+            alignment,
+        };
     }
 
     /// Returns the angle of this edge.
@@ -1785,8 +1855,8 @@ class Edge extends Cell {
             ) + CLEAR_PADDING) * 2;
         };
 
-        const [width, height] =
-            label.offsetWidth > 0 && label.offsetHeight > 0 ?
+        const [width, height]
+            = label.offsetWidth > 0 && label.offsetHeight > 0 ?
                 [angle_length(angle), angle_length(angle + Math.PI / 2)]
             : [0, 0];
 
@@ -1808,8 +1878,8 @@ class Edge extends Cell {
         // Reverse the label alignment and edge offset.
         // Note that since we do this, the position of the edge will remain the same, which means
         // we don't need to rerender any of this edge's dependencies.
-        this.options.label_alignment =
-            { left: "right", centre: "centre", right: "left" }[this.options.label_alignment];
+        this.options.label_alignment
+            = { left: "right", centre: "centre", right: "left" }[this.options.label_alignment];
         this.options.offset = -this.options.offset;
         // Swap the `source` and `target`.
         [this.source, this.target] = [this.target, this.source];
