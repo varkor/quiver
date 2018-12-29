@@ -1254,8 +1254,14 @@ class Cell {
         content_element.addEventListener("mousedown", (event) => {
             if (event.button === 0) {
                 event.stopPropagation();
+                event.preventDefault();
 
-                was_previously_selected = ui.selection.has(this);
+                const label_input = ui.panel.element.querySelector('label input[type="text"]');
+                was_previously_selected = ui.selection.has(this) &&
+                    // If the label input is already focused, then we defocus it.
+                    // This allows the user to easily switch between editing the
+                    // entire cell and the label.
+                    document.activeElement !== label_input;
                 // Deselect all other nodes.
                 ui.deselect();
                 ui.select(this);
