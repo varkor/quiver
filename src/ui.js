@@ -649,11 +649,17 @@ class UI {
                         this.panel.update(this);
                     }
                     break;
+                case "Enter":
+                    // Focus the label input.
+                    this.panel.element.querySelector('label input[type="text"]').focus();
+                    break;
                 case "Escape":
                     // Stop trying to connect cells.
                     if (this.in_mode(UIState.Connect)) {
                         this.switch_mode(UIState.default);
                     }
+                    // Defocus the label input.
+                    this.panel.element.querySelector('label input[type="text"]').blur();
                     // Close any open panes.
                     this.panel.dismiss_export_pane(this);
                     break;
