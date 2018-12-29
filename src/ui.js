@@ -261,7 +261,7 @@ QuiverExport.tikzcd = new class extends QuiverExport {
                 }
 
                 let style = "";
-                let label = `"{${edge.label}}"${align}`;
+                let label = edge.label.trim() !== "" ? `"{${edge.label}}"${align}` : '""';
 
                 // Edge styles.
                 switch (edge.options.style.name) {
