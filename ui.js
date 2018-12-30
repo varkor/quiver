@@ -1929,10 +1929,10 @@ class Edge extends Cell {
                         break;
                     case "hook":
                         // The hook width is the same as the arrowhead.
-                        // We only need `head_width * 2` height, but we
-                        // need to double that to keep the arrow
-                        // aligned conveniently in the middle.
-                        fit(head_width, head_width * 4);
+                        // We only need `head_width * 2` height (for
+                        // 1-cells), but we need to double that to keep
+                        // the arrow aligned conveniently in the middle.
+                        fit(head_width, head_width * 4 + SPACING * (level - 1) / 2);
                         shorten = head_width;
                 }
 
@@ -1971,24 +1971,57 @@ class Edge extends Cell {
 
         switch (options.style.name) {
             case "arrow":
-                if (options.style.body.name !== "none") {
-                    // A function for finding the width of an arrowhead at a certain y position,
-                    // so that we can draw multiple lines to a curved arrow head perfectly.
-                    const x = (y) => {
-                        if (head_height === 0 || options.style.head.name === "none") {
-                            return 0;
-                        }
-                        return head_width * (1 - (1 - 2 * Math.abs(y) / head_height) ** 2) ** 0.5;
-                    };
+                // When drawing asymmetric arrowheads (such as harpoons), we need to
+                // draw the arrowhead at the lowermost line, so we need to adjust the
+                // y position.
+                const asymmetry_offset
+                    = options.style.head.name === "harpoon" ? (level - 1) * SPACING / 2 : 0;
 
+                // A function for finding the width of an arrowhead at a certain y position,
+                // so that we can draw multiple lines to a curved arrow head perfectly.
+                const head_x = (y, tail = false) => {
+                    if (head_height === 0 || !tail && options.style.head.name === "none") {
+                        return 0;
+                    }
+
+                    // Currently only arrowheads drawn for heads may be asymmetric.
+                    const asymmetry_adjustment = !tail ? asymmetry_offset : 0;
+                    // We have to be careful to adjust for asymmetry, which affects the dimensions
+                    // of the arrowheads.
+                    const asymmetry_sign
+                        = asymmetry_adjustment !== 0
+                            ? { top: 1, bottom: -1 }[options.style.head.side]
+                            : 0;
+
+                    return (head_width + asymmetry_adjustment)
+                        * (1 - (1 - 2 * Math.abs(y - asymmetry_offset * asymmetry_sign)
+                            / (head_height + asymmetry_adjustment)) ** 2)
+                        ** 0.5;
+                };
+
+                if (options.style.body.name !== "none") {
                     // Draw all the lines.
                     for (let i = 0; i < level; ++i) {
                         let y = (i + (1 - level) / 2) * SPACING;
                         // This edge case is necessary simply for very short edges.
                         if (Math.abs(y) <= head_height / 2) {
+                            // If the tail is drawn as a head, as is the case with `"mono"`,
+                            // then we need to shift the lines instead of simply shortening
+                            // them.
+                            const tail_head_adjustment
+                                = options.style.tail.name === "mono" ? head_x(y, true) : 0;
                             const path
-                                = [`M ${SVG_PADDING + shorten} ${SVG_PADDING + height / 2 + y}`];
-                            const line_length = length - shorten - x(y);
+                                = [`M ${SVG_PADDING + shorten - tail_head_adjustment} ${
+                                    SVG_PADDING + height / 2 + y
+                                }`];
+                            // When drawing multiple heads and multiple lines, it looks messy
+                            // if the heads intersect the lines, so in this case we draw the
+                            // lines to the leftmost head. For 1-cells, it looks better if
+                            // heads do intersect the lines.
+                            const level_heads_adjustment
+                                = level > 1 ? (heads - 1) * HEAD_SPACING : 0;
+                            const line_length = length - shorten - head_x(y)
+                                - level_heads_adjustment + tail_head_adjustment;
 
                             if (options.style.body.name === "squiggly") {
                                 // The height of each triangle from the edge.
@@ -2042,16 +2075,23 @@ class Edge extends Cell {
 
                 // This function has been extracted because it is actually used to draw
                 // both arrowheads (in the usual case) and tails (for `"mono"`).
-                const draw_arrowhead = (x, top = true, bottom = true) => {
+                const draw_arrowhead = (x, tail = false, top = true, bottom = true) => {
+                    // Currently only arrowheads drawn for heads may be asymmetric.
+                    const asymmetry_adjustment = !tail ? asymmetry_offset : 0;
+
                     svg.appendChild(new DOM.SVGElement("path", {
                         d: (top ? `
-                            M ${SVG_PADDING + x} ${SVG_PADDING + height / 2}
-                            a ${head_width} ${head_height / 2} 0 0 1 -${head_width}
-                                -${head_height / 2}
+                            M ${SVG_PADDING + x} ${SVG_PADDING + height / 2 + asymmetry_adjustment}
+                            a ${head_width + asymmetry_adjustment}
+                                ${head_height / 2 + asymmetry_adjustment} 0 0 1
+                                -${head_width + asymmetry_adjustment}
+                                -${head_height / 2 + asymmetry_adjustment}
                         ` : "") + (bottom ? `
-                            M ${SVG_PADDING + x} ${SVG_PADDING + height / 2}
-                            a ${head_width} ${head_height / 2} 0 0 0 -${head_width}
-                                ${head_height / 2}
+                            M ${SVG_PADDING + x} ${SVG_PADDING + height / 2 - asymmetry_adjustment}
+                            a ${head_width + asymmetry_adjustment}
+                                ${head_height / 2 + asymmetry_adjustment} 0 0 0
+                                -${head_width + asymmetry_adjustment}
+                                ${head_height / 2 + asymmetry_adjustment}
                         ` : "").trim().replace(/\s+/g, " ")
                     }).element);
                 };
@@ -2068,19 +2108,23 @@ class Edge extends Cell {
                         break;
 
                     case "mono":
-                        draw_arrowhead(head_width);
+                        draw_arrowhead(head_width, true);
                         break;
 
                     case "hook":
-                        const flip = options.style.tail.side === "top" ? 1 : -1;
-                        svg.appendChild(new DOM.SVGElement("path", {
-                            d: `
-                                M ${SVG_PADDING + head_width}
-                                    ${SVG_PADDING + height / 2}
-                                a ${head_width} ${head_width} 0 0 ${flip === 1 ? 1 : 0} 0
-                                    ${-head_width * 2 * flip}
-                            `.trim().replace(/\s+/g, " ")
-                        }).element);
+                        for (let i = 0; i < level; ++i) {
+                            let y = (i + (1 - level) / 2) * SPACING;
+                            const flip = options.style.tail.side === "top" ? 1 : -1;
+                            svg.appendChild(new DOM.SVGElement("path", {
+                                d: `
+                                    M ${SVG_PADDING + head_width}
+                                        ${SVG_PADDING + height / 2 + y}
+                                    a ${head_width} ${head_width} 0 0 ${flip === 1 ? 1 : 0} 0
+                                        ${-head_width * 2 * flip}
+                                `.trim().replace(/\s+/g, " ")
+                            }).element);
+                        }
+                        break;
                 }
 
                 // Draw the arrow head.
@@ -2094,7 +2138,7 @@ class Edge extends Cell {
 
                     case "harpoon":
                         const top = options.style.head.side === "top";
-                        draw_arrowhead(width, top, !top);
+                        draw_arrowhead(width, false, top, !top);
                         break;
                 }
 
