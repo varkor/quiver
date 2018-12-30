@@ -54,6 +54,10 @@ body {
     visibility: hidden;
 }
 
+.insertion-point.active::before {
+    content: "Add edge";
+}
+
 .insertion-point.revealed::before {
     visibility: visible;
 }

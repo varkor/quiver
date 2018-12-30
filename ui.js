@@ -482,7 +482,7 @@ UIState.default = new class extends UIState {};
 
 /// Two k-cells are being connected by an (k + 1)-cell.
 UIState.Connect = class extends UIState {
-    constructor(ui, source, target = null) {
+    constructor(ui, source, forge_vertex = false) {
         super();
 
         this.name = "connect";
@@ -491,7 +491,11 @@ UIState.Connect = class extends UIState {
         this.source = source;
 
         /// The target of a connection between two cells.
-        this.target = target;
+        this.target = null;
+
+        /// Whether to allow connections from vertices to empty cells (in which
+        /// case a new vertex will be created before creating the connection.)
+        this.forge_vertex = forge_vertex;
 
         /// The overlay for drawing an edge between the source and the cursor.
         this.overlay = new DOM.Element("div", { class: "edge overlay" })
@@ -720,11 +724,7 @@ class UI {
                         event.preventDefault();
 
                         for (const cell of this.selection) {
-                            // Remove this cell and its dependents from the quiver
-                            // and then from the HTML.
-                            for (const removed of this.quiver.remove(cell)) {
-                                removed.element.remove();
-                            }
+                            this.remove_cell(cell);
                         }
                         this.selection = new Set();
                         this.panel.update(this);
@@ -738,6 +738,9 @@ class UI {
                     // Stop trying to connect cells.
                     if (this.in_mode(UIState.Connect)) {
                         this.switch_mode(UIState.default);
+                        // If we're connecting from an insertion point, then we need to hide
+                        // it again.
+                        insertion_point.classList.remove("revealed");
                     }
                     // Defocus the label input.
                     this.panel.element.querySelector('label input[type="text"]').blur();
@@ -751,13 +754,23 @@ class UI {
         const insertion_point = new DOM.Element("div", { class: "insertion-point" }).element;
         this.element.appendChild(insertion_point);
 
+        // A helper function for creating a new vertex, as there are
+        // several actions that can trigger the creation of a vertex.
+        const create_vertex = (position) => {
+            const label = this.debug ? `\\mathscr{${
+                String.fromCharCode("A".charCodeAt(0) + Math.floor(Math.random() * 26))
+            }}` : "\\bullet";
+            return new Vertex(this, label, position);
+        };
+
         // Clicking on the insertion point reveals it,
         // after which another click adds a new node.
         insertion_point.addEventListener("mousedown", (event) => {
             if (event.button === 0) {
+                event.preventDefault();
                 if (!insertion_point.classList.contains("revealed")) {
                     // Reveal the insertion point upon a click.
-                    insertion_point.classList.add("revealed");
+                    insertion_point.classList.add("revealed", "pending");
                 } else {
                     // We only stop propagation in this branch, so that clicking once in an
                     // empty grid cell will deselect any selected cells, but clicking a second
@@ -767,27 +780,84 @@ class UI {
                     // (to select other cells) hides the insertion point again.
                     event.stopPropagation();
                     insertion_point.classList.remove("revealed");
-                    const label = this.debug ? `\\mathscr{${
-                        String.fromCharCode("A".charCodeAt(0) + Math.floor(Math.random() * 26))
-                    }}` : "\\bullet";
-                    const vertex = new Vertex(this, label, this.position_from_event(event));
-                    this.select(vertex);
-                    event.preventDefault();
+                    this.select(create_vertex(this.position_from_event(event)));
                     this.panel.element.querySelector('label input[type="text"]').select();
                 }
             }
         });
 
-        // If the cursor leaves the insertion point, it gets hidden again.
+        // If we move the mouse (without releasing it) while the insertion
+        // point is revealed, it will transition from a `"pending"` state
+        // to an `"active"` state. Moving the mouse off the insertion
+        // point in this state will create a new vertex and trigger the
+        // connection mode.
+        insertion_point.addEventListener("mousemove", () => {
+            if (insertion_point.classList.contains("pending")) {
+                insertion_point.classList.remove("pending");
+                insertion_point.classList.add("active");
+            }
+        });
+
+        // If we release the mouse while hovering over the insertion point,
+        // there are two possibilities. Either we haven't moved the mouse,
+        // in which case the insertion point loses its `"pending"` or
+        // `"active"` state, or we have, in which case we're mid-connection
+        // and we need to create a new vertex and connect it.
+        insertion_point.addEventListener("mouseup", (event) => {
+            if (event.button === 0) {
+                insertion_point.classList.remove("pending", "active");
+
+                // `forge_vertex` is only true when we've triggered a connection
+                // by dragging on the insertion point, in which case we want to
+                // create a new vertex and connect it.
+                if (this.in_mode(UIState.Connect) && this.state.forge_vertex) {
+                    this.state.target = create_vertex(this.position_from_event(event));
+                    this.state.connect(this);
+                }
+            }
+        });
+
+        // If the cursor leaves the insertion point and the mouse has *not*
+        // been held, it gets hidden again. However, if the cursor leaves the
+        // insertion point whilst remaining held, then the insertion point will
+        // be `"active"` and we create a new vertex and immediately start
+        // connecting it to something (though in `forge_vertex` mode, which
+        // allows us also to connect to empty cells, creating a new vertex
+        // and connecting them both).
         insertion_point.addEventListener("mouseleave", () => {
-            insertion_point.classList.remove("revealed");
+            insertion_point.classList.remove("pending");
+
+            if (insertion_point.classList.contains("active")) {
+                // If the insertion point is `"active"`, we're going to create
+                // a vertex and start connecting it.
+                insertion_point.classList.remove("active");
+                const vertex = create_vertex(this.position_from_offset(new Offset(
+                    insertion_point.offsetLeft,
+                    insertion_point.offsetTop,
+                )));
+                this.select(vertex);
+                this.switch_mode(new UIState.Connect(this, vertex, true));
+                vertex.element.classList.add("source");
+            } else if (!this.in_mode(UIState.Connect) || !this.state.forge_vertex) {
+                // If the cursor leaves the insertion point and we're *not*
+                // connecting anything, then hide it.
+                insertion_point.classList.remove("revealed");
+            }
         });
 
         // Moving the insertion point, and rearranging cells.
         this.element.addEventListener("mousemove", (event) => {
+            // Move the insertion point under the pointer.
             const position = this.position_from_event(event);
             const offset = this.offset_from_position(position);
             offset.reposition(insertion_point);
+
+            // If we are in `forge_vertex` mode, then we want to reveal
+            // the insertion point if and only if it is not at the same
+            // position as an existing vertex.
+            if (this.in_mode(UIState.Connect) && this.state.forge_vertex) {
+                insertion_point.classList.toggle("revealed", !this.positions.has(`${position}`));
+            }
 
             if (this.in_mode(UIState.Move)) {
                 // Prevent dragging from selecting random elements.
@@ -862,13 +932,18 @@ class UI {
         }
     }
 
-    /// A helper method for getting a position from an event.
-    position_from_event(event, round = true) {
+    /// A helper method for getting a position from an offset.
+    position_from_offset(offset, round = true) {
         const transform = round ? Math.round : x => x;
         return new Position(
-            transform(event.pageX / this.cell_size - 0.5),
-            transform(event.pageY / this.cell_size - 0.5),
+            transform(offset.left / this.cell_size - 0.5),
+            transform(offset.top / this.cell_size - 0.5),
         );
+    }
+
+    /// A helper method for getting a position from an event.
+    position_from_event(event, round = true) {
+        return this.position_from_offset(new Offset(event.pageX, event.pageY), round);
     }
 
     /// A helper method for getting an HTML (left, top) position from a grid `Position`.
@@ -912,6 +987,17 @@ class UI {
             this.positions.set(`${cell.position}`, cell);
         }
         this.element.appendChild(cell.element);
+    }
+
+    /// Removes a cell.
+    remove_cell(cell) {
+        // Remove this cell and its dependents from the quiver and then from the HTML.
+        for (const removed of this.quiver.remove(cell)) {
+            if (removed.level === 0) {
+                this.positions.delete(`${removed.position}`);
+            }
+            removed.element.remove();
+        }
     }
 
     /// Moves a cell to a new position. This is specifically intended for vertices.
@@ -1545,7 +1631,7 @@ class Cell {
                 // Deselect all other nodes.
                 ui.deselect();
                 ui.select(this);
-                const state = new UIState.Connect(ui, this);
+                const state = new UIState.Connect(ui, this, true);
                 if (state.valid_connection(null)) {
                     ui.switch_mode(state);
                     this.element.classList.add("source");
