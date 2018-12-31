@@ -811,8 +811,11 @@ class UI {
                 // by dragging on the insertion point, in which case we want to
                 // create a new vertex and connect it.
                 if (this.in_mode(UIState.Connect) && this.state.forge_vertex) {
-                    this.state.target = create_vertex(this.position_from_event(event));
-                    this.state.connect(this);
+                    // We only want to forge vertices, not edges (and thus 1-cells).
+                    if (this.state.source.level === 0) {
+                        this.state.target = create_vertex(this.position_from_event(event));
+                        this.state.connect(this);
+                    }
                 }
             }
         });
@@ -856,7 +859,12 @@ class UI {
             // the insertion point if and only if it is not at the same
             // position as an existing vertex.
             if (this.in_mode(UIState.Connect) && this.state.forge_vertex) {
-                insertion_point.classList.toggle("revealed", !this.positions.has(`${position}`));
+                // We're in `forge_vertex` mode, not `forge_cell` mode: we can't create
+                // arbitrary edges to connect.
+                if (this.state.source.level === 0) {
+                    insertion_point.classList
+                        .toggle("revealed", !this.positions.has(`${position}`));
+                }
             }
 
             if (this.in_mode(UIState.Move)) {
