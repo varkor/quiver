@@ -455,6 +455,11 @@ class Offset {
         [this.left, this.top] = [left, top];
     }
 
+    /// Returns an `Offset` with `{ left: 0, top: 0}`.
+    static zero() {
+        return new Offset(0, 0);
+    }
+
     /// Return a [left, top] arrow of CSS length values.
     to_CSS() {
         return [`${this.left}px`, `${this.top}px`];
@@ -463,6 +468,10 @@ class Offset {
     /// Moves an `element` to the offset.
     reposition(element) {
         [element.style.left, element.style.top] = this.to_CSS();
+    }
+
+    sub(other) {
+        return new Offset(this.left - other.left, this.top - other.top);
     }
 }
 
@@ -478,7 +487,14 @@ class UIState {
 }
 
 /// The default state, representing no special action.
-UIState.default = new class extends UIState {};
+UIState.Default = class extends UIState {
+    constructor() {
+        super();
+
+        this.name = "default";
+    }
+};
+UIState.default = new UIState.Default();
 
 /// Two k-cells are being connected by an (k + 1)-cell.
 UIState.Connect = class extends UIState {
@@ -520,7 +536,7 @@ UIState.Connect = class extends UIState {
             svg.removeChild(svg.firstChild);
         }
         if (!position.eq(this.source.position)) {
-            Edge.prototype.draw_and_position_edge(
+            Edge.draw_and_position_edge(
                 ui,
                 this.overlay,
                 svg,
@@ -529,7 +545,9 @@ UIState.Connect = class extends UIState {
                 // Lock on to the target if present, otherwise simply draw the edge
                 // to the position of the cursor.
                 this.target !== null ? this.target.position : position,
-                Edge.prototype.default_options(null, { body: { name: "cell", level: this.source.level + 1 } }),
+                Edge.default_options(null, {
+                    body: { name: "cell", level: this.source.level + 1 },
+                }),
                 this.target !== null,
                 null,
             );
@@ -655,13 +673,26 @@ UIState.Move = class extends UIState {
     }
 };
 
+/// The UI view is being panned.
+UIState.Pan = class extends UIState {
+    constructor() {
+        super();
+
+        this.name = "pan";
+
+        /// The location from which the pan was initiated (used to update the view relative to the
+        /// origin).
+        this.origin = null;
+    }
+};
+
 class UI {
     constructor(element) {
         /// The quiver identified with the UI.
         this.quiver = new Quiver();
 
         /// The UI state (e.g. whether cells are being rearranged, or connected, etc.).
-        this.state = UIState.default;
+        this.state = null;
 
         /// The size of each 0-cell.
         this.cell_size = 128;
@@ -669,7 +700,7 @@ class UI {
         /// All currently selected cells;
         this.selection = new Set();
 
-        /// The element in which to place cells.
+        /// The element in which to place the interface elements.
         this.element = element;
 
         /// A map from `x,y` positions to vertices. Note that this
@@ -678,6 +709,12 @@ class UI {
 
         /// A set of unique idenitifiers for various objects (used for generating HTML `id`s).
         this.ids = new Map();
+
+        /// The element containing all the cells themselves.
+        this.canvas = null;
+
+        /// The offset of the view.
+        this.view = Offset.zero();
 
         /// The panel for viewing and editing cell data.
         this.panel = new Panel();
@@ -688,15 +725,29 @@ class UI {
 
     initialise() {
         this.element.classList.add("ui");
+        this.switch_mode(UIState.default);
+
+        // Set up the element containing all the cells.
+        this.canvas = new DOM.Element("div", { class: "canvas" });
+        this.element.appendChild(this.canvas.element);
 
         // Set up the panel for viewing and editing cell data.
         this.panel.initialise(this);
         this.element.appendChild(this.panel.element);
 
-        // Stop trying to connect or move cells when the mouse is released.
+        // Add the insertion point for new nodes.
+        const insertion_point = new DOM.Element("div", { class: "insertion-point" }).element;
+        this.canvas.element.appendChild(insertion_point);
+
         document.addEventListener("mouseup", (event) => {
             if (event.button === 0) {
-                this.switch_mode(UIState.default);
+                if (this.in_mode(UIState.Pan)) {
+                    // We only want to pan when the pointer is held.
+                    this.state.origin = null;
+                } else {
+                    // Stop trying to connect or move cells when the mouse is released.
+                    this.switch_mode(UIState.default);
+                }
             }
         });
 
@@ -707,19 +758,29 @@ class UI {
             }
         });
 
-        // Deselect cells when the mouse is pressed.
         this.element.addEventListener("mousedown", (event) => {
             if (event.button === 0) {
-                this.deselect();
+                if (this.in_mode(UIState.Pan)) {
+                    // Record the position the pointer was pressed at, so we can pan relative
+                    // to that location by dragging.
+                    this.state.origin = this.offset_from_event(event);
+                } else {
+                    // Deselect cells when the mouse is pressed.
+                    this.deselect();
+                }
             }
         });
 
         // Handle global key presses (such as keyboard shortcuts).
         document.addEventListener("keydown", (event) => {
+            // Many keyboard shortcuts are only relevant when we're not midway
+            // through typing in an input, which should capture key presses.
+            const editing_input = document.activeElement instanceof HTMLInputElement;
+
             switch (event.key) {
                 case "Backspace":
                     // Remove any selected cells.
-                    if (!(document.activeElement instanceof HTMLInputElement)) {
+                    if (!editing_input) {
                         // Prevent Backspace triggering browser history navigation.
                         event.preventDefault();
 
@@ -747,12 +808,24 @@ class UI {
                     // Close any open panes.
                     this.panel.dismiss_export_pane(this);
                     break;
+                case "Alt":
+                    // Holding Option triggers panning mode.
+                    if (this.in_mode(UIState.Default)) {
+                        this.switch_mode(new UIState.Pan());
+                    }
+                    break;
             }
         });
 
-        // Add the insertion point for new nodes.
-        const insertion_point = new DOM.Element("div", { class: "insertion-point" }).element;
-        this.element.appendChild(insertion_point);
+        document.addEventListener("keyup", (event) => {
+            switch (event.key) {
+                case "Alt":
+                    if (this.in_mode(UIState.Pan)) {
+                        this.switch_mode(UIState.default);
+                    }
+                    break;
+            }
+        });
 
         // A helper function for creating a new vertex, as there are
         // several actions that can trigger the creation of a vertex.
@@ -767,21 +840,23 @@ class UI {
         // after which another click adds a new node.
         insertion_point.addEventListener("mousedown", (event) => {
             if (event.button === 0) {
-                event.preventDefault();
-                if (!insertion_point.classList.contains("revealed")) {
-                    // Reveal the insertion point upon a click.
-                    insertion_point.classList.add("revealed", "pending");
-                } else {
-                    // We only stop propagation in this branch, so that clicking once in an
-                    // empty grid cell will deselect any selected cells, but clicking a second
-                    // time to add a new vertex will not deselect the new, selected vertex we've
-                    // just added. Note that it's not possible to select other cells in between
-                    // the first and second click, because leaving the grid cell with the cursor
-                    // (to select other cells) hides the insertion point again.
-                    event.stopPropagation();
-                    insertion_point.classList.remove("revealed");
-                    this.select(create_vertex(this.position_from_event(event)));
-                    this.panel.element.querySelector('label input[type="text"]').select();
+                if (this.in_mode(UIState.Default)) {
+                    event.preventDefault();
+                    if (!insertion_point.classList.contains("revealed")) {
+                        // Reveal the insertion point upon a click.
+                        insertion_point.classList.add("revealed", "pending");
+                    } else {
+                        // We only stop propagation in this branch, so that clicking once in an
+                        // empty grid cell will deselect any selected cells, but clicking a second
+                        // time to add a new vertex will not deselect the new, selected vertex we've
+                        // just added. Note that it's not possible to select other cells in between
+                        // the first and second click, because leaving the grid cell with the cursor
+                        // (to select other cells) hides the insertion point again.
+                        event.stopPropagation();
+                        insertion_point.classList.remove("revealed");
+                        this.select(create_vertex(this.position_from_event(this.view, event)));
+                        this.panel.element.querySelector('label input[type="text"]').select();
+                    }
                 }
             }
         });
@@ -813,7 +888,8 @@ class UI {
                 if (this.in_mode(UIState.Connect) && this.state.forge_vertex) {
                     // We only want to forge vertices, not edges (and thus 1-cells).
                     if (this.state.source.level === 0) {
-                        this.state.target = create_vertex(this.position_from_event(event));
+                        this.state.target
+                            = create_vertex(this.position_from_event(this.view, event));
                         this.state.connect(this);
                     }
                 }
@@ -834,7 +910,7 @@ class UI {
                 // If the insertion point is `"active"`, we're going to create
                 // a vertex and start connecting it.
                 insertion_point.classList.remove("active");
-                const vertex = create_vertex(this.position_from_offset(new Offset(
+                const vertex = create_vertex(this.position_from_offset(this.view, new Offset(
                     insertion_point.offsetLeft,
                     insertion_point.offsetTop,
                 )));
@@ -851,9 +927,15 @@ class UI {
         // Moving the insertion point, and rearranging cells.
         this.element.addEventListener("mousemove", (event) => {
             // Move the insertion point under the pointer.
-            const position = this.position_from_event(event);
-            const offset = this.offset_from_position(position);
+            const position = this.position_from_event(this.view, event);
+            const offset = this.offset_from_position(this.view, position);
             offset.reposition(insertion_point);
+
+            if (this.in_mode(UIState.Pan) && this.state.origin !== null) {
+                const new_offset = this.offset_from_event(event);
+                this.pan_view(new_offset.sub(this.state.origin));
+                this.state.origin = new_offset;
+            }
 
             // If we are in `forge_vertex` mode, then we want to reveal
             // the insertion point if and only if it is not at the same
@@ -912,12 +994,12 @@ class UI {
                 // Prevent dragging from selecting random elements.
                 event.preventDefault();
 
-                this.state.update(this, this.position_from_event(event, false));
+                this.state.update(this, this.position_from_event(this.view, event, false));
             }
         });
 
         // Set the grid background.
-        this.set_background(this.element);
+        this.set_background(this.canvas.element, this.view);
     }
 
     /// Returns whether the UI has a particular state.
@@ -927,11 +1009,13 @@ class UI {
 
     /// Transitions to a `UIState`.
     switch_mode(state) {
-        if (this.state.constructor !== state.constructor) {
-            // Clean up any state for which this state is responsible.
-            this.state.release();
-            if (this.state.name !== null) {
-                this.element.classList.remove(this.state.name);
+        if (this.state === null || this.state.constructor !== state.constructor) {
+            if (this.state !== null) {
+                // Clean up any state for which this state is responsible.
+                this.state.release();
+                if (this.state.name !== null) {
+                    this.element.classList.remove(this.state.name);
+                }
             }
             this.state = state;
             if (this.state.name !== null) {
@@ -941,24 +1025,31 @@ class UI {
     }
 
     /// A helper method for getting a position from an offset.
-    position_from_offset(offset, round = true) {
+    position_from_offset(view, offset, round = true) {
         const transform = round ? Math.round : x => x;
         return new Position(
-            transform(offset.left / this.cell_size - 0.5),
-            transform(offset.top / this.cell_size - 0.5),
+            transform((offset.left - view.left) / this.cell_size - 0.5),
+            transform((offset.top - view.top) / this.cell_size - 0.5),
         );
     }
 
     /// A helper method for getting a position from an event.
-    position_from_event(event, round = true) {
-        return this.position_from_offset(new Offset(event.pageX, event.pageY), round);
+    position_from_event(view, event, round = true) {
+        return this.position_from_offset(view, this.offset_from_event(event), round);
+    }
+
+    /// A helper method for getting an offset from an event.
+    offset_from_event(event) {
+        return new Offset(event.pageX, event.pageY);
     }
 
     /// A helper method for getting an HTML (left, top) position from a grid `Position`.
-    offset_from_position(position, account_for_centring = true) {
+    offset_from_position(view, position, account_for_centring = true) {
         return new Offset(
-            position.x * this.cell_size + (account_for_centring ? this.cell_size / 2 : 0),
-            position.y * this.cell_size + (account_for_centring ? this.cell_size / 2 : 0),
+            position.x * this.cell_size + (account_for_centring ? this.cell_size / 2 : 0)
+                + view.left,
+            position.y * this.cell_size + (account_for_centring ? this.cell_size / 2 : 0)
+                + view.top,
         );
     }
 
@@ -994,7 +1085,7 @@ class UI {
         if (cell.level === 0) {
             this.positions.set(`${cell.position}`, cell);
         }
-        this.element.appendChild(cell.element);
+        this.canvas.element.appendChild(cell.element);
     }
 
     /// Removes a cell.
@@ -1023,6 +1114,17 @@ class UI {
         }
     }
 
+    /// Repositions the view by a relative offset.
+    pan_view(offset) {
+        this.view.left += offset.left;
+        this.view.top += offset.top;
+        for (const cell of this.canvas.element.querySelectorAll(".cell")) {
+            cell.style.left = `${cell.offsetLeft + offset.left}px`;
+            cell.style.top = `${cell.offsetTop + offset.top}px`;
+        }
+        this.set_background(this.canvas.element, this.view);
+    }
+
     /// Returns a unique identifier for an object.
     unique_id(object) {
         if (!this.ids.has(object)) {
@@ -1046,7 +1148,7 @@ class UI {
     }
 
     // Set the grid background for the canvas.
-    set_background() {
+    set_background(element, offset) {
         // Constants for parameters of the grid pattern.
         // The width of the cell border lines.
         const BORDER_WIDTH = 2;
@@ -1055,17 +1157,6 @@ class UI {
         // The border colour.
         const BORDER_COLOUR = "lightgrey";
 
-        // Construct the linear gradient corresponding to the dashed pattern (in a single cell).
-        let dashes = "";
-        let x = 0;
-        while (x + DASH_LENGTH * 2 < this.cell_size) {
-            dashes += `
-                transparent ${x += DASH_LENGTH}px, white ${x}px,
-                white ${x += DASH_LENGTH}px, transparent ${x}px,
-            `;
-        }
-        // Slice off the whitespace and trailing comma.
-        dashes = dashes.trim().slice(0, -1);
         // Because we're perfectionists, we want to position the dashes so that the dashes forming
         // the corners of each cell make a perfect symmetrical cross. This works out how to offset
         // the dashes to do so. Full disclosure: I derived this equation observationally and it may
@@ -1073,20 +1164,37 @@ class UI {
         const dash_offset = (2 * (this.cell_size / 16 % (DASH_LENGTH / 2)) - 1 + DASH_LENGTH)
             % DASH_LENGTH + 1 - (DASH_LENGTH / 2);
 
-        const grid_background = `
-            linear-gradient(${dashes}),
-            linear-gradient(90deg, transparent ${this.cell_size - BORDER_WIDTH}px, ${BORDER_COLOUR} 0),
-            linear-gradient(90deg, ${dashes}),
-            linear-gradient(transparent ${this.cell_size - BORDER_WIDTH}px, ${BORDER_COLOUR} 0)
-        `;
+        // We only want to set the background image if it's not already set: otherwise we
+        // can update it simply by updating the position without having to reset everything.
+        if (element.style.backgroundImage === "") {
+            // Construct the linear gradient corresponding to the dashed pattern (in a single cell).
+            let dashes = "";
+            for (let x = 0; x + DASH_LENGTH * 2 < this.cell_size;) {
+                dashes += `
+                    transparent ${x += DASH_LENGTH}px, white ${x}px,
+                    white ${x += DASH_LENGTH}px, transparent ${x}px,
+                `;
+            }
+            // Slice off the whitespace and trailing comma.
+            dashes = dashes.trim().slice(0, -1);
 
-        this.element.style.setProperty("--cell-size", `${this.cell_size}px`);
-        this.element.style.backgroundImage = grid_background;
-        this.element.style.backgroundPosition = `
-            0 ${dash_offset}px,
-            ${BORDER_WIDTH / 2}px 0,
-            ${dash_offset}px 0,
-            0px ${BORDER_WIDTH / 2}px
+            const grid_background = `
+                linear-gradient(${dashes}),
+                linear-gradient(90deg, transparent ${this.cell_size - BORDER_WIDTH}px,
+                    ${BORDER_COLOUR} 0),
+                linear-gradient(90deg, ${dashes}),
+                linear-gradient(transparent ${this.cell_size - BORDER_WIDTH}px, ${BORDER_COLOUR} 0)
+            `.trim().replace(/\s+/g, " ");
+
+            element.style.setProperty("--cell-size", `${this.cell_size}px`);
+            element.style.backgroundImage = grid_background;
+        }
+
+        element.style.backgroundPosition = `
+            ${offset.left}px ${dash_offset + offset.top}px,
+            ${BORDER_WIDTH / 2 + offset.left}px ${offset.top}px,
+            ${dash_offset + offset.left}px ${offset.top}px,
+            ${offset.left}px ${BORDER_WIDTH / 2 + offset.top}px
         `;
     }
 }
@@ -1191,7 +1299,7 @@ class Panel {
                 return {
                     edge: {
                         length: ARROW_LENGTH,
-                        options: Edge.prototype.default_options(),
+                        options: Edge.default_options(),
                         gap,
                     },
                     shared: { y_offset },
@@ -1266,7 +1374,7 @@ class Panel {
                 return {
                     edge: {
                         length: 0,
-                        options: Edge.prototype.default_options(null, {
+                        options: Edge.default_options(null, {
                             tail: data,
                             body: { name: "none" },
                             head: { name: "none" },
@@ -1295,7 +1403,7 @@ class Panel {
                 return {
                     edge: {
                         length: ARROW_LENGTH,
-                        options: Edge.prototype.default_options(null, {
+                        options: Edge.default_options(null, {
                             body: data,
                             head: { name: "none" },
                         }),
@@ -1322,7 +1430,7 @@ class Panel {
                 return {
                     edge: {
                         length: 0,
-                        options: Edge.prototype.default_options(null, {
+                        options: Edge.default_options(null, {
                             head: data,
                             body: { name: "none" },
                         }),
@@ -1335,7 +1443,7 @@ class Panel {
         this.create_option_list(
             ui,
             [
-                ["arrow", Edge.prototype.default_options().style],
+                ["arrow", Edge.default_options().style],
                 ["adjunction", { name: "adjunction" }],
                 ["corner", { name: "corner" }],
             ],
@@ -1362,7 +1470,7 @@ class Panel {
                 return {
                     edge: {
                         length: ARROW_LENGTH,
-                        options: Edge.prototype.default_options(null, data),
+                        options: Edge.default_options(null, data),
                     },
                 };
             },
@@ -1443,7 +1551,7 @@ class Panel {
 
             const { shared, edge: { length, options, gap = null } } = properties(value, data);
 
-            const { dimensions, alignment } = Edge.prototype.draw_edge(svg, options, length, gap);
+            const { dimensions, alignment } = Edge.draw_edge(svg, options, length, gap);
             // Align the background according the alignment of the arrow
             // (`"centre"` is default).
             if (alignment !== "centre") {
@@ -1608,13 +1716,18 @@ class Cell {
         if (this.element !== content_element) {
             this.element.addEventListener("mousedown", (event) => {
                 if (event.button === 0) {
-                    event.stopPropagation();
-                    // If the cell we're dragging is part of the existing selection,
-                    // then we'll move every cell that is selected. However, if it's
-                    // not already part of the selection, we'll just drag this cell
-                    // and ignore the selection.
-                    const move = new Set(ui.selection.has(this) ? [...ui.selection] : [this]);
-                    ui.switch_mode(new UIState.Move(ui.position_from_event(event), move));
+                    if (ui.in_mode(UIState.Default)) {
+                        event.stopPropagation();
+                        // If the cell we're dragging is part of the existing selection,
+                        // then we'll move every cell that is selected. However, if it's
+                        // not already part of the selection, we'll just drag this cell
+                        // and ignore the selection.
+                        const move = new Set(ui.selection.has(this) ? [...ui.selection] : [this]);
+                        ui.switch_mode(
+                            new UIState.Move(ui.position_from_event(ui.view, event),
+                            move,
+                        ));
+                    }
                 }
             });
         }
@@ -1627,22 +1740,24 @@ class Cell {
         let was_previously_selected;
         content_element.addEventListener("mousedown", (event) => {
             if (event.button === 0) {
-                event.stopPropagation();
-                event.preventDefault();
+                if (ui.in_mode(UIState.Default)) {
+                    event.stopPropagation();
+                    event.preventDefault();
 
-                const label_input = ui.panel.element.querySelector('label input[type="text"]');
-                was_previously_selected = ui.selection.has(this) &&
-                    // If the label input is already focused, then we defocus it.
-                    // This allows the user to easily switch between editing the
-                    // entire cell and the label.
-                    document.activeElement !== label_input;
-                // Deselect all other nodes.
-                ui.deselect();
-                ui.select(this);
-                const state = new UIState.Connect(ui, this, true);
-                if (state.valid_connection(null)) {
-                    ui.switch_mode(state);
-                    this.element.classList.add("source");
+                    const label_input = ui.panel.element.querySelector('label input[type="text"]');
+                    was_previously_selected = ui.selection.has(this) &&
+                        // If the label input is already focused, then we defocus it.
+                        // This allows the user to easily switch between editing the
+                        // entire cell and the label.
+                        document.activeElement !== label_input;
+                    // Deselect all other nodes.
+                    ui.deselect();
+                    ui.select(this);
+                    const state = new UIState.Connect(ui, this, true);
+                    if (state.valid_connection(null)) {
+                        ui.switch_mode(state);
+                        this.element.classList.add("source");
+                    }
                 }
             }
         });
@@ -1728,7 +1843,7 @@ class Vertex extends Cell {
 
     /// Create the HTML element associated with the vertex.
     render(ui) {
-        const offset = ui.offset_from_position(this.position);
+        const offset = ui.offset_from_position(ui.view, this.position);
 
         const construct = this.element === null;
 
@@ -1768,21 +1883,21 @@ class Edge extends Cell {
         this.target = target;
         ui.quiver.connect(this.source, this.target, this);
 
-        this.options = this.default_options(options);
+        this.options = Edge.default_options(options, null, this.level);
 
         this.render(ui);
         super.initialise(ui);
     }
 
     /// A set of defaults for edge options: a basic arrow (→).
-    default_options(override_properties, override_style) {
+    static default_options(override_properties, override_style, level = 1) {
         return Object.assign({
             label_alignment: "left",
             offset: 0,
             style: Object.assign({
                 name: "arrow",
                 tail: { name: "none" },
-                body: { name: "cell", level: this.level },
+                body: { name: "cell", level },
                 head: { name: "arrowhead" },
             }, override_style),
         }, override_properties);
@@ -1854,7 +1969,7 @@ class Edge extends Cell {
             ));
 
         // Draw the edge itself.
-        this.draw_and_position_edge(
+        Edge.draw_and_position_edge(
             ui,
             this.element,
             svg,
@@ -1883,7 +1998,7 @@ class Edge extends Cell {
     /// Draw an edge on an existing SVG and positions it with respect to a parent `element`.
     /// Note that this does not clear the SVG beforehand.
     /// Returns the direction of the arrow.
-    draw_and_position_edge(
+    static draw_and_position_edge(
         ui,
         element,
         svg,
@@ -1903,7 +2018,11 @@ class Edge extends Cell {
         let MARGIN = level === 1 ? ui.cell_size / 4 : ui.cell_size / 8;
 
         // The SVG for the arrow itself.
-        const offset_delta = ui.offset_from_position(target_position.sub(source_position), false);
+        const offset_delta = ui.offset_from_position(
+            Offset.zero(),
+            target_position.sub(source_position),
+            false,
+        );
         const length = Math.hypot(offset_delta.top, offset_delta.left)
             - MARGIN * (offset_from_target ? 2 : 1);
 
@@ -1914,7 +2033,7 @@ class Edge extends Cell {
             return 0;
         }
 
-        const { dimensions, alignment } = this.draw_edge(svg, options, length, gap, true);
+        const { dimensions, alignment } = Edge.draw_edge(svg, options, length, gap, true);
         // If the arrow is shorter than expected (for example, because we are using a
         // fixed-width arrow style), then we need to make sure that it's still centred
         // if the `alignment` is `"centre"`.
@@ -1935,7 +2054,7 @@ class Edge extends Cell {
 
         // Transform the `element` so that the arrow points in the correct direction.
         const direction = Math.atan2(offset_delta.top, offset_delta.left);
-        const source_offset = ui.offset_from_position(source_position);
+        const source_offset = ui.offset_from_position(ui.view, source_position);
         element.style.left = `${source_offset.left + Math.cos(direction) * margin}px`;
         element.style.top = `${source_offset.top + Math.sin(direction) * margin}px`;
         [element.style.width, element.style.height]
@@ -1955,7 +2074,7 @@ class Edge extends Cell {
     /// Note that this does not clear the SVG beforehand.
     /// Returns the (new) dimensions of the SVG and the intended alignment of the edge.
     /// `{ dimensions, alignment }`
-    draw_edge(svg, options, length, gap, scale = false) {
+    static draw_edge(svg, options, length, gap, scale = false) {
         // Constants for parameters of the arrow shapes.
         const SVG_PADDING = Edge.SVG_PADDING;
         // The width of each stroke (for the tail, body and head).
