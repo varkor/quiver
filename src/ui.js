@@ -84,11 +84,14 @@ class Quiver {
         const removal_queue = new Set([cell]);
         for (const cell of removal_queue) {
             this.cells[cell.level].delete(cell);
-            for (const [dependency,] of this.dependencies.get(cell)) {
+            // The edge case here and below (`|| []`) is for when a cell and its dependencies
+            // are being removed simultaneously, in which case the ordering of removal
+            // here can cause problems without taking this into consideration.
+            for (const [dependency,] of this.dependencies.get(cell) || []) {
                 removal_queue.add(dependency);
             }
             this.dependencies.delete(cell);
-            for (const reverse_dependency of this.reverse_dependencies.get(cell)) {
+            for (const reverse_dependency of this.reverse_dependencies.get(cell) || []) {
                 // If a cell is being removed as a dependency, then some of its
                 // reverse dependencies may no longer exist.
                 if (this.dependencies.has(reverse_dependency)) {
@@ -109,6 +112,11 @@ class Quiver {
 
         this.reverse_dependencies.get(edge).add(source);
         this.reverse_dependencies.get(edge).add(target);
+    }
+
+    /// Returns a collection of all the cells in the quiver.
+    all_cells() {
+        return this.dependencies.keys();
     }
 
     /// Returns whether the quiver is empty.
@@ -206,7 +214,7 @@ QuiverExport.tikzcd = new class extends QuiverExport {
         const names = new Map();
         let index = 0;
         const cell_reference = (cell) => {
-            if (cell.level === 0) {
+            if (cell.is_vertex()) {
                 // Note that tikzcd 1-indexes its cells.
                 return `${cell.position.y - offset.y + 1}-${cell.position.x - offset.x + 1}`;
             } else {
@@ -568,11 +576,10 @@ UIState.Connect = class extends UIState {
 
     /// Connects the source and target. Note that this does *not* check whether the source and
     /// target are compatible with each other.
-    connect(ui) {
+    connect(ui, event) {
         const label = ui.debug ? `${
             String.fromCharCode("A".charCodeAt(0) + Math.floor(Math.random() * 26))
         }` : "";
-        ui.deselect();
 
         // We attempt to guess what the intended label alignment is and what the intended edge
         // offset is, if the cells being connected form some path with existing connections.
@@ -651,15 +658,20 @@ UIState.Connect = class extends UIState {
             options.offset = offset.keys().next().value;
         }
 
+        if (!event.shiftKey) {
+            ui.deselect();
+        }
         // The edge itself does all the set up, such as adding itself to the page.
         ui.select(new Edge(ui, label, this.source, this.target, options));
-        ui.panel.element.querySelector('label input[type="text"]').focus();
+        if (!event.shiftKey) {
+            ui.panel.element.querySelector('label input[type="text"]').focus();
+        }
     }
 };
 
 /// Cells are being moved to a different position.
 UIState.Move = class extends UIState {
-    constructor(origin, selection) {
+    constructor(ui, origin, selection) {
         super();
 
         this.name = "move";
@@ -670,6 +682,25 @@ UIState.Move = class extends UIState {
 
         /// The group of cells that should be moved.
         this.selection = selection;
+
+        // Cells that are being moved are not considered part of the grid of cells
+        // and therefore do not interact with one another.
+        for (const cell of selection) {
+            ui.positions.delete(`${cell.position}`);
+        }
+    }
+
+    release(ui) {
+        for (const cell of this.selection) {
+            if (!ui.positions.has(`${cell.position}`)) {
+                ui.positions.set(`${cell.position}`, cell);
+            } else {
+                throw new Error(
+                    "new cell position already contains a cell:",
+                    ui.positions.get(`${cell.position}`),
+                );
+            }
+        }
     }
 };
 
@@ -765,8 +796,15 @@ class UI {
                     // to that location by dragging.
                     this.state.origin = this.offset_from_event(event);
                 } else {
-                    // Deselect cells when the mouse is pressed.
-                    this.deselect();
+                    if (!event.shiftKey) {
+                        // Deselect cells when the mouse is pressed (at least when the Shift key
+                        // is not held).
+                        this.deselect();
+                    } else {
+                        // Otherwise, simply deselect the label input (it's unlikely the user
+                        // wants to modify all the cell labels at once).
+                        this.panel.element.querySelector('label input[type="text"]').blur();
+                    }
                 }
             }
         });
@@ -814,6 +852,21 @@ class UI {
                         this.switch_mode(new UIState.Pan());
                     }
                     break;
+                case "a":
+                    // Select/deselect all.
+                    if (!editing_input) {
+                        if (event.metaKey || event.ctrlKey) {
+                            event.preventDefault();
+                            if (this.in_mode(UIState.Default)) {
+                                if (!event.shiftKey) {
+                                    this.select(...this.quiver.all_cells());
+                                } else {
+                                    this.deselect();
+                                }
+                            }
+                        }
+                    }
+                    break;
             }
         });
 
@@ -854,8 +907,18 @@ class UI {
                         // (to select other cells) hides the insertion point again.
                         event.stopPropagation();
                         insertion_point.classList.remove("revealed");
+                        // We want the new vertex to be the only selected cell, unless we've held
+                        // Shift when creating it.
+                        if (!event.shiftKey) {
+                            this.deselect();
+                        }
                         this.select(create_vertex(this.position_from_event(this.view, event)));
-                        this.panel.element.querySelector('label input[type="text"]').select();
+                        // When the user is creating a vertex and adding it to the selection,
+                        // it is unlikely they expect to edit all the labels simultaneously,
+                        // so in this case we do not focus the input.
+                        if (!event.shiftKey) {
+                            this.panel.element.querySelector('label input[type="text"]').select();
+                        }
                     }
                 }
             }
@@ -887,10 +950,14 @@ class UI {
                 // create a new vertex and connect it.
                 if (this.in_mode(UIState.Connect) && this.state.forge_vertex) {
                     // We only want to forge vertices, not edges (and thus 1-cells).
-                    if (this.state.source.level === 0) {
+                    if (this.state.source.is_vertex()) {
                         this.state.target
                             = create_vertex(this.position_from_event(this.view, event));
-                        this.state.connect(this);
+                        // Usually this vertex will be immediately deselected, except when Shift
+                        // is held, in which case we want to select the forged vertices *and* the
+                        // new edge.
+                        this.select(this.state.target);
+                        this.state.connect(this, event);
                     }
                 }
             }
@@ -943,7 +1010,7 @@ class UI {
             if (this.in_mode(UIState.Connect) && this.state.forge_vertex) {
                 // We're in `forge_vertex` mode, not `forge_cell` mode: we can't create
                 // arbitrary edges to connect.
-                if (this.state.source.level === 0) {
+                if (this.state.source.is_vertex()) {
                     insertion_point.classList
                         .toggle("revealed", !this.positions.has(`${position}`));
                 }
@@ -953,19 +1020,26 @@ class UI {
                 // Prevent dragging from selecting random elements.
                 event.preventDefault();
 
+                const new_position = (cell) => {
+                    return position.add(cell.position.sub(this.state.origin));
+                };
+
                 // We will only try to reposition if the new position is actually different
                 // (rather than the cursor simply having moved within the same grid cell).
                 // On top of this, we prevent vertices from being moved into grid cells that
                 // are already occupied by vertices.
-                if (!position.eq(this.state.origin) && !this.positions.has(`${position}`)) {
+                const occupied = Array.from(this.state.selection).some((cell) => {
+                    return cell.is_vertex() && this.positions.has(`${new_position(cell)}`);
+                });
+                if (!position.eq(this.state.origin) && !occupied) {
                     // We'll need to move all of the edges connected to the moved vertices,
                     // so we keep track of which we need to update in `render_queue`.
                     const render_queue = new Set();
                     // Move all the selected vertices.
                     for (const cell of this.state.selection) {
-                        if (cell.level === 0) {
-                            const position_delta = cell.position.sub(this.state.origin);
-                            this.reposition(cell, position.add(position_delta));
+                        if (cell.is_vertex()) {
+                            cell.position = new_position(cell);
+                            cell.render(this);
                             // Track all of the edges dependent on this vertex.
                             for (const [dependency,] of this.quiver.dependencies.get(cell)) {
                                 render_queue.add(dependency);
@@ -1012,7 +1086,7 @@ class UI {
         if (this.state === null || this.state.constructor !== state.constructor) {
             if (this.state !== null) {
                 // Clean up any state for which this state is responsible.
-                this.state.release();
+                this.state.release(this);
                 if (this.state.name !== null) {
                     this.element.classList.remove(this.state.name);
                 }
@@ -1053,13 +1127,18 @@ class UI {
         );
     }
 
-    /// Selects a specific `cell`. Note that this does *not* deselect any cells that were
-    /// already selected.
-    select(cell) {
-        if (!this.selection.has(cell)) {
-            this.selection.add(cell);
-            cell.select();
-
+    /// Selects specific `cells`. Note that this does *not* deselect any cells that were
+    /// already selected. For this, call `deselect()` beforehand.
+    select(...cells) {
+        let selection_changed = false;
+        for (const cell of cells) {
+            if (!this.selection.has(cell)) {
+                this.selection.add(cell);
+                cell.select();
+                selection_changed = true;
+            }
+        }
+        if (selection_changed) {
             this.panel.update(this);
         }
     }
@@ -1082,7 +1161,7 @@ class UI {
 
     /// Adds a cell to the canvas.
     add_cell(cell) {
-        if (cell.level === 0) {
+        if (cell.is_vertex()) {
             this.positions.set(`${cell.position}`, cell);
         }
         this.canvas.element.appendChild(cell.element);
@@ -1092,25 +1171,10 @@ class UI {
     remove_cell(cell) {
         // Remove this cell and its dependents from the quiver and then from the HTML.
         for (const removed of this.quiver.remove(cell)) {
-            if (removed.level === 0) {
+            if (removed.is_vertex()) {
                 this.positions.delete(`${removed.position}`);
             }
             removed.element.remove();
-        }
-    }
-
-    /// Moves a cell to a new position. This is specifically intended for vertices.
-    reposition(cell, position) {
-        if (!this.positions.has(`${position}`)) {
-            this.positions.delete(`${cell.position}`);
-            cell.position = position;
-            this.positions.set(`${cell.position}`, cell);
-            cell.render(this);
-        } else {
-            throw new Error(
-                "new cell position already contains a cell:",
-                this.positions.get(`${position}`),
-            );
         }
     }
 
@@ -1243,7 +1307,7 @@ class Panel {
                         buffer.classList.remove("buffer", "buffering");
                     },
                     () => {
-                        if (cell.level > 0) {
+                        if (cell.is_edge()) {
                             cell.update_label_transformation();
                         }
                     },
@@ -1329,7 +1393,7 @@ class Panel {
                     { type: "range", min: -3, value: 0, max: 3, step: 1, disabled: true }
                 ).listen("input", (_, slider) => {
                     for (const selected of ui.selection) {
-                        if (selected.level > 0) {
+                        if (selected.is_edge()) {
                             // Update the actual `value` attribute so that we can
                             // reference it in the CSS.
                             slider.setAttribute("value", slider.value);
@@ -1345,7 +1409,7 @@ class Panel {
         this.element.appendChild(
             new DOM.Element("button", { disabled: true }).add("⇌ Reverse").listen("click", () => {
                 for (const selected of ui.selection) {
-                    if (selected.level > 0) {
+                    if (selected.is_edge()) {
                         selected.reverse(ui);
                     }
                 }
@@ -1452,7 +1516,14 @@ class Panel {
             true, // `disabled`
             (selected, _, data) => {
                 // Update the edge style.
-                selected.options.style = data;
+                if (data.name !== "arrow" || selected.options.style.name !== "arrow") {
+                    // The arrow is a special case, because it contains suboptions that we
+                    // don't necessarily want to override. For example, if we have multiple
+                    // edges selected, one of which is a non-default arrow and another which
+                    // has a different style, clicking on the arrow option should not reset
+                    // the style of the existing arrow.
+                    selected.options.style = data;
+                }
 
                 // Enable/disable the arrow style buttons.
                 ui.element.querySelectorAll('.arrow-style input[type="radio"]')
@@ -1530,7 +1601,7 @@ class Panel {
             }).listen("change", (_, button) => {
                 if (button.checked) {
                     for (const selected of ui.selection) {
-                        if (selected.level > 0) {
+                        if (selected.is_edge()) {
                             on_check(selected, value, data);
                             selected.render(ui);
                         }
@@ -1593,45 +1664,61 @@ class Panel {
         const label_alignments = this.element.querySelectorAll('input[name="label-alignment"]');
         const slider = this.element.querySelector('input[type="range"]');
 
+        // Modifying cells is not permitted when the export pane is visible.
         if (this.export === null) {
-            if (ui.selection.size === 1) {
-                const cell = ui.selection.values().next().value;
-                input.value = cell.label;
-                input.disabled = false;
-                if (cell.level > 0) {
-                    this.element.querySelector(
-                        `input[name="label-alignment"][value="${cell.options.label_alignment}"]`
-                    ).checked = true;
+            // Default options (for when no cells are selected). We only need to provide defaults
+            // for inputs that display their state even when disabled.
+            input.value = "";
+            slider.value = 0;
 
-                    // Rotate the label alignment buttons to reflect the direction of the arrow
-                    // (at least to the nearest multiple of 90°).
-                    const angle = cell.angle();
-                    for (const option of label_alignments) {
-                        option.style.transform = `rotate(${
-                            Math.round(2 * angle / Math.PI) * 90
-                        }deg)`;
-                    }
+            // Multiple selection is always permitted, so the following code must provide sensible
+            // behaviour for both single and multiple selections (including empty selections).
+            const selection_includes_edge = Array.from(ui.selection).some(cell => cell.is_edge());
 
-                    slider.value = cell.options.offset;
-                    // Update the actual `value` attribute so that we can reference it in the CSS.
-                    slider.setAttribute("value", slider.value);
-                    slider.disabled = false;
+            // Enable all the inputs iff we've selected at least one edge.
+            this.element.querySelectorAll("input, button:not(.global)")
+                .forEach(element => element.disabled = !selection_includes_edge);
 
-                    // Enable the Reverse button.
-                    this.element.querySelector('button').disabled = false;
+            // Enable the label input if at least one cell has been selected.
+            input.disabled = ui.selection.size === 0;
 
-                    const style_is_arrow = cell.options.style.name === "arrow";
-                    // Disable/enable the arrow style buttons.
-                    for (const option of this.element.querySelectorAll('input[type="radio"]')) {
-                        option.disabled = !style_is_arrow
-                            && option.parentElement.classList.contains("arrow-style");
-                    }
-                    // Check the correct edge style button.
-                    this.element.querySelector(
-                        `input[name="edge-type"][value="${cell.options.style.name}"]`
-                    ).checked = true;
-                    // Check the correct arrow style buttons.
-                    if (style_is_arrow) {
+            // Label alignment options are always enabled.
+            for (const option of label_alignments) {
+                option.disabled = false;
+            }
+
+            // A map from option names to values. If a value is `null`, that means that
+            // there are multiple potential values, so we (in the case of radio buttons)
+            // uncheck all such inputs or set them to an empty string (in the case of text
+            // inputs).
+            const values = new Map();
+            let all_edges_are_arrows = selection_includes_edge;
+
+            const consider = (name, value) => {
+                if (values.has(name) && values.get(name) !== value) {
+                    values.set(name, null);
+                } else {
+                    values.set(name, value);
+                }
+            };
+
+            // Collect the consistent and varying input values.
+            for (const cell of ui.selection) {
+                // Options applying to all cells.
+                consider("{label}", cell.label);
+
+                // Edge-specific options.
+                if (cell.is_edge()) {
+                    consider("label-alignment", cell.options.label_alignment);
+                    // The label alignment buttons are rotated to reflect the direction of the arrow
+                    // when all arrows have the same direction (at least to the nearest multiple of
+                    // 90°). Otherwise, rotation defaults to 0°.
+                    consider("{angle}", cell.angle());
+                    consider("{offset}", cell.options.offset);
+                    consider("edge-type", cell.options.style.name);
+
+                    // Arrow-specific options.
+                    if (cell.options.style.name === "arrow") {
                         for (const component of ["tail", "body", "head"]) {
                             let value;
                             // The following makes the assumption that the
@@ -1652,28 +1739,62 @@ class Panel {
                                     break;
                             }
 
-                            this.element.querySelector(
-                                `input[name="${component}-type"][value="${value}"]`
-                            ).checked = true;
+                            consider(`${component}-type`, value);
                         }
+                    } else {
+                        all_edges_are_arrows = false;
                     }
                 }
-            } else {
-                // Reset the inputs when multiple cells are selected.
-                input.value = "";
-                slider.value = 0;
-
-                // Disable all the inputs.
-                this.element.querySelectorAll("input, button:not(.global)")
-                    .forEach(element => element.disabled = true);
             }
-            for (const option of label_alignments) {
-                option.disabled = false;
+
+            // Fill the consistent values for the inputs, checking and unchecking
+            // radio buttons as relevant.
+            for (const [name, value] of values) {
+                switch (name) {
+                    case "{label}":
+                        input.value = value !== null ? value : "";
+                        break;
+                    case "{angle}":
+                        const angle = value !== null ? value : 0;
+                        for (const option of label_alignments) {
+                            option.style.transform = `rotate(${
+                                Math.round(2 * angle / Math.PI) * 90
+                            }deg)`;
+                        }
+                        break;
+                    case "{offset}":
+                        slider.value = value !== null ? value : 0;
+                        break;
+                    default:
+                        if (value === null) {
+                            // Uncheck any checked input for which there are
+                            // multiple selected values.
+                            this.element.querySelectorAll(
+                                `input[name="${name}"]:checked`
+                            ).forEach(element => element.checked = false);
+                        } else {
+                            // Check any input for which there is a canonical choice of value.
+                            this.element.querySelector(
+                                `input[name="${name}"][value="${value}"]`
+                            ).checked = true;
+                        }
+                        break;
+                }
+            }
+
+            // Update the actual `value` attribute for the offset slider so that we can
+            // reference it in the CSS.
+            slider.setAttribute("value", slider.value);
+
+            // Disable/enable the arrow style buttons.
+            for (const option of this.element
+                    .querySelectorAll('.arrow-style input[type="radio"]')) {
+                option.disabled = !all_edges_are_arrows;
             }
         } else {
             // Disable all the inputs.
             this.element.querySelectorAll("input, button:not(.global)")
-            .forEach(element => element.disabled = true);
+                .forEach(element => element.disabled = true);
         }
     }
 
@@ -1724,9 +1845,12 @@ class Cell {
                         // and ignore the selection.
                         const move = new Set(ui.selection.has(this) ? [...ui.selection] : [this]);
                         ui.switch_mode(
-                            new UIState.Move(ui.position_from_event(ui.view, event),
-                            move,
-                        ));
+                            new UIState.Move(
+                                ui,
+                                ui.position_from_event(ui.view, event),
+                                move,
+                            ),
+                        );
                     }
                 }
             });
@@ -1745,14 +1869,25 @@ class Cell {
                     event.preventDefault();
 
                     const label_input = ui.panel.element.querySelector('label input[type="text"]');
-                    was_previously_selected = ui.selection.has(this) &&
+                    was_previously_selected = !event.shiftKey && ui.selection.has(this) &&
                         // If the label input is already focused, then we defocus it.
                         // This allows the user to easily switch between editing the
                         // entire cell and the label.
                         document.activeElement !== label_input;
-                    // Deselect all other nodes.
-                    ui.deselect();
-                    ui.select(this);
+
+                    if (!event.shiftKey) {
+                        // Deselect all other nodes.
+                        ui.deselect();
+                        ui.select(this);
+                    } else {
+                        // Toggle selection when holding Shift and clicking.
+                        if (!ui.selection.has(this)) {
+                            ui.select(this);
+                        } else {
+                            ui.deselect(this);
+                        }
+                    }
+
                     const state = new UIState.Connect(ui, this, true);
                     if (state.valid_connection(null)) {
                         ui.switch_mode(state);
@@ -1791,7 +1926,7 @@ class Cell {
                 if (ui.in_mode(UIState.Connect)) {
                     // Connect two cells if the source is different to the target.
                     if (ui.state.target === this) {
-                        ui.state.connect(ui);
+                        ui.state.connect(ui, event);
                     }
                     // Focus the label input for a cell if we've just ended releasing
                     // the mouse on top of the source. (This includes when we've
@@ -1812,6 +1947,16 @@ class Cell {
     /// may override this getter.
     get content_element() {
         return this.element;
+    }
+
+    /// Whether this cell is an edge (i.e. whether its level is equal to zero).
+    is_vertex() {
+        return this.level === 0;
+    }
+
+    /// Whether this cell is an edge (i.e. whether its level is nonzero).
+    is_edge() {
+        return this.level > 0;
     }
 
     select() {
