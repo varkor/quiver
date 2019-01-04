@@ -923,18 +923,30 @@ class UI {
 
             // Trigger a keyboard shortcut of the form Command/Control (+ Shift) + {Letter},
             // where Shift triggers the dual of the action.
-            const invertible_shortcut = (action, coaction) => {
+            // If `effect_within_input`, then if the command is deemed to have had no effect
+            // (in terms of changing the value of selection of the input), the `action`/
+            // `coaction` will be triggered anyway.
+            const invertible_shortcut = (action, coaction, effect_within_input = false) => {
+                const effect = !event.shiftKey ? action : coaction;
                 if (!editing_input) {
                     if (event.metaKey || event.ctrlKey) {
                         event.preventDefault();
                         if (this.in_mode(UIState.Default)) {
-                            if (!event.shiftKey) {
-                                action();
-                            } else {
-                                coaction();
-                            }
+                            effect();
                         }
                     }
+                } else if (effect_within_input) {
+                    const input = document.activeElement;
+                    const [value, selectionStart, selectionEnd]
+                        = [input.value, input.selectionStart,  input.selectionEnd];
+                    setTimeout(() => {
+                        if (input.value === value
+                            && input.selectionStart === selectionStart
+                            && input.selectionEnd === selectionEnd)
+                        {
+                            effect();
+                        }
+                    }, 4);
                 }
             };
 
@@ -1023,6 +1035,7 @@ class UI {
                     invertible_shortcut(
                         () => this.history.undo(this),
                         () => this.history.redo(this),
+                        true,
                     );
                     break;
             }
