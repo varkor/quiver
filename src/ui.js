@@ -849,6 +849,14 @@ class UI {
         const insertion_point = new DOM.Element("div", { class: "insertion-point" }).element;
         this.canvas.element.appendChild(insertion_point);
 
+        // Handle panning via scrolling.
+        window.addEventListener("wheel", (event) => {
+            // We don't want to scroll while using the mouse wheel.
+            event.preventDefault();
+
+            this.pan_view(new Offset(-event.deltaX, -event.deltaY));
+        });
+
         // Add a move to the history.
         const commit_move_event = () => {
             if (!this.state.previous.sub(this.state.origin).is_zero()) {
@@ -1175,7 +1183,7 @@ class UI {
             }
         });
 
-        // Moving the insertion point, and rearranging cells.
+        // Moving the insertion point, panning, and rearranging cells.
         this.element.addEventListener("mousemove", (event) => {
             // Move the insertion point under the pointer.
             const position = this.position_from_event(this.view, event);
