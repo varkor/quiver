@@ -45,6 +45,18 @@ body {
     transition: transform 0.2s;
 }
 
+.logo {
+    position: fixed;
+    left: 16px; top: 16px;
+    width: 100px;
+
+    opacity: 0.5;
+}
+
+.logo:hover {
+    opacity: 1;
+}
+
 .error.hidden {
     transform: translateY(-100%);
 }

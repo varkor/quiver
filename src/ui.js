@@ -834,6 +834,13 @@ class UI {
         this.panel.initialise(this);
         this.element.appendChild(this.panel.element);
 
+        // Add the logo.
+        this.element.appendChild(
+            new DOM.Element("a", { href: "https://github.com/varkor/quiver", target: "_blank" })
+                .add(new DOM.Element("img", { src: "quiver.svg", class: "logo" }))
+                .element
+        );
+
         // Add the insertion point for new nodes.
         const insertion_point = new DOM.Element("div", { class: "insertion-point" }).element;
         this.canvas.element.appendChild(insertion_point);
