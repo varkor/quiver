@@ -849,27 +849,39 @@ class UI {
         const insertion_point = new DOM.Element("div", { class: "insertion-point" }).element;
         this.canvas.element.appendChild(insertion_point);
 
+        // Add a move to the history.
+        const commit_move_event = () => {
+            if (!this.state.previous.sub(this.state.origin).is_zero()) {
+                // We only want to commit the move event if it actually did moved things.
+                this.history.add(this, [{
+                    kind: "move",
+                    displacements: Array.from(this.state.selection).map((vertex) => ({
+                        vertex,
+                        from:
+                            vertex.position.sub(this.state.previous.sub(this.state.origin)),
+                        to: vertex.position,
+                    })),
+                }]);
+            }
+        };
+
         document.addEventListener("mouseup", (event) => {
             if (event.button === 0) {
                 if (this.in_mode(UIState.Pan)) {
                     // We only want to pan when the pointer is held.
                     this.state.origin = null;
                 } else if (this.in_mode(UIState.Move)) {
-                    if (!this.state.previous.sub(this.state.origin).is_zero()) {
-                        // We only want to commit the move event if it actually did moved things.
+                    commit_move_event();
+                    this.switch_mode(UIState.default);
+                } else if (this.in_mode(UIState.Connect)) {
+                    // Stop trying to connect cells when the mouse is released outside
+                    // the `<body>`.
+                    if (this.state.forged_vertex) {
                         this.history.add(this, [{
-                            kind: "move",
-                            displacements: Array.from(this.state.selection).map((vertex) => ({
-                                vertex,
-                                from:
-                                    vertex.position.sub(this.state.previous.sub(this.state.origin)),
-                                to: vertex.position,
-                            })),
+                            kind: "create",
+                            cells: new Set([this.state.source]),
                         }]);
                     }
-                    this.switch_mode(UIState.default);
-                } else {
-                    // Stop trying to connect cells when the mouse is released.
                     this.switch_mode(UIState.default);
                 }
             }
@@ -878,6 +890,7 @@ class UI {
         // Stop dragging cells when the mouse leaves the window.
         this.element.addEventListener("mouseleave", () => {
             if (this.in_mode(UIState.Move)) {
+                commit_move_event();
                 this.switch_mode(UIState.default);
             }
         });
@@ -1098,6 +1111,7 @@ class UI {
                 // When releasing the mouse over an empty grid cell, we want to create a new
                 // cell and connect it to the source.
                 if (this.in_mode(UIState.Connect)) {
+                    event.stopImmediatePropagation();
                     // We only want to forge vertices, not edges (and thus 1-cells).
                     if (this.state.source.is_vertex()) {
                         this.state.target
@@ -1116,6 +1130,7 @@ class UI {
                             cells: cells,
                         }]);
                     }
+                    this.switch_mode(UIState.default);
                 }
             }
         });
