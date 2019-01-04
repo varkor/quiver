@@ -960,6 +960,37 @@ class UI {
                         this.switch_mode(new UIState.Pan());
                     }
                     break;
+                // Use the arrow keys for moving vertices around.
+                case "ArrowLeft":
+                case "ArrowDown":
+                case "ArrowRight":
+                case "ArrowUp":
+                    if (!editing_input) {
+                        let offset;
+                        switch (event.key) {
+                            case "ArrowLeft":
+                                offset = new Position(-1, 0);
+                                break;
+                            case "ArrowDown":
+                                offset = new Position(0, 1);
+                                break;
+                            case "ArrowRight":
+                                offset = new Position(1, 0);
+                                break;
+                            case "ArrowUp":
+                                offset = new Position(0, -1);
+                                break;
+                        }
+                        this.history.add(this, [{
+                            kind: "move",
+                            displacements: Array.from(this.selection).map((vertex) => ({
+                                vertex,
+                                from: vertex.position,
+                                to: vertex.position.add(offset),
+                            })),
+                        }], true);
+                    }
+                    break;
                 case "a":
                     // Select/deselect all.
                     invertible_shortcut(
