@@ -65,43 +65,68 @@ class Quiver {
         /// Reverse dependencies (used for removing cells from `dependencies` when removing cells).
         /// Each map entry is simply a set, unlike `dependencies`.
         this.reverse_dependencies = new Map();
+
+        /// A set of cells that have been deleted. We don't properly delete cells immediately, as
+        /// this makes it more awkward to revert deletion (with undo, for instance). Instead we add
+        /// them to `deleted` to mark them as such and remove them *solely* from `this.cells`.
+        /// Deleted cells are then ignored for all functional purposes involving dependencies.
+        /// Though `deleted` is primarily treated as a set, it is really a map from cells to the
+        /// point in time (e.g. history state) they were deleted at. This is so we can flush them
+        /// later to avoid accumulating memory.
+        this.deleted = new Map();
     }
 
     /// Add a new cell to the graph.
-    add(level, cell) {
-        this.dependencies.set(cell, new Map());
-        this.reverse_dependencies.set(cell, new Set());
+    add(cell) {
+        if (!this.deleted.has(cell)) {
+            this.dependencies.set(cell, new Map());
+            this.reverse_dependencies.set(cell, new Set());
 
-        while (this.cells.length <= level) {
-            this.cells.push(new Set());
+            while (this.cells.length <= cell.level) {
+                this.cells.push(new Set());
+            }
+        } else {
+            this.deleted.delete(cell);
         }
-        this.cells[level].add(cell);
+        this.cells[cell.level].add(cell);
     }
 
     /// Remove a cell from the graph.
-    remove(cell) {
+    remove(cell, when) {
         const removed = new Set();
         const removal_queue = new Set([cell]);
         for (const cell of removal_queue) {
-            this.cells[cell.level].delete(cell);
-            // The edge case here and below (`|| []`) is for when a cell and its dependencies
-            // are being removed simultaneously, in which case the ordering of removal
-            // here can cause problems without taking this into consideration.
-            for (const [dependency,] of this.dependencies.get(cell) || []) {
-                removal_queue.add(dependency);
-            }
-            this.dependencies.delete(cell);
-            for (const reverse_dependency of this.reverse_dependencies.get(cell) || []) {
-                // If a cell is being removed as a dependency, then some of its
-                // reverse dependencies may no longer exist.
-                if (this.dependencies.has(reverse_dependency)) {
-                    this.dependencies.get(reverse_dependency).delete(cell);
+            if (!this.deleted.has(cell)) {
+                this.deleted.set(cell, when);
+                this.cells[cell.level].delete(cell);
+                // The edge case here and below (`|| []`) is for when a cell and its dependencies
+                // are being removed simultaneously, in which case the ordering of removal
+                // here can cause problems without taking this into consideration.
+                for (const [dependency,] of this.dependencies.get(cell) || []) {
+                    removal_queue.add(dependency);
                 }
+                removed.add(cell);
             }
-            this.reverse_dependencies.delete(cell);
-            removed.add(cell);
         }
         return removed;
+    }
+
+    /// Actually delete all deleted cells from the dependency data structures.
+    flush(when) {
+        for (const [cell, deleted] of this.deleted) {
+            if (deleted >= when) {
+                this.dependencies.delete(cell);
+                for (const reverse_dependency of this.reverse_dependencies.get(cell) || []) {
+                    // If a cell is being removed as a dependency, then some of its
+                    // reverse dependencies may no longer exist.
+                    if (this.dependencies.has(reverse_dependency)) {
+                        this.dependencies.get(reverse_dependency).delete(cell);
+                    }
+                }
+                this.reverse_dependencies.delete(cell);
+                this.deleted.delete(cell);
+            }
+        }
     }
 
     /// Connect two cells. Note that this does *not* check whether the source and
@@ -116,12 +141,41 @@ class Quiver {
 
     /// Returns a collection of all the cells in the quiver.
     all_cells() {
-        return this.dependencies.keys();
+        return Array.from(this.dependencies.keys()).filter(cell => !this.deleted.has(cell));
     }
 
     /// Returns whether the quiver is empty.
     is_empty() {
-        return this.dependencies.size === 0;
+        return this.dependencies.size - this.deleted.size === 0;
+    }
+
+    /// Returns the non-deleted dependencies of a cell.
+    dependencies_of(cell) {
+        return new Map(Array.from(this.dependencies.get(cell)).filter(([dependency,]) => {
+            return !this.deleted.has(dependency);
+        }));
+    }
+
+    /// Returns the non-deleted reverse dependencies of a cell.
+    reverse_dependencies_of(cell) {
+        return new Set(Array.from(this.reverse_dependencies.get(cell)).filter((dependency) => {
+            return !this.deleted.has(dependency);
+        }));
+    }
+
+    /// Returns the transitive closure of the dependencies of a collection of cells
+    // (including those cells themselves).
+    transitive_dependencies(cells) {
+        const closure = new Set(cells);
+        // We're relying on the iteration order of the `Set` here.
+        for (const cell of closure) {
+            for (const [dependency,] of this.dependencies.get(cell)) {
+                if (!this.deleted.has(dependency)) {
+                    closure.add(dependency);
+                }
+            }
+        }
+        return closure;
     }
 
     /// Return a string containing the graph in a specific format.
@@ -234,7 +288,7 @@ QuiverExport.tikzcd = new class extends QuiverExport {
                 let align = "";
 
                 // We only need to give edges names if they're depended on by another edge.
-                if (quiver.dependencies.get(edge).size > 0) {
+                if (quiver.dependencies_of(edge).size > 0) {
                     label_parameters.push(`name=${index}`);
                     names.set(edge, index++);
                     // In this case, because we have a parameter list, we have to also change
@@ -506,7 +560,7 @@ UIState.default = new UIState.Default();
 
 /// Two k-cells are being connected by an (k + 1)-cell.
 UIState.Connect = class extends UIState {
-    constructor(ui, source, forge_vertex = false) {
+    constructor(ui, source, forged_vertex) {
         super();
 
         this.name = "connect";
@@ -517,9 +571,10 @@ UIState.Connect = class extends UIState {
         /// The target of a connection between two cells.
         this.target = null;
 
-        /// Whether to allow connections from vertices to empty cells (in which
-        /// case a new vertex will be created before creating the connection.)
-        this.forge_vertex = forge_vertex;
+        /// Whether the source of this connection was created with the start
+        // of the connection itself (i.e. a vertex was created after dragging
+        // from an empty grid cell).
+        this.forged_vertex = forged_vertex;
 
         /// The overlay for drawing an edge between the source and the cursor.
         this.overlay = new DOM.Element("div", { class: "edge overlay" })
@@ -633,8 +688,8 @@ UIState.Connect = class extends UIState {
             balance += tip;
         };
 
-        const source_dependencies = ui.quiver.dependencies.get(this.source);
-        const target_dependencies = ui.quiver.dependencies.get(this.target);
+        const source_dependencies = ui.quiver.dependencies_of(this.source);
+        const target_dependencies = ui.quiver.dependencies_of(this.target);
         for (const [edge, relationship] of source_dependencies) {
             consider({
                 source: swap,
@@ -662,10 +717,13 @@ UIState.Connect = class extends UIState {
             ui.deselect();
         }
         // The edge itself does all the set up, such as adding itself to the page.
-        ui.select(new Edge(ui, label, this.source, this.target, options));
+        const edge = new Edge(ui, label, this.source, this.target, options);
+        ui.select(edge);
         if (!event.shiftKey) {
             ui.panel.element.querySelector('label input[type="text"]').focus();
         }
+
+        return edge;
     }
 };
 
@@ -676,9 +734,11 @@ UIState.Move = class extends UIState {
 
         this.name = "move";
 
-        /// The location from which the move was initiated (used to update positions relative to the
-        /// origin).
+        /// The location from which the move was initiated.
         this.origin = origin;
+
+        /// The location relative to which positions were last updated.
+        this.previous = this.origin;
 
         /// The group of cells that should be moved.
         this.selection = selection;
@@ -717,6 +777,7 @@ UIState.Pan = class extends UIState {
     }
 };
 
+/// The object responsible for controlling all aspects of the user interface.
 class UI {
     constructor(element) {
         /// The quiver identified with the UI.
@@ -747,6 +808,9 @@ class UI {
         /// The offset of the view.
         this.view = Offset.zero();
 
+        /// Undo/redo for actions.
+        this.history = new History();
+
         /// The panel for viewing and editing cell data.
         this.panel = new Panel();
 
@@ -775,8 +839,19 @@ class UI {
                 if (this.in_mode(UIState.Pan)) {
                     // We only want to pan when the pointer is held.
                     this.state.origin = null;
+                } else if (this.in_mode(UIState.Move)) {
+                    this.history.add(this, [{
+                        kind: "move",
+                        displacements: Array.from(this.state.selection).map((vertex) => ({
+                            vertex,
+                            from:
+                                vertex.position.sub(this.state.previous.sub(this.state.origin)),
+                            to: vertex.position,
+                        })),
+                    }]);
+                    this.switch_mode(UIState.default);
                 } else {
-                    // Stop trying to connect or move cells when the mouse is released.
+                    // Stop trying to connect cells when the mouse is released.
                     this.switch_mode(UIState.default);
                 }
             }
@@ -813,7 +888,24 @@ class UI {
         document.addEventListener("keydown", (event) => {
             // Many keyboard shortcuts are only relevant when we're not midway
             // through typing in an input, which should capture key presses.
-            const editing_input = document.activeElement instanceof HTMLInputElement;
+            const editing_input = this.input_is_active();
+
+            // Trigger a keyboard shortcut of the form Command/Control (+ Shift) + {Letter},
+            // where Shift triggers the dual of the action.
+            const invertible_shortcut = (action, coaction) => {
+                if (!editing_input) {
+                    if (event.metaKey || event.ctrlKey) {
+                        event.preventDefault();
+                        if (this.in_mode(UIState.Default)) {
+                            if (!event.shiftKey) {
+                                action();
+                            } else {
+                                coaction();
+                            }
+                        }
+                    }
+                }
+            };
 
             switch (event.key) {
                 case "Backspace":
@@ -822,11 +914,10 @@ class UI {
                         // Prevent Backspace triggering browser history navigation.
                         event.preventDefault();
 
-                        for (const cell of this.selection) {
-                            this.remove_cell(cell);
-                        }
-                        this.selection = new Set();
-                        this.panel.update(this);
+                        this.history.add(this, [{
+                            kind: "delete",
+                            cells: this.quiver.transitive_dependencies(this.selection),
+                        }], true);
                     }
                     break;
                 case "Enter":
@@ -836,6 +927,12 @@ class UI {
                 case "Escape":
                     // Stop trying to connect cells.
                     if (this.in_mode(UIState.Connect)) {
+                        // If we created a vertex as part of the connection, we need to record
+                        // that as an action.
+                        this.history.add(this, [{
+                            kind: "create",
+                            cells: new Set([this.state.source]),
+                        }]);
                         this.switch_mode(UIState.default);
                         // If we're connecting from an insertion point, then we need to hide
                         // it again.
@@ -854,18 +951,17 @@ class UI {
                     break;
                 case "a":
                     // Select/deselect all.
-                    if (!editing_input) {
-                        if (event.metaKey || event.ctrlKey) {
-                            event.preventDefault();
-                            if (this.in_mode(UIState.Default)) {
-                                if (!event.shiftKey) {
-                                    this.select(...this.quiver.all_cells());
-                                } else {
-                                    this.deselect();
-                                }
-                            }
-                        }
-                    }
+                    invertible_shortcut(
+                        () => this.select(...this.quiver.all_cells()),
+                        () => this.deselect(),
+                    );
+                    break;
+                case "z":
+                    // Undo/redo
+                    invertible_shortcut(
+                        () => this.history.undo(this),
+                        () => this.history.redo(this),
+                    );
                     break;
             }
         });
@@ -912,7 +1008,12 @@ class UI {
                         if (!event.shiftKey) {
                             this.deselect();
                         }
-                        this.select(create_vertex(this.position_from_event(this.view, event)));
+                        const vertex = create_vertex(this.position_from_event(this.view, event));
+                        this.select(vertex);
+                        this.history.add(this, [{
+                            kind: "create",
+                            cells: new Set([vertex]),
+                        }]);
                         // When the user is creating a vertex and adding it to the selection,
                         // it is unlikely they expect to edit all the labels simultaneously,
                         // so in this case we do not focus the input.
@@ -945,10 +1046,9 @@ class UI {
             if (event.button === 0) {
                 insertion_point.classList.remove("pending", "active");
 
-                // `forge_vertex` is only true when we've triggered a connection
-                // by dragging on the insertion point, in which case we want to
-                // create a new vertex and connect it.
-                if (this.in_mode(UIState.Connect) && this.state.forge_vertex) {
+                // When releasing the mouse over an empty grid cell, we want to create a new
+                // cell and connect it to the source.
+                if (this.in_mode(UIState.Connect)) {
                     // We only want to forge vertices, not edges (and thus 1-cells).
                     if (this.state.source.is_vertex()) {
                         this.state.target
@@ -957,7 +1057,15 @@ class UI {
                         // is held, in which case we want to select the forged vertices *and* the
                         // new edge.
                         this.select(this.state.target);
-                        this.state.connect(this, event);
+                        const edge = this.state.connect(this, event);
+                        const cells = new Set([this.state.target, edge]);
+                        if (this.state.forged_vertex) {
+                            cells.add(this.state.source);
+                        }
+                        this.history.add(this, [{
+                            kind: "create",
+                            cells: cells,
+                        }]);
                     }
                 }
             }
@@ -967,9 +1075,8 @@ class UI {
         // been held, it gets hidden again. However, if the cursor leaves the
         // insertion point whilst remaining held, then the insertion point will
         // be `"active"` and we create a new vertex and immediately start
-        // connecting it to something (though in `forge_vertex` mode, which
-        // allows us also to connect to empty cells, creating a new vertex
-        // and connecting them both).
+        // connecting it to something (possibly an empty grid cell, which will
+        // create a new vertex and connect them both).
         insertion_point.addEventListener("mouseleave", () => {
             insertion_point.classList.remove("pending");
 
@@ -984,7 +1091,7 @@ class UI {
                 this.select(vertex);
                 this.switch_mode(new UIState.Connect(this, vertex, true));
                 vertex.element.classList.add("source");
-            } else if (!this.in_mode(UIState.Connect) || !this.state.forge_vertex) {
+            } else if (!this.in_mode(UIState.Connect)) {
                 // If the cursor leaves the insertion point and we're *not*
                 // connecting anything, then hide it.
                 insertion_point.classList.remove("revealed");
@@ -1004,12 +1111,11 @@ class UI {
                 this.state.origin = new_offset;
             }
 
-            // If we are in `forge_vertex` mode, then we want to reveal
-            // the insertion point if and only if it is not at the same
-            // position as an existing vertex.
-            if (this.in_mode(UIState.Connect) && this.state.forge_vertex) {
-                // We're in `forge_vertex` mode, not `forge_cell` mode: we can't create
-                // arbitrary edges to connect.
+            // We want to reveal the insertion point if and only if it is
+            // not at the same position as an existing vertex (i.e. over an
+            // empty grid cell).
+            if (this.in_mode(UIState.Connect)) {
+                // We only permit the forgery of vertices, not edges.
                 if (this.state.source.is_vertex()) {
                     insertion_point.classList
                         .toggle("revealed", !this.positions.has(`${position}`));
@@ -1021,7 +1127,7 @@ class UI {
                 event.preventDefault();
 
                 const new_position = (cell) => {
-                    return position.add(cell.position.sub(this.state.origin));
+                    return position.add(cell.position.sub(this.state.previous));
                 };
 
                 // We will only try to reposition if the new position is actually different
@@ -1031,31 +1137,22 @@ class UI {
                 const occupied = Array.from(this.state.selection).some((cell) => {
                     return cell.is_vertex() && this.positions.has(`${new_position(cell)}`);
                 });
-                if (!position.eq(this.state.origin) && !occupied) {
+                if (!position.eq(this.state.previous) && !occupied) {
                     // We'll need to move all of the edges connected to the moved vertices,
-                    // so we keep track of which we need to update in `render_queue`.
-                    const render_queue = new Set();
+                    // so we keep track of the root vertices in `moved.`
+                    const moved = new Set();
                     // Move all the selected vertices.
                     for (const cell of this.state.selection) {
                         if (cell.is_vertex()) {
                             cell.position = new_position(cell);
-                            cell.render(this);
-                            // Track all of the edges dependent on this vertex.
-                            for (const [dependency,] of this.quiver.dependencies.get(cell)) {
-                                render_queue.add(dependency);
-                            }
+                            moved.add(cell);
                         }
                     }
-                    this.state.origin = position;
+                    this.state.previous = position;
 
                     // Move all of the edges connected to cells that have moved.
-                    // We're relying on the iteration order of the set here.
-                    for (const edge of render_queue) {
-                        edge.render(this);
-                        // Track all of the edges dependent on this edge.
-                        for (const [dependency,] of this.quiver.dependencies.get(edge)) {
-                            render_queue.add(dependency);
-                        }
+                    for (const cell of this.quiver.transitive_dependencies(moved)) {
+                        cell.render(this);
                     }
 
                     // Update the panel, so that the interface is kept in sync (e.g. the
@@ -1131,6 +1228,9 @@ class UI {
     /// already selected. For this, call `deselect()` beforehand.
     select(...cells) {
         let selection_changed = false;
+        // The selection set is treated immutably, so we duplicate it here to
+        // ensure that existing references to the selection are not modified.
+        this.selection = new Set(this.selection);
         for (const cell of cells) {
             if (!this.selection.has(cell)) {
                 this.selection.add(cell);
@@ -1151,6 +1251,9 @@ class UI {
             }
             this.selection = new Set();
         } else {
+            // The selection set is treated immutably, so we duplicate it here to
+            // ensure that existing references to the selection are not modified.
+            this.selection = new Set(this.selection);
             if (this.selection.delete(cell)) {
                 cell.deselect();
             }
@@ -1168,9 +1271,9 @@ class UI {
     }
 
     /// Removes a cell.
-    remove_cell(cell) {
+    remove_cell(cell, when) {
         // Remove this cell and its dependents from the quiver and then from the HTML.
-        for (const removed of this.quiver.remove(cell)) {
+        for (const removed of this.quiver.remove(cell, when)) {
             if (removed.is_vertex()) {
                 this.positions.delete(`${removed.position}`);
             }
@@ -1195,6 +1298,17 @@ class UI {
             this.ids.set(object, this.ids.size);
         }
         return this.ids.get(object);
+    }
+
+    /// Returns whether the active element is a text input field. If it is, certain
+    /// actions (primarily keyboard shortcuts) will be disabled.
+    input_is_active() {
+        for (const input of this.panel.element.querySelectorAll('label input[type="text"]')) {
+            if (document.activeElement === input) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /// Renders TeX with MathJax and returns the corresponding element.
@@ -1263,6 +1377,192 @@ class UI {
     }
 }
 
+/// The history system (i.e. undo and redo).
+class History {
+    constructor() {
+        /// A list of all actions taken by the user.
+        /// Each "action" actually comprises a list of atomic actions.
+        this.actions = [];
+
+        /// The index after the last taken action (usually equal to `this.actions.length`).
+        /// `0` therefore signifies that no action has been taken (or we've reverted history
+        /// to that point).
+        this.present = 0;
+
+        /// We keep track of cell selection between events to conserve it as expected.
+        this.selections = [new Set()];
+
+        /// We allow history events to be collapsed if two consecutive events have the same
+        /// (elementwise) `collapse` array. This tracks the previous one.
+        this.collapse = null;
+    }
+
+    /// Add a reversible event to the history. Its effect will not be invoked (i.e. one should
+    /// effect the action separately) unless `invoke` is `true`, as actions added to the history
+    /// are often composites of individual actions that should not be performed atomically in
+    /// real-time.
+    add(ui, actions, invoke = false) {
+        // Append a new history event.
+        // If there are future actions, clear them. (Our history only forms a list, not a tree.)
+        ui.quiver.flush(this.present);
+        this.selections.splice(this.present + 1, this.actions.length - this.present);
+        this.actions.splice(this.present, this.actions.length - this.present);
+        this.actions.push(actions);
+        if (invoke) {
+            this.redo(ui);
+        } else {
+            ++this.present;
+        }
+        this.selections.push(ui.selection);
+        this.collapse = null;
+    }
+
+    /// Add a collapsible history event. This allows the last event to be modified later,
+    /// replacing the history state.
+    add_collapsible(ui, collapse, event, invoke = false) {
+        this.add(ui, event, invoke);
+        this.collapse = collapse;
+    }
+
+    /// Get the previous array of actions, if `collapse` matches `this.collapse`.
+    get_collapsible_actions(collapse) {
+        if (this.collapse !== null && collapse !== null
+            && collapse.length === this.collapse.length
+            && collapse.every((_, i) => collapse[i] === this.collapse[i]))
+        {
+            return this.actions[this.present - 1];
+        } else {
+            return null;
+        }
+    }
+
+    /// Make the last action permanent, preventing it from being collapsed.
+    permanentise() {
+        this.collapse = null;
+    }
+
+    /// Trigger an action.
+    effect(ui, actions, reverse) {
+        const order = Array.from(actions);
+
+        // We need to iterate these in reverse order if `reverse` so that interacting actions
+        // get executed in the correct order relative to one another.
+        if (reverse) {
+            order.reverse();
+        }
+
+        for (const action of order) {
+            let kind = action.kind;
+            if (reverse) {
+                // Actions either have corresponding inverse actions or are self-inverse.
+                kind = {
+                    create: "delete",
+                    delete: "create",
+                    // Self-inverse actions will be automatically preserved.
+                }[kind] || kind;
+            }
+            // Self-inverse actions often work by inverting `from`/`to`.
+            const from = !reverse ? "from" : "to";
+            const to = !reverse ? "to" : "from";
+            switch (kind) {
+                case "move":
+                    // We perform these loops in sequence as cells may move
+                    // directly into positions that have just been unoccupied.
+                    const vertices = new Set();
+                    for (const displacement of action.displacements) {
+                        ui.positions.delete(`${displacement[from]}`);
+                    }
+                    for (const displacement of action.displacements) {
+                        displacement.vertex.position = displacement[to];
+                        ui.positions.set(
+                            `${displacement.vertex.position}`,
+                            displacement.vertex,
+                        );
+                        vertices.add(displacement.vertex);
+                    }
+                    for (const cell of ui.quiver.transitive_dependencies(vertices)) {
+                        cell.render(ui);
+                    }
+                    break;
+                case "create":
+                    for (const cell of action.cells) {
+                        ui.add_cell(cell);
+                        ui.quiver.add(cell);
+                    }
+                    break;
+                case "delete":
+                    for (const cell of action.cells) {
+                        ui.remove_cell(cell, this.present);
+                    }
+                    break;
+                case "label":
+                    for (const label of action.labels) {
+                        label.cell.label = label[to];
+                        ui.panel.render_tex(label.cell);
+                    }
+                    ui.panel.update(ui);
+                    break;
+                case "label-alignment":
+                    for (const alignment of action.alignments) {
+                        alignment.edge.options.label_alignment = alignment[to];
+                        alignment.edge.render(ui);
+                    }
+                    ui.panel.update(ui);
+                    break;
+                case "offset":
+                    for (const offset of action.offsets) {
+                        offset.edge.options.offset = offset[to];
+                        offset.edge.render(ui);
+                    }
+                    ui.panel.update(ui);
+                    break;
+                case "reverse":
+                    for (const cell of action.cells) {
+                        if (cell.is_edge()) {
+                            cell.reverse(ui);
+                        }
+                    }
+                    ui.panel.update(ui);
+                    break;
+                case "style":
+                    for (const style of action.styles) {
+                        style.edge.options.style = style[to];
+                        style.edge.render(ui);
+                    }
+                    ui.panel.update(ui);
+            }
+        }
+    }
+
+    undo(ui) {
+        if (this.present > 0) {
+            --this.present;
+            this.permanentise();
+
+            // Trigger the reverse of the previous action.
+            this.effect(ui, this.actions[this.present], true);
+            ui.deselect();
+            ui.select(...this.selections[this.present]);
+        }
+    }
+
+    redo(ui) {
+        if (this.present < this.actions.length) {
+            // Trigger the next action.
+            this.effect(ui, this.actions[this.present], false);
+
+            ++this.present;
+            this.permanentise();
+            // If we're immediately invoking `redo`, then the selection has not
+            // been recorded yet, in which case the current selection is correct.
+            if (this.present < this.selections.length) {
+                ui.deselect();
+                ui.select(...this.selections[this.present]);
+            }
+        }
+    }
+}
+
 /// A panel for editing cell data.
 class Panel {
     constructor() {
@@ -1287,42 +1587,42 @@ class Panel {
         const label = new DOM.Element("label").add("Label: ").add(label_input).element;
         this.element.appendChild(label);
 
-        // We buffer the MathJax rendering to reduce flickering.
-        // If the `.buffer` has no extra classes, then we are free to start a new MathJax
-        // TeX render.
-        // If the `.buffer` has a `.buffering` class, then we are rendering a label. This
-        // may be out of date, in which case we add a `.pending` class (which means we're
-        // going to rerender as soon as the current MathJax render has completed).
-        const render_tex = (cell) => {
-            const label = cell.element.querySelector(".label:not(.buffer)");
-            const buffer = cell.element.querySelector(".buffer");
-            const jax = MathJax.Hub.getAllJax(buffer);
-            if (!buffer.classList.contains("buffering") && jax.length > 0) {
-                buffer.classList.add("buffering");
-                MathJax.Hub.Queue(
-                    ["Text", jax[0], cell.label],
-                    () => {
-                        // Swap the label and the label buffer.
-                        label.classList.add("buffer");
-                        buffer.classList.remove("buffer", "buffering");
-                    },
-                    () => {
-                        if (cell.is_edge()) {
-                            cell.update_label_transformation();
-                        }
-                    },
-                );
-            } else if (!buffer.classList.contains("pending")) {
-                MathJax.Hub.Queue(() => render_tex(cell));
-            }
-        };
         // Handle label interaction: update the labels of the selected cells when
         // the input field is modified.
         label_input.listen("input", () => {
-            for (const selected of ui.selection) {
-                selected.label = label_input.element.value;
-                render_tex(selected);
+            const collapse = ["label", ui.selection];
+            const actions = ui.history.get_collapsible_actions(collapse);
+            if (actions !== null) {
+                // If the previous history event was to modify the label, then
+                // we're just going to modify that event rather than add a new
+                // one. This means we won't have to undo every single character
+                // change: we'll undo the entire label change.
+                for (const action of actions) {
+                    // This ought always to be true.
+                    if (action.kind === "label") {
+                        // Modify the `to` field of each label.
+                        action.labels.forEach(label => label.to = label_input.element.value);
+                    }
+                }
+                // Invoke the new label changes immediately.
+                ui.history.effect(ui, actions, false);
+            } else {
+                // If this is the start of our label modification,
+                // we need to add a new history event.
+                ui.history.add_collapsible(ui, collapse, [{
+                    kind: "label",
+                    labels: Array.from(ui.selection).map((cell) => ({
+                        cell,
+                        from: cell.label,
+                        to: label_input.element.value,
+                    })),
+                }], true);
             }
+        }).listen("blur", () => {
+            // As soon as the input is blurred, treat the label modification as
+            // a discrete event, so if we modify again, we'll need to undo both
+            // modifications to completely undo the label change.
+            ui.history.permanentise();
         });
 
         // The label alignment options.
@@ -1340,7 +1640,19 @@ class Panel {
             "label-alignment",
             [],
             false, // `disabled`
-            (selected, value) => selected.options.label_alignment = value,
+            (edges, value) => {
+                ui.history.add(ui, [{
+                    kind: "label-alignment",
+                    alignments: Array.from(ui.selection)
+                        .filter(cell => cell.is_edge())
+                        .map((edge) => ({
+                            edge,
+                            from: edge.options.label_alignment,
+                            to: value,
+                        })),
+                }]);
+                edges.forEach(edge => edge.options.label_alignment = value);
+            },
             (value) => {
                 // The length of the arrow.
                 const ARROW_LENGTH = 28;
@@ -1392,14 +1704,37 @@ class Panel {
                     "input",
                     { type: "range", min: -3, value: 0, max: 3, step: 1, disabled: true }
                 ).listen("input", (_, slider) => {
-                    for (const selected of ui.selection) {
-                        if (selected.is_edge()) {
-                            // Update the actual `value` attribute so that we can
-                            // reference it in the CSS.
-                            slider.setAttribute("value", slider.value);
-                            selected.options.offset = parseInt(slider.value);
-                            selected.render(ui);
+                    const value = parseInt(slider.value);
+                    const collapse = ["offset", ui.selection];
+                    const actions = ui.history.get_collapsible_actions(collapse);
+                    if (actions !== null) {
+                        // If the previous history event was to modify the offset, then
+                        // we're just going to modify that event rather than add a new
+                        // one, as with the label input.
+                        for (const action of actions) {
+                            // This ought always to be true.
+                            if (action.kind === "offset") {
+                                // Modify the `to` field of each offset.
+                                action.offsets.forEach((offset) => {
+                                    offset.to = value;
+                                });
+                            }
                         }
+                        // Invoke the new offset changes immediately.
+                        ui.history.effect(ui, actions, false);
+                    } else {
+                        // If this is the start of our offset modification,
+                        // we need to add a new history event.
+                        ui.history.add_collapsible(ui, collapse, [{
+                            kind: "offset",
+                            offsets: Array.from(ui.selection)
+                                .filter(cell => cell.is_edge())
+                                .map((edge) => ({
+                                    edge,
+                                    from: edge.options.offset,
+                                    to: value,
+                                })),
+                        }], true);
                     }
                 })
             ).element
@@ -1408,18 +1743,52 @@ class Panel {
         // The button to reverse an edge.
         this.element.appendChild(
             new DOM.Element("button", { disabled: true }).add("⇌ Reverse").listen("click", () => {
-                for (const selected of ui.selection) {
-                    if (selected.is_edge()) {
-                        selected.reverse(ui);
-                    }
-                }
-                this.update(ui);
+                ui.history.add(ui, [{
+                    kind: "reverse",
+                    cells: ui.selection,
+                }], true);
             }).element
         );
 
         // The list of tail styles.
         // The length of the arrow to draw in the centre style buttons.
         const ARROW_LENGTH = 72;
+
+        // To make selecting the arrow style button work as expected, we automatically
+        // trigger the `"change"` event for the arrow style buttons. This in turn will
+        // trigger `record_edge_style_change`, creating many unintentional history
+        // actions. To avoid this, we prevent `record_edge_style_change` from taking
+        // effect when it's already in progress using the `recording` flag.
+        let recording = false;
+        const record_edge_style_change = (modify) => {
+            if (recording) {
+                return;
+            }
+            recording = true;
+
+            const clone = x => JSON.parse(JSON.stringify(x));
+            const styles = new Map();
+            for (const cell of ui.selection) {
+                if (cell.is_edge()) {
+                    styles.set(cell, clone(cell.options.style));
+                }
+            }
+
+            modify();
+
+            ui.history.add(ui, [{
+                kind: "style",
+                styles: Array.from(ui.selection)
+                    .filter(cell => cell.is_edge())
+                    .map((edge) => ({
+                        edge,
+                        from: styles.get(edge),
+                        to: clone(edge.options.style),
+                    })),
+            }]);
+
+            recording = false;
+        };
 
         this.create_option_list(
             ui,
@@ -1433,7 +1802,9 @@ class Panel {
             "tail-type",
             ["vertical", "short", "arrow-style"],
             true, // `disabled`
-            (selected, _, data) => selected.options.style.tail = data,
+            (edges, _, data) => record_edge_style_change(() => {
+                edges.forEach(edge => edge.options.style.tail = data);
+            }),
             (_, data) => {
                 return {
                     edge: {
@@ -1462,7 +1833,9 @@ class Panel {
             "body-type",
             ["vertical", "arrow-style"],
             true, // `disabled`
-            (selected, _, data) => selected.options.style.body = data,
+            (edges, _, data) => record_edge_style_change(() => {
+                edges.forEach(edge => edge.options.style.body = data);
+            }),
             (_, data) => {
                 return {
                     edge: {
@@ -1489,7 +1862,9 @@ class Panel {
             "head-type",
             ["vertical", "short", "arrow-style"],
             true, // `disabled`
-            (selected, _, data) => selected.options.style.head = data,
+            (edges, _, data) => record_edge_style_change(() => {
+                edges.forEach(edge => edge.options.style.head = data);
+            }),
             (_, data) => {
                 return {
                     edge: {
@@ -1514,15 +1889,17 @@ class Panel {
             "edge-type",
             ["vertical", "centre"],
             true, // `disabled`
-            (selected, _, data) => {
-                // Update the edge style.
-                if (data.name !== "arrow" || selected.options.style.name !== "arrow") {
-                    // The arrow is a special case, because it contains suboptions that we
-                    // don't necessarily want to override. For example, if we have multiple
-                    // edges selected, one of which is a non-default arrow and another which
-                    // has a different style, clicking on the arrow option should not reset
-                    // the style of the existing arrow.
-                    selected.options.style = data;
+            (edges, _, data) => record_edge_style_change(() => {
+                for (const edge of edges) {
+                    // Update the edge style.
+                    if (data.name !== "arrow" || edge.options.style.name !== "arrow") {
+                        // The arrow is a special case, because it contains suboptions that we
+                        // don't necessarily want to override. For example, if we have multiple
+                        // edges selected, one of which is a non-default arrow and another which
+                        // has a different style, clicking on the arrow option should not reset
+                        // the style of the existing arrow.
+                        edge.options.style = data;
+                    }
                 }
 
                 // Enable/disable the arrow style buttons.
@@ -1536,7 +1913,7 @@ class Panel {
                     ui.element.querySelectorAll('.arrow-style input[type="radio"]:checked')
                         .forEach(element => element.dispatchEvent(new Event("change")));
                 }
-            },
+            }),
             (_, data) => {
                 return {
                     edge: {
@@ -1600,11 +1977,10 @@ class Panel {
                 value,
             }).listen("change", (_, button) => {
                 if (button.checked) {
-                    for (const selected of ui.selection) {
-                        if (selected.is_edge()) {
-                            on_check(selected, value, data);
-                            selected.render(ui);
-                        }
+                    const selected_edges = Array.from(ui.selection).filter(cell => cell.is_edge());
+                    on_check(selected_edges, value, data);
+                    for (const edge of selected_edges) {
+                        edge.render(ui);
                     }
                 }
             }).element;
@@ -1658,6 +2034,36 @@ class Panel {
         this.element.appendChild(options_list);
     }
 
+    /// We buffer the MathJax rendering to reduce flickering.
+    /// If the `.buffer` has no extra classes, then we are free to start a new MathJax
+    /// TeX render.
+    /// If the `.buffer` has a `.buffering` class, then we are rendering a label. This
+    /// may be out of date, in which case we add a `.pending` class (which means we're
+    /// going to rerender as soon as the current MathJax render has completed).
+    render_tex(cell) {
+        const label = cell.element.querySelector(".label:not(.buffer)");
+        const buffer = cell.element.querySelector(".buffer");
+        const jax = MathJax.Hub.getAllJax(buffer);
+        if (!buffer.classList.contains("buffering") && jax.length > 0) {
+            buffer.classList.add("buffering");
+            MathJax.Hub.Queue(
+                ["Text", jax[0], cell.label],
+                () => {
+                    // Swap the label and the label buffer.
+                    label.classList.add("buffer");
+                    buffer.classList.remove("buffer", "buffering");
+                },
+                () => {
+                    if (cell.is_edge()) {
+                        cell.update_label_transformation();
+                    }
+                },
+            );
+        } else if (!buffer.classList.contains("pending")) {
+            MathJax.Hub.Queue(() => this.render_tex(cell));
+        }
+    };
+
     /// Update the panel state (i.e. enable/disable fields as relevant).
     update(ui) {
         const input = this.element.querySelector('label input[type="text"]');
@@ -1668,18 +2074,20 @@ class Panel {
         if (this.export === null) {
             // Default options (for when no cells are selected). We only need to provide defaults
             // for inputs that display their state even when disabled.
-            input.value = "";
-            slider.value = 0;
+            if (ui.selection.size === 0) {
+                input.value = "";
+                slider.value = 0;
+            }
 
             // Multiple selection is always permitted, so the following code must provide sensible
             // behaviour for both single and multiple selections (including empty selections).
             const selection_includes_edge = Array.from(ui.selection).some(cell => cell.is_edge());
 
             // Enable all the inputs iff we've selected at least one edge.
-            this.element.querySelectorAll("input, button:not(.global)")
+            this.element.querySelectorAll('input:not([type="text"]), button:not(.global)')
                 .forEach(element => element.disabled = !selection_includes_edge);
 
-            // Enable the label input if at least one cell has been selected.
+            // // Enable the label input if at least one cell has been selected.
             input.disabled = ui.selection.size === 0;
 
             // Label alignment options are always enabled.
@@ -1819,7 +2227,7 @@ class Cell {
         this.label = label;
 
         /// Add this cell to the quiver.
-        quiver.add(this.level, this);
+        quiver.add(this);
 
         /// Elements are specialised depending on whether the cell is a vertex (0-cell) or edge.
         this.element = null;
@@ -1868,12 +2276,11 @@ class Cell {
                     event.stopPropagation();
                     event.preventDefault();
 
-                    const label_input = ui.panel.element.querySelector('label input[type="text"]');
                     was_previously_selected = !event.shiftKey && ui.selection.has(this) &&
                         // If the label input is already focused, then we defocus it.
                         // This allows the user to easily switch between editing the
                         // entire cell and the label.
-                        document.activeElement !== label_input;
+                        !ui.input_is_active();
 
                     if (!event.shiftKey) {
                         // Deselect all other nodes.
@@ -1888,7 +2295,7 @@ class Cell {
                         }
                     }
 
-                    const state = new UIState.Connect(ui, this, true);
+                    const state = new UIState.Connect(ui, this, false);
                     if (state.valid_connection(null)) {
                         ui.switch_mode(state);
                         this.element.classList.add("source");
@@ -1926,7 +2333,15 @@ class Cell {
                 if (ui.in_mode(UIState.Connect)) {
                     // Connect two cells if the source is different to the target.
                     if (ui.state.target === this) {
-                        ui.state.connect(ui, event);
+                        const edge = ui.state.connect(ui, event);
+                        const cells = new Set([edge]);
+                        if (ui.state.forged_vertex) {
+                            cells.add(ui.state.source);
+                        }
+                        ui.history.add(ui, [{
+                            kind: "create",
+                            cells,
+                        }]);
                     }
                     // Focus the label input for a cell if we've just ended releasing
                     // the mouse on top of the source. (This includes when we've
@@ -2613,9 +3028,12 @@ class Edge extends Cell {
     /// Reverses the edge, swapping the `source` and `target`.
     reverse(ui) {
         // Flip all the dependency relationships.
-        for (const cell of ui.quiver.reverse_dependencies.get(this)) {
+        for (const cell of ui.quiver.reverse_dependencies_of(this)) {
             const dependencies = ui.quiver.dependencies.get(cell);
-            dependencies.set(this, { source: "target", target: "source" }[dependencies.get(this)]);
+            dependencies.set(
+                this,
+                { source: "target", target: "source" }[dependencies.get(this)],
+            );
         }
 
         // Reverse the label alignment and edge offset as well as any oriented styles.
