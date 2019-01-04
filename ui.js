@@ -814,6 +814,10 @@ class UI {
         /// The panel for viewing and editing cell data.
         this.panel = new Panel();
 
+        /// Whether to use MathJax for rendering labels.
+        /// This is `false` until MathJax loads.
+        this.use_MathJax = false;
+
         /// A debug mode for convenience. Adds default random labels to cells.
         this.debug = false;
     }
@@ -1173,6 +1177,16 @@ class UI {
         this.set_background(this.canvas.element, this.view);
     }
 
+    /// Active MathJax when it becomes available, updating all existing labels make use of MathJax.
+    activate_MathJax() {
+        this.use_MathJax = true;
+
+        // Rerender all the existing labels now that MathJax is available.
+        for (const cell of this.quiver.all_cells()) {
+            cell.render_label(this);
+        }
+    }
+
     /// Returns whether the UI has a particular state.
     in_mode(state) {
         return this.state instanceof state;
@@ -1315,13 +1329,19 @@ class UI {
     render_tex(tex = "", after = x => x) {
         // We're going to fade the label in once it's rendered, so it looks less janky.
         const label = new DOM.Element("div", { class: "label" }, { opacity: 0 })
-            .add(`\\(${tex}\\)`)
+            .add(this.use_MathJax ? `\\(${tex}\\)` : tex)
             .element;
-        MathJax.Hub.queue.Push(
-            ["Typeset", MathJax.Hub, label],
-            () => label.style.opacity = 1,
-            after,
-        );
+        if (this.use_MathJax) {
+            MathJax.Hub.queue.Push(
+                ["Typeset", MathJax.Hub, label],
+                () => label.style.opacity = 1,
+                after,
+            );
+        } else {
+            label.style.opacity = 1;
+            // Simulate the usual queue delay.
+            setTimeout(() => after(), 0);
+        }
         return label;
     }
 
@@ -1498,7 +1518,7 @@ class History {
                 case "label":
                     for (const label of action.labels) {
                         label.cell.label = label[to];
-                        ui.panel.render_tex(label.cell);
+                        ui.panel.render_tex(ui, label.cell);
                     }
                     ui.panel.update(ui);
                     break;
@@ -2040,27 +2060,34 @@ class Panel {
     /// If the `.buffer` has a `.buffering` class, then we are rendering a label. This
     /// may be out of date, in which case we add a `.pending` class (which means we're
     /// going to rerender as soon as the current MathJax render has completed).
-    render_tex(cell) {
+    render_tex(ui, cell) {
         const label = cell.element.querySelector(".label:not(.buffer)");
-        const buffer = cell.element.querySelector(".buffer");
-        const jax = MathJax.Hub.getAllJax(buffer);
-        if (!buffer.classList.contains("buffering") && jax.length > 0) {
-            buffer.classList.add("buffering");
-            MathJax.Hub.Queue(
-                ["Text", jax[0], cell.label],
-                () => {
-                    // Swap the label and the label buffer.
-                    label.classList.add("buffer");
-                    buffer.classList.remove("buffer", "buffering");
-                },
-                () => {
-                    if (cell.is_edge()) {
-                        cell.update_label_transformation();
-                    }
-                },
-            );
-        } else if (!buffer.classList.contains("pending")) {
-            MathJax.Hub.Queue(() => this.render_tex(cell));
+        if (ui.use_MathJax) {
+            const buffer = cell.element.querySelector(".buffer");
+            const jax = MathJax.Hub.getAllJax(buffer);
+            if (!buffer.classList.contains("buffering") && jax.length > 0) {
+                buffer.classList.add("buffering");
+                MathJax.Hub.Queue(
+                    ["Text", jax[0], cell.label],
+                    () => {
+                        // Swap the label and the label buffer.
+                        label.classList.add("buffer");
+                        buffer.classList.remove("buffer", "buffering");
+                    },
+                    () => {
+                        if (cell.is_edge()) {
+                            cell.update_label_transformation();
+                        }
+                    },
+                );
+            } else if (!buffer.classList.contains("pending")) {
+                MathJax.Hub.Queue(() => this.render_tex(ui, cell));
+            }
+        } else {
+            while (label.firstChild !== null) {
+                label.removeChild(label.firstChild);
+            }
+            label.appendChild(document.createTextNode(cell.label));
         }
     };
 
@@ -2421,16 +2448,23 @@ class Vertex extends Cell {
         this.element.classList.add("vertex");
 
         // The cell content (containing the label).
-        this.element.appendChild(
-            new DOM.Element("div", {
-                class: "content",
-            })
-            // The label.
-            .add(new DOM.Element(ui.render_tex(this.label), { class: "label" }))
-            // Create an empty label buffer for flicker-free rendering.
-            .add(new DOM.Element(ui.render_tex(), { class: "label buffer" }))
-            .element
-        );
+        this.element.appendChild(new DOM.Element("div", { class: "content" }).element);
+        this.render_label(ui);
+    }
+
+    /// Create the HTML element associated with the label (and label buffer).
+    /// This abstraction is necessary to handle situations where MathJax cannot
+    /// be loaded gracefully.
+    render_label(ui) {
+        const content = new DOM.Element(this.element.querySelector(".content"));
+        // Remove any existing content.
+        while (content.element.firstChild !== null) {
+            content.element.removeChild(content.element.firstChild);
+        }
+        // Create the label.
+        content.add(new DOM.Element(ui.render_tex(this.label), { class: "label" }));
+        // Create an empty label buffer for flicker-free rendering.
+        content.add(new DOM.Element(ui.render_tex(), { class: "label buffer" }));
     }
 }
 
@@ -2508,13 +2542,7 @@ class Edge extends Cell {
             defs.add(mask);
             svg.appendChild(defs.element);
 
-            // The edge label.
-            const label = ui.render_tex(this.label, () => this.update_label_transformation());
-            this.element.appendChild(label);
-            // Create an empty label buffer for flicker-free rendering.
-            const buffer = ui.render_tex();
-            buffer.classList.add("buffer");
-            this.element.appendChild(buffer);
+            this.render_label(ui);
         }
 
         // Set the edge's position. This is important only for the cells that depend on this one,
@@ -2553,6 +2581,23 @@ class Edge extends Cell {
         // If it has not already been rendered, this is a no-op: it will be called
         // again when the label is rendered.
         this.update_label_transformation();
+    }
+
+    /// Create the HTML element associated with the label (and label buffer).
+    /// This abstraction is necessary to handle situations where MathJax cannot
+    /// be loaded gracefully.
+    render_label(ui) {
+        // Remove all existing labels (i.e. the label and the label buffer).
+        for (const label of this.element.querySelectorAll(".label")) {
+            label.remove();
+        }
+        // Create the edge label.
+        const label = ui.render_tex(this.label, () => this.update_label_transformation());
+        this.element.appendChild(label);
+        // Create an empty label buffer for flicker-free rendering.
+        const buffer = ui.render_tex();
+        buffer.classList.add("buffer");
+        this.element.appendChild(buffer);
     }
 
     /// Draw an edge on an existing SVG and positions it with respect to a parent `element`.
@@ -3089,7 +3134,20 @@ window.MathJax = {
 
 // We want until the (minimal) DOM content has loaded, so we have access to `document.body`.
 document.addEventListener("DOMContentLoaded", () => {
-    /// The global UI.
+    // The global UI.
     let ui = new UI(document.body);
     ui.initialise();
+
+    // Handle MathJax not loading (somewhat) gracefully.
+    new DOM.Element(document.querySelector("#MathJax"))
+        .listen("load", () => {
+            ui.activate_MathJax();
+        })
+        .listen("error", () => {
+            const error = new DOM.Element("div", { class: "error hidden" })
+                .add("MathJax failed to load.")
+                .element;
+            document.body.appendChild(error);
+            setTimeout(() => error.classList.remove("hidden"), 0);
+        });
 });
