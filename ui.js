@@ -496,6 +496,10 @@ class Position {
     angle() {
         return Math.atan2(this.y, this.x);
     }
+
+    is_zero() {
+        return this.x === 0 && this.y === 0;
+    }
 }
 
 /// An (width, height) pair. This is functionally equivalent to `Position`, but has different
@@ -851,15 +855,18 @@ class UI {
                     // We only want to pan when the pointer is held.
                     this.state.origin = null;
                 } else if (this.in_mode(UIState.Move)) {
-                    this.history.add(this, [{
-                        kind: "move",
-                        displacements: Array.from(this.state.selection).map((vertex) => ({
-                            vertex,
-                            from:
-                                vertex.position.sub(this.state.previous.sub(this.state.origin)),
-                            to: vertex.position,
-                        })),
-                    }]);
+                    if (!this.state.previous.sub(this.state.origin).is_zero()) {
+                        // We only want to commit the move event if it actually did moved things.
+                        this.history.add(this, [{
+                            kind: "move",
+                            displacements: Array.from(this.state.selection).map((vertex) => ({
+                                vertex,
+                                from:
+                                    vertex.position.sub(this.state.previous.sub(this.state.origin)),
+                                to: vertex.position,
+                            })),
+                        }]);
+                    }
                     this.switch_mode(UIState.default);
                 } else {
                     // Stop trying to connect cells when the mouse is released.
@@ -1499,6 +1506,15 @@ class History {
         this.collapse = null;
     }
 
+    /// Pop the last event from the history. Assumes that `this.present === this.actions.length`.
+    pop(ui) {
+        --this.present;
+        this.permanentise();
+        ui.quiver.flush(this.present);
+        this.selections.splice(this.present + 1, 1);
+        this.actions.splice(this.present, 1);
+    }
+
     /// Trigger an action.
     effect(ui, actions, reverse) {
         const order = Array.from(actions);
@@ -1655,15 +1671,24 @@ class Panel {
                 // we're just going to modify that event rather than add a new
                 // one. This means we won't have to undo every single character
                 // change: we'll undo the entire label change.
+                let unchanged = true;
                 for (const action of actions) {
                     // This ought always to be true.
                     if (action.kind === "label") {
                         // Modify the `to` field of each label.
-                        action.labels.forEach(label => label.to = label_input.element.value);
+                        action.labels.forEach(label => {
+                            label.to = label_input.element.value;
+                            if (label.to !== label.from) {
+                                unchanged = false;
+                            }
+                        });
                     }
                 }
                 // Invoke the new label changes immediately.
                 ui.history.effect(ui, actions, false);
+                if (unchanged) {
+                    ui.history.pop(ui);
+                }
             } else {
                 // If this is the start of our label modification,
                 // we need to add a new history event.
@@ -1769,17 +1794,24 @@ class Panel {
                         // If the previous history event was to modify the offset, then
                         // we're just going to modify that event rather than add a new
                         // one, as with the label input.
+                        let unchanged = true;
                         for (const action of actions) {
                             // This ought always to be true.
                             if (action.kind === "offset") {
                                 // Modify the `to` field of each offset.
                                 action.offsets.forEach((offset) => {
                                     offset.to = value;
+                                    if (offset.to !== offset.from) {
+                                        unchanged = false;
+                                    }
                                 });
                             }
                         }
                         // Invoke the new offset changes immediately.
                         ui.history.effect(ui, actions, false);
+                        if (unchanged) {
+                            ui.history.pop(ui);
+                        }
                     } else {
                         // If this is the start of our offset modification,
                         // we need to add a new history event.
