@@ -770,7 +770,7 @@ UIState.Move = class extends UIState {
 
 /// The UI view is being panned.
 UIState.Pan = class extends UIState {
-    constructor() {
+    constructor(key) {
         super();
 
         this.name = "pan";
@@ -778,6 +778,11 @@ UIState.Pan = class extends UIState {
         /// The location from which the pan was initiated (used to update the view relative to the
         /// origin).
         this.origin = null;
+
+        /// The key with which the pan was initiated. Multiple keys (Option and Control) can be used
+        /// for panning, so we need to make sure that we're consistent about the key we listen for
+        /// when panning.
+        this.key = key;
     }
 };
 
@@ -996,9 +1001,10 @@ class UI {
                     this.panel.dismiss_export_pane(this);
                     break;
                 case "Alt":
+                case "Control":
                     // Holding Option triggers panning mode.
                     if (this.in_mode(UIState.Default)) {
-                        this.switch_mode(new UIState.Pan());
+                        this.switch_mode(new UIState.Pan(event.key));
                     }
                     break;
                 // Use the arrow keys for moving vertices around.
@@ -1053,7 +1059,8 @@ class UI {
         document.addEventListener("keyup", (event) => {
             switch (event.key) {
                 case "Alt":
-                    if (this.in_mode(UIState.Pan)) {
+                case "Control":
+                    if (this.in_mode(UIState.Pan) && this.state.key === event.key) {
                         this.switch_mode(UIState.default);
                     }
                     break;
