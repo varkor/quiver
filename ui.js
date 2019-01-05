@@ -960,6 +960,7 @@ class UI {
 
             switch (event.key) {
                 case "Backspace":
+                case "Delete":
                     // Remove any selected cells.
                     if (!editing_input) {
                         // Prevent Backspace triggering browser history navigation.
@@ -2400,8 +2401,8 @@ class Cell {
         // We record whether a cell was already selected when we click on it, because
         // we only want to trigger a label input focus if we click on a cell that is
         // already selected. Clicking on an unselected cell should not focus the input,
-        // or we wouldn't be able to immediately delete a cell with Backspace, as the
-        // input field would capture it.
+        // or we wouldn't be able to immediately delete a cell with Backspace/Delete,
+        // as the input field would capture it.
         let was_previously_selected;
         content_element.addEventListener("mousedown", (event) => {
             if (event.button === 0) {
