@@ -29,7 +29,7 @@ body {
     outline: none;
 }
 
-.error {
+.error-banner {
     position: fixed;
     width: 100%;
     left: 0; top: 0;
@@ -44,6 +44,10 @@ body {
     user-select: none;
 
     transition: transform 0.2s;
+}
+
+.error-banner.hidden {
+    transform: translateY(-100%);
 }
 
 .close {
@@ -82,10 +86,6 @@ body {
 
 .logo:hover {
     opacity: 1;
-}
-
-.error.hidden {
-    transform: translateY(-100%);
 }
 
 /* The grid of cells */
@@ -202,6 +202,11 @@ body {
 
 .label.buffer {
     visibility: hidden;
+}
+
+.label.error {
+    font: 22px monospace;
+    color: hsl(0, 100%, 40%);
 }
 
 /* Edges */
