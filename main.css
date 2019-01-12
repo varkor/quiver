@@ -255,12 +255,20 @@ body {
     width: 20%; height: 100%;
     right: 0;
     z-index: 1;
-    padding: 24px 16px;
 
     background: hsl(0, 0%, 20%);
 
     font: 14px sans-serif;
     color: hsl(0, 0%, 80%);
+}
+
+.panel .local {
+    position: absolute;
+    width: 100%; height: calc(100% - 84px);
+    padding: 24px 16px;
+    overflow: auto;
+
+    border-bottom: hsl(0, 0%, 36%) solid 1px;
 }
 
 .panel input[type="text"] {

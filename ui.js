@@ -2013,15 +2013,25 @@ class Panel {
     initialise(ui) {
         this.element = new DOM.Element("div", { class: "panel" }).element;
 
-        // Prevent propogation of mouse events when interacting with the panel.
+        // Prevent propagation of mouse events when interacting with the panel.
         this.element.addEventListener("mousedown", (event) => {
             event.stopImmediatePropagation();
         });
 
+        // Prevent propagation of scrolling when the cursor is over the panel.
+        // This allows the user to scroll the panel when all the elements don't fit on it.
+        this.element.addEventListener("wheel", (event) => {
+            event.stopImmediatePropagation();
+        }, { passive: true });
+
+        // Local options, such as vertex and edge actions.
+        const local = new DOM.Element("div", { class: "local" });
+        this.element.appendChild(local.element);
+
         // The label.
         const label_input = new DOM.Element("input", { type: "text", disabled: true });
-        const label = new DOM.Element("label").add("Label: ").add(label_input).element;
-        this.element.appendChild(label);
+        const label = new DOM.Element("label").add("Label: ").add(label_input);
+        local.add(label);
 
         // Handle label interaction: update the labels of the selected cells when
         // the input field is modified.
@@ -2081,6 +2091,7 @@ class Panel {
 
         this.create_option_list(
             ui,
+            local,
             [["left",], ["centre",], ["right",]],
             "label-alignment",
             [],
@@ -2143,7 +2154,7 @@ class Panel {
         );
 
         // The offset slider.
-        this.element.appendChild(
+        local.add(
             new DOM.Element("label").add("Offset: ").add(
                 new DOM.Element(
                     "input",
@@ -2189,17 +2200,17 @@ class Panel {
                         }], true);
                     }
                 })
-            ).element
+            )
         );
 
         // The button to reverse an edge.
-        this.element.appendChild(
+        local.add(
             new DOM.Element("button", { disabled: true }).add("⇌ Reverse").listen("click", () => {
                 ui.history.add(ui, [{
                     kind: "reverse",
                     cells: ui.selection,
                 }], true);
-            }).element
+            })
         );
 
         // The list of tail styles.
@@ -2244,6 +2255,7 @@ class Panel {
 
         this.create_option_list(
             ui,
+            local,
             [
                 ["none", { name: "none" }],
                 ["maps to", { name: "maps to" }],
@@ -2274,6 +2286,7 @@ class Panel {
         // The list of body styles.
         this.create_option_list(
             ui,
+            local,
             [
                 ["1-cell", { name: "cell", level: 1 }],
                 ["2-cell", { name: "cell", level: 2 }],
@@ -2304,6 +2317,7 @@ class Panel {
         // The list of head styles.
         this.create_option_list(
             ui,
+            local,
             [
                 ["arrowhead", { name: "arrowhead" }],
                 ["none", { name: "none" }],
@@ -2333,6 +2347,7 @@ class Panel {
         // The list of (non-arrow) edge styles.
         this.create_option_list(
             ui,
+            local,
             [
                 ["arrow", Edge.default_options().style],
                 ["adjunction", { name: "adjunction" }],
@@ -2429,6 +2444,7 @@ class Panel {
     // with visual feedback.
     create_option_list(
         ui,
+        local,
         entries,
         name,
         classes,
@@ -2437,8 +2453,8 @@ class Panel {
         properties,
         augment_svg = () => [],
     ) {
-        const options_list = new DOM.Element("div", { class: `options` }).element;
-        options_list.classList.add(...classes);
+        const options_list = new DOM.Element("div", { class: `options` });
+        options_list.class_list.add(...classes);
 
         const create_option = (value, data) => {
             const button = new DOM.Element("input", {
@@ -2453,9 +2469,9 @@ class Panel {
                         edge.render(ui);
                     }
                 }
-            }).element;
-            button.disabled = disabled;
-            options_list.appendChild(button);
+            });
+            button.element.disabled = disabled;
+            options_list.add(button);
 
             // We're going to create background images for the label alignment buttons
             // representing each of the alignments. We do this by creating SVGs so that
@@ -2475,7 +2491,8 @@ class Panel {
                 // What percentage of the button to offset `"left"` or `"right"` aligned arrows.
                 const BACKGROUND_PADDING = 20;
 
-                button.style.backgroundPosition = `${alignment} ${BACKGROUND_PADDING}% center`
+                button.element.style.backgroundPosition
+                    = `${alignment} ${BACKGROUND_PADDING}% center`
             }
 
             // Trigger the callback to modify the SVG in some way after drawing the arrow.
@@ -2490,18 +2507,18 @@ class Panel {
                 }
                 backgrounds.push(`url(data:image/svg+xml;utf8,${encodeURI(svg.outerHTML)})`);
             }
-            button.style.backgroundImage = backgrounds.join(", ");
+            button.element.style.backgroundImage = backgrounds.join(", ");
 
             return button;
         };
 
         for (const [value, data, classes = []] of entries) {
-            create_option(value, data).classList.add(...classes);
+            create_option(value, data).class_list.add(...classes);
         }
 
-        options_list.querySelector(`input[name="${name}"]`).checked = true;
+        options_list.element.querySelector(`input[name="${name}"]`).checked = true;
 
-        this.element.appendChild(options_list);
+        local.add(options_list);
     }
 
     /// We buffer the MathJax rendering to reduce flickering (KaTeX is fast enough not
