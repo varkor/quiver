@@ -319,6 +319,9 @@ QuiverExport.tikzcd = new class extends QuiverExport {
                         case "centre":
                             label_parameters.push("description");
                             break;
+                        case "over":
+                            label_parameters.push("marking");
+                            break;
                         case "right":
                             label_parameters.push("swap");
                             break;
@@ -328,6 +331,10 @@ QuiverExport.tikzcd = new class extends QuiverExport {
                         case "centre":
                             // Centring is done by using the `description` style.
                             align = " description";
+                            break;
+                        case "over":
+                            // Centring without clearing is done by using the `marking` style.
+                            align = " marking";
                             break;
                         case "right":
                             // We can flip the side of the edge on which the label is drawn
@@ -446,6 +453,9 @@ QuiverExport.tikzcd = new class extends QuiverExport {
                                 case "centre":
                                     anchor = "description, ";
                                     break;
+                                case "over":
+                                    anchor = "marking, ";
+                                    break;
                                 case "right":
                                     anchor = "anchor=east, ";
                                     break;
@@ -502,6 +512,7 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
     //          * `0`: left
     //          * `1`: centre
     //          * `2`: right
+    //          * `3`: over
     //        It has been distinguished from the other options as one that is frequently
     //        changed from the default, to avoid the overhead of encoding an options
     //        object.
@@ -592,7 +603,7 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
                     }
                 };
 
-                const variant = { left: 0, centre: 1, right: 2 }[label_alignment];
+                const variant = { left: 0, centre: 1, right: 2, over: 3 }[label_alignment];
                 // It's only necessary to encode the label alignment is the label is not blank.
                 push_if_necessary(variant, 0, label !== "");
                 push_if_necessary(label, "");
@@ -702,7 +713,7 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
                     }
                     assert_kind(label, "string");
                     assert_kind(alignment, "natural");
-                    assert(alignment <= 2, "invalid label alignment");
+                    assert(alignment <= 3, "invalid label alignment");
                     assert_kind(options, "object");
 
                     // We currently don't validate `options` further than being an object.
@@ -713,17 +724,16 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
                     const level = Math.max(indices[source].level, indices[target].level) + 1;
                     const { style = {} } = { options };
                     delete options.style;
-                    Edge.default_options({
-                        label_alignment: ["left", "centre", "right"][alignment],
-                        ...options,
-                    }, style, level);
 
                     const edge = new Edge(
                         ui,
                         label,
                         indices[source],
                         indices[target],
-                        options,
+                        Edge.default_options({
+                            label_alignment: ["left", "centre", "right", "over"][alignment],
+                            ...options,
+                        }, style, level),
                     );
                     indices.push(edge);
                 }
@@ -954,8 +964,12 @@ UIState.Connect = class extends UIState {
 
         const swap = (options) => {
             return {
-                label_alignment:
-                    { left: "right", centre: "centre", right: "left" }[options.label_alignment],
+                label_alignment: {
+                    left: "right",
+                    centre: "centre",
+                    over: "over",
+                    right: "left",
+                }[options.label_alignment],
                 offset: -options.offset,
             };
         };
@@ -2092,7 +2106,7 @@ class Panel {
         this.create_option_list(
             ui,
             local,
-            [["left",], ["centre",], ["right",]],
+            [["left",], ["centre",], ["over",], ["right",]],
             "label-alignment",
             [],
             false, // `disabled`
@@ -2119,6 +2133,7 @@ class Panel {
                         y_offset = -Y_OFFSET;
                         break;
                     case "centre":
+                    case "over":
                         y_offset = 0;
                         break;
                     case "right":
@@ -2126,7 +2141,7 @@ class Panel {
                         break;
                 }
 
-                const gap = y_offset === 0 ? { length: RADIUS * 4, offset: X_OFFSET } : null;
+                const gap = value === "centre" ? { length: RADIUS * 4, offset: X_OFFSET } : null;
 
                 return {
                     edge: {
@@ -3141,6 +3156,7 @@ class Edge extends Cell {
                 margin_adjustment = 0;
                 break;
             case "centre":
+            case "over":
                 margin_adjustment = 0.5;
                 break;
             case "right":
@@ -3517,6 +3533,7 @@ class Edge extends Cell {
                 label_offset = -1;
                 break;
             case "centre":
+            case "over":
                 label_offset = 0;
                 break;
             case "right":
@@ -3576,8 +3593,12 @@ class Edge extends Cell {
         // Reverse the label alignment and edge offset as well as any oriented styles.
         // Note that since we do this, the position of the edge will remain the same, which means
         // we don't need to rerender any of this edge's dependencies.
-        this.options.label_alignment
-            = { left: "right", centre: "centre", right: "left" }[this.options.label_alignment];
+        this.options.label_alignment = {
+            left: "right",
+            centre: "centre",
+            over: "over",
+            right: "left",
+        }[this.options.label_alignment];
         this.options.offset = -this.options.offset;
         if (this.options.style.name === "arrow") {
             const swap_sides = { top: "bottom", bottom: "top" };
