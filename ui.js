@@ -24,6 +24,10 @@ DOM.Element = class {
         return this.element.id;
     }
 
+    get class_list() {
+        return this.element.classList;
+    }
+
     /// Appends an element.
     /// `value` has two forms: a plain string, in which case it is added as a text node, or a
     /// `DOM.Element`, in which case the corresponding element is appended.
@@ -1110,9 +1114,10 @@ class UI {
         /// The panel for viewing and editing cell data.
         this.panel = new Panel();
 
-        /// Whether to use MathJax for rendering labels.
-        /// This is `false` until MathJax loads.
-        this.use_MathJax = false;
+        /// What library to use for rendering labels.
+        /// `null` is a basic HTML fallback: it is used until the relevant library is loaded.
+        /// Options include MathJax and KaTeX.
+        this.render_method = null;
 
         /// A debug mode for convenience. Adds default random labels to cells.
         this.debug = false;
@@ -1553,9 +1558,10 @@ class UI {
         this.set_background(this.canvas.element, this.view);
     }
 
-    /// Active MathJax when it becomes available, updating all existing labels make use of MathJax.
-    activate_MathJax() {
-        this.use_MathJax = true;
+    /// Active MathJax or KaTeX when it becomes available,
+    /// updating all existing labels to make use of the library.
+    activate_render_method(method) {
+        this.render_method = method;
 
         // Rerender all the existing labels now that MathJax is available.
         for (const cell of this.quiver.all_cells()) {
@@ -1704,25 +1710,45 @@ class UI {
 
     /// Renders TeX with MathJax and returns the corresponding element.
     render_tex(tex = "", after = x => x) {
-        const label = new DOM.Element("div", { class: "label" }, { display: "none", opacity: 0 })
-            .add(this.use_MathJax ? `\\(${tex}\\)` : tex)
-            .element;
-        // We're going to fade the label in once it's rendered, so it looks less janky.
-        const reveal = () => {
-            label.style.display = "block";
-            label.style.opacity = 1;
-        };
-        if (this.use_MathJax) {
-            MathJax.Hub.queue.Push(
-                ["Typeset", MathJax.Hub, label],
-                reveal,
-                after,
-            );
-        } else {
-            reveal();
-            // Simulate the usual queue delay.
-            setTimeout(() => after(), 0);
+        const label = new DOM.Element("div", { class: "label" });
+
+        switch (this.render_method) {
+            case null:
+                label.add(tex);
+                // Simulate the usual queue delay.
+                setTimeout(() => after(), 0);
+                break;
+
+            case "MathJax":
+                label.add(`\\(${tex}\\)`);
+
+                // We're going to fade the label in once it's rendered, so it looks less janky.
+                label.element.style.display = "none";
+                label.element.style.opacity = 0;
+
+                MathJax.Hub.queue.Push(
+                    ["Typeset", MathJax.Hub, label.element],
+                    () => {
+                        label.element.style.display = "block";
+                        label.element.style.opacity = 1;
+                    },
+                    after,
+                );
+
+                break;
+
+            case "KaTeX":
+                try {
+                    katex.render(tex, label.element);
+                } catch (_) {
+                    label.class_list.add("error");
+                    label.add(tex);
+                }
+                // Simulate the usual queue delay.
+                setTimeout(() => after(), 0);
+                break;
         }
+
         return label;
     }
 
@@ -2478,38 +2504,58 @@ class Panel {
         this.element.appendChild(options_list);
     }
 
-    /// We buffer the MathJax rendering to reduce flickering.
+    /// We buffer the MathJax rendering to reduce flickering (KaTeX is fast enough not
+    /// to require buffering).
     /// If the `.buffer` has no extra classes, then we are free to start a new MathJax
     /// TeX render.
     /// If the `.buffer` has a `.buffering` class, then we are rendering a label. This
     /// may be out of date, in which case we add a `.pending` class (which means we're
     /// going to rerender as soon as the current MathJax render has completed).
     render_tex(ui, cell) {
-        const label = cell.element.querySelector(".label:not(.buffer)");
-        if (ui.use_MathJax) {
-            const buffer = cell.element.querySelector(".buffer");
-            const jax = MathJax.Hub.getAllJax(buffer);
-            if (!buffer.classList.contains("buffering") && jax.length > 0) {
-                buffer.classList.add("buffering");
-                MathJax.Hub.Queue(
-                    ["Text", jax[0], cell.label],
-                    () => {
-                        // Swap the label and the label buffer.
-                        label.classList.add("buffer");
-                        buffer.classList.remove("buffer", "buffering");
-                    },
-                    () => {
-                        if (cell.is_edge()) {
-                            cell.update_label_transformation();
-                        }
-                    },
-                );
-            } else if (!buffer.classList.contains("pending")) {
-                MathJax.Hub.Queue(() => this.render_tex(ui, cell));
+        const label = new DOM.Element(cell.element.querySelector(".label:not(.buffer)"));
+        label.class_list.remove("error");
+
+        const update_label_transformation = () =>{
+            if (cell.is_edge()) {
+                cell.update_label_transformation();
             }
-        } else {
-            new DOM.Element(label).clear();
-            label.appendChild(document.createTextNode(cell.label));
+        };
+
+        switch (ui.render_method) {
+            case null:
+                label.clear().add(cell.label);
+                update_label_transformation();
+                break;
+
+            case "MathJax":
+                const buffer = cell.element.querySelector(".buffer");
+                const jax = MathJax.Hub.getAllJax(buffer);
+                if (!buffer.classList.contains("buffering") && jax.length > 0) {
+                    buffer.classList.add("buffering");
+                    MathJax.Hub.Queue(
+                        ["Text", jax[0], cell.label],
+                        () => {
+                            // Swap the label and the label buffer.
+                            label.class_list.add("buffer");
+                            buffer.classList.remove("buffer", "buffering");
+                        },
+                        update_label_transformation,
+                    );
+                } else if (!buffer.classList.contains("pending")) {
+                    MathJax.Hub.Queue(() => this.render_tex(ui, cell));
+                }
+                break;
+
+            case "KaTeX":
+                label.clear();
+                try {
+                    katex.render(cell.label, label.element);
+                } catch (_) {
+                    label.add(cell.label);
+                    label.class_list.add("error");
+                }
+                update_label_transformation();
+                break;
         }
     };
 
@@ -2882,9 +2928,11 @@ class Vertex extends Cell {
         // Remove any existing content.
         content.clear();
         // Create the label.
-        content.add(new DOM.Element(ui.render_tex(this.label), { class: "label" }));
+        content.add(ui.render_tex(this.label));
         // Create an empty label buffer for flicker-free rendering.
-        content.add(new DOM.Element(ui.render_tex(), { class: "label buffer" }));
+        const buffer = ui.render_tex(this.label);
+        buffer.class_list.add("buffer");
+        content.add(buffer);
     }
 }
 
@@ -3020,11 +3068,11 @@ class Edge extends Cell {
         }
         // Create the edge label.
         const label = ui.render_tex(this.label, () => this.update_label_transformation());
-        this.element.appendChild(label);
+        this.element.appendChild(label.element);
         // Create an empty label buffer for flicker-free rendering.
         const buffer = ui.render_tex();
-        buffer.classList.add("buffer");
-        this.element.appendChild(buffer);
+        buffer.class_list.add("buffer");
+        this.element.appendChild(buffer.element);
     }
 
     /// Draw an edge on an existing SVG and positions it with respect to a parent `element`.
@@ -3538,26 +3586,8 @@ Edge.SVG_PADDING = 6;
 // How much space to leave between adjacent parallel arrows.
 Edge.OFFSET_DISTANCE = 8;
 
-// Initialise MathJax.
-window.MathJax = {
-  jax: ["input/TeX", "output/SVG"],
-  extensions: ["tex2jax.js", "TeX/noErrors.js"],
-  messageStyle: "none",
-  skipStartupTypeset: true,
-  positionToHash: false,
-  showMathMenu: false,
-  showMathMenuMSIE: false,
-  TeX: {
-    noErrors: {
-        multiLine: false,
-        style: {
-            color: "hsl(0, 100%, 40%)",
-            font: "18px monospace",
-            border: "none",
-        },
-    }
-  },
-};
+// Which library to use for rendering labels.
+const RENDER_METHOD = "KaTeX";
 
 // We want until the (minimal) DOM content has loaded, so we have access to `document.body`.
 document.addEventListener("DOMContentLoaded", () => {
@@ -3569,8 +3599,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const display_error = (message) => {
         // If there's already an error, it's not unlikely that subsequent errors will be triggered.
         // Thus, we don't display an error banner if one is already displayed.
-        if (document.body.querySelector(".error") === null) {
-            const error = new DOM.Element("div", { class: "error hidden" })
+        if (document.body.querySelector(".error-banner") === null) {
+            const error = new DOM.Element("div", { class: "error-banner hidden" })
                 .add(message)
                 .add(
                     new DOM.Element("button", { class: "close" })
@@ -3587,37 +3617,90 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
-    // Get the query string (i.e. the part of the URL after the "?").
-    const query_string = window.location.href.match(/\?(.*)$/);
-    if (query_string !== null) {
-        // If there is a query string, try to decode it as a diagram.
-        try {
-            QuiverImportExport.base64.import(ui, query_string[1]);
-        } catch (error) {
-            if (ui.quiver.is_empty()) {
-                display_error("The saved diagram was malformed and could not be loaded.");
-            } else {
-                // The importer will try to recover from errors, so we may have been mostly
-                // successful.
-                display_error(
-                    "The saved diagram was malformed and may have been loaded incorrectly."
-                );
+    const load_quiver_from_query_string = () => {
+        // Get the query string (i.e. the part of the URL after the "?").
+        const query_string = window.location.href.match(/\?(.*)$/);
+        if (query_string !== null) {
+            // If there is a query string, try to decode it as a diagram.
+            try {
+                QuiverImportExport.base64.import(ui, query_string[1]);
+            } catch (error) {
+                if (ui.quiver.is_empty()) {
+                    display_error("The saved diagram was malformed and could not be loaded.");
+                } else {
+                    // The importer will try to recover from errors, so we may have been mostly
+                    // successful.
+                    display_error(
+                        "The saved diagram was malformed and may have been loaded incorrectly."
+                    );
+                }
+                // Rethrow the error so that it can be reported.
+                throw error;
             }
-            // Rethrow the error so that it can be reported.
-            throw error;
         }
+    };
+
+    // Immediately load the rendering library.
+    if (RENDER_METHOD !== null) {
+        // All non-`null` rendering libraries add some script.
+        const rendering_library = new DOM.Element("script", {
+            type: "text/javascript",
+            src: {
+                MathJax: "MathJax/MathJax.js",
+                KaTeX: "KaTeX/dist/katex.js",
+            }[RENDER_METHOD],
+        }).listen("load", () => {
+            ui.activate_render_method(RENDER_METHOD);
+
+            // We delay loading the quiver when using KaTeX (see comment below),
+            // so as soon as the library is loaded, we want to load the quiver.
+            if (RENDER_METHOD === "KaTeX") {
+                load_quiver_from_query_string();
+            }
+        }).listen("error", () => {
+            // Handle MathJax or KaTeX not loading (somewhat) gracefully.
+            display_error(`${RENDER_METHOD} failed to load.`)
+        });
+
+        // Specific, per-library behaviour.
+        switch (RENDER_METHOD) {
+            case "MathJax":
+                window.MathJax = {
+                    jax: ["input/TeX", "output/SVG"],
+                    extensions: ["tex2jax.js", "TeX/noErrors.js"],
+                    messageStyle: "none",
+                    skipStartupTypeset: true,
+                    positionToHash: false,
+                    showMathMenu: false,
+                    showMathMenuMSIE: false,
+                    TeX: {
+                        noErrors: {
+                            multiLine: false,
+                            style: {
+                                border: "none",
+                                font: "20px monospace",
+                                color: "hsl(0, 100%, 40%)",
+                            },
+                        }
+                    },
+                };
+                break;
+            case "KaTeX":
+                document.head.appendChild(new DOM.Element("link", {
+                    rel: "stylesheet",
+                    href: "KaTeX/dist/katex.css",
+                }).element);
+                break;
+        }
+
+        // Trigger the script load.
+        document.head.appendChild(rendering_library.element);
     }
 
-    // Handle MathJax not loading (somewhat) gracefully.
-    new DOM.Element(document.querySelector("#MathJax"))
-        .listen("load", () => {
-            ui.activate_MathJax();
-        })
-        .listen("error", () => {
-            const error = new DOM.Element("div", { class: "error hidden" })
-                .add("MathJax failed to load.")
-                .element;
-            document.body.appendChild(error);
-            setTimeout(() => error.classList.remove("hidden"), 0);
-        });
+    // KaTeX is special in that it's fast enough to be worth waiting for, but not
+    // immediately available. In this case, we delay loading the quiver until the
+    // library has loaded.
+    if (RENDER_METHOD !== "KaTeX") {
+        load_quiver_from_query_string();
+    }
 });
