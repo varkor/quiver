@@ -14,10 +14,8 @@ DOM.Element = class {
         } else {
             this.element = document.createElement(from);
         }
-        for (const [attribute, value] of Object.entries(attributes)) {
-            this.element.setAttribute(attribute, value);
-        }
-        Object.assign(this.element.style, style);
+        this.set_attributes(attributes);
+        this.style = style;
     }
 
     get id() {
@@ -28,14 +26,29 @@ DOM.Element = class {
         return this.element.classList;
     }
 
+    set style(style) {
+        Object.assign(this.element.style, style);
+    }
+
+    set_attributes(attributes) {
+        for (const [attribute, value] of Object.entries(attributes)) {
+            this.element.setAttribute(attribute, value);
+        }
+    }
+
     /// Appends an element.
-    /// `value` has two forms: a plain string, in which case it is added as a text node, or a
-    /// `DOM.Element`, in which case the corresponding element is appended.
+    /// `value` has three forms:
+    /// - A plain string, in which case it is added as a text node.
+    /// - A `DOM.Element`, in which case the corresponding element is appended.
+    /// - An HTML element, in which case it is appended.
     add(value) {
-        if (typeof value !== "string") {
+        if (typeof value === "string") {
+            this.element.appendChild(document.createTextNode(value));
+
+        } else if (value instanceof DOM.Element) {
             this.element.appendChild(value.element);
         } else {
-            this.element.appendChild(document.createTextNode(value));
+            this.element.appendChild(value);
         }
         return this;
     }
@@ -194,12 +207,14 @@ class Quiver {
     /// Currently, the supported formats are:
     /// - "tikzcd"
     /// - "base64"
-    export(format) {
+    export(format, ui) {
         switch (format) {
             case "tikzcd":
                 return QuiverExport.tikzcd.export(this);
             case "base64":
                 return QuiverImportExport.base64.export(this);
+            case "svg":
+                return QuiverExport.svg.export(ui, this);
             default:
                 throw new Error(`unknown export format \`${format}\``);
         }
@@ -745,6 +760,59 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
         }
 
         return quiver;
+    }
+};
+
+QuiverExport.svg = new class extends QuiverExport {
+    export(ui, quiver) {
+        const output = new DOM.SVGElement("svg", { xmlns: "http://www.w3.org/2000/svg" });
+
+        // How many pixels of padding to give the SVG.
+        const PADDING = 16;
+
+        for (let level = 0; level < quiver.cells.length; ++level) {
+            if (level === 0) {
+
+            } else {
+                const svg = new DOM.SVGElement("svg");
+
+                for (const cell of quiver.cells[level]) {
+                    Edge.draw_and_position_edge(
+                        ui,
+                        svg.element,
+                        svg.element,
+                        cell.level,
+                        cell.source.position,
+                        cell.target.position,
+                        cell.options,
+                        true,
+                        null,
+                    );
+                }
+
+                output.add(svg);
+            }
+        }
+
+        // We can only compute the bounding box if the SVG is in the document,
+        // so we add it prematurely. (We could add it anywhere: it'll be
+        // repositioned later anyway.)
+        ui.element.querySelector(".export").appendChild(output.element);
+
+        const bounding_box = output.element.getBBox();
+        const canvas = {
+            x: bounding_box.x - PADDING,
+            y: bounding_box.y - PADDING,
+            width: bounding_box.width + PADDING * 2,
+            height: bounding_box.height + PADDING * 2,
+        };
+        output.set_attributes({
+            viewBox: `${canvas.x} ${canvas.y} ${canvas.width} ${canvas.height}`,
+            width: `${canvas.width}px`,
+            height: `${canvas.height}px`,
+        });
+
+        return output;
     }
 };
 
@@ -2397,9 +2465,6 @@ class Panel {
             // we will simply switch the displayed export format.
             // Clicking on the same button twice closes the panel.
             if (this.export !== format) {
-                // Get the base 64 URI encoding of the diagram.
-                const output = ui.quiver.export(format);
-
                 let export_pane;
                 if (this.export === null) {
                     // Create the export pane.
@@ -2409,7 +2474,11 @@ class Panel {
                     // Find the existing export pane.
                     export_pane = new DOM.Element(ui.element.querySelector(".export"));
                 }
-                export_pane.clear().add(output);
+                export_pane.clear();
+
+                // Get the encoding of the diagram in the chosen `format`.
+                const output = ui.quiver.export(format, ui);
+                export_pane.add(output);
 
                 this.export = format;
 
@@ -2432,9 +2501,17 @@ class Panel {
                 new DOM.Element("button", { class: "global" }).add("Get shareable link")
                     .listen("click", () => display_export_pane("base64"))
             ).add(
-                // The export button.
-                new DOM.Element("button", { class: "global" }).add("Export to LaTeX")
-                    .listen("click", () => display_export_pane("tikzcd"))
+                // The export buttons.
+                new DOM.Element("div", { class: "horizontal" })
+                    .add(new DOM.Element("label").add("Export as: "))
+                    .add(
+                        new DOM.Element("button", { class: "global medium" }).add("LaTeX")
+                            .listen("click", () => display_export_pane("tikzcd"))
+                    ).add(
+                        // The SVG export button.
+                        new DOM.Element("button", { class: "global medium" }).add("SVG")
+                            .listen("click", () => display_export_pane("svg"))
+                    )
             ).element
         );
     }
@@ -3604,7 +3681,7 @@ Edge.SVG_PADDING = 6;
 Edge.OFFSET_DISTANCE = 8;
 
 // Which library to use for rendering labels.
-const RENDER_METHOD = "KaTeX";
+const RENDER_METHOD = null;
 
 // We want until the (minimal) DOM content has loaded, so we have access to `document.body`.
 document.addEventListener("DOMContentLoaded", () => {
