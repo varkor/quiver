@@ -46,6 +46,32 @@ body {
     transition: transform 0.2s;
 }
 
+.close {
+    width: 28px; height: 28px;
+    margin-left: 20px;
+
+    background: transparent;
+    border: none;
+    border-radius: 100%;
+    outline: none;
+
+    text-align: center;
+    color: white;
+    font-size: 20px;
+}
+
+.close:hover {
+    background: hsla(0, 0%, 100%, 0.2);
+}
+
+.close:active {
+    background: hsla(0, 0%, 100%, 0.4);
+}
+
+.close::before {
+    content: "×";
+}
+
 .logo {
     position: fixed;
     left: 16px; top: 16px;
@@ -458,7 +484,7 @@ body {
     width: 100%; height: 30px;
     margin: 8px 0;
 
-    background: transparent;
+    background: hsl(0, 0%, 20%);
     border: hsl(0, 0%, 36%) solid 1px;
     border-radius: 2px;
     outline: none;
@@ -491,6 +517,7 @@ body {
 
     background: hsla(0, 0%, 10%, 0.8);
     white-space: pre-wrap;
+    overflow-wrap: break-word;
     tab-size: 4;
     -moz-tab-size: 4;
 

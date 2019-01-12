@@ -41,6 +41,14 @@ DOM.Element = class {
         this.element.addEventListener(type, event => f(event, this.element));
         return this;
     }
+
+    /// Removes all children from the element.
+    clear() {
+        while (this.element.firstChild !== null) {
+            this.element.firstChild.remove();
+        }
+        return this;
+    }
 };
 
 /// A class for conveniently dealing with SVGs.
@@ -181,10 +189,13 @@ class Quiver {
     /// Return a string containing the graph in a specific format.
     /// Currently, the supported formats are:
     /// - "tikzcd"
+    /// - "base64"
     export(format) {
         switch (format) {
             case "tikzcd":
                 return QuiverExport.tikzcd.export(this);
+            case "base64":
+                return QuiverImportExport.base64.export(this);
             default:
                 throw new Error(`unknown export format \`${format}\``);
         }
@@ -195,6 +206,12 @@ class Quiver {
 class QuiverExport {
     /// A method to export a quiver as a string.
     export() {}
+}
+
+class QuiverImportExport extends QuiverExport {
+    /// A method to import a quiver as a string. `import(export(quiver))` should be the
+    /// identity function. Currently `import` takes a `UI` into which to import directly.
+    import() {}
 }
 
 QuiverExport.tikzcd = new class extends QuiverExport {
@@ -459,6 +476,274 @@ QuiverExport.tikzcd = new class extends QuiverExport {
     }
 };
 
+QuiverImportExport.base64 = new class extends QuiverImportExport {
+    // The format we use for encoding quivers in base64 (primarily for link-sharing) is
+    // the following. This has been chosen based on minimality (for shorter representations),
+    // rather than readability.
+    //
+    // Note that an empty quiver has no representation.
+    //
+    // `[version: integer, |vertices|: integer, ...vertices, ...edges]`
+    //
+    // Parameters:
+    // - `version` is currently only permitted to be 0. The format has been designed to be
+    //   forwards-compatible with changes, so it is intended that this version will not
+    //   change.
+    // - `|vertices|` is the length of the array `vertices`.
+    // - `vertices` is an array of vertices of the form:
+    //      `[x: integer, y: integer, label: string]`
+    // - `edges` is an array of edges of the form:
+    //      `[source: index, target: index, label: string, alignment, options]`
+    //      + (label) `alignment` is an enum comprising the following options:
+    //          * `0`: left
+    //          * `1`: centre
+    //          * `2`: right
+    //        It has been distinguished from the other options as one that is frequently
+    //        changed from the default, to avoid the overhead of encoding an options
+    //        object.
+    //      + `options` is an object containing the delta of the options from the defaults.
+    //         This is the only parameter that is not encoded simply as an array, as the
+    //         most likely parameter to be changed in the future.
+    //
+    // Notes:
+    // - An `index` is an integer indexing into the array `[...vertices, ...edges]`.
+    // - Arrays may be truncated if the values of the elements are the default values.
+
+    export(quiver) {
+        // Remove the query string from the current URL and use that as a base.
+        const URL_prefix = window.location.href.replace(/\?.*$/, "");
+
+        if (quiver.is_empty()) {
+            // No need to have an encoding of an empty quiver;
+            // we'll just use the URL directly.
+            return URL_prefix;
+        }
+
+        const cells = [];
+        const indices = new Map();
+
+        let offset = new Position(Infinity, Infinity);
+        // We want to ensure that the top-left cell is in position (0, 0), so we need
+        // to work out where the top-left cell actually is, to compute an offset.
+        for (const vertex of quiver.cells[0]) {
+            offset = offset.min(vertex.position);
+        }
+        for (const vertex of quiver.cells[0]) {
+            const { label } = vertex;
+            indices.set(vertex, cells.length);
+            const position = vertex.position.sub(offset).toArray();
+            const cell = [...position];
+            // In the name of efficiency, we omit any parameter that is not necessary.
+            if (label !== "") {
+                cell.push(label);
+            }
+            cells.push(cell);
+        }
+
+        for (let level = 1; level < quiver.cells.length; ++level) {
+            for (const edge of quiver.cells[level]) {
+                const { level, label, options: { label_alignment, ...options } } = edge;
+                const [source, target] = [indices.get(edge.source), indices.get(edge.target)];
+                indices.set(edge, cells.length);
+                const cell = [source, target];
+                // We want to omit parameters that are unnecessary (i.e. have the default
+                // values). However, because we store parameters in an array, the only way
+                // we can distinguish missing values is by the length. Therefore, we can
+                // only truncate the array (not omit elements partway through the array).
+                // This means we may need to include unnecessary information if there is a
+                // non-default parameter after a default one. The parameters most likely to
+                // be default are placed further back in the array to reduce the frequency
+                // of this situation.
+                const end = [];
+
+                // We compute a delta of the edge options compared
+                // to the default, so we encode a minimum of data.
+                const default_options = Edge.default_options({}, {}, level);
+
+                // Recursively compute a delta between an `object` and `base`.
+                const probe = (object, base) => {
+                    const delta = {};
+                    for (const [key, value] of Object.entries(object)) {
+                        const default_value = base[key];
+                        if (typeof default_value === "object" && typeof value === "object") {
+                            const subdelta = probe(value, default_value);
+                            if (Object.keys(subdelta).length > 0) {
+                                delta[key] = subdelta;
+                            }
+                        } else if (base[key] !== value) {
+                            delta[key] = value;
+                        }
+                    }
+                    return delta;
+                };
+
+                const delta = probe(options, default_options);
+                if (Object.keys(delta).length > 0) {
+                    end.push(delta);
+                }
+
+                const push_if_necessary = (parameter, default_value, condition = true) => {
+                    if (end.length > 0 || (parameter !== default_value && condition)) {
+                        end.push(parameter);
+                    }
+                };
+
+                const variant = { left: 0, centre: 1, right: 2 }[label_alignment];
+                // It's only necessary to encode the label alignment is the label is not blank.
+                push_if_necessary(variant, 0, label !== "");
+                push_if_necessary(label, "");
+
+                cell.push(...end.reverse());
+                cells.push(cell);
+            }
+        }
+
+        // The version of the base64 output format exported by this version of quiver.
+        const VERSION = 0;
+        const output = [VERSION, quiver.cells[0].size, ...cells];
+
+        return `${URL_prefix}?${btoa(JSON.stringify(output))}`;
+    }
+
+    import(ui, string) {
+        const quiver = new Quiver();
+
+        let input;
+        try {
+            const decoded = atob(string);
+            if (decoded === "") {
+                return quiver;
+            }
+            input = JSON.parse(decoded);
+        } catch (_) {
+            throw new Error("invalid base64 or JSON");
+        }
+
+        // Helper functions for dealing with bad input.
+
+        const assert = (condition, message) => {
+            const postfix = " in quiver encoding";
+            if (!condition) {
+                throw new Error(`${message}${postfix}`);
+            }
+        };
+        const assert_kind = (object, kind) => {
+            switch (kind) {
+                case "array":
+                    assert(Array.isArray(object), `expected array`);
+                    break;
+                case "integer":
+                case "natural":
+                    assert(Number.isInteger(object), `expected integer`);
+                    if (kind === "natural") {
+                        assert(object >= 0, `expected non-negative integer`);
+                    }
+                    break;
+                case "string":
+                    assert(typeof object === "string", `expected string`);
+                    break;
+                case "object":
+                    assert(typeof object === "object", `expected object`);
+                    break;
+                default:
+                    throw new Error(`unknown parameter kind \`${kind}\``);
+            }
+        };
+        const assert_eq = (object, value) => {
+            assert(object === value, `expected \`${value}\`, but found \`${object}\``);
+        };
+
+        // Check all of the non-cell data is valid.
+        assert_kind(input, "array");
+        const [version = 0, vertices = 0, ...cells] = input;
+        assert_kind(version, "natural");
+        assert_eq(version, 0);
+        assert_kind(vertices, "natural");
+        assert(vertices <= cells.length, "invalid number of vertices");
+
+        // We want to centre the view on the diagram, so we take the mean of all vertex positions.
+        let offset = new Position(0, 0);
+        // If we encounter errors while loading cells, we skip the malformed cell and try to
+        // continue loading the diagram, but we want to report the errors we encountered afterwards,
+        // to let the user know we were not entirely successful.
+        const errors = [];
+
+        const indices = [];
+        for (const cell of cells) {
+            try {
+                assert_kind(cell, "array");
+
+                if (indices.length < vertices) {
+                    // This cell is a vertex.
+
+                    assert(cell.length >= 2 && cell.length <= 3, "invalid vertex format");
+                    const [x, y, label = ""] = cell;
+                    assert_kind(x, "natural");
+                    assert_kind(y, "natural");
+                    assert_kind(label, "string");
+
+                    const position = new Position(x, y);
+                    offset = offset.add(position);
+                    const vertex = new Vertex(ui, label, position);
+                    indices.push(vertex);
+                } else {
+                    // This cell is an edge.
+
+                    assert(cell.length >= 2 && cell.length <= 5, "invalid edge format");
+                    const [source, target, label = "", alignment = 0, options = {}]
+                        = cell;
+                    for (const [endpoint, name] of [[source, "source"], [target, "target"]]) {
+                        assert_kind(endpoint, "natural");
+                        assert(endpoint < indices.length, `invalid ${name} index`);
+                    }
+                    assert_kind(label, "string");
+                    assert_kind(alignment, "natural");
+                    assert(alignment <= 2, "invalid label alignment");
+                    assert_kind(options, "object");
+
+                    // We currently don't validate `options` further than being an object.
+                    // This is because it is likely that `options` will be extended in the future,
+                    // and this permits a limited form of backwards compatibility. We never access
+                    // prototype properties on `options`, so this should not be amenable to
+                    // injection.
+                    const level = Math.max(indices[source].level, indices[target].level) + 1;
+                    const { style = {} } = { options };
+                    delete options.style;
+                    Edge.default_options({
+                        label_alignment: ["left", "centre", "right"][alignment],
+                        ...options,
+                    }, style, level);
+
+                    const edge = new Edge(
+                        ui,
+                        label,
+                        indices[source],
+                        indices[target],
+                        options,
+                    );
+                    indices.push(edge);
+                }
+            } catch (error) {
+                errors.push(error);
+            }
+        }
+
+        // Centre the view on the quiver.
+        const view_width = ui.element.offsetWidth - ui.panel.element.offsetWidth;
+        ui.pan_view(
+            new Offset(view_width / 2, ui.element.offsetHeight / 2)
+                .sub(ui.offset_from_position(ui.view, offset.div(vertices)))
+        );
+
+        if (errors.length > 0) {
+            // Just throw the first error.
+            throw errors[0];
+        }
+
+        return quiver;
+    }
+};
+
 /// A quintessential (x, y) position.
 class Position {
     constructor(x, y) {
@@ -467,6 +752,10 @@ class Position {
 
     toString() {
         return `${this.x} ${this.y}`;
+    }
+
+    toArray() {
+        return [this.x, this.y];
     }
 
     eq(other) {
@@ -599,9 +888,7 @@ UIState.Connect = class extends UIState {
     update(ui, position) {
         // We're drawing the edge again from scratch, so we need to remove all existing elements.
         const svg = this.overlay.querySelector("svg");
-        while (svg.firstChild) {
-            svg.removeChild(svg.firstChild);
-        }
+        new DOM.Element(svg).clear();
         if (!position.eq(this.source.position)) {
             Edge.draw_and_position_edge(
                 ui,
@@ -860,7 +1147,7 @@ class UI {
             event.preventDefault();
 
             this.pan_view(new Offset(-event.deltaX, -event.deltaY));
-        });
+        }, { passive: false });
 
         // Add a move to the history.
         const commit_move_event = () => {
@@ -1385,6 +1672,7 @@ class UI {
     }
 
     /// Repositions the view by a relative offset.
+    /// If `offset` is positive, then everything will appear to move towards the bottom right.
     pan_view(offset) {
         this.view.left += offset.left;
         this.view.top += offset.top;
@@ -1416,18 +1704,22 @@ class UI {
 
     /// Renders TeX with MathJax and returns the corresponding element.
     render_tex(tex = "", after = x => x) {
-        // We're going to fade the label in once it's rendered, so it looks less janky.
-        const label = new DOM.Element("div", { class: "label" }, { opacity: 0 })
+        const label = new DOM.Element("div", { class: "label" }, { display: "none", opacity: 0 })
             .add(this.use_MathJax ? `\\(${tex}\\)` : tex)
             .element;
+        // We're going to fade the label in once it's rendered, so it looks less janky.
+        const reveal = () => {
+            label.style.display = "block";
+            label.style.opacity = 1;
+        };
         if (this.use_MathJax) {
             MathJax.Hub.queue.Push(
                 ["Typeset", MathJax.Hub, label],
-                () => label.style.opacity = 1,
+                reveal,
                 after,
             );
         } else {
-            label.style.opacity = 1;
+            reveal();
             // Simulate the usual queue delay.
             setTimeout(() => after(), 0);
         }
@@ -1687,7 +1979,7 @@ class Panel {
         /// The panel element.
         this.element = null;
 
-        /// The export pane element (`null` if not currently shown).
+        /// The displayed export format (`null` if not currently shown).
         this.export = null;
     }
 
@@ -2058,32 +2350,50 @@ class Panel {
             },
         );
 
-        // The export button.
+        const display_export_pane = (format) => {
+            // Handle export button interaction: export the quiver.
+            // If the user clicks on two different exports in a row
+            // we will simply switch the displayed export format.
+            // Clicking on the same button twice closes the panel.
+            if (this.export !== format) {
+                // Get the base 64 URI encoding of the diagram.
+                const output = ui.quiver.export(format);
+
+                let export_pane;
+                if (this.export === null) {
+                    // Create the export pane.
+                    export_pane = new DOM.Element("div", { class: "export" });
+                    ui.element.appendChild(export_pane.element);
+                } else {
+                    // Find the existing export pane.
+                    export_pane = new DOM.Element(ui.element.querySelector(".export"));
+                }
+                export_pane.clear().add(output);
+
+                this.export = format;
+
+                // Select the code for easy copying.
+                const selection = window.getSelection();
+                const range = document.createRange();
+                range.selectNodeContents(export_pane.element);
+                selection.removeAllRanges();
+                selection.addRange(range);
+                // Disable cell data editing while the export pane is visible.
+                this.update(ui);
+            } else {
+                this.dismiss_export_pane(ui);
+            }
+        };
+
         this.element.appendChild(
             new DOM.Element("div", { class: "bottom" }).add(
+                // The shareable link button.
+                new DOM.Element("button", { class: "global" }).add("Get shareable link")
+                    .listen("click", () => display_export_pane("base64"))
+            ).add(
+                // The export button.
                 new DOM.Element("button", { class: "global" }).add("Export to LaTeX")
-                    .listen("click", () => {
-                        // Handle export button interaction: export the quiver.
-                        if (this.export === null) {
-                            // Get the tikzcd diagram code.
-                            const output = ui.quiver.export("tikzcd");
-                            // Create the export pane.
-                            this.export = new DOM.Element("div", { class: "export" })
-                                .add(output)
-                                .element;
-                            ui.element.appendChild(this.export);
-                            // Select the code for easy copying.
-                            const selection = window.getSelection();
-                            const range = document.createRange();
-                            range.selectNodeContents(this.export);
-                            selection.removeAllRanges();
-                            selection.addRange(range);
-                            // Disable cell data editing while the export pane is visible.
-                            this.update(ui);
-                        } else {
-                            this.dismiss_export_pane(ui);
-                        }
-                    })
+                    .listen("click", () => display_export_pane("tikzcd"))
             ).element
         );
     }
@@ -2198,9 +2508,7 @@ class Panel {
                 MathJax.Hub.Queue(() => this.render_tex(ui, cell));
             }
         } else {
-            while (label.firstChild !== null) {
-                label.removeChild(label.firstChild);
-            }
+            new DOM.Element(label).clear();
             label.appendChild(document.createTextNode(cell.label));
         }
     };
@@ -2350,7 +2658,7 @@ class Panel {
     /// Dismiss the export pane, if it is shown.
     dismiss_export_pane(ui) {
         if (this.export !== null) {
-            this.export.remove();
+            ui.element.querySelector(".export").remove();
             this.export = null;
             this.update(ui);
         }
@@ -2572,9 +2880,7 @@ class Vertex extends Cell {
     render_label(ui) {
         const content = new DOM.Element(this.element.querySelector(".content"));
         // Remove any existing content.
-        while (content.element.firstChild !== null) {
-            content.element.removeChild(content.element.firstChild);
-        }
+        content.clear();
         // Create the label.
         content.add(new DOM.Element(ui.render_tex(this.label), { class: "label" }));
         // Create an empty label buffer for flicker-free rendering.
@@ -2647,11 +2953,18 @@ class Edge extends Cell {
             );
             mask.add(new DOM.SVGElement(
                 "rect",
-                { width: "100%", height: "100%"},
+                { width: "100%", height: "100%" },
                 { fill: "white" },
             ));
             mask.add(
-                new DOM.SVGElement("rect", { class: "clear" }, { fill: "black", stroke: "none" })
+                new DOM.SVGElement("rect", {
+                    class: "clear",
+                    width: 0,
+                    height: 0,
+                }, {
+                    fill: "black",
+                    stroke: "none",
+                })
             );
             defs.add(mask);
             svg.appendChild(defs.element);
@@ -3251,6 +3564,49 @@ document.addEventListener("DOMContentLoaded", () => {
     // The global UI.
     let ui = new UI(document.body);
     ui.initialise();
+
+    // A helper method for displaying error banners.
+    const display_error = (message) => {
+        // If there's already an error, it's not unlikely that subsequent errors will be triggered.
+        // Thus, we don't display an error banner if one is already displayed.
+        if (document.body.querySelector(".error") === null) {
+            const error = new DOM.Element("div", { class: "error hidden" })
+                .add(message)
+                .add(
+                    new DOM.Element("button", { class: "close" })
+                        .listen("click", () => {
+                            const SECOND = 1000;
+                            error.classList.add("hidden");
+                            setTimeout(() => error.remove(), 0.2 * SECOND);
+                        })
+                )
+                .element;
+            document.body.appendChild(error);
+            // Animate the banner's entry.
+            setTimeout(() => error.classList.remove("hidden"), 0);
+        }
+    };
+
+    // Get the query string (i.e. the part of the URL after the "?").
+    const query_string = window.location.href.match(/\?(.*)$/);
+    if (query_string !== null) {
+        // If there is a query string, try to decode it as a diagram.
+        try {
+            QuiverImportExport.base64.import(ui, query_string[1]);
+        } catch (error) {
+            if (ui.quiver.is_empty()) {
+                display_error("The saved diagram was malformed and could not be loaded.");
+            } else {
+                // The importer will try to recover from errors, so we may have been mostly
+                // successful.
+                display_error(
+                    "The saved diagram was malformed and may have been loaded incorrectly."
+                );
+            }
+            // Rethrow the error so that it can be reported.
+            throw error;
+        }
+    }
 
     // Handle MathJax not loading (somewhat) gracefully.
     new DOM.Element(document.querySelector("#MathJax"))
