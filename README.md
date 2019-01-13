@@ -1,10 +1,10 @@
 # quiver
-A graphical editor for commutative diagrams that exports to tikzcd.
+A graphical editor for commutative diagrams that exports to tikz-cd.
 
 ## Features
 - An intuitive graphical interface for creating and modifying commutative diagrams.
 - Support for objects, morphisms, natural transformations.
-- tikzcd (LaTeX) export.
+- tikz-cd (LaTeX) export.
 - Shareable links.
 - Smart label alignment and edge offset.
 - Parallel (shifted) arrows.
