@@ -937,10 +937,6 @@ UIState.Connect = class extends UIState {
     /// Connects the source and target. Note that this does *not* check whether the source and
     /// target are compatible with each other.
     connect(ui, event) {
-        const label = ui.debug ? `${
-            String.fromCharCode("A".charCodeAt(0) + Math.floor(Math.random() * 26))
-        }` : "";
-
         // We attempt to guess what the intended label alignment is and what the intended edge
         // offset is, if the cells being connected form some path with existing connections.
         // Otherwise we revert to the currently-selected label alignment in the panel and the
@@ -1025,6 +1021,7 @@ UIState.Connect = class extends UIState {
         if (!event.shiftKey) {
             ui.deselect();
         }
+        const label = "";
         // The edge itself does all the set up, such as adding itself to the page.
         const edge = new Edge(ui, label, this.source, this.target, options);
         ui.select(edge);
@@ -1132,9 +1129,6 @@ class UI {
         /// `null` is a basic HTML fallback: it is used until the relevant library is loaded.
         /// Options include MathJax and KaTeX.
         this.render_method = null;
-
-        /// A debug mode for convenience. Adds default random labels to cells.
-        this.debug = false;
     }
 
     initialise() {
@@ -1376,9 +1370,7 @@ class UI {
         // A helper function for creating a new vertex, as there are
         // several actions that can trigger the creation of a vertex.
         const create_vertex = (position) => {
-            const label = this.debug ? `\\mathscr{${
-                String.fromCharCode("A".charCodeAt(0) + Math.floor(Math.random() * 26))
-            }}` : "\\bullet";
+            const label = "\\bullet";
             return new Vertex(this, label, position);
         };
 
