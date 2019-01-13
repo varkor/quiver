@@ -366,7 +366,7 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                 }
 
                 let style = "";
-                let label = edge.label.trim() !== "" ? `"{${edge.label}}"${align}` : '""';
+                let label = edge.label.trim() !== "" ? `"{${edge.label}}"${align}` : "";
 
                 // Edge styles.
                 switch (edge.options.style.name) {
@@ -489,9 +489,9 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                 }
 
                 output += `\\arrow[${style}` +
-                    `${label}${
+                    (label !== "" ? `${label}${
                         label_parameters.length > 0 ? `{${label_parameters.join(", ")}}` : ""
-                    }, ` +
+                    }, ` : "") +
                     `from=${cell_reference(edge.source)}, ` +
                     `to=${cell_reference(edge.target)}` +
                     (parameters.length > 0 ? `, ${parameters.join(", ")}` : "") +
