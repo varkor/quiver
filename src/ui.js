@@ -1960,9 +1960,13 @@ class History {
                     ui.panel.update(ui);
                     break;
                 case "offset":
+                    const edges = new Set();
                     for (const offset of action.offsets) {
                         offset.edge.options.offset = offset[to];
-                        offset.edge.render(ui);
+                        edges.add(offset.edge);
+                    }
+                    for (const cell of ui.quiver.transitive_dependencies(edges)) {
+                        cell.render(ui);
                     }
                     ui.panel.update(ui);
                     break;
