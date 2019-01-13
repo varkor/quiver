@@ -207,12 +207,12 @@ class Quiver {
 
     /// Return a string containing the graph in a specific format.
     /// Currently, the supported formats are:
-    /// - "tikzcd"
+    /// - "tikz-cd"
     /// - "base64"
     export(format) {
         switch (format) {
-            case "tikzcd":
-                return QuiverExport.tikzcd.export(this);
+            case "tikz-cd":
+                return QuiverExport.tikz_cd.export(this);
             case "base64":
                 return QuiverImportExport.base64.export(this);
             default:
@@ -233,11 +233,11 @@ class QuiverImportExport extends QuiverExport {
     import() {}
 }
 
-QuiverExport.tikzcd = new class extends QuiverExport {
+QuiverExport.tikz_cd = new class extends QuiverExport {
     export(quiver) {
         let output = "";
 
-        // Wrap tikzcd code with `\begin{tikzcd} ... \end{tikzcd}`.
+        // Wrap tikz-cd code with `\begin{tikzcd} ... \end{tikzcd}`.
         const wrap_boilerplate = (output) => {
             return `\\begin{tikzcd}\n${
                 output.length > 0 ? `${
@@ -252,10 +252,10 @@ QuiverExport.tikzcd = new class extends QuiverExport {
         }
 
         // We handle the export in two stages: vertices and edges. These are fundamentally handled
-        // differently in tikzcd, so it makes sense to separate them in this way. We have a bit of
+        // differently in tikz-cd, so it makes sense to separate them in this way. We have a bit of
         // flexibility in the format in which we output (e.g. edges relative to nodes, or with
         // absolute positions).
-        // We choose to lay out the tikzcd code as follows:
+        // We choose to lay out the tikz-cd code as follows:
         //    (vertices)
         //    X & X & X \\
         //    X & X & X \\
@@ -277,7 +277,7 @@ QuiverExport.tikzcd = new class extends QuiverExport {
             rows.get(vertex.position.y).set(vertex.position.x, vertex);
             offset = offset.min(vertex.position);
         }
-        // Iterate through the rows and columns in order, outputting the tikzcd code.
+        // Iterate through the rows and columns in order, outputting the tikz-cd code.
         const prev = new Position(offset.x, offset.y);
         for (const [y, row] of Array.from(rows).sort()) {
             if (y - prev.y > 0) {
@@ -298,14 +298,14 @@ QuiverExport.tikzcd = new class extends QuiverExport {
         }
 
         // Referencing cells is slightly complicated by the fact that we can't give vertices
-        // names in tikzcd, so we have to refer to them by position instead. That means 1-cells
+        // names in tikz-cd, so we have to refer to them by position instead. That means 1-cells
         // have to be handled differently to k-cells for k > 1.
         // A map of unique identifiers for cells.
         const names = new Map();
         let index = 0;
         const cell_reference = (cell) => {
             if (cell.is_vertex()) {
-                // Note that tikzcd 1-indexes its cells.
+                // Note that tikz-cd 1-indexes its cells.
                 return `${cell.position.y - offset.y + 1}-${cell.position.x - offset.x + 1}`;
             } else {
                 return `${names.get(cell)}`;
@@ -374,7 +374,7 @@ QuiverExport.tikzcd = new class extends QuiverExport {
                         // Body styles.
                         switch (edge.options.style.body.name) {
                             case "cell":
-                                // tikzcd only has supported for 1-cells and 2-cells.
+                                // tikz-cd only has supported for 1-cells and 2-cells.
                                 // Anything else requires custom support, so for now
                                 // we only special-case 2-cells. Everything else is
                                 // drawn as if it is a 1-cell.
@@ -481,7 +481,7 @@ QuiverExport.tikzcd = new class extends QuiverExport {
                         break;
                 }
 
-                // tikzcd tends to place arrows between arrows directly contiguously
+                // tikz-cd tends to place arrows between arrows directly contiguously
                 // without adding some spacing manually.
                 if (level > 1) {
                     parameters.push("shorten <=1mm");
@@ -961,7 +961,7 @@ UIState.Connect = class extends UIState {
     /// Returns whether the `source` is compatible with the specified `target`.
     /// This first checks that the source is valid at all.
     // We currently only support 0-cells, 1-cells and 2-cells. This is solely
-    // due to a restriction with tikzcd. This restriction can be lifted in
+    // due to a restriction with tikz-cd. This restriction can be lifted in
     // the editor with no issue.
     valid_connection(target) {
         return this.source.level <= 1 &&
@@ -2546,7 +2546,7 @@ class Panel {
             ).add(
                 // The export button.
                 new DOM.Element("button", { class: "global" }).add("Export to LaTeX")
-                    .listen("click", () => display_export_pane("tikzcd"))
+                    .listen("click", () => display_export_pane("tikz-cd"))
             ).element
         );
     }
