@@ -299,6 +299,20 @@ body {
     background: hsl(0, 0%, 20%);
 }
 
+.panel input[type="text"].flash {
+    animation: flash 0.2s;
+}
+
+@keyframes flash {
+    from {
+        box-shadow: 0 0 0 4px hsl(200, 100%, 40%);
+    }
+
+    to {
+        box-shadow: 0 0 0 hsl(200, 100%, 40%);
+    }
+}
+
 .panel .options {
     margin: 8px 0;
 

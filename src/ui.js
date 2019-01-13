@@ -1275,6 +1275,14 @@ class UI {
                             kind: "delete",
                             cells: this.quiver.transitive_dependencies(this.selection),
                         }], true);
+                    } else {
+                        const input = document.activeElement;
+                        if (document.activeElement.value === "") {
+                            // Trigger the animation by (removing the class if it already exists
+                            // and then) adding a class.
+                            input.classList.remove("flash");
+                            UI.delay(() => input.classList.add("flash"));
+                        }
                     }
                     break;
                 case "Enter":
@@ -1626,6 +1634,11 @@ class UI {
         );
     }
 
+    /// A helper method to trigger a UI event immediately, but later in the event queue.
+    static delay(f) {
+        setTimeout(f, 0);
+    }
+
     /// Selects specific `cells`. Note that this does *not* deselect any cells that were
     /// already selected. For this, call `deselect()` beforehand.
     select(...cells) {
@@ -1706,12 +1719,7 @@ class UI {
     /// Returns whether the active element is a text input field. If it is, certain
     /// actions (primarily keyboard shortcuts) will be disabled.
     input_is_active() {
-        for (const input of this.panel.element.querySelectorAll('label input[type="text"]')) {
-            if (document.activeElement === input) {
-                return true;
-            }
-        }
-        return false;
+        return document.activeElement.matches('label input[type="text"]');
     }
 
     /// Renders TeX with MathJax and returns the corresponding element.
@@ -1722,7 +1730,7 @@ class UI {
             case null:
                 label.add(tex);
                 // Simulate the usual queue delay.
-                setTimeout(() => after(), 0);
+                UI.delay(() => after());
                 break;
 
             case "MathJax":
@@ -1751,7 +1759,7 @@ class UI {
                     label.add(tex);
                 }
                 // Simulate the usual queue delay.
-                setTimeout(() => after(), 0);
+                UI.delay(() => after());
                 break;
         }
 
@@ -3643,7 +3651,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 .element;
             document.body.appendChild(error);
             // Animate the banner's entry.
-            setTimeout(() => error.classList.remove("hidden"), 0);
+            UI.delay(() => error.classList.remove("hidden"));
         }
     };
 
