@@ -75,6 +75,7 @@ class Quiver {
         this.dependencies = new Map();
 
         /// Reverse dependencies (used for removing cells from `dependencies` when removing cells).
+        /// That is: cells that this edge is reliant on.
         /// Each map entry is simply a set, unlike `dependencies`.
         this.reverse_dependencies = new Map();
 
@@ -142,13 +143,22 @@ class Quiver {
     }
 
     /// Connect two cells. Note that this does *not* check whether the source and
-    /// target are compatible with each other.
+    /// target are compatible with each other. It does handle reconnecting cells
+    /// that may already be connected to other cells.
     connect(source, target, edge) {
+        // Clear any existing reverse dependencies. This is necessary if we're
+        // reconnecting an edge that is already connected.
+        const reverse_dependencies = this.reverse_dependencies.get(edge);
+        for (const cell of reverse_dependencies) {
+            this.dependencies.get(cell).delete(edge);
+        }
+        reverse_dependencies.clear();
+
         this.dependencies.get(source).set(edge, "source");
         this.dependencies.get(target).set(edge, "target");
 
-        this.reverse_dependencies.get(edge).add(source);
-        this.reverse_dependencies.get(edge).add(target);
+        reverse_dependencies.add(source);
+        reverse_dependencies.add(target);
     }
 
     /// Returns a collection of all the cells in the quiver.
@@ -176,8 +186,8 @@ class Quiver {
     }
 
     /// Returns the transitive closure of the dependencies of a collection of cells
-    // (including those cells themselves).
-    transitive_dependencies(cells) {
+    // (including those cells themselves, unless `exclude_roots`).
+    transitive_dependencies(cells, exclude_roots = false) {
         const closure = new Set(cells);
         // We're relying on the iteration order of the `Set` here.
         for (const cell of closure) {
@@ -185,6 +195,11 @@ class Quiver {
                 if (!this.deleted.has(dependency)) {
                     closure.add(dependency);
                 }
+            }
+        }
+        if (exclude_roots) {
+            for (const cell of cells) {
+                closure.delete(cell);
             }
         }
         return closure;
@@ -867,7 +882,7 @@ UIState.default = new UIState.Default();
 
 /// Two k-cells are being connected by an (k + 1)-cell.
 UIState.Connect = class extends UIState {
-    constructor(ui, source, forged_vertex) {
+    constructor(ui, source, forged_vertex, reconnect = null) {
         super();
 
         this.name = "connect";
@@ -879,9 +894,16 @@ UIState.Connect = class extends UIState {
         this.target = null;
 
         /// Whether the source of this connection was created with the start
-        // of the connection itself (i.e. a vertex was created after dragging
-        // from an empty grid cell).
+        /// of the connection itself (i.e. a vertex was created after dragging
+        /// from an empty grid cell).
         this.forged_vertex = forged_vertex;
+
+        /// If `reconnect` is not null, then we're reconnecting an existing edge.
+        /// In that case, rather than drawing a phantom arrow, we'll actually
+        /// reposition the existing edge.
+        /// `reconnect` is of the form `{ edge, end }` where `end` is either
+        /// `"source"` or `"target"`.
+        this.reconnect = reconnect;
 
         /// The overlay for drawing an edge between the source and the cursor.
         this.overlay = new DOM.Element("div", { class: "edge overlay" })
@@ -890,35 +912,49 @@ UIState.Connect = class extends UIState {
         ui.element.appendChild(this.overlay);
     }
 
-    release() {
+    release(ui) {
         this.overlay.remove();
         this.source.element.classList.remove("source");
         if (this.target !== null) {
             this.target.element.classList.remove("target");
         }
+        if (this.reconnect !== null) {
+            this.reconnect.edge.element.classList.remove("reconnecting");
+            this.reconnect.edge.render(ui);
+            this.reconnect = null;
+        }
     }
 
     /// Update the overlay with a new cursor position.
     update(ui, position) {
-        // We're drawing the edge again from scratch, so we need to remove all existing elements.
-        const svg = this.overlay.querySelector("svg");
-        new DOM.Element(svg).clear();
-        if (!position.eq(this.source.position)) {
-            Edge.draw_and_position_edge(
-                ui,
-                this.overlay,
-                svg,
-                this.source.level + 1,
-                this.source.position,
-                // Lock on to the target if present, otherwise simply draw the edge
-                // to the position of the cursor.
-                this.target !== null ? this.target.position : position,
-                Edge.default_options(null, {
-                    body: { name: "cell", level: this.source.level + 1 },
-                }),
-                this.target !== null,
-                null,
-            );
+        // If we're creating a new edge...
+        if (this.reconnect === null) {
+            // We're drawing the edge again from scratch, so we need to remove all existing elements.
+            const svg = this.overlay.querySelector("svg");
+            new DOM.Element(svg).clear();
+            if (!position.eq(this.source.position)) {
+                Edge.draw_and_position_edge(
+                    ui,
+                    this.overlay,
+                    svg,
+                    this.source.level + 1,
+                    this.source.position,
+                    // Lock on to the target if present, otherwise simply draw the edge
+                    // to the position of the cursor.
+                    this.target !== null ? this.target.position : position,
+                    Edge.default_options(null, {
+                        body: { name: "cell", level: this.source.level + 1 },
+                    }),
+                    { source: true, target: this.target !== null },
+                    null,
+                );
+            }
+        } else {
+            // We're reconnecting an existing edge.
+            this.reconnect.edge.render(ui, position);
+            for (const cell of ui.quiver.transitive_dependencies([this.reconnect.edge], true)) {
+                cell.render(ui);
+            }
         }
     }
 
@@ -937,99 +973,119 @@ UIState.Connect = class extends UIState {
     /// Connects the source and target. Note that this does *not* check whether the source and
     /// target are compatible with each other.
     connect(ui, event) {
-        // We attempt to guess what the intended label alignment is and what the intended edge
-        // offset is, if the cells being connected form some path with existing connections.
-        // Otherwise we revert to the currently-selected label alignment in the panel and the
-        // default offset (0).
-        const options = {
-            label_alignment:
-                ui.panel.element.querySelector('input[name="label-alignment"]:checked').value,
-            // The default settings for the other options are fine.
-        };
-        // If *every* existing connection to source and target has a consistent label alignment,
-        // then `align` will be a singleton, in which case we use that element as the alignment.
-        // If it has `left` and `right` in equal measure (regardless of `centre`), then
-        // we will pick `centre`. Otherwise we keep the default. And similarly for `offset`.
-        const align = new Map();
-        const offset = new Map();
-        // We only want to pick `centre` when the source and target are equally constraining
-        // (otherwise we end up picking `centre` far too often). So we check that they're both
-        // being considered equally. This means `centre` is chosen only rarely, but often in
-        // the situations you want it. (This has no analogue in `offset`.)
-        let balance = 0;
+        if (this.reconnect === null) {
+            // Create a new edge.
 
-        const swap = (options) => {
-            return {
-                label_alignment: {
-                    left: "right",
-                    centre: "centre",
-                    over: "over",
-                    right: "left",
-                }[options.label_alignment],
-                offset: -options.offset,
+            // We attempt to guess what the intended label alignment is and what the intended edge
+            // offset is, if the cells being connected form some path with existing connections.
+            // Otherwise we revert to the currently-selected label alignment in the panel and the
+            // default offset (0).
+            const options = {
+                label_alignment:
+                    ui.panel.element.querySelector('input[name="label-alignment"]:checked').value,
+                // The default settings for the other options are fine.
             };
-        };
+            // If *every* existing connection to source and target has a consistent label alignment,
+            // then `align` will be a singleton, in which case we use that element as the alignment.
+            // If it has `left` and `right` in equal measure (regardless of `centre`), then
+            // we will pick `centre`. Otherwise we keep the default. And similarly for `offset`.
+            const align = new Map();
+            const offset = new Map();
+            // We only want to pick `centre` when the source and target are equally constraining
+            // (otherwise we end up picking `centre` far too often). So we check that they're both
+            // being considered equally. This means `centre` is chosen only rarely, but often in
+            // the situations you want it. (This has no analogue in `offset`.)
+            let balance = 0;
 
-        const conserve = (options, between) => {
-            return {
-                label_alignment: options.label_alignment,
-                // We ignore the offsets of edges that aren't directly `between` the
-                // source and target.
-                offset: between ? options.offset : null,
+            const swap = (options) => {
+                return {
+                    label_alignment: {
+                        left: "right",
+                        centre: "centre",
+                        over: "over",
+                        right: "left",
+                    }[options.label_alignment],
+                    offset: -options.offset,
+                };
             };
-        };
 
-        const consider = (options, tip) => {
-            if (!align.has(options.label_alignment)) {
-                align.set(options.label_alignment, 0);
-            }
-            align.set(options.label_alignment, align.get(options.label_alignment) + 1);
-            if (options.offset !== null) {
-                if (!offset.has(options.offset)) {
-                    offset.set(options.offset, 0);
+            const conserve = (options, between) => {
+                return {
+                    label_alignment: options.label_alignment,
+                    // We ignore the offsets of edges that aren't directly `between` the
+                    // source and target.
+                    offset: between ? options.offset : null,
+                };
+            };
+
+            const consider = (options, tip) => {
+                if (!align.has(options.label_alignment)) {
+                    align.set(options.label_alignment, 0);
                 }
-                offset.set(options.offset, offset.get(options.offset) + 1);
+                align.set(options.label_alignment, align.get(options.label_alignment) + 1);
+                if (options.offset !== null) {
+                    if (!offset.has(options.offset)) {
+                        offset.set(options.offset, 0);
+                    }
+                    offset.set(options.offset, offset.get(options.offset) + 1);
+                }
+                balance += tip;
+            };
+
+            const source_dependencies = ui.quiver.dependencies_of(this.source);
+            const target_dependencies = ui.quiver.dependencies_of(this.target);
+            for (const [edge, relationship] of source_dependencies) {
+                consider({
+                    source: swap,
+                    target: options => conserve(options, target_dependencies.has(edge)),
+                }[relationship](edge.options), -1);
             }
-            balance += tip;
-        };
+            for (const [edge, relationship] of target_dependencies) {
+                consider({
+                    source: options => conserve(options, source_dependencies.has(edge)),
+                    target: swap,
+                }[relationship](edge.options), 1);
+            }
 
-        const source_dependencies = ui.quiver.dependencies_of(this.source);
-        const target_dependencies = ui.quiver.dependencies_of(this.target);
-        for (const [edge, relationship] of source_dependencies) {
-            consider({
-                source: swap,
-                target: options => conserve(options, target_dependencies.has(edge)),
-            }[relationship](edge.options), -1);
-        }
-        for (const [edge, relationship] of target_dependencies) {
-            consider({
-                source: options => conserve(options, source_dependencies.has(edge)),
-                target: swap,
-            }[relationship](edge.options), 1);
-        }
+            if (align.size === 1) {
+                options.label_alignment = align.keys().next().value;
+            } else if (align.size > 0 && align.get("left") === align.get("right") && balance === 0) {
+                options.label_alignment = "centre";
+            }
 
-        if (align.size === 1) {
-            options.label_alignment = align.keys().next().value;
-        } else if (align.size > 0 && align.get("left") === align.get("right") && balance === 0) {
-            options.label_alignment = "centre";
-        }
+            if (offset.size === 1) {
+                options.offset = offset.keys().next().value;
+            }
 
-        if (offset.size === 1) {
-            options.offset = offset.keys().next().value;
-        }
+            if (!event.shiftKey) {
+                ui.deselect();
+            }
+            const label = "";
+            // The edge itself does all the set up, such as adding itself to the page.
+            const edge = new Edge(ui, label, this.source, this.target, options);
+            ui.select(edge);
+            if (!event.shiftKey) {
+                ui.panel.element.querySelector('label input[type="text"]').focus();
+            }
 
-        if (!event.shiftKey) {
-            ui.deselect();
+            return edge;
+        } else {
+            // Reconnect an existing edge.
+            const { edge, end } = this.reconnect;
+            // We might be reconnecting an edge by its source, in which case, we need to switch
+            // the traditional order of `source` and `target`, because the "source" will actually
+            // be the target and vice versa.
+            // Generally, the fixed end is always `this.source`, even if it isn't actually the
+            // edge's source. This makes the interaction behaviour simpler elsewhere, because
+            // one can always assume that `state.target` is the possibly-null, moving endpoint
+            // that is the one of interest.
+            const [source, target] = {
+                source: [this.target, this.source],
+                target: [this.source, this.target],
+            }[end];
+            edge.reconnect(ui, source, target);
+            return edge;
         }
-        const label = "";
-        // The edge itself does all the set up, such as adding itself to the page.
-        const edge = new Edge(ui, label, this.source, this.target, options);
-        ui.select(edge);
-        if (!event.shiftKey) {
-            ui.panel.element.querySelector('label input[type="text"]').focus();
-        }
-
-        return edge;
     }
 };
 
@@ -1292,12 +1348,14 @@ class UI {
                 case "Escape":
                     // Stop trying to connect cells.
                     if (this.in_mode(UIState.Connect)) {
-                        // If we created a vertex as part of the connection, we need to record
-                        // that as an action.
-                        this.history.add(this, [{
-                            kind: "create",
-                            cells: new Set([this.state.source]),
-                        }]);
+                        if (this.state.forged_vertex) {
+                            // If we created a vertex as part of the connection, we need to record
+                            // that as an action.
+                            this.history.add(this, [{
+                                kind: "create",
+                                cells: new Set([this.state.source]),
+                            }]);
+                        }
                         this.switch_mode(UIState.default);
                         // If we're connecting from an insertion point, then we need to hide
                         // it again.
@@ -1455,15 +1513,42 @@ class UI {
                         // is held, in which case we want to select the forged vertices *and* the
                         // new edge.
                         this.select(this.state.target);
-                        const edge = this.state.connect(this, event);
-                        const cells = new Set([this.state.target, edge]);
-                        if (this.state.forged_vertex) {
-                            cells.add(this.state.source);
-                        }
-                        this.history.add(this, [{
+                        const created = new Set([this.state.target]);
+                        const actions = [{
                             kind: "create",
-                            cells: cells,
-                        }]);
+                            cells: created,
+                        }];
+
+                        if (this.state.forged_vertex) {
+                            created.add(this.state.source);
+                        }
+
+                        if (this.state.reconnect === null) {
+                            // If we're not reconnecting an existing edge, then we need
+                            // to create a new one.
+                            const edge = this.state.connect(this, event);
+                            created.add(edge);
+                        } else {
+                            // Unless we're holding Shift (in which case we just add the new vertex
+                            // to the selection) we want to focus and select the new vertex.
+                            const { edge, end } = this.state.reconnect;
+                            if (!event.shiftKey) {
+                                this.deselect();
+                                this.select(this.state.target);
+                                this.panel.element.querySelector('label input[type="text"]')
+                                    .select();
+                            }
+                            actions.push({
+                                kind: "connect",
+                                edge,
+                                end,
+                                from: edge[end],
+                                to: this.state.target,
+                            });
+                            this.state.connect(this, event);
+                        }
+
+                        this.history.add(this, actions);
                     }
                     this.switch_mode(UIState.default);
                 }
@@ -1912,8 +1997,7 @@ class History {
                 }[kind] || kind;
             }
             // Self-inverse actions often work by inverting `from`/`to`.
-            const from = !reverse ? "from" : "to";
-            const to = !reverse ? "to" : "from";
+            const [from, to] = !reverse ? ["from", "to"] : ["to", "from"];
             switch (kind) {
                 case "move":
                     // We perform these loops in sequence as cells may move
@@ -1984,6 +2068,15 @@ class History {
                         style.edge.render(ui);
                     }
                     ui.panel.update(ui);
+                    break;
+                case "connect":
+                    const [source, target] = {
+                        source: [action[to], action.edge.target],
+                        target: [action.edge.source, action[to]],
+                    }[action.end];
+                    action.edge.reconnect(ui, source, target);
+                    ui.panel.update(ui);
+                    break;
             }
         }
     }
@@ -2864,15 +2957,47 @@ class Cell {
                 if (ui.in_mode(UIState.Connect)) {
                     // Connect two cells if the source is different to the target.
                     if (ui.state.target === this) {
-                        const edge = ui.state.connect(ui, event);
-                        const cells = new Set([edge]);
+                        const actions = [];
+                        const cells = new Set();
+
                         if (ui.state.forged_vertex) {
                             cells.add(ui.state.source);
                         }
-                        ui.history.add(ui, [{
-                            kind: "create",
-                            cells,
-                        }]);
+
+                        if (ui.state.reconnect === null) {
+                            // Create a new edge if we're not simply reconnecting an existing one.
+                            const edge = ui.state.connect(ui, event);
+                            cells.add(edge);
+                        } else {
+                            // Otherwise, reconnect the existing edge.
+                            const { edge, end } = ui.state.reconnect;
+                            actions.push({
+                                kind: "connect",
+                                edge,
+                                end,
+                                from: edge[end],
+                                to: ui.state.target,
+                            });
+                            ui.state.connect(ui, event);
+                        }
+
+                        // If we haven't created any cells, then we don't need to
+                        // record it in the history.
+                        if (cells.size > 0) {
+                            // We want to make sure `create` comes before `connect`, as
+                            // order for history events is important, so we `unshift`
+                            // here instead of `push`ing.
+                            actions.unshift({
+                                kind: "create",
+                                cells,
+                            });
+                        }
+
+                        // We might not have made a meaningful action (e.g. if we're tried
+                        // connecting an edge to a node it's already connected to).
+                        if (actions.length > 0) {
+                            ui.history.add(ui, actions);
+                        }
                     }
                     // Focus the label input for a cell if we've just ended releasing
                     // the mouse on top of the source. (This includes when we've
@@ -2977,13 +3102,10 @@ class Edge extends Cell {
     constructor(ui, label = "", source, target, options) {
         super(ui.quiver, Math.max(source.level, target.level) + 1, label);
 
-        this.source = source;
-        this.target = target;
-        ui.quiver.connect(this.source, this.target, this);
-
         this.options = Edge.default_options(options, null, this.level);
 
-        this.render(ui);
+        this.reconnect(ui, source, target);
+
         super.initialise(ui);
     }
 
@@ -3002,7 +3124,7 @@ class Edge extends Cell {
     }
 
     /// Create the HTML element associated with the edge.
-    render(ui) {
+    render(ui, pointer_position = null) {
         let svg = null;
 
         if (this.element !== null) {
@@ -3019,7 +3141,35 @@ class Edge extends Cell {
             }
         } else {
             // The container for the edge.
-            this.element = new DOM.Element("div", { class: "edge" }).element;
+            this.element = new DOM.Element("div", { class: "edge" }, {
+                // We want to make sure edges always display over vertices (and so on).
+                // This means their handles are actually accessible.
+                zIndex: this.level,
+            }).element;
+
+            // We allow users to reconnect edges to different cells by dragging their
+            // endpoint handles.
+            const reconnect = (event, end) => {
+                event.stopPropagation();
+                event.preventDefault();
+                // We don't get the default blur behaviour, as we've prevented it, here, so
+                // we have to do it ourselves.
+                ui.panel.element.querySelector('label input[type="text"]').blur();
+
+                this.element.classList.add("reconnecting");
+                const fixed = { source: this.target, target: this.source }[end];
+                ui.switch_mode(new UIState.Connect(ui, fixed, false, {
+                    end,
+                    edge: this,
+                }));
+            };
+
+            // Create the endpoint handles.
+            for (const end of ["source", "target"]) {
+                const handle = new DOM.Element("div", { class: `handle ${end}` });
+                handle.listen("mousedown", (event) => reconnect(event, end));
+                this.element.appendChild(handle.element);
+            }
 
             // The arrow SVG itself.
             svg = new DOM.SVGElement("svg").element;
@@ -3056,11 +3206,39 @@ class Edge extends Cell {
             this.render_label(ui);
         }
 
+        // If we're reconnecting an edge, then we vary its source/target (depending on
+        // which is being dragged) depending on the pointer position. Thus, we need
+        // to check what state we're currently in, and if we establish this edge is being
+        // reconnected, we override the source/target position (as well as whether we offset
+        // the edge endpoints).
+        let [source_position, target_position] = [this.source.position, this.target.position];
+        const endpoint_offset = { source: true, target: true };
+        const reconnecting = ui.in_mode(UIState.Connect)
+            && ui.state.reconnect !== null
+            && ui.state.reconnect.edge === this;
+        if (reconnecting && pointer_position !== null) {
+            const connection_position
+                = ui.state.target !== null ? ui.state.target.position : pointer_position;
+            switch (ui.state.reconnect.end) {
+                case "source":
+                    source_position = connection_position;
+                    break;
+                case "target":
+                    target_position = connection_position;
+                    break;
+            }
+            if (ui.state.target === null) {
+                // Usually we offset edge endpoints from the cells to which they are connected,
+                // but when we are dragging an endpoint, we want to draw it right up to the pointer.
+                endpoint_offset[ui.state.reconnect.end] = false;
+            }
+        }
+
         // Set the edge's position. This is important only for the cells that depend on this one,
         // so that they can be drawn between the correct positions.
         const normal = this.angle() + Math.PI / 2;
-        this.position = this.source.position
-            .add(this.target.position)
+        this.position = source_position
+            .add(target_position)
             .div(2)
             .add(new Position(
                 Math.cos(normal) * this.options.offset * Edge.OFFSET_DISTANCE / ui.cell_size,
@@ -3073,10 +3251,10 @@ class Edge extends Cell {
             this.element,
             svg,
             this.level,
-            this.source.position,
-            this.target.position,
+            source_position,
+            target_position,
             this.options,
-            true,
+            endpoint_offset,
             null,
         );
 
@@ -3122,7 +3300,7 @@ class Edge extends Cell {
         source_position,
         target_position,
         options,
-        offset_from_target,
+        endpoint_offset,
         gap,
     ) {
         // Constants for parameters of the arrow shapes.
@@ -3140,7 +3318,7 @@ class Edge extends Cell {
             false,
         );
         const length = Math.hypot(offset_delta.top, offset_delta.left)
-            - MARGIN * (offset_from_target ? 2 : 1);
+            - MARGIN * ((endpoint_offset.source ? 1 : 0) + (endpoint_offset.target ? 1 : 0));
 
         // If the arrow has zero or negative length, then we can just return here.
         // Otherwise we just get SVG errors from drawing invalid shapes.
@@ -3167,7 +3345,7 @@ class Edge extends Cell {
                 margin_adjustment = 1;
                 break;
         }
-        const margin = MARGIN + width_shortfall * margin_adjustment;
+        const margin = (endpoint_offset.source ? MARGIN : 0) + width_shortfall * margin_adjustment;
 
         // Transform the `element` so that the arrow points in the correct direction.
         const direction = Math.atan2(offset_delta.top, offset_delta.left);
@@ -3581,6 +3759,15 @@ class Edge extends Cell {
             width,
             height,
         });
+    }
+
+    /// Changes the source and target.
+    reconnect(ui, source, target) {
+        [this.source, this.target] = [source, target];
+        ui.quiver.connect(source, target, this);
+        for (const cell of ui.quiver.transitive_dependencies([this])) {
+            cell.render(ui);
+        }
     }
 
     /// Reverses the edge, swapping the `source` and `target`.

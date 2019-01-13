@@ -33,7 +33,7 @@ body {
     position: fixed;
     width: 100%;
     left: 0; top: 0;
-    z-index: 10;
+    z-index: 200;
     padding: 8px 0;
 
     background: hsl(0, 50%, 50%);
@@ -215,10 +215,16 @@ body {
     position: absolute;
 }
 
+.edge.reconnecting {
+    pointer-events: none;
+}
+
 .edge > svg {
     position: absolute;
     left: 50%; top: 50%;
     transform: translate(-50%, -50%);
+
+    pointer-events: none;
 }
 
 /* The overlay edge drawn while connecting cells. */
@@ -248,13 +254,40 @@ body {
     text-align: right;
 }
 
+.edge .handle {
+    display: none;
+    position: absolute;
+    width: 24px; height: 24px;
+    top: 50%;
+    transform: translateY(-50%);
+
+    background: white;
+    border-radius: 100%;
+}
+
+.edge .handle.source {
+    left: 0;
+}
+
+.edge .handle.target {
+    right: 0;
+}
+
+.ui.default .edge:hover .handle, .ui.default .edge.selected .handle {
+    display: block;
+}
+
+.edge .handle:hover {
+    border: hsl(200, 100%, 40%) 2px solid;
+}
+
 /* The side panel */
 
 .panel {
     position: fixed;
     width: 20%; height: 100%;
     right: 0;
-    z-index: 1;
+    z-index: 100;
 
     background: hsl(0, 0%, 20%);
 
@@ -539,7 +572,7 @@ body {
     position: fixed;
     width: 80%; height: 100%;
     left: 0;
-    z-index: 1;
+    z-index: 100;
     padding: 20px 24px;
 
     background: hsla(0, 0%, 10%, 0.8);
