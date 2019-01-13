@@ -295,6 +295,7 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                 first_in_row = false;
             }
             prev.x = offset.x;
+            prev.y = y;
         }
 
         // Referencing cells is slightly complicated by the fact that we can't give vertices
