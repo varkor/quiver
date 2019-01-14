@@ -2044,6 +2044,16 @@ class History {
                     }
                     ui.panel.update(ui);
                     break;
+                case "label-placement":
+                    for (const placement of action.placements) {
+                        if (placement.edge.options.label_placement != placement[to]) {
+                            placement.edge.element.classList.remove(placement.edge.options.label_placement);
+                            placement.edge.options.label_placement = placement[to];
+                            placement.edge.element.classList.add(placement.edge.options.label_placement);
+                        }
+                    }
+                    ui.panel.update(ui);
+                    break;
                 case "offset":
                     const edges = new Set();
                     for (const offset of action.offsets) {
@@ -2141,9 +2151,10 @@ class Panel {
         this.element.appendChild(local.element);
 
         // The label.
+        const labels = new DOM.Element("div");
         const label_input = new DOM.Element("input", { type: "text", disabled: true });
         const label = new DOM.Element("label").add("Label: ").add(label_input);
-        local.add(label);
+        local.add(labels.add(label));
 
         // Handle label interaction: update the labels of the selected cells when
         // the input field is modified.
@@ -2191,6 +2202,34 @@ class Panel {
             // modifications to completely undo the label change.
             ui.history.permanentise();
         });
+
+        // The label placement options.
+        this.create_option_list(
+            ui,
+            local,
+            [["near-start",], ["middle",], ["near-end",]],
+            "label-placement",
+            ["thin"],
+            false, // `disabled`
+            (edges, value) => {
+                ui.history.add(ui, [{
+                    kind: "label-placement",
+                    placements: Array.from(ui.selection)
+                        .filter(cell => cell.is_edge())
+                        .map((edge) => ({
+                            edge,
+                            from: edge.options.label_placement,
+                            to: value,
+                        })),
+                }]);
+                for (const edge of edges) {
+                    const label = edge.element.querySelector(".label:not(.buffer)");
+                    label.classList.remove(edge.options.label_placement);
+                    label.classList.add(value);
+                }
+                edges.forEach(edge => edge.options.label_placement = value);
+            },
+        );
 
         // The label alignment options.
 
@@ -2563,7 +2602,7 @@ class Panel {
         classes,
         disabled,
         on_check,
-        properties,
+        properties = () => ({ edge: { length: 0, options: Edge.default_options() } }),
         augment_svg = () => [],
     ) {
         const options_list = new DOM.Element("div", { class: `options` });
@@ -2692,7 +2731,9 @@ class Panel {
     /// Update the panel state (i.e. enable/disable fields as relevant).
     update(ui) {
         const input = this.element.querySelector('label input[type="text"]');
-        const label_alignments = this.element.querySelectorAll('input[name="label-alignment"]');
+        const label_options = this.element.querySelectorAll(
+            'input[name="label-alignment"], input[name="label-placement"]'
+        );
         const slider = this.element.querySelector('input[type="range"]');
 
         // Modifying cells is not permitted when the export pane is visible.
@@ -2715,8 +2756,8 @@ class Panel {
             // // Enable the label input if at least one cell has been selected.
             input.disabled = ui.selection.size === 0;
 
-            // Label alignment options are always enabled.
-            for (const option of label_alignments) {
+            // Label alignment/placement options are always enabled.
+            for (const option of label_options) {
                 option.disabled = false;
             }
 
@@ -2789,6 +2830,8 @@ class Panel {
                         break;
                     case "{angle}":
                         const angle = value !== null ? value : 0;
+                        const label_alignments
+                            = this.element.querySelectorAll('input[name="label-alignment"]');
                         for (const option of label_alignments) {
                             option.style.transform = `rotate(${
                                 Math.round(2 * angle / Math.PI) * 90
@@ -3114,6 +3157,7 @@ class Edge extends Cell {
     static default_options(override_properties, override_style, level = 1) {
         return Object.assign({
             label_alignment: "left",
+            label_placement: "middle",
             offset: 0,
             style: Object.assign({
                 name: "arrow",

@@ -251,7 +251,14 @@ body {
 
 .edge .label {
     font-size: 20px;
-    text-align: right;
+}
+
+.edge .label.near-start {
+    left: 25%; right: auto;
+}
+
+.edge .label.near-end {
+    left: auto; right: 25%;
 }
 
 .edge .handle {
@@ -366,6 +373,14 @@ body {
     border: hsl(0, 0%, 28%) solid 1px;
     border-radius: 2px;
     outline: none;
+}
+
+.panel .thin {
+    margin-bottom: -8px;
+}
+
+.panel .thin input[type="radio"] {
+    height: 24px;
 }
 
 .panel .vertical {
