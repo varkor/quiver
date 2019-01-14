@@ -1235,6 +1235,16 @@ class UI {
             }
         };
 
+        document.addEventListener("mousemove", (event) => {
+            if (this.in_mode(UIState.Pan)) {
+                // If we're panning, but no longer holding the requisite key, stop.
+                // This can happen if we release the key when the document is not focused.
+                if (!{ Control: event.ctrlKey, Alt: event.altKey }[this.state.key]) {
+                    this.switch_mode(UIState.default);
+                }
+            }
+        });
+
         document.addEventListener("mouseup", (event) => {
             if (event.button === 0) {
                 if (this.in_mode(UIState.Pan)) {
