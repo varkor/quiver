@@ -233,20 +233,20 @@ body {
 }
 
 /* This is so explicit because of the CSS specificity rules. */
-.ui.default .edge:hover:not(.selected):not(.source):not(.target) {
-    background: var(--cell-hover);
+.ui.default .edge:hover:not(.selected):not(.source):not(.target) svg.background {
+    stroke: var(--cell-hover);
 }
 
-.edge.source {
-    background: var(--cell-source);
+.edge.source svg.background {
+    stroke: var(--cell-source);
 }
 
-.edge.target {
-    background: var(--cell-target);
+.edge.target svg.background {
+    stroke: var(--cell-target);
 }
 
-.edge.selected {
-    background: var(--cell-selected);
+.edge.selected svg.background {
+    stroke: var(--cell-selected);
 }
 
 .edge .label {
