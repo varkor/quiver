@@ -3331,6 +3331,10 @@ class Edge extends Cell {
         const EDGE_PADDING = 4;
         // How much space to leave between the cells this edge spans. (Less for other edges.)
         let MARGIN = level === 1 ? ui.cell_size / 4 : ui.cell_size / 8;
+        // The minimum length of the `element`. This is defined so that very small edges (e.g.
+        // adjunctions or pullbacks) are still large enough to manipulate by clicking on them or
+        // their handles.
+        const MIN_LENGTH = 72;
 
         // The SVG for the arrow itself.
         const offset_delta = ui.offset_from_position(
@@ -3350,11 +3354,13 @@ class Edge extends Cell {
 
         const { dimensions, alignment } = Edge.draw_edge(svg, options, length, gap, true);
 
+        const clamped_width = Math.min(Math.max(dimensions.width, MIN_LENGTH), length);
+
         if (background !== null) {
-            background.setAttribute("width", dimensions.width);
+            background.setAttribute("width", clamped_width);
             background.setAttribute("height", dimensions.height + EDGE_PADDING * 2);
             background.appendChild(new DOM.SVGElement("path", {
-                d: `M 0 ${EDGE_PADDING + dimensions.height / 2} l ${dimensions.width} 0`,
+                d: `M 0 ${EDGE_PADDING + dimensions.height / 2} l ${clamped_width} 0`,
             }, {
                 strokeWidth: `${dimensions.height + EDGE_PADDING * 2}px`,
             }).element);
@@ -3363,7 +3369,7 @@ class Edge extends Cell {
         // If the arrow is shorter than expected (for example, because we are using a
         // fixed-width arrow style), then we need to make sure that it's still centred
         // if the `alignment` is `"centre"`.
-        const width_shortfall = length + SVG_PADDING * 2 - dimensions.width;
+        const width_shortfall = length + SVG_PADDING * 2 - clamped_width;
         let margin_adjustment;
         switch (alignment) {
             case "left":
@@ -3385,7 +3391,7 @@ class Edge extends Cell {
         element.style.left = `${source_offset.left + Math.cos(direction) * margin}px`;
         element.style.top = `${source_offset.top + Math.sin(direction) * margin}px`;
         [element.style.width, element.style.height]
-            = new Offset(dimensions.width, dimensions.height + EDGE_PADDING * 2).to_CSS();
+            = new Offset(clamped_width, dimensions.height + EDGE_PADDING * 2).to_CSS();
         element.style.transformOrigin
             = `${SVG_PADDING}px ${dimensions.height / 2 + EDGE_PADDING}px`;
         element.style.transform = `
