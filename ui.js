@@ -3136,18 +3136,21 @@ class Edge extends Cell {
 
     /// Create the HTML element associated with the edge.
     render(ui, pointer_position = null) {
-        let svg = null;
+        let [svg, background] = [null, null];
 
         if (this.element !== null) {
             // If an element already exists for the edge, then can mostly reuse it when
             // re-rendering it.
-            svg = this.element.querySelector("svg");
+            svg = this.element.querySelector("svg:not(.background)");
+            background = this.element.querySelector("svg.background");
 
-            // Clear the SVG: we're going to be completely redrawing it. We're going to keep around
-            // any definitions, though, as we can effectively reuse them.
-            for (const child of Array.from(svg.childNodes)) {
-                if (child.tagName !== "defs") {
-                    child.remove();
+            // Clear the SVGs: we're going to be completely redrawing it. We're going to keep
+            // around any definitions, though, as we can effectively reuse them.
+            for (const element of [svg, background]) {
+                for (const child of Array.from(element.childNodes)) {
+                    if (child.tagName !== "defs") {
+                        child.remove();
+                    }
                 }
             }
         } else {
@@ -3174,6 +3177,11 @@ class Edge extends Cell {
                     edge: this,
                 }));
             };
+
+            // Create the background. We use an SVG rather than colouring the background
+            // of the element so that we can curve it according to the edge shape.
+            background = new DOM.SVGElement("svg", { class: "background" }).element;
+            this.element.appendChild(background);
 
             // Create the endpoint handles.
             for (const end of ["source", "target"]) {
@@ -3267,6 +3275,7 @@ class Edge extends Cell {
             this.options,
             endpoint_offset,
             null,
+            background,
         );
 
         // Apply the mask to the edge.
@@ -3313,6 +3322,7 @@ class Edge extends Cell {
         options,
         endpoint_offset,
         gap,
+        background = null,
     ) {
         // Constants for parameters of the arrow shapes.
         const SVG_PADDING = Edge.SVG_PADDING;
@@ -3339,6 +3349,17 @@ class Edge extends Cell {
         }
 
         const { dimensions, alignment } = Edge.draw_edge(svg, options, length, gap, true);
+
+        if (background !== null) {
+            background.setAttribute("width", dimensions.width);
+            background.setAttribute("height", dimensions.height + EDGE_PADDING * 2);
+            background.appendChild(new DOM.SVGElement("path", {
+                d: `M 0 ${EDGE_PADDING + dimensions.height / 2} l ${dimensions.width} 0`,
+            }, {
+                strokeWidth: `${dimensions.height + EDGE_PADDING * 2}px`,
+            }).element);
+        }
+
         // If the arrow is shorter than expected (for example, because we are using a
         // fixed-width arrow style), then we need to make sure that it's still centred
         // if the `alignment` is `"centre"`.
