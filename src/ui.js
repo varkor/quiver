@@ -14,10 +14,8 @@ DOM.Element = class {
         } else {
             this.element = document.createElement(from);
         }
-        for (const [attribute, value] of Object.entries(attributes)) {
-            this.element.setAttribute(attribute, value);
-        }
-        Object.assign(this.element.style, style);
+        this.set_attributes(attributes);
+        this.style = style;
     }
 
     get id() {
@@ -28,14 +26,29 @@ DOM.Element = class {
         return this.element.classList;
     }
 
+    set style(style) {
+        Object.assign(this.element.style, style);
+    }
+
+    set_attributes(attributes) {
+        for (const [attribute, value] of Object.entries(attributes)) {
+            this.element.setAttribute(attribute, value);
+        }
+    }
+
     /// Appends an element.
-    /// `value` has two forms: a plain string, in which case it is added as a text node, or a
-    /// `DOM.Element`, in which case the corresponding element is appended.
+    /// `value` has three forms:
+    /// - A plain string, in which case it is added as a text node.
+    /// - A `DOM.Element`, in which case the corresponding element is appended.
+    /// - An HTML element, in which case it is appended.
     add(value) {
-        if (typeof value !== "string") {
+        if (typeof value === "string") {
+            this.element.appendChild(document.createTextNode(value));
+
+        } else if (value instanceof DOM.Element) {
             this.element.appendChild(value.element);
         } else {
-            this.element.appendChild(document.createTextNode(value));
+            this.element.appendChild(value);
         }
         return this;
     }
@@ -213,6 +226,8 @@ class Quiver {
         switch (format) {
             case "tikz-cd":
                 return QuiverExport.tikz_cd.export(this);
+            case "xymatrix":
+                return QuiverExport.xymatrix.export(this);
             case "base64":
                 return QuiverImportExport.base64.export(this);
             default:
@@ -505,6 +520,279 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
         return wrap_boilerplate(output);
     }
 };
+
+QuiverExport.xymatrix = new class extends QuiverExport {
+    export(quiver) {
+        let output = "";
+
+        // Wrap xymatrix code with `\xymatrix{ ... }`.
+        const wrap_boilerplate = (output) => {
+            return `\\xymatrix{\n${
+                output.length > 0 ? `${
+                    output.split("\n").map(line => `\t${line}`).join("\n")
+                }\n` : ""
+            }}`;
+        };
+
+        // Early exit for empty quivers.
+        if (quiver.is_empty()) {
+            return wrap_boilerplate(output);
+        }
+
+        // We handle the export in two stages: vertices and edges. These are fundamentally handled
+        // differently in tikz-cd, so it makes sense to separate them in this way. We have a bit of
+        // flexibility in the format in which we output (e.g. edges relative to nodes, or with
+        // absolute positions).
+        // We choose to lay out the tikz-cd code as follows:
+        //    (vertices)
+        //    X & X & X \\
+        //    X & X & X \\
+        //    X & X & X
+        //    (1-cells)
+        //    (2-cells)
+        //    ...
+
+        // Output the vertices.
+        // Note that currently vertices may not share the same position,
+        // as in that case they will be overwritten.
+        let offset = new Position(Infinity, Infinity);
+        // Construct a grid for the vertices.
+        const rows = new Map();
+        for (const vertex of quiver.cells[0]) {
+            if (!rows.has(vertex.position.y)) {
+                rows.set(vertex.position.y, new Map());
+            }
+            rows.get(vertex.position.y).set(vertex.position.x, vertex);
+            offset = offset.min(vertex.position);
+        }
+        // Iterate through the rows and columns in order, outputting the tikz-cd code.
+        const prev = new Position(offset.x, offset.y);
+        for (const [y, row] of Array.from(rows).sort()) {
+            if (y - prev.y > 0) {
+                output += ` ${"\\\\\n".repeat(y - prev.y)}`;
+            }
+            // This variable is really unnecessary, but it allows us to remove
+            //  a leading space on a line, which makes things prettier.
+            let first_in_row = true;
+            for (const [x, vertex] of Array.from(row).sort()) {
+                if (x - prev.x > 0) {
+                    output += `${!first_in_row ? " " : ""}${"&".repeat(x - prev.x)} `;
+                }
+                output += `{${vertex.label}}`;
+                prev.x = x;
+                first_in_row = false;
+            }
+            prev.x = offset.x;
+            prev.y = y;
+        }
+
+        // Referencing cells is slightly complicated by the fact that we can't give vertices
+        // names in tikz-cd, so we have to refer to them by position instead. That means 1-cells
+        // have to be handled differently to k-cells for k > 1.
+        // A map of unique identifiers for cells.
+        const names = new Map();
+        let index = 0;
+        const cell_reference = (cell) => {
+            if (cell.is_vertex()) {
+                // Note that tikz-cd 1-indexes its cells.
+                return `${cell.position.y - offset.y + 1}-${cell.position.x - offset.x + 1}`;
+            } else {
+                return `${names.get(cell)}`;
+            }
+        };
+
+        // Output the edges.
+        for (let level = 1; level < quiver.cells.length; ++level) {
+            if (quiver.cells[level].size > 0) {
+                output += "\n";
+            }
+
+            for (const edge of quiver.cells[level]) {
+                const parameters = [];
+                const label_parameters = [];
+                let align = "";
+
+                // We only need to give edges names if they're depended on by another edge.
+                if (quiver.dependencies_of(edge).size > 0) {
+                    label_parameters.push(`name=${index}`);
+                    names.set(edge, index++);
+                    // In this case, because we have a parameter list, we have to also change
+                    // the syntax for alignment (technically, we can always use the quotation
+                    // mark for swap, but it's simpler to be consistent with `description`).
+                    switch (edge.options.label_alignment) {
+                        case "centre":
+                            label_parameters.push("description");
+                            break;
+                        case "over":
+                            label_parameters.push("marking");
+                            break;
+                        case "right":
+                            label_parameters.push("swap");
+                            break;
+                    }
+                } else {
+                    switch (edge.options.label_alignment) {
+                        case "centre":
+                            // Centring is done by using the `description` style.
+                            align = " description";
+                            break;
+                        case "over":
+                            // Centring without clearing is done by using the `marking` style.
+                            align = " marking";
+                            break;
+                        case "right":
+                            // We can flip the side of the edge on which the label is drawn
+                            // by appending a quotation mark to the label as an edge option.
+                            align = "'";
+                            break;
+                    }
+                }
+                if (edge.options.offset > 0) {
+                    parameters.push(`shift right=${edge.options.offset}`);
+                }
+                if (edge.options.offset < 0) {
+                    parameters.push(`shift left=${-edge.options.offset}`);
+                }
+
+                let style = "";
+                let label = edge.label.trim() !== "" ? `"{${edge.label}}"${align}` : "";
+
+                // Edge styles.
+                switch (edge.options.style.name) {
+                    case "arrow":
+                        // Body styles.
+                        switch (edge.options.style.body.name) {
+                            case "cell":
+                                // tikz-cd only has supported for 1-cells and 2-cells.
+                                // Anything else requires custom support, so for now
+                                // we only special-case 2-cells. Everything else is
+                                // drawn as if it is a 1-cell.
+                                if (edge.options.style.body.level === 2) {
+                                    style = "Rightarrow, ";
+                                }
+                                break;
+
+                            case "dashed":
+                                parameters.push("dashed");
+                                break;
+
+                            case "dotted":
+                                parameters.push("dotted");
+                                break;
+
+                            case "squiggly":
+                                parameters.push("squiggly");
+                                break;
+
+                            case "none":
+                                parameters.push("phantom");
+                                break;
+                        }
+
+                        // Tail styles.
+                        switch (edge.options.style.tail.name) {
+                            case "maps to":
+                                parameters.push("maps to");
+                                break;
+
+                            case "mono":
+                                parameters.push("tail");
+                                break;
+
+                            case "hook":
+                                parameters.push(`hook${
+                                    edge.options.style.tail.side === "top" ? "" : "'"
+                                }`);
+                                break;
+                        }
+
+                        // Head styles.
+                        switch (edge.options.style.head.name) {
+                            case "none":
+                                parameters.push("no head");
+                                break;
+
+                            case "epi":
+                                parameters.push("two heads");
+                                break;
+
+                            case "harpoon":
+                                parameters.push(`harpoon${
+                                    edge.options.style.head.side === "top" ? "" : "'"
+                                }`);
+                                break;
+                        }
+
+                        break;
+
+                    case "adjunction":
+                    case "corner":
+                        parameters.push("phantom");
+
+                        let angle_offset = 0;
+
+                        switch (edge.options.style.name) {
+                            case "adjunction":
+                                label = "\"\\dashv\"";
+                                break;
+                            case "corner":
+                                label = "\"\\lrcorner\"";
+                                label_parameters.push("very near start");
+                                angle_offset = 45;
+                                break;
+                        }
+
+                        label_parameters.push(`rotate=${
+                            -edge.angle() * 180 / Math.PI + angle_offset
+                        }`);
+
+                        // We allow these sorts of edges to have labels attached,
+                        // even though it's a little unusual.
+                        if (edge.label.trim() !== "") {
+                            let anchor = "";
+                            switch (edge.options.label_alignment) {
+                                case "left":
+                                    anchor = "anchor=west, ";
+                                    break;
+                                case "centre":
+                                    anchor = "description, ";
+                                    break;
+                                case "over":
+                                    anchor = "marking, ";
+                                    break;
+                                case "right":
+                                    anchor = "anchor=east, ";
+                                    break;
+                            }
+                            parameters.push(`"{${edge.label}}"{${anchor}inner sep=1.5mm}`);
+                        }
+
+                        break;
+                }
+
+                // tikz-cd tends to place arrows between arrows directly contiguously
+                // without adding some spacing manually.
+                if (level > 1) {
+                    parameters.push("shorten <=1mm");
+                    parameters.push("shorten >=1mm");
+                }
+
+                output += `\\arrow[${style}` +
+                    (label !== "" ? `${label}${
+                        label_parameters.length > 0 ? `{${label_parameters.join(", ")}}` : ""
+                    }, ` : "") +
+                    `from=${cell_reference(edge.source)}, ` +
+                    `to=${cell_reference(edge.target)}` +
+                    (parameters.length > 0 ? `, ${parameters.join(", ")}` : "") +
+                    "] ";
+            }
+            // Remove the trailing space.
+            output = output.slice(0, -1);
+        }
+
+        return wrap_boilerplate(output);
+    }
+}
 
 QuiverImportExport.base64 = new class extends QuiverImportExport {
     // The format we use for encoding quivers in base64 (primarily for link-sharing) is
@@ -2520,9 +2808,6 @@ class Panel {
             // we will simply switch the displayed export format.
             // Clicking on the same button twice closes the panel.
             if (this.export !== format) {
-                // Get the base 64 URI encoding of the diagram.
-                const output = ui.quiver.export(format);
-
                 let export_pane;
                 if (this.export === null) {
                     // Create the export pane.
@@ -2532,7 +2817,11 @@ class Panel {
                     // Find the existing export pane.
                     export_pane = new DOM.Element(ui.element.querySelector(".export"));
                 }
-                export_pane.clear().add(output);
+                export_pane.clear();
+
+                // Get the encoding of the diagram in the chosen `format`.
+                const output = ui.quiver.export(format);
+                export_pane.add(output);
 
                 this.export = format;
 
@@ -2555,9 +2844,16 @@ class Panel {
                 new DOM.Element("button", { class: "global" }).add("Get shareable link")
                     .listen("click", () => display_export_pane("base64"))
             ).add(
-                // The export button.
-                new DOM.Element("button", { class: "global" }).add("Export to LaTeX")
-                    .listen("click", () => display_export_pane("tikz-cd"))
+                // The export buttons.
+                new DOM.Element("div", { class: "horizontal" })
+                    .add(new DOM.Element("label").add("Export as: "))
+                    .add(
+                        new DOM.Element("button", { class: "global medium" }).add("tikz-cd")
+                            .listen("click", () => display_export_pane("tikz-cd"))
+                    ).add(
+                        new DOM.Element("button", { class: "global medium" }).add("xymatrix")
+                            .listen("click", () => display_export_pane("xymatrix"))
+                    )
             ).element
         );
     }
@@ -3854,7 +4150,7 @@ Edge.SVG_PADDING = 6;
 Edge.OFFSET_DISTANCE = 8;
 
 // Which library to use for rendering labels.
-const RENDER_METHOD = "KaTeX";
+const RENDER_METHOD = null;
 
 // We want until the (minimal) DOM content has loaded, so we have access to `document.body`.
 document.addEventListener("DOMContentLoaded", () => {

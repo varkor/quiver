@@ -378,8 +378,19 @@ body {
     margin-left: 4px;
 }
 
+.panel .horizontal {
+    display: inline-block;
+    width: 100%; height: 30px;
+
+    margin-bottom: 8px;
+}
+
 .panel .short {
     width: 20%;
+}
+
+.panel .medium {
+    width: calc((100% - 80px) / 2);
 }
 
 .panel .centre {
@@ -426,6 +437,30 @@ body {
 
 .panel .vertical input[type="radio"].short:last-child {
     border-radius: 0 0 2px 0;
+}
+
+.panel .horizontal label {
+    display: inline-block;
+    width: 80px;
+
+    padding-left: 4px;
+}
+
+.panel .horizontal button {
+    display: inline-block;
+    vertical-align: middle;
+    margin: 0;
+    margin-left: -1px;
+
+    border-radius: 0;
+}
+
+.panel .horizontal button:first-of-type {
+    border-radius: 2px 0 0 2px;
+}
+
+.panel .horizontal button:last-of-type {
+    border-radius: 0 2px 2px 0;
 }
 
 .panel input[type="radio"]:hover {
@@ -583,4 +618,13 @@ body {
 
     font: 16px monospace;
     color: white;
+}
+
+.export svg {
+    position: absolute;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+
+    background: white;
+    border-radius: 2px;
 }
