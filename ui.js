@@ -1,3 +1,14 @@
+"use strict";
+
+/// An enumeration type.
+class Enum {
+    constructor(name, ...variants) {
+        for (const variant of variants) {
+            this[variant] = Symbol(`${name}::${variant}`);
+        }
+    }
+}
+
 /// A helper object for dealing with the DOM.
 const DOM = {};
 
@@ -1182,6 +1193,9 @@ class UI {
         /// The panel for viewing and editing cell data.
         this.panel = new Panel();
 
+        /// The toolbar.
+        this.toolbar = new Toolbar();
+
         /// What library to use for rendering labels.
         /// `null` is a basic HTML fallback: it is used until the relevant library is loaded.
         /// Options include MathJax and KaTeX.
@@ -1199,6 +1213,10 @@ class UI {
         // Set up the panel for viewing and editing cell data.
         this.panel.initialise(this);
         this.element.appendChild(this.panel.element);
+
+        // Set up the toolbar.
+        this.toolbar.initialise(this);
+        this.element.appendChild(this.toolbar.element);
 
         // Add the logo.
         this.element.appendChild(
@@ -1292,155 +1310,6 @@ class UI {
                         this.panel.element.querySelector('label input[type="text"]').blur();
                     }
                 }
-            }
-        });
-
-        // Handle global key presses (such as keyboard shortcuts).
-        document.addEventListener("keydown", (event) => {
-            // Many keyboard shortcuts are only relevant when we're not midway
-            // through typing in an input, which should capture key presses.
-            const editing_input = this.input_is_active();
-
-            // Trigger a keyboard shortcut of the form Command/Control (+ Shift) + {Letter},
-            // where Shift triggers the dual of the action.
-            // If `effect_within_input`, then if the command is deemed to have had no effect
-            // (in terms of changing the value of selection of the input), the `action`/
-            // `coaction` will be triggered anyway.
-            const invertible_shortcut = (action, coaction, effect_within_input = false) => {
-                const effect = !event.shiftKey ? action : coaction;
-                if (!editing_input) {
-                    if (event.metaKey || event.ctrlKey) {
-                        event.preventDefault();
-                        if (this.in_mode(UIState.Default)) {
-                            effect();
-                        }
-                    }
-                } else if (effect_within_input) {
-                    const input = document.activeElement;
-                    const [value, selectionStart, selectionEnd]
-                        = [input.value, input.selectionStart,  input.selectionEnd];
-                    setTimeout(() => {
-                        if (input.value === value
-                            && input.selectionStart === selectionStart
-                            && input.selectionEnd === selectionEnd)
-                        {
-                            effect();
-                        }
-                    }, 4);
-                }
-            };
-
-            switch (event.key) {
-                case "Backspace":
-                case "Delete":
-                    // Remove any selected cells.
-                    if (!editing_input) {
-                        // Prevent Backspace triggering browser history navigation.
-                        event.preventDefault();
-
-                        this.history.add(this, [{
-                            kind: "delete",
-                            cells: this.quiver.transitive_dependencies(this.selection),
-                        }], true);
-                    } else {
-                        const input = document.activeElement;
-                        if (document.activeElement.value === "") {
-                            // Trigger the animation by (removing the class if it already exists
-                            // and then) adding a class.
-                            input.classList.remove("flash");
-                            UI.delay(() => input.classList.add("flash"));
-                        }
-                    }
-                    break;
-                case "Enter":
-                    // Focus the label input.
-                    this.panel.element.querySelector('label input[type="text"]').focus();
-                    break;
-                case "Escape":
-                    // Stop trying to connect cells.
-                    if (this.in_mode(UIState.Connect)) {
-                        if (this.state.forged_vertex) {
-                            // If we created a vertex as part of the connection, we need to record
-                            // that as an action.
-                            this.history.add(this, [{
-                                kind: "create",
-                                cells: new Set([this.state.source]),
-                            }]);
-                        }
-                        this.switch_mode(UIState.default);
-                        // If we're connecting from an insertion point, then we need to hide
-                        // it again.
-                        insertion_point.classList.remove("revealed");
-                    }
-                    // Defocus the label input.
-                    this.panel.element.querySelector('label input[type="text"]').blur();
-                    // Close any open panes.
-                    this.panel.dismiss_export_pane(this);
-                    break;
-                case "Alt":
-                case "Control":
-                    // Holding Option triggers panning mode.
-                    if (this.in_mode(UIState.Default)) {
-                        this.switch_mode(new UIState.Pan(event.key));
-                    }
-                    break;
-                // Use the arrow keys for moving vertices around.
-                case "ArrowLeft":
-                case "ArrowDown":
-                case "ArrowRight":
-                case "ArrowUp":
-                    if (!editing_input) {
-                        let offset;
-                        switch (event.key) {
-                            case "ArrowLeft":
-                                offset = new Position(-1, 0);
-                                break;
-                            case "ArrowDown":
-                                offset = new Position(0, 1);
-                                break;
-                            case "ArrowRight":
-                                offset = new Position(1, 0);
-                                break;
-                            case "ArrowUp":
-                                offset = new Position(0, -1);
-                                break;
-                        }
-                        this.history.add(this, [{
-                            kind: "move",
-                            displacements: Array.from(this.selection).map((vertex) => ({
-                                vertex,
-                                from: vertex.position,
-                                to: vertex.position.add(offset),
-                            })),
-                        }], true);
-                    }
-                    break;
-                case "a":
-                    // Select/deselect all.
-                    invertible_shortcut(
-                        () => this.select(...this.quiver.all_cells()),
-                        () => this.deselect(),
-                    );
-                    break;
-                case "z":
-                    // Undo/redo
-                    invertible_shortcut(
-                        () => this.history.undo(this),
-                        () => this.history.redo(this),
-                        true,
-                    );
-                    break;
-            }
-        });
-
-        document.addEventListener("keyup", (event) => {
-            switch (event.key) {
-                case "Alt":
-                case "Control":
-                    if (this.in_mode(UIState.Pan) && this.state.key === event.key) {
-                        this.switch_mode(UIState.default);
-                    }
-                    break;
             }
         });
 
@@ -1788,6 +1657,7 @@ class UI {
             if (removed.is_vertex()) {
                 this.positions.delete(`${removed.position}`);
             }
+            this.selection.delete(removed);
             removed.element.remove();
         }
     }
@@ -1945,13 +1815,31 @@ class History {
         this.selections.splice(this.present + 1, this.actions.length - this.present);
         this.actions.splice(this.present, this.actions.length - this.present);
         this.actions.push(actions);
+        const previous_selection = ui.selection;
+
         if (invoke) {
             this.redo(ui);
         } else {
             ++this.present;
         }
-        this.selections.push(ui.selection);
+
+        // Our process for recording selections is slightly convoluted. In essence, we simply
+        // get the current UI selection after each action and use that whenever history resets
+        // to that point. However, if we delete cells, when we undo this action, we generally
+        // want those cells to be deleted. However, deleted cells do not count as selected, so
+        // we have to track those cells that *were* selected, but now are deleted, and add them
+        // to the selection set.
+        const recorded_selection = new Set(ui.selection);
+        for (const selected of previous_selection) {
+            if (ui.quiver.deleted.has(selected)) {
+                recorded_selection.add(selected);
+            }
+        }
+        this.selections.push(recorded_selection);
         this.collapse = null;
+
+        // Update the history toolbar buttons (e.g. enabling Redo).
+        ui.toolbar.update(ui);
     }
 
     /// Add a collapsible history event. This allows the last event to be modified later,
@@ -1987,7 +1875,7 @@ class History {
         this.actions.splice(this.present, 1);
     }
 
-    /// Trigger an action.
+    /// Trigger an action. Returns whether the panel should be updated after the action.
     effect(ui, actions, reverse) {
         const order = Array.from(actions);
 
@@ -1996,6 +1884,8 @@ class History {
         if (reverse) {
             order.reverse();
         }
+
+        let update_panel = false;
 
         for (const action of order) {
             let kind = action.kind;
@@ -2034,25 +1924,27 @@ class History {
                         ui.add_cell(cell);
                         ui.quiver.add(cell);
                     }
+                    update_panel = true;
                     break;
                 case "delete":
                     for (const cell of action.cells) {
                         ui.remove_cell(cell, this.present);
                     }
+                    update_panel = true;
                     break;
                 case "label":
                     for (const label of action.labels) {
                         label.cell.label = label[to];
                         ui.panel.render_tex(ui, label.cell);
                     }
-                    ui.panel.update(ui);
+                    update_panel = true;
                     break;
                 case "label-alignment":
                     for (const alignment of action.alignments) {
                         alignment.edge.options.label_alignment = alignment[to];
                         alignment.edge.render(ui);
                     }
-                    ui.panel.update(ui);
+                    update_panel = true;
                     break;
                 case "offset":
                     const edges = new Set();
@@ -2063,7 +1955,7 @@ class History {
                     for (const cell of ui.quiver.transitive_dependencies(edges)) {
                         cell.render(ui);
                     }
-                    ui.panel.update(ui);
+                    update_panel = true;
                     break;
                 case "reverse":
                     for (const cell of action.cells) {
@@ -2071,14 +1963,14 @@ class History {
                             cell.reverse(ui);
                         }
                     }
-                    ui.panel.update(ui);
+                    update_panel = true;
                     break;
                 case "style":
                     for (const style of action.styles) {
                         style.edge.options.style = style[to];
                         style.edge.render(ui);
                     }
-                    ui.panel.update(ui);
+                    update_panel = true;
                     break;
                 case "connect":
                     const [source, target] = {
@@ -2086,10 +1978,12 @@ class History {
                         target: [action.edge.source, action[to]],
                     }[action.end];
                     action.edge.reconnect(ui, source, target);
-                    ui.panel.update(ui);
+                    update_panel = true;
                     break;
             }
         }
+
+        return update_panel;
     }
 
     undo(ui) {
@@ -2098,16 +1992,25 @@ class History {
             this.permanentise();
 
             // Trigger the reverse of the previous action.
-            this.effect(ui, this.actions[this.present], true);
+            const update_panel = this.effect(ui, this.actions[this.present], true);
             ui.deselect();
             ui.select(...this.selections[this.present]);
+            if (update_panel) {
+                ui.panel.update(ui);
+            }
+
+            ui.toolbar.update(ui);
+
+            return true;
         }
+
+        return false;
     }
 
     redo(ui) {
         if (this.present < this.actions.length) {
             // Trigger the next action.
-            this.effect(ui, this.actions[this.present], false);
+            const update_panel = this.effect(ui, this.actions[this.present], false);
 
             ++this.present;
             this.permanentise();
@@ -2117,7 +2020,16 @@ class History {
                 ui.deselect();
                 ui.select(...this.selections[this.present]);
             }
+            if (update_panel) {
+                ui.panel.update(ui);
+            }
+
+            ui.toolbar.update(ui);
+
+            return true;
         }
+
+        return false;
     }
 }
 
@@ -2722,8 +2634,13 @@ class Panel {
             this.element.querySelectorAll('input:not([type="text"]), button:not(.global)')
                 .forEach(element => element.disabled = !selection_includes_edge);
 
-            // // Enable the label input if at least one cell has been selected.
+            // Enable the label input if at least one cell has been selected.
             input.disabled = ui.selection.size === 0;
+            if (input.disabled && document.activeElement === input) {
+                // In Firefox, if the active element is disabled, then key
+                // presses aren't registered, so we need to blur it manually.
+                input.blur();
+            }
 
             // Label alignment options are always enabled.
             for (const option of label_alignments) {
@@ -2848,6 +2765,289 @@ class Panel {
             this.export = null;
             this.update(ui);
         }
+    }
+}
+
+/// The toolbar, providing shortcuts to useful actions. This handles both the physical
+/// toolbar buttons and the keyboard shortcuts.
+class Toolbar {
+    constructor() {
+        /// The toolbar element.
+        this.element = null;
+    }
+
+    initialise(ui) {
+        this.element = new DOM.Element("div", { class: "toolbar" }).element;
+
+        // By default, we display "Ctrl" and "Shift" as modifier keys, as most
+        // operating systems use this to initiate keyboard shortcuts. For Mac
+        // and iOS, we switch to displaying "⌘" and "⇧". However, both keys
+        // (on any operating system) work with the shortcuts: this is simply
+        // used to work out what to display.
+        const apple_platform = /^(Mac|iPhone|iPod|iPad)/.test(navigator.platform);
+
+        // A map from keys to the shortcuts to which they correspond.
+        const shortcuts = new Map();
+
+        // Defines the contexts in which a keyboard shortcut may trigger.
+        const SHORTCUT_PRIORITY = new Enum(
+            "SHORTCUT_PRIORITY",
+            // Triggers whenever the keyboard shortcut is held.
+            "Always",
+            // Triggers when an input is not focused, or if the shortcut
+            // has no effect on the input.
+            "Defer",
+            // Triggers when an input is not focused.
+            "Conservative",
+        );
+
+        // Associate an action to a keyboard shortcut. Multiple shortcuts can be
+        // associated to a single action, making it easier to facilitate different
+        // keyboard layouts.
+        const add_shortcut = (combinations, action, button = null, unaction = null) => {
+            for (const shortcut of combinations) {
+                if (!shortcuts.has(shortcut.key)) {
+                    shortcuts.set(shortcut.key, []);
+                }
+                shortcuts.get(shortcut.key).push({
+                    modifier: shortcut.modifier || false,
+                    shift: shortcut.shift || false,
+                    // The function to call when the shortcut is triggered.
+                    action,
+                    // The function to call (if any) when the shortcut is released.
+                    unaction,
+                    context: shortcut.context || SHORTCUT_PRIORITY.Conservative,
+                    button,
+                });
+            }
+        };
+
+        const add_action = (symbol, name, shortcut, action, disabled) => {
+            // Format the keyboard shortcut to make it discoverable in the toolbar.
+            const shortcut_keys = [shortcut.key.toUpperCase()];
+            if (shortcut.modifier) {
+                shortcut_keys.unshift(apple_platform ? "⌘" : "Ctrl");
+            }
+            if (shortcut.shift) {
+                shortcut_keys.unshift(apple_platform ? "⇧" : "Shift");
+            }
+            const shortcut_name = shortcut_keys.join(apple_platform ? "" : "+");
+
+            const button = new DOM.Element("button", { class: "action", "data-name": name })
+                .add(new DOM.Element("span", { class: "symbol" }).add(symbol))
+                .add(new DOM.Element("span", { class: "name" }).add(name))
+                .add(new DOM.Element("span", { class: "shortcut" }).add(shortcut_name))
+                .listen("mousedown", (event) => event.stopImmediatePropagation())
+                .listen("click", (event) => action(event));
+
+            if (disabled) {
+                button.element.disabled = true;
+            }
+
+            add_shortcut([shortcut], action, button);
+
+            this.element.appendChild(button.element);
+            return button;
+        };
+
+        // Add all of the toolbar buttons.
+        add_action(
+            "⎌",
+            "Undo",
+            { key: "z", modifier: true, context: SHORTCUT_PRIORITY.Defer },
+            () => {
+                return ui.history.undo(ui);
+            },
+            true,
+        );
+        const redo = add_action(
+            "⎌",
+            "Redo",
+            { key: "z", modifier: true, shift: true, context: SHORTCUT_PRIORITY.Defer },
+            () => {
+                return ui.history.redo(ui);
+            },
+            true,
+        );
+        // There's no "Redo" symbol in Unicode, so we make do by flipping the "Undo"
+        // symbol horizontally.
+        redo.element.querySelector(".symbol").classList.add("flip");
+
+        // Add the other, "invisible", shortcuts.
+        add_shortcut([
+            { key: "Backspace", context: SHORTCUT_PRIORITY.Defer },
+            { key: "Delete", context: SHORTCUT_PRIORITY.Defer },
+        ], () => {
+            ui.history.add(ui, [{
+                kind: "delete",
+                cells: ui.quiver.transitive_dependencies(ui.selection),
+            }], true);
+            ui.panel.update(ui);
+        });
+
+        add_shortcut([{ key: "Enter" }], () => {
+            // Focus the label input.
+            const input = ui.panel.element.querySelector('label input[type="text"]');
+            input.focus();
+            input.selectionStart = input.selectionEnd = input.value.length;
+        });
+
+        add_shortcut([{ key: "Escape", context: SHORTCUT_PRIORITY.Always }], () => {
+            // Stop trying to connect cells.
+            if (ui.in_mode(UIState.Connect)) {
+                if (ui.state.forged_vertex) {
+                    // If we created a vertex as part of the connection, we need to record
+                    // that as an action.
+                    ui.history.add(ui, [{
+                        kind: "create",
+                        cells: new Set([ui.state.source]),
+                    }]);
+                }
+                ui.switch_mode(UIState.default);
+                // If we're connecting from an insertion point, then we need to hide
+                // it again.
+                ui.element.querySelector(".insertion-point").classList.remove("revealed");
+            }
+            // Defocus the label input.
+            ui.panel.element.querySelector('label input[type="text"]').blur();
+            // Close any open panes.
+            ui.panel.dismiss_export_pane(ui);
+        });
+
+        // Holding Option or Control triggers panning mode (and releasing ends panning mode).
+        add_shortcut([{ key: "Alt" }, { key: "Control" }], (event) => {
+            if (ui.in_mode(UIState.Default)) {
+                ui.switch_mode(new UIState.Pan(event.key));
+            }
+        }, null, (event) => {
+            if (ui.in_mode(UIState.Pan) && ui.state.key === event.key) {
+                ui.switch_mode(UIState.default);
+            }
+        });
+
+        // Use the arrow keys for moving vertices around.
+        add_shortcut([
+            { key: "ArrowLeft" }, { key: "ArrowDown" }, { key: "ArrowRight" }, { key: "ArrowUp" },
+        ], (event) => {
+            let offset;
+            switch (event.key) {
+                case "ArrowLeft":
+                    offset = new Position(-1, 0);
+                    break;
+                case "ArrowDown":
+                    offset = new Position(0, 1);
+                    break;
+                case "ArrowRight":
+                    offset = new Position(1, 0);
+                    break;
+                case "ArrowUp":
+                    offset = new Position(0, -1);
+                    break;
+            }
+            ui.history.add(ui, [{
+                kind: "move",
+                displacements: Array.from(ui.selection).map((vertex) => ({
+                    vertex,
+                    from: vertex.position,
+                    to: vertex.position.add(offset),
+                })),
+            }], true);
+        });
+
+        // Select all.
+        add_shortcut([{ key: "a", modifier: true }], () => {
+            ui.select(...ui.quiver.all_cells());
+        });
+
+        // Deselect all.
+        add_shortcut([{ key: "a", modifier: true, shift: true }], () => {
+            ui.deselect();
+        });
+
+        // Handle global key presses (such as, but not exclusively limited to, keyboard shortcuts).
+        const handle_shortcut = (type, event) => {
+            // Many keyboard shortcuts are only relevant when we're not midway
+            // through typing in an input, which should capture key presses.
+            const editing_input = ui.input_is_active();
+
+            // Trigger a "flash" animation on an element.
+            const flash = (element) => {
+                element.classList.remove("flash");
+                // Removing a class and instantly adding it again is going to be ignored by
+                // the browser, so we need to trigger a reflow to get the animation to
+                // retrigger.
+                void element.offsetWidth;
+                element.classList.add("flash");
+            };
+
+            if (shortcuts.has(event.key)) {
+                for (const shortcut of shortcuts.get(event.key)) {
+                    if (
+                        event.shiftKey === shortcut.shift
+                            && ((event.metaKey || event.ctrlKey) === shortcut.modifier
+                                || ["Control", "Meta"].includes(event.key))
+                    ) {
+                        const effect = () => {
+                            // Trigger the shortcut effect.
+                            const action = shortcut[{ keydown: "action", keyup: "unaction" }[type]];
+                            if (action !== null) {
+                                if (action(event) !== false) {
+                                    if (shortcut.button !== null) {
+                                        // Give some visual indication that the action has been triggered.
+                                        flash(shortcut.button.element);
+                                    }
+                                }
+                            }
+                        };
+                        if (!editing_input || shortcut.context === SHORTCUT_PRIORITY.Always) {
+                            event.preventDefault();
+                            effect();
+                        } else if (type === "keydown") {
+                            // If we were editing an input, and the keyboard shortcut doesn't
+                            // trigger in that case, then if the keyboard shortcut is deemed
+                            // to have had no effect on the input, we either:
+                            // (a) Trigger the keyboard shortcut effect (if the `context` is
+                            //     `Defer`).
+                            // (b) Trigger an animation on the input, to signal to the
+                            //     user that the input is the one receiving the keyboard
+                            //     shortcut.
+                            const input = document.activeElement;
+                            const [value, selectionStart, selectionEnd]
+                                = [input.value, input.selectionStart,  input.selectionEnd];
+                            setTimeout(() => {
+                                if (input.value === value
+                                    && input.selectionStart === selectionStart
+                                    && input.selectionEnd === selectionEnd)
+                                {
+                                    if (shortcut.context === SHORTCUT_PRIORITY.Defer) {
+                                        effect();
+                                    } else {
+                                        // Give some visual indication that the input stole the
+                                        // keyboard focus.
+                                        flash(input);
+                                    }
+                                }
+                            }, 4);
+                        }
+                    }
+                }
+            }
+        };
+
+        // Handle global key presses and releases.
+        for (const type of ["keydown", "keyup"]) {
+            document.addEventListener(type, (event) => {
+                handle_shortcut(type, event);
+            });
+        }
+    }
+
+    /// Update the toolbar (e.g. enabling or disabling buttons based on UI state).
+    update(ui) {
+        const undo = this.element.querySelector('.action[data-name="Undo"]');
+        undo.disabled = ui.history.present === 0;
+        const redo = this.element.querySelector('.action[data-name="Redo"]');
+        redo.disabled = ui.history.present === ui.history.actions.length;
     }
 }
 
