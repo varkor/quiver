@@ -330,13 +330,14 @@ body {
 
 .panel input[type="text"]:disabled {
     background: hsl(0, 0%, 20%);
+    border-color: hsl(0, 0%, 28%);
 }
 
 .panel input[type="text"].flash {
-    animation: flash 0.2s;
+    animation: shadow-flash 0.2s;
 }
 
-@keyframes flash {
+@keyframes shadow-flash {
     from {
         box-shadow: 0 0 0 4px hsl(200, 100%, 40%);
     }
@@ -567,6 +568,92 @@ body {
 
     color: hsl(0, 0%, 28%);
 }
+
+/* The toolbar */
+
+.toolbar {
+    position: fixed;
+    height: 48px;
+    left: 40%; bottom: 16px;
+    transform: translateX(-50%);
+
+    background: hsl(0, 0%, 16%);
+    border-radius: 2px;
+    overflow: hidden;
+
+    color: hsl(0, 0%, 96%);
+}
+
+.toolbar .action {
+    position: relative;
+    vertical-align: middle;
+    width: 48px; height: 48px;
+
+    background: transparent;
+    border: none;
+    outline: none;
+
+    font: inherit;
+    text-align: center;
+    font-size: 24px;
+    color: inherit;
+
+    cursor: default;
+    user-select: none;
+}
+
+.toolbar .action:hover {
+    background: hsl(0, 0%, 28%);
+}
+
+.toolbar .action:active {
+    background: hsl(200, 100%, 40%);
+}
+
+.toolbar .action:disabled {
+    background: transparent;
+
+    color: hsl(0, 0%, 64%);
+}
+
+.toolbar .action:disabled .name, .toolbar .action:disabled .shortcut {
+    color: hsl(0, 0%, 64%);
+}
+
+.toolbar .action .flip {
+    display: inline-block;
+    transform: scaleX(-1);
+}
+
+.toolbar .action.flash {
+    animation: background-flash 0.6s ease-in;
+}
+
+@keyframes background-flash {
+    from {
+        background: hsl(200, 100%, 40%);
+    }
+}
+
+.toolbar .action .name, .toolbar .action .shortcut {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+
+    font-size: 8px;
+    line-height: 8px;
+    color: hsl(0, 0%, 80%);
+}
+
+.toolbar .action .name {
+    top: 6px;
+}
+
+.toolbar .action .shortcut {
+    bottom: 4px;
+}
+
+/* Modal elements */
 
 .export {
     position: fixed;
