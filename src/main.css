@@ -576,12 +576,21 @@ body {
     height: 48px;
     left: 40%; bottom: 16px;
     transform: translateX(-50%);
+    z-index: 100;
 
     background: hsl(0, 0%, 16%);
     border-radius: 2px;
     overflow: hidden;
 
     color: hsl(0, 0%, 96%);
+
+    transition: opacity 0.1s;
+}
+
+.ui:not(.default) .toolbar {
+    opacity: 0.2;
+
+    pointer-events: none;
 }
 
 .toolbar .action {

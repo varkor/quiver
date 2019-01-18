@@ -2915,7 +2915,10 @@ class Toolbar {
         });
 
         // Holding Option or Control triggers panning mode (and releasing ends panning mode).
-        add_shortcut([{ key: "Alt" }, { key: "Control" }], (event) => {
+        add_shortcut([
+            { key: "Alt", context: SHORTCUT_PRIORITY.Always },
+            { key: "Control", context: SHORTCUT_PRIORITY.Always },
+        ], (event) => {
             if (ui.in_mode(UIState.Default)) {
                 ui.switch_mode(new UIState.Pan(event.key));
             }
