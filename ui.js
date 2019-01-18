@@ -1620,6 +1620,7 @@ class UI {
         }
         if (selection_changed) {
             this.panel.update(this);
+            this.toolbar.update(this);
         }
     }
 
@@ -1640,6 +1641,7 @@ class UI {
         }
 
         this.panel.update(this);
+        this.toolbar.update(this);
     }
 
     /// Adds a cell to the canvas.
@@ -2810,8 +2812,10 @@ class Toolbar {
                     shortcuts.set(shortcut.key, []);
                 }
                 shortcuts.get(shortcut.key).push({
-                    modifier: shortcut.modifier || false,
-                    shift: shortcut.shift || false,
+                    // `null` means we don't care about whether the modifier key
+                    // is pressed or not, so we need to special case it.
+                    modifier: shortcut.modifier !== null ? (shortcut.modifier || false) : null,
+                    shift: shortcut.shift !== null ? (shortcut.shift || false) : null,
                     // The function to call when the shortcut is triggered.
                     action,
                     // The function to call (if any) when the shortcut is released.
@@ -2822,16 +2826,27 @@ class Toolbar {
             }
         };
 
-        const add_action = (symbol, name, shortcut, action, disabled) => {
-            // Format the keyboard shortcut to make it discoverable in the toolbar.
-            const shortcut_keys = [shortcut.key.toUpperCase()];
-            if (shortcut.modifier) {
-                shortcut_keys.unshift(apple_platform ? "⌘" : "Ctrl");
+        const add_action = (symbol, name, combinations, action, disabled) => {
+            const shortcuts_keys = [];
+            for (const shortcut of combinations) {
+                // Format the keyboard shortcut to make it discoverable in the toolbar.
+                let key = shortcut.key;
+                if (key.length === 1) {
+                    // Upper case any letter key.
+                    key = key.toUpperCase();
+                }
+                const shortcut_keys = [key];
+                if (shortcut.modifier) {
+                    shortcut_keys.unshift(apple_platform ? "⌘" : "Ctrl");
+                }
+                if (shortcut.shift) {
+                    shortcut_keys.unshift(apple_platform ? "⇧" : "Shift");
+                }
+                shortcuts_keys.push(shortcut_keys.join(apple_platform ? "" : "+"));
             }
-            if (shortcut.shift) {
-                shortcut_keys.unshift(apple_platform ? "⇧" : "Shift");
-            }
-            const shortcut_name = shortcut_keys.join(apple_platform ? "" : "+");
+            // For now, we simply display the first shortcut (there's rarely enough room
+            // to display more than one shortcut name).
+            const shortcut_name = shortcuts_keys.slice(0, 1).join("/");
 
             const button = new DOM.Element("button", { class: "action", "data-name": name })
                 .add(new DOM.Element("span", { class: "symbol" }).add(symbol))
@@ -2844,26 +2859,28 @@ class Toolbar {
                 button.element.disabled = true;
             }
 
-            add_shortcut([shortcut], action, button);
+            add_shortcut(combinations, action, button);
 
             this.element.appendChild(button.element);
             return button;
         };
 
         // Add all of the toolbar buttons.
+
         add_action(
             "⎌",
             "Undo",
-            { key: "z", modifier: true, context: SHORTCUT_PRIORITY.Defer },
+            [{ key: "z", modifier: true, context: SHORTCUT_PRIORITY.Defer }],
             () => {
                 return ui.history.undo(ui);
             },
             true,
         );
+
         const redo = add_action(
             "⎌",
             "Redo",
-            { key: "z", modifier: true, shift: true, context: SHORTCUT_PRIORITY.Defer },
+            [{ key: "z", modifier: true, shift: true, context: SHORTCUT_PRIORITY.Defer }],
             () => {
                 return ui.history.redo(ui);
             },
@@ -2873,17 +2890,24 @@ class Toolbar {
         // symbol horizontally.
         redo.element.querySelector(".symbol").classList.add("flip");
 
+        add_action(
+            "⨉",
+            "Delete",
+            [
+                { key: "Backspace", context: SHORTCUT_PRIORITY.Defer },
+                { key: "Delete", context: SHORTCUT_PRIORITY.Defer },
+            ],
+            () => {
+                ui.history.add(ui, [{
+                    kind: "delete",
+                    cells: ui.quiver.transitive_dependencies(ui.selection),
+                }], true);
+                ui.panel.update(ui);
+            },
+            true,
+        );
+
         // Add the other, "invisible", shortcuts.
-        add_shortcut([
-            { key: "Backspace", context: SHORTCUT_PRIORITY.Defer },
-            { key: "Delete", context: SHORTCUT_PRIORITY.Defer },
-        ], () => {
-            ui.history.add(ui, [{
-                kind: "delete",
-                cells: ui.quiver.transitive_dependencies(ui.selection),
-            }], true);
-            ui.panel.update(ui);
-        });
 
         add_shortcut([{ key: "Enter" }], () => {
             // Focus the label input.
@@ -2892,7 +2916,7 @@ class Toolbar {
             input.selectionStart = input.selectionEnd = input.value.length;
         });
 
-        add_shortcut([{ key: "Escape", context: SHORTCUT_PRIORITY.Always }], () => {
+        add_shortcut([{ key: "Escape", shift: null, context: SHORTCUT_PRIORITY.Always }], () => {
             // Stop trying to connect cells.
             if (ui.in_mode(UIState.Connect)) {
                 if (ui.state.forged_vertex) {
@@ -2986,8 +3010,9 @@ class Toolbar {
             if (shortcuts.has(event.key)) {
                 for (const shortcut of shortcuts.get(event.key)) {
                     if (
-                        event.shiftKey === shortcut.shift
-                            && ((event.metaKey || event.ctrlKey) === shortcut.modifier
+                        (shortcut.shift === null || event.shiftKey === shortcut.shift)
+                            && (shortcut.modifier === null
+                                || (event.metaKey || event.ctrlKey) === shortcut.modifier
                                 || ["Control", "Meta"].includes(event.key))
                     ) {
                         const effect = () => {
@@ -3047,10 +3072,14 @@ class Toolbar {
 
     /// Update the toolbar (e.g. enabling or disabling buttons based on UI state).
     update(ui) {
-        const undo = this.element.querySelector('.action[data-name="Undo"]');
-        undo.disabled = ui.history.present === 0;
-        const redo = this.element.querySelector('.action[data-name="Redo"]');
-        redo.disabled = ui.history.present === ui.history.actions.length;
+        const enable_if = (name, condition) => {
+            const element = this.element.querySelector(`.action[data-name="${name}"]`);
+            element.disabled = !condition;
+        };
+
+        enable_if("Undo", ui.history.present !== 0);
+        enable_if("Redo", ui.history.present < ui.history.actions.length);
+        enable_if("Delete", ui.selection.size > 0);
     }
 }
 
