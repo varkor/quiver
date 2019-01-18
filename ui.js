@@ -1659,7 +1659,7 @@ class UI {
             if (removed.is_vertex()) {
                 this.positions.delete(`${removed.position}`);
             }
-            this.selection.delete(removed);
+            this.deselect(removed);
             removed.element.remove();
         }
     }
@@ -1815,9 +1815,11 @@ class History {
         // If there are future actions, clear them. (Our history only forms a list, not a tree.)
         ui.quiver.flush(this.present);
         this.selections.splice(this.present + 1, this.actions.length - this.present);
+        // Update the current selection, so that if we undo to it, we restore the exact
+        // selection we had before making the action.
+        this.selections[this.present] = ui.selection;
         this.actions.splice(this.present, this.actions.length - this.present);
         this.actions.push(actions);
-        const previous_selection = ui.selection;
 
         if (invoke) {
             this.redo(ui);
@@ -1825,19 +1827,7 @@ class History {
             ++this.present;
         }
 
-        // Our process for recording selections is slightly convoluted. In essence, we simply
-        // get the current UI selection after each action and use that whenever history resets
-        // to that point. However, if we delete cells, when we undo this action, we generally
-        // want those cells to be deleted. However, deleted cells do not count as selected, so
-        // we have to track those cells that *were* selected, but now are deleted, and add them
-        // to the selection set.
-        const recorded_selection = new Set(ui.selection);
-        for (const selected of previous_selection) {
-            if (ui.quiver.deleted.has(selected)) {
-                recorded_selection.add(selected);
-            }
-        }
-        this.selections.push(recorded_selection);
+        this.selections.push(ui.selection);
         this.collapse = null;
 
         // Update the history toolbar buttons (e.g. enabling Redo).
@@ -2779,7 +2769,9 @@ class Toolbar {
     }
 
     initialise(ui) {
-        this.element = new DOM.Element("div", { class: "toolbar" }).element;
+        this.element = new DOM.Element("div", { class: "toolbar" })
+            .listen("mousedown", (event) => event.stopImmediatePropagation())
+            .element;
 
         // By default, we display "Ctrl" and "Shift" as modifier keys, as most
         // operating systems use this to initiate keyboard shortcuts. For Mac
