@@ -22,6 +22,13 @@ A graphical editor for commutative diagrams that exports to tikz-cd.
 - A history system with undo and redo.
 - Panning.
 
+## Building
+1. Clone the repository.
+1. `git submodule update --init --recursive`.
+1. `yarn`.
+1. `yarn build`.
+1. Open src/index.html in your favourite web browser.
+
 ## Screenshots
 The interface:
 
