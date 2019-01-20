@@ -23,11 +23,21 @@ A graphical editor for commutative diagrams that exports to tikz-cd.
 - Panning.
 
 ## Building
-1. Clone the repository.
-1. `git submodule update --init --recursive`.
-1. `yarn`.
-1. `yarn build`.
-1. Open src/index.html in your favourite web browser.
+Clone the repository. Run:
+```
+make
+```
+Open `src/index.html` in your favourite web browser.
+
+If make doesn't work try
+```
+git submodule update --init --recursive
+cd src/KaTeX
+yarn
+yarn build
+```
+
+If that doesn't work make an issue
 
 ## Screenshots
 The interface:
