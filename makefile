@@ -1,3 +1,4 @@
+.PHONY: all
 .ONESHELL:
 all:
 	git submodule update --init --recursive
