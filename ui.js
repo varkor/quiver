@@ -2920,9 +2920,14 @@ class Toolbar {
                     }]);
                 }
                 ui.switch_mode(UIState.default);
-                // If we're connecting from an insertion point, then we need to hide
-                // it again.
+                // If we're connecting from an insertion point,
+                // then we need to hide it again.
                 ui.element.querySelector(".insertion-point").classList.remove("revealed");
+            }
+            // If we're waiting to start connecting a cell, then we stop waiting.
+            const pending = ui.element.querySelector(".cell.pending");
+            if (pending !== null) {
+                pending.classList.remove("pending");
             }
             // Defocus the label input.
             ui.panel.element.querySelector('label input[type="text"]').blur();
@@ -3154,11 +3159,11 @@ class Cell {
                         }
                     }
 
-                    const state = new UIState.Connect(ui, this, false);
-                    if (state.valid_connection(null)) {
-                        ui.switch_mode(state);
-                        this.element.classList.add("source");
-                    }
+                    // We won't start a new connection immediately, because that will hide
+                    // the toolbar prematurely. Instead, we'll add a `.pending` class, which
+                    // will then convert to a connection if the mouse leaves the element
+                    // while remaining held.
+                    this.element.classList.add("pending");
                 }
             }
         });
@@ -3175,6 +3180,17 @@ class Cell {
         });
 
         content_element.addEventListener("mouseleave", () => {
+            if (this.element.classList.contains("pending")) {
+                this.element.classList.remove("pending");
+
+                // Start connecting the node.
+                const state = new UIState.Connect(ui, this, false);
+                if (state.valid_connection(null)) {
+                    ui.switch_mode(state);
+                    this.element.classList.add("source");
+                }
+            }
+
             if (ui.in_mode(UIState.Connect)) {
                 if (ui.state.target === this) {
                     ui.state.target = null;
@@ -3189,6 +3205,10 @@ class Cell {
 
         content_element.addEventListener("mouseup", (event) => {
             if (event.button === 0) {
+                // If we release the pointer without ever dragging, then
+                // we never begin connecting the cell.
+                this.element.classList.remove("pending");
+
                 if (ui.in_mode(UIState.Connect)) {
                     // Connect two cells if the source is different to the target.
                     if (ui.state.target === this) {
