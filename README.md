@@ -29,15 +29,8 @@ make
 ```
 Open `src/index.html` in your favourite web browser.
 
-If make doesn't work try
-```
-git submodule update --init --recursive
-cd src/KaTeX
-yarn
-yarn build
-```
-
-If that doesn't work make an issue
+If that doesn't work, [open an
+issue](https://github.com/varkor/quiver/issues/new) detailing the problem.
 
 ## Screenshots
 The interface:
