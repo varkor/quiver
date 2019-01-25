@@ -23,6 +23,8 @@ A graphical editor for commutative diagrams that exports to tikz-cd.
 - Panning.
 
 ## Building
+Make sure you have [installed yarn](https://yarnpkg.com/lang/en/docs/install/).
+
 Clone the repository. Run:
 ```
 make
@@ -31,6 +33,14 @@ Open `src/index.html` in your favourite web browser.
 
 If that doesn't work, [open an
 issue](https://github.com/varkor/quiver/issues/new) detailing the problem.
+
+<blockquote>
+<details>
+<summary>__Common errors:__ "There are no scenarios; must have at least one."</summary>
+
+__Solution:__ [uninstall `cmdtest`](https://yarnpkg.com/lang/en/docs/install/#debian-stable).
+</details>
+</blockquote>
 
 ## Screenshots
 The interface:
