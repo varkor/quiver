@@ -749,7 +749,7 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
                     // prototype properties on `options`, so this should not be amenable to
                     // injection.
                     const level = Math.max(indices[source].level, indices[target].level) + 1;
-                    const { style = {} } = { options };
+                    const { style = {} } = options;
                     delete options.style;
 
                     const edge = new Edge(
