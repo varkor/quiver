@@ -3565,7 +3565,7 @@ class Edge extends Cell {
         // If the label has already been rendered, then clear the edge for it.
         // If it has not already been rendered, this is a no-op: it will be called
         // again when the label is rendered.
-        this.update_label_transformation();
+        this.update_label_transformation(target_position.sub(source_position).angle());
     }
 
     /// Create the HTML element associated with the label (and label buffer).
@@ -4011,15 +4011,13 @@ class Edge extends Cell {
     /// Update the `label` transformation (translation and rotation) as well as
     /// the edge clearing size for `centre` alignment in accordance with the
     /// dimensions of the label.
-    update_label_transformation() {
+    update_label_transformation(angle = this.angle()) {
         const label = this.element.querySelector(".label:not(.buffer)");
 
         // Bound an `angle` to [0, π/2).
         const bound_angle = (angle) => {
             return Math.PI / 2 - Math.abs(Math.PI / 2 - ((angle % Math.PI) + Math.PI) % Math.PI);
         };
-
-        const angle = this.angle();
 
         // How much to offset the label from the edge.
         const LABEL_OFFSET = 16;
