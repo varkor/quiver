@@ -1275,10 +1275,11 @@ class UI {
                     // Stop trying to connect cells when the mouse is released outside
                     // the `<body>`.
                     if (this.state.forged_vertex) {
+                        const created = new Set([this.state.source]);
                         this.history.add(this, [{
                             kind: "create",
-                            cells: new Set([this.state.source]),
-                        }]);
+                            cells: created,
+                        }], false, this.selection_excluding(created));
                     }
                     this.switch_mode(UIState.default);
                 }
@@ -1344,11 +1345,11 @@ class UI {
                             this.deselect();
                         }
                         const vertex = create_vertex(this.position_from_event(this.view, event));
-                        this.select(vertex);
                         this.history.add(this, [{
                             kind: "create",
                             cells: new Set([vertex]),
                         }]);
+                        this.select(vertex);
                         // When the user is creating a vertex and adding it to the selection,
                         // it is unlikely they expect to edit all the labels simultaneously,
                         // so in this case we do not focus the input.
@@ -1428,7 +1429,7 @@ class UI {
                             this.state.connect(this, event);
                         }
 
-                        this.history.add(this, actions);
+                        this.history.add(this, actions, false, this.selection_excluding(created));
                     }
                     this.switch_mode(UIState.default);
                 }
@@ -1597,6 +1598,15 @@ class UI {
             position.y * this.cell_size + (account_for_centring ? this.cell_size / 2 : 0)
                 + view.top,
         );
+    }
+
+    /// Returns the current UI selection, excluding the given `cells`.
+    selection_excluding(cells) {
+        const selection = new Set(this.selection);
+        for (const cell of cells) {
+            selection.delete(cell);
+        }
+        return selection;
     }
 
     /// A helper method to trigger a UI event immediately, but later in the event queue.
@@ -1810,14 +1820,14 @@ class History {
     /// effect the action separately) unless `invoke` is `true`, as actions added to the history
     /// are often composites of individual actions that should not be performed atomically in
     /// real-time.
-    add(ui, actions, invoke = false) {
+    add(ui, actions, invoke = false, selection = ui.selection) {
         // Append a new history event.
         // If there are future actions, clear them. (Our history only forms a list, not a tree.)
         ui.quiver.flush(this.present);
         this.selections.splice(this.present + 1, this.actions.length - this.present);
         // Update the current selection, so that if we undo to it, we restore the exact
         // selection we had before making the action.
-        this.selections[this.present] = ui.selection;
+        this.selections[this.present] = selection;
         this.actions.splice(this.present, this.actions.length - this.present);
         this.actions.push(actions);
 
@@ -1827,7 +1837,7 @@ class History {
             ++this.present;
         }
 
-        this.selections.push(ui.selection);
+        this.selections.push(selection);
         this.collapse = null;
 
         // Update the history toolbar buttons (e.g. enabling Redo).
@@ -2864,7 +2874,7 @@ class Toolbar {
             "Undo",
             [{ key: "z", modifier: true, context: SHORTCUT_PRIORITY.Defer }],
             () => {
-                return ui.history.undo(ui);
+                ui.history.undo(ui);
             },
             true,
         );
@@ -2874,13 +2884,33 @@ class Toolbar {
             "Redo",
             [{ key: "z", modifier: true, shift: true, context: SHORTCUT_PRIORITY.Defer }],
             () => {
-                return ui.history.redo(ui);
+                ui.history.redo(ui);
             },
             true,
         );
         // There's no "Redo" symbol in Unicode, so we make do by flipping the "Undo"
         // symbol horizontally.
         redo.element.querySelector(".symbol").classList.add("flip");
+
+        add_action(
+            "■",
+            "Select all",
+            [{ key: "a", modifier: true, context: SHORTCUT_PRIORITY.Defer }],
+            () => {
+                ui.select(...ui.quiver.all_cells());
+            },
+            true,
+        );
+
+        add_action(
+            "□",
+            "Deselect all",
+            [{ key: "a", modifier: true, shift: true, context: SHORTCUT_PRIORITY.Defer }],
+            () => {
+                ui.deselect();
+            },
+            true,
+        );
 
         add_action(
             "⨉",
@@ -2914,10 +2944,11 @@ class Toolbar {
                 if (ui.state.forged_vertex) {
                     // If we created a vertex as part of the connection, we need to record
                     // that as an action.
+                    const created = new Set([ui.state.source]);
                     ui.history.add(ui, [{
                         kind: "create",
-                        cells: new Set([ui.state.source]),
-                    }]);
+                        cells: created,
+                    }], false, ui.selection_excluding(created));
                 }
                 ui.switch_mode(UIState.default);
                 // If we're connecting from an insertion point,
@@ -2978,16 +3009,6 @@ class Toolbar {
             }], true);
         });
 
-        // Select all.
-        add_shortcut([{ key: "a", modifier: true }], () => {
-            ui.select(...ui.quiver.all_cells());
-        });
-
-        // Deselect all.
-        add_shortcut([{ key: "a", modifier: true, shift: true }], () => {
-            ui.deselect();
-        });
-
         // Handle global key presses (such as, but not exclusively limited to, keyboard shortcuts).
         const handle_shortcut = (type, event) => {
             // Many keyboard shortcuts are only relevant when we're not midway
@@ -3016,9 +3037,14 @@ class Toolbar {
                             // Trigger the shortcut effect.
                             const action = shortcut[{ keydown: "action", keyup: "unaction" }[type]];
                             if (action !== null) {
-                                if (action(event) !== false) {
-                                    if (shortcut.button !== null) {
-                                        // Give some visual indication that the action has been triggered.
+                                action(event);
+                                if (shortcut.button !== null) {
+                                    // The button might be disabled by `action`, but we still want
+                                    // to trigger the visual indication if it was enabled when
+                                    // activated.
+                                    if (!shortcut.button.element.disabled) {
+                                        // Give some visual indication that the action has
+                                        // been triggered.
                                         flash(shortcut.button.element);
                                     }
                                 }
@@ -3076,6 +3102,8 @@ class Toolbar {
 
         enable_if("Undo", ui.history.present !== 0);
         enable_if("Redo", ui.history.present < ui.history.actions.length);
+        enable_if("Select all", ui.selection.size < ui.quiver.all_cells().length);
+        enable_if("Deselect all", ui.selection.size > 0);
         enable_if("Delete", ui.selection.size > 0);
     }
 }
@@ -3210,6 +3238,7 @@ class Cell {
                 this.element.classList.remove("pending");
 
                 if (ui.in_mode(UIState.Connect)) {
+                    event.stopImmediatePropagation();
                     // Connect two cells if the source is different to the target.
                     if (ui.state.target === this) {
                         const actions = [];
@@ -3251,7 +3280,7 @@ class Cell {
                         // We might not have made a meaningful action (e.g. if we're tried
                         // connecting an edge to a node it's already connected to).
                         if (actions.length > 0) {
-                            ui.history.add(ui, actions);
+                            ui.history.add(ui, actions, false, ui.selection_excluding(cells));
                         }
                     }
                     // Focus the label input for a cell if we've just ended releasing
@@ -3261,6 +3290,8 @@ class Cell {
                     if (ui.state.source === this && was_previously_selected) {
                         ui.panel.element.querySelector('label input[type="text"]').focus();
                     }
+
+                    ui.switch_mode(UIState.default);
                 }
             }
         });

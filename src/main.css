@@ -606,6 +606,7 @@ body {
     text-align: center;
     font-size: 24px;
     color: inherit;
+    white-space: nowrap;
 
     cursor: default;
     user-select: none;
