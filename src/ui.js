@@ -3161,7 +3161,7 @@ class Cell {
         // already selected. Clicking on an unselected cell should not focus the input,
         // or we wouldn't be able to immediately delete a cell with Backspace/Delete,
         // as the input field would capture it.
-        let was_previously_selected;
+        let was_previously_selected = true;
         content_element.addEventListener("mousedown", (event) => {
             if (event.button === 0) {
                 if (ui.in_mode(UIState.Default)) {
@@ -3237,6 +3237,14 @@ class Cell {
                 // we never begin connecting the cell.
                 this.element.classList.remove("pending");
 
+                if (ui.in_mode(UIState.Default)) {
+                    // Focus the label input for a cell if we've just ended releasing
+                    // the mouse on top of the source.
+                    if (was_previously_selected) {
+                        ui.panel.element.querySelector('label input[type="text"]').focus();
+                    }
+                }
+
                 if (ui.in_mode(UIState.Connect)) {
                     event.stopImmediatePropagation();
                     // Connect two cells if the source is different to the target.
@@ -3282,13 +3290,6 @@ class Cell {
                         if (actions.length > 0) {
                             ui.history.add(ui, actions, false, ui.selection_excluding(cells));
                         }
-                    }
-                    // Focus the label input for a cell if we've just ended releasing
-                    // the mouse on top of the source. (This includes when we've
-                    // dragged the cursor, rather than just having clicked, but this
-                    // tends to work as expected).
-                    if (ui.state.source === this && was_previously_selected) {
-                        ui.panel.element.querySelector('label input[type="text"]').focus();
                     }
 
                     ui.switch_mode(UIState.default);
