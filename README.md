@@ -8,6 +8,7 @@ A graphical editor for commutative diagrams that exports to tikz-cd.
 - Shareable links.
 - Smart label alignment and edge offset.
 - Parallel (shifted) arrows.
+- Curved arrows.
 - Arrow styles, including:
     - Dashed and dotted edges.
     - Maps to arrows.

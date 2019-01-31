@@ -213,9 +213,6 @@ body {
 
 .edge {
     position: absolute;
-}
-
-.edge.reconnecting {
     pointer-events: none;
 }
 
@@ -227,13 +224,17 @@ body {
     pointer-events: none;
 }
 
+.edge > svg.background > path {
+    pointer-events: stroke;
+}
+
 /* The overlay edge drawn while connecting cells. */
 .overlay {
     pointer-events: none;
 }
 
 /* This is so explicit because of the CSS specificity rules. */
-.ui.default .edge:hover:not(.selected):not(.source):not(.target) svg.background {
+.ui.default .edge:not(.selected):not(.source):not(.target) svg.background:hover {
     stroke: var(--cell-hover);
 }
 
@@ -263,6 +264,8 @@ body {
 
     background: white;
     border-radius: 100%;
+
+    pointer-events: all;
 }
 
 .edge .handle.source {
@@ -306,6 +309,11 @@ body {
     overflow: auto;
 
     border-bottom: hsl(0, 0%, 36%) solid 1px;
+}
+
+.panel label {
+    display: block;
+    margin-bottom: 8px;
 }
 
 .panel input[type="text"] {

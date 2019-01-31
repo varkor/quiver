@@ -73,6 +73,102 @@ DOM.SVGElement = class extends DOM.Element {
     }
 };
 
+/// A helper class for dealing with symmetric Bézier curves.
+class Bezier {
+    /// A symmetric Bézier curve whose endpoints are `start` and `end`. The `height` is the (signed)
+    /// distance of the furthest point on the curve from the straight line connecting `start` and
+    /// `end`.
+    /// `relative` describes whether `end` is relative to `start`.
+    constructor(start, end, height, relative = true) {
+        this.start = start;
+        this.end = !relative ? end : this.start.add(end);
+        this.height = height;
+
+        // The control point. This is twice the distance from the straight line connecting `start`
+        // and `end` as `height`.
+        const midpoint = this.start.add(this.end).div(2);
+        const normal = this.end.sub(this.start).atan() + Math.PI / 2;
+        this.control = midpoint.add(Position.from_length_and_direction(this.height * 2, normal));
+    }
+
+    /// Returns the (x, y)-point at t = `t`.
+    point(t) {
+        return this.start.lerp(this.control, t).lerp(this.control.lerp(this.end, t), t);
+    }
+
+    /// Returns the angle of the curve at t = `t`.
+    angle(t) {
+        return this.control.lerp(this.end, t).sub(this.start.lerp(this.control, t)).atan();
+    }
+
+    /// Returns the Bézier curve from t = 0 to t = `t` as a series of points corresponding
+    /// to line segments, and their total length.
+    /// `{ points, length }`
+    delineate(t) {
+        // How many pixels of precision we want for the length.
+        const EPSILON = 0.25;
+
+        // Start with a single, linear segment.
+        const points = [[0, this.point(0)], [t, this.point(t)]];
+
+        let previous_length;
+        let length = 0;
+
+        do {
+            // Calculate the current approximation of the arc length.
+            previous_length = length;
+            length = 0;
+            for (let i = 0; i < points.length - 1; ++i) {
+                length += points[i + 1][1].sub(points[i][1]).length();
+            }
+        } while (length - previous_length > EPSILON && (() => {
+            // If we're still not within the required precision, double the number of segments.
+            for (let i = 0; i < points.length - 1; ++i) {
+                const t = (points[i][0] + points[i + 1][0]) / 2;
+                points.splice(++i, 0, [t, this.point(t)]);
+            }
+            return true;
+        })());
+
+        return { points, length };
+    }
+
+    /// Returns the arc length of the Bézier curve from t = 0 to t = `t`.
+    /// These Bézier curves are symmetric, so t = `t` to t = 1 can be calculated by inverting the
+    /// arc length from t = 0.
+    arc_length(t) {
+        const { length } = this.delineate(t);
+        return length;
+    }
+
+    /// Returns a function giving the parameter t of the point a given length along the arc of
+    /// the Bézier curve. (It returns a function, rather than the t for a length, to allow
+    /// the segments to be cached for efficiency).
+    /// The returned function does no error-checking, so ensure that it is only called with
+    /// lengths between 0 and the arc length of the curve.
+    t_after_length() {
+        const { points } = this.delineate(1);
+        return (length) => {
+            let distance = 0;
+            for (let i = 0; i < points.length - 1; ++ i) {
+                const segment_length = points[i + 1][1].sub(points[i][1]).length();
+                if (distance + segment_length >= length) {
+                    // Lerp the t parameter.
+                    return points[i][0]
+                        + (points[i + 1][0] - points[i][0]) * (length - distance) / segment_length;
+                }
+                distance += segment_length;
+            }
+        };
+    }
+
+    /// Returns an SVG path description for the Bézier curve.
+    path() {
+        return `M ${this.start.x} ${this.start.y}`
+            + `Q ${this.control.x} ${this.control.y}, ${this.end.x} ${this.end.y}`;
+    }
+}
+
 /// A directed n-pseudograph, in which (k + 1)-cells can connect k-cells.
 class Quiver {
     constructor() {
@@ -387,11 +483,14 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                         }
                     }
                 }
-                if (edge.options.offset > 0) {
-                    parameters.push(`shift right=${edge.options.offset}`);
+                if (edge.options.offset !== 0) {
+                    const side = edge.options.offset > 0 ? "right" : "left";
+                    parameters.push(`shift ${side}=${Math.abs(edge.options.offset)}`);
                 }
-                if (edge.options.offset < 0) {
-                    parameters.push(`shift left=${-edge.options.offset}`);
+                if (edge.options.curve !== 0) {
+                    const CURVE_MULTIPLIER = 4;
+                    const side = edge.options.curve > 0 ? "right" : "left";
+                    parameters.push(`bend ${side}=${Math.abs(edge.options.curve) * Edge.CURVE_HEIGHT}`);
                 }
 
                 let style = "";
@@ -725,7 +824,7 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
         assert(vertices <= cells.length, "invalid number of vertices");
 
         // We want to centre the view on the diagram, so we take the mean of all vertex positions.
-        let offset = new Position(0, 0);
+        let offset = Position.zero();
         // If we encounter errors while loading cells, we skip the malformed cell and try to
         // continue loading the diagram, but we want to report the errors we encountered afterwards,
         // to let the user know we were not entirely successful.
@@ -815,6 +914,14 @@ class Position {
         [this.x, this.y] = [x, y];
     }
 
+    static zero() {
+        return new Position(0, 0);
+    }
+
+    static from_length_and_direction(length, direction) {
+        return new Position(Math.cos(direction) * length, Math.sign(direction) * length);
+    }
+
     toString() {
         return `${this.x} ${this.y}`;
     }
@@ -833,6 +940,10 @@ class Position {
 
     sub(other) {
         return new (this.constructor)(this.x - other.x, this.y - other.y);
+    }
+
+    mul(multiplier) {
+        return new Position(this.x * multiplier, this.y * multiplier);
     }
 
     div(divisor) {
@@ -857,6 +968,14 @@ class Position {
 
     is_zero() {
         return this.x === 0 && this.y === 0;
+    }
+
+    lerp(other, t) {
+        return this.add(other.sub(this).mul(t));
+    }
+
+    atan() {
+        return Math.atan2(this.y, this.x);
     }
 }
 
@@ -972,7 +1091,6 @@ UIState.Connect = class extends UIState {
             this.target.element.classList.remove("target");
         }
         if (this.reconnect !== null) {
-            this.reconnect.edge.element.classList.remove("reconnecting");
             this.reconnect.edge.render(ui);
             this.reconnect = null;
         }
@@ -2165,11 +2283,12 @@ class History {
             }
             // Self-inverse actions often work by inverting `from`/`to`.
             const [from, to] = !reverse ? ["from", "to"] : ["to", "from"];
+            // Actions will often require cells to be rerendered transitively.
+            const cells = new Set();
             switch (kind) {
                 case "move":
                     // We perform these loops in sequence as cells may move
                     // directly into positions that have just been unoccupied.
-                    const vertices = new Set();
                     for (const displacement of action.displacements) {
                         ui.positions.delete(`${displacement[from]}`);
                     }
@@ -2179,10 +2298,7 @@ class History {
                             `${displacement.vertex.position}`,
                             displacement.vertex,
                         );
-                        vertices.add(displacement.vertex);
-                    }
-                    for (const cell of ui.quiver.transitive_dependencies(vertices)) {
-                        cell.render(ui);
+                        cells.add(displacement.vertex);
                     }
                     break;
                 case "create":
@@ -2213,13 +2329,16 @@ class History {
                     update_panel = true;
                     break;
                 case "offset":
-                    const edges = new Set();
                     for (const offset of action.offsets) {
                         offset.edge.options.offset = offset[to];
-                        edges.add(offset.edge);
+                        cells.add(offset.edge);
                     }
-                    for (const cell of ui.quiver.transitive_dependencies(edges)) {
-                        cell.render(ui);
+                    update_panel = true;
+                    break;
+                case "curve":
+                    for (const curve of action.curves) {
+                        curve.edge.options.curve = curve[to];
+                        cells.add(curve.edge);
                     }
                     update_panel = true;
                     break;
@@ -2247,8 +2366,17 @@ class History {
                     update_panel = true;
                     break;
             }
+            for (const cell of ui.quiver.transitive_dependencies(cells)) {
+                cell.render(ui);
+            }
         }
 
+        if (update_panel) {
+            ui.panel.update(ui);
+        }
+        // Though we have already updated the `panel` if `update_panel`, `undo` and
+        // `redo` may want to update the panel again, if they change which cells are
+        // selected, so we pass this flag on.
         return update_panel;
     }
 
@@ -2454,55 +2582,72 @@ class Panel {
             },
         );
 
-        // The offset slider.
-        local.add(
-            new DOM.Element("label").add("Offset: ").add(
+        const create_curve_option_slider = (name, property) => {
+            const slider = new DOM.Element("label").add(`${name}: `).add(
                 new DOM.Element(
                     "input",
-                    { type: "range", min: -3, value: 0, max: 3, step: 1, disabled: true }
+                    {
+                        type: "range",
+                        name: property,
+                        min: -3,
+                        value: 0,
+                        max: 3,
+                        step: 1,
+                        disabled: true,
+                    },
                 ).listen("input", (_, slider) => {
                     const value = parseInt(slider.value);
-                    const collapse = ["offset", ui.selection];
+                    const collapse = [property, ui.selection];
                     const actions = ui.history.get_collapsible_actions(collapse);
                     if (actions !== null) {
-                        // If the previous history event was to modify the offset, then
+                        // If the previous history event was to modify the property, then
                         // we're just going to modify that event rather than add a new
                         // one, as with the label input.
                         let unchanged = true;
                         for (const action of actions) {
                             // This ought always to be true.
-                            if (action.kind === "offset") {
-                                // Modify the `to` field of each offset.
-                                action.offsets.forEach((offset) => {
-                                    offset.to = value;
-                                    if (offset.to !== offset.from) {
+                            if (action.kind === property) {
+                                // Modify the `to` field of each property modification.
+                                action[`${property}s`].forEach((modification) => {
+                                    modification.to = value;
+                                    if (modification.to !== modification.from) {
                                         unchanged = false;
                                     }
                                 });
                             }
                         }
-                        // Invoke the new offset changes immediately.
+                        // Invoke the new property changes immediately.
                         ui.history.effect(ui, actions, false);
                         if (unchanged) {
                             ui.history.pop(ui);
                         }
                     } else {
-                        // If this is the start of our offset modification,
+                        // If this is the start of our property modification,
                         // we need to add a new history event.
                         ui.history.add_collapsible(ui, collapse, [{
-                            kind: "offset",
-                            offsets: Array.from(ui.selection)
+                            kind: property,
+                            [`${property}s`]: Array.from(ui.selection)
                                 .filter(cell => cell.is_edge())
                                 .map((edge) => ({
                                     edge,
-                                    from: edge.options.offset,
+                                    from: edge.options[property],
                                     to: value,
                                 })),
                         }], true);
                     }
                 })
-            )
-        );
+            );
+
+            local.add(slider);
+
+            return slider;
+        };
+
+        // The offset slider.
+        create_curve_option_slider("Offset", "offset");
+
+        // The curve slider.
+        create_curve_option_slider("Curve", "curve").class_list.add("arrow-style");
 
         // The button to reverse an edge.
         local.add(
@@ -2670,8 +2815,8 @@ class Panel {
                     }
                 }
 
-                // Enable/disable the arrow style buttons.
-                ui.element.querySelectorAll('.arrow-style input[type="radio"]')
+                // Enable/disable the arrow style buttons and curve slider.
+                ui.element.querySelectorAll(".arrow-style input")
                     .forEach(element => element.disabled = data.name !== "arrow");
 
                 // If we've selected the `"arrow"` style, then we need to
@@ -2922,7 +3067,7 @@ class Panel {
     update(ui) {
         const input = this.element.querySelector('label input[type="text"]');
         const label_alignments = this.element.querySelectorAll('input[name="label-alignment"]');
-        const slider = this.element.querySelector('input[type="range"]');
+        const sliders = this.element.querySelectorAll('input[type="range"]');
 
         // Modifying cells is not permitted when the export pane is visible.
         if (this.export === null) {
@@ -2930,7 +3075,7 @@ class Panel {
             // for inputs that display their state even when disabled.
             if (ui.selection.size === 0) {
                 input.value = "";
-                slider.value = 0;
+                sliders.forEach(slider => slider.value = 0);
             }
 
             // Multiple selection is always permitted, so the following code must provide sensible
@@ -2982,6 +3127,7 @@ class Panel {
                     // 90°). Otherwise, rotation defaults to 0°.
                     consider("{angle}", cell.angle());
                     consider("{offset}", cell.options.offset);
+                    consider("{curve}", cell.options.curve);
                     consider("edge-type", cell.options.style.name);
 
                     // Arrow-specific options.
@@ -3030,6 +3176,9 @@ class Panel {
                         }
                         break;
                     case "{offset}":
+                    case "{curve}":
+                        const property = name.slice(1, -1);
+                        const slider = this.element.querySelector(`input[name="${property}"]`);
                         slider.value = value !== null ? value : 0;
                         break;
                     default:
@@ -3049,13 +3198,12 @@ class Panel {
                 }
             }
 
-            // Update the actual `value` attribute for the offset slider so that we can
-            // reference it in the CSS.
-            slider.setAttribute("value", slider.value);
+            // Update the actual `value` attribute for the offset and curve sliders
+            // so that we can reference it in the CSS.
+            sliders.forEach(slider => slider.setAttribute("value", slider.value));
 
-            // Disable/enable the arrow style buttons.
-            for (const option of this.element
-                    .querySelectorAll('.arrow-style input[type="radio"]')) {
+            // Disable/enable the arrow style buttons and the curve slider.
+            for (const option of this.element.querySelectorAll(".arrow-style input")) {
                 option.disabled = !all_edges_are_arrows;
             }
 
@@ -3732,6 +3880,7 @@ class Edge extends Cell {
         let options = Object.assign({
             label_alignment: "left",
             offset: 0,
+            curve: 0,
             style: Object.assign({
                 name: "arrow",
                 tail: { name: "none" },
@@ -3785,7 +3934,6 @@ class Edge extends Cell {
                 // we have to do it ourselves.
                 ui.panel.element.querySelector('label input[type="text"]').blur();
 
-                this.element.classList.add("reconnecting");
                 const fixed = { source: this.target, target: this.source }[end];
                 ui.switch_mode(new UIState.Connect(ui, fixed, false, {
                     end,
@@ -3874,13 +4022,11 @@ class Edge extends Cell {
         // Set the edge's position. This is important only for the cells that depend on this one,
         // so that they can be drawn between the correct positions.
         const normal = this.angle() + Math.PI / 2;
+        const offset = (this.options.offset * Edge.OFFSET_DISTANCE + Edge.height(this.options)) / ui.cell_size;
         this.position = source_position
             .add(target_position)
             .div(2)
-            .add(new Position(
-                Math.cos(normal) * this.options.offset * Edge.OFFSET_DISTANCE / ui.cell_size,
-                Math.sin(normal) * this.options.offset * Edge.OFFSET_DISTANCE / ui.cell_size,
-            ));
+            .add(new Position(Math.cos(normal) * offset, Math.sin(normal) * offset));
 
         // Draw the edge itself.
         Edge.draw_and_position_edge(
@@ -3906,7 +4052,7 @@ class Edge extends Cell {
 
         // Apply the mask to the edge.
         for (const path of svg.querySelectorAll("path")) {
-            path.setAttribute("mask", `url(#mask-${ui.unique_id(this)})`);
+            // path.setAttribute("mask", `url(#mask-${ui.unique_id(this)})`);
         }
         // We only want to actually clear part of the edge if the alignment is `centre`.
         svg.querySelector(".clear").style.display
@@ -3933,6 +4079,15 @@ class Edge extends Cell {
         // Create an empty label buffer for flicker-free rendering.
         const buffer = ui.render_tex(this, UI.clear_label_for_cell(this, true));
         this.element.appendChild(buffer.element);
+    }
+
+    /// Returns the height of the (potentially) curved edge. This does not take into account
+    /// the dimensions of the arrowhead or tail.
+    static height(options) {
+        // Although `curve` can be set on non-arrow edges, it is not taken into account when
+        // drawing. (This allows curve to be conserved when changing arrow styles, without
+        // affecting the edge counter-intuitively.)
+        return Edge.CURVE_HEIGHT * (options.style.name === "arrow" ? options.curve : 0);
     }
 
     /// Draw an edge on an existing SVG and positions it with respect to a parent `element`.
@@ -4003,7 +4158,7 @@ class Edge extends Cell {
         // If the arrow has zero or negative length, then we can just return here.
         // Otherwise we just get SVG errors from drawing invalid shapes.
         if (length <= 0) {
-            // Pick an arbitrary direction to return.
+            // Pick an arbitrary direction (0°) to return.
             return 0;
         }
 
@@ -4012,14 +4167,45 @@ class Edge extends Cell {
 
         const clamped_width = Math.min(Math.max(dimensions.width, MIN_LENGTH), length);
 
+        // We're going to draw a background for the edge. To make sure the background follows
+        // the curve of the edge (rather than just being, say, a rectangle), we draw a path
+        // with a stroke width to outline the edge.
         if (background !== null) {
-            background.setAttribute("width", clamped_width);
-            background.setAttribute("height", dimensions.height + EDGE_PADDING * 2);
-            background.appendChild(new DOM.SVGElement("path", {
-                d: `M 0 ${EDGE_PADDING + dimensions.height / 2} l ${clamped_width} 0`,
-            }, {
-                strokeWidth: `${dimensions.height + EDGE_PADDING * 2}px`,
+            // The stroke width of the background (intuitively, the height of the background).
+            const stroke_width = dimensions.height + EDGE_PADDING * 2;
+            // The Bézier curve along which the background is drawn.
+            const bezier = new Bezier(new Position(
+                stroke_width / 2,
+                EDGE_PADDING + dimensions.height / 2 - Math.min(Edge.height(options), 0),
+            ), new Position(clamped_width, 0), Edge.height(options), true);
+
+            background.setAttribute("width", clamped_width + stroke_width);
+            background.setAttribute("height", stroke_width + Math.abs(bezier.height));
+            background.appendChild(new DOM.SVGElement("path", { d: bezier.path() }, {
+                fill: "none",
+                strokeWidth: `${stroke_width}px`,
             }).element);
+            // background.style.background = "red";
+            // svg.style.background = "yellow";
+            const transform = `translateY(${bezier.height / 2}px) translate(-50%, -50%)`;
+            svg.style.transform = background.style.transform = transform;
+
+            // We want to centre the edge endpoint handles in the background, even when the
+            // background is curved, so we shift it according to the angle of the curve at
+            // the endpoints. This isn't quite perfect, but it looks close enough for the
+            // curves that are possible to draw in quiver.
+            // The radius of the edge endpoint handles.
+            const HANDLE_RADIUS = 12;
+            let t = 0;
+            for (const handle of element.querySelectorAll(".handle")) {
+                const angle = bezier.angle(t);
+                handle.style.transform = `translate(${
+                    Math.cos(angle + Math.PI * t) * HANDLE_RADIUS
+                }px, ${
+                    Math.sin(angle + Math.PI * t) * HANDLE_RADIUS
+                }px) translateX(${(2 * t - 1) * HANDLE_RADIUS}px) translateY(-50%)`;
+                t = 1 - t;
+            }
         }
 
         // If the arrow is shorter than expected (for example, because we are using a
@@ -4055,7 +4241,7 @@ class Edge extends Cell {
             translateY(${(options.offset || 0) * OFFSET_DISTANCE}px)
         `;
 
-        return direction;
+        return dimensions;
     }
 
     /// Draws an edge on an SVG. `length` must be nonnegative.
@@ -4064,7 +4250,7 @@ class Edge extends Cell {
     /// `{ dimensions, alignment }`
     static draw_edge(svg, options, length, direction, gap, scale = false) {
         // Constants for parameters of the arrow shapes.
-        const SVG_PADDING = Edge.SVG_PADDING;
+        const SVG_PADDING = Edge.SVG_PADDING + 50;
         // The width of each stroke (for the tail, body and head).
         const STROKE_WIDTH = 1.5;
 
@@ -4078,7 +4264,7 @@ class Edge extends Cell {
         });
 
         // Default to 1-cells if no `level` is present (as for dashed and dotted lines.)
-        const level = options.style.name === "arrow" && options.style.body.level || 1;
+        const level = window.level || options.style.name === "arrow" && options.style.body.level || 1;
         // How much spacing to leave between lines for k-cells where k > 1.
         const SPACING = 6;
         // How wide each arrowhead should be (for a horizontal arrow).
@@ -4169,6 +4355,20 @@ class Edge extends Cell {
                 break;
         }
 
+        // Calculate the Bézier curve associated to the edge. This is always used to draw in
+        // relative coördinates, so we can use (0, 0) for the start of the curve.
+        const bezier = new Bezier(
+            Position.zero(),
+            new Position(width, 0),
+            Edge.height(options),
+        );
+        // These two variables are necessary to ensure that the various components of the arrow
+        // are positioned correctly when the curve of the edge is changed. (Depending on whether
+        // an element is anchored relative to the top or bottom, and whether the curve is positive
+        // or negative, we might have to shift something by the height of the Bézier curve).
+        const y_adjust_min = -Math.min(bezier.height, 0);
+        const y_adjust_max = Math.max(bezier.height, 0);
+
         // Now actually draw the edge.
 
         switch (options.style.name) {
@@ -4201,11 +4401,37 @@ class Edge extends Cell {
                         ** 0.5;
                 };
 
+                let mask = null;
+
                 if (options.style.body.name !== "none") {
+
+                    const path = [`M ${SVG_PADDING} ${SVG_PADDING + height / 2 + y_adjust_min}`, `q ${length / 2} ${bezier.height * 2}, ${length} ${0}`];
+
+                    const defs = new DOM.SVGElement("defs");
+                    mask = new DOM.SVGElement("mask", { id: "frog" + "-" + 0 + "-" + performance.now(), maskUnits: "userSpaceOnUse" });
+                    defs.add(mask);
+                    for (let i = level - 1; i > 0; i -= 2) {
+                        mask.add(new DOM.SVGElement("path", { d: path.join(" ") }, { stroke: "white", strokeWidth: `${SPACING * i + STROKE_WIDTH + 0.5}px`, strokeLinecap: "butt" }));
+                        mask.add(new DOM.SVGElement("path", { d: path.join(" ") }, { stroke: "black", strokeWidth: `${SPACING * i - STROKE_WIDTH + 0.5}px`, strokeLinecap: "butt" }));
+                    }
+                    svg.appendChild(defs.element);
+
+                    if (level > 1) {
+                        const line = new DOM.SVGElement("path", { d: path.join(" ") }).element;
+                        line.style.strokeWidth = `${SPACING * (level - 1) + STROKE_WIDTH + 0.5}px`;
+                        line.style.strokeLinecap = "butt";
+                        line.setAttribute("mask", `url(#${mask.id})`);
+                        svg.appendChild(line);
+                    }
+
+                    if (level & 1) {
+                        svg.appendChild(new DOM.SVGElement("path", { d: path.join(" ") }, { strokeWidth: `${STROKE_WIDTH}px`, strokeLinecap: "butt" }).element);
+                    }
+
                     // Draw all the lines.
                     for (let i = 0; i < level; ++i) {
                         let y = (i + (1 - level) / 2) * SPACING;
-                        // This edge case is necessary simply for very short edges.
+                        // This guard condition is necessary simply for very short edges.
                         if (Math.abs(y) <= head_height / 2) {
                             // If the tail is drawn as a head, as is the case with `"mono"`,
                             // then we need to shift the lines instead of simply shortening
@@ -4213,8 +4439,8 @@ class Edge extends Cell {
                             const tail_head_adjustment
                                 = options.style.tail.name === "mono" ? head_x(y, true) : 0;
                             const path
-                                = [`M ${SVG_PADDING + shorten - tail_head_adjustment} ${
-                                    SVG_PADDING + height / 2 + y
+                                = [`M ${SVG_PADDING - tail_head_adjustment} ${
+                                    SVG_PADDING + height / 2 + y + y_adjust_min
                                 }`];
                             // When drawing multiple heads and multiple lines, it looks messy
                             // if the heads intersect the lines, so in this case we draw the
@@ -4222,33 +4448,76 @@ class Edge extends Cell {
                             // heads do intersect the lines.
                             const level_heads_adjustment
                                 = level > 1 ? (heads - 1) * HEAD_SPACING : 0;
-                            const line_length = length - shorten - head_x(y)
+                            const line_length = length - head_x(y)
                                 - level_heads_adjustment + tail_head_adjustment;
 
                             if (options.style.body.name === "squiggly") {
-                                // The height of each triangle from the edge.
+                                // When we draw squiggly lines, we essentially have to draw the
+                                // Bézier curve by ourselves, using line segments, so we can
+                                // transform it (i.e. add the triangle waveform pattern).
+                                // This means it's important that our bézier approximation is
+                                // correct. The `bezier` variable is normalised, but we want one
+                                // that has the correct position and length, so we override it here.
+                                const bezier = new Bezier(new Position(
+                                    SVG_PADDING - tail_head_adjustment,
+                                    SVG_PADDING + height / 2 + y + y_adjust_min,
+                                ), new Position(line_length, 0), Edge.height(options), true);
+
+                                // The height (in pixels) of each triangle from the edge.
                                 const AMPLITUDE = 2;
+                                // Each triangle has a width equal to twice its height.
+                                const HALF_WAVELENGTH = AMPLITUDE * 2;
                                 // Flat padding at the start of the edge (measured in
                                 // triangles).
                                 const PADDING = 1;
                                 // Twice as much padding is given at the end, plus extra
                                 // if there are multiple heads.
-                                const head_padding = PADDING + PADDING * heads;
+                                const head_padding = PADDING * (1 + heads);
 
-                                path.push(`l ${AMPLITUDE * 2 * PADDING} 0`);
+                                // Draw the padding at the tail of the arrow.
+                                const angle = bezier.angle(0);
+                                path.push(`l ${
+                                    (HALF_WAVELENGTH * PADDING + shorten) * Math.cos(angle)
+                                } ${
+                                    (HALF_WAVELENGTH * PADDING + shorten) * Math.sin(angle)
+                                }`);
+
+                                const arc_length = bezier.arc_length(1);
+                                const t_after_length = bezier.t_after_length();
+                                const squiggle_length = arc_length - HALF_WAVELENGTH * head_padding;
+
                                 for (
-                                    let l = AMPLITUDE * 2 * PADDING, flip = 1;
-                                    l < line_length - AMPLITUDE * 2 * head_padding;
-                                    l += AMPLITUDE * 2, flip = -flip
+                                    // The current (arc) length along the curve.
+                                    // `sign
+                                    let l = HALF_WAVELENGTH * PADDING + shorten,
+                                    // Which direction to draw the triangle (`-1` or `1`).
+                                    sign = -1,
+                                    // Whether to draw offset by `AMPLITUDE` (`1`) or not (`0`).
+                                    m = 1;
+                                    l + m * HALF_WAVELENGTH / 2 < squiggle_length;
+                                    // Flip the direction of the triangle each time a triangle
+                                    // is drawn. We alternate between drawing tips and bases of
+                                    // the triangles.
+                                    sign = [sign, -sign][m], m = 1 - m
                                 ) {
-                                    path.push(`l ${AMPLITUDE} ${AMPLITUDE * flip}`);
-                                    path.push(`l ${AMPLITUDE} ${AMPLITUDE * -flip}`);
+                                    l += HALF_WAVELENGTH / 2;
+                                    const t = t_after_length(l);
+                                    const point = bezier.point(t);
+                                    const angle = bezier.angle(t) + Math.PI / 2 * sign;
+                                    path.push(`L ${
+                                        point.x + Math.cos(angle) * AMPLITUDE * m
+                                    } ${
+                                        point.y + Math.sin(angle) * AMPLITUDE * m
+                                    }`);
                                 }
-                                path.push(`L ${SVG_PADDING + line_length + shorten} ${
-                                    SVG_PADDING + height / 2 + y
+
+                                // Draw the padding at the head of the arrow.
+                                path.push(`L ${SVG_PADDING + line_length} ${
+                                    SVG_PADDING + height / 2 + y + y_adjust_min
                                 }`);
                             } else {
-                                path.push(`l ${line_length} 0`);
+                                path.push(`q ${line_length / 2} ${
+                                    bezier.height * 2}, ${line_length} 0`);
                             }
 
                             const line = new DOM.SVGElement("path", { d: path.join(" ") }).element;
@@ -4270,32 +4539,106 @@ class Edge extends Cell {
                                 line.style.strokeDashoffset = gap.offset;
                             }
 
-                            svg.appendChild(line);
+                            // svg.appendChild(line);
                         }
                     }
                 }
 
+                // We need to make sure the head and tail are correctly rotated,
+                // around the endpoint and facing in direction of the curve.
+                // Here, (`x`, `y`) are the coördinates around which to transform
+                // and `t` is the curve parameter at which this head/tail is placed.
+                const end_transform = (x, y, t) => {
+                    const angle = bezier.angle(t);
+                    // If the angle is 0°, then our transformation is idempotent. We skip it
+                    // as a special case, because otherwise there are issues with zero-length
+                    // edges (e.g. just heads).
+                    if (angle !== 0) {
+                        // Work out where to place the head or tail. t = 0 is special-cased to
+                        // represent the tail for convenience.
+                        let origin_delta = Position.zero();
+                        let delta = Position.zero();
+                        if (t !== 0) {
+                            origin_delta = bezier.point(t).sub(bezier.point(1));
+                        } else {
+                            origin_delta = new Position(-x, 0);
+                            const t_after_length = bezier.t_after_length();
+                            delta = bezier.point(0).sub(bezier.point(t_after_length(x)));
+                            delta.x = 0;
+                        }
+
+                        return {
+                            transformOrigin: `${
+                                SVG_PADDING + x + origin_delta.x
+                            }px ${
+                                SVG_PADDING + height / 2 + y + y_adjust_min + origin_delta.y
+                            }px`,
+                            transform: `translate(${delta.x}px, ${delta.y}px) rotate(${angle}rad)`,
+                        }
+                    }
+
+                    return {};
+                };
+
                 // This function has been extracted because it is actually used to draw
                 // both arrowheads (in the usual case) and tails (for `"mono"`).
-                const draw_arrowhead = (x, tail = false, top = true, bottom = true) => {
+                const draw_arrowhead = (x, t = 1, top = true, bottom = true) => {
                     // Currently only arrowheads drawn for heads may be asymmetric.
-                    const asymmetry_adjustment = !tail ? asymmetry_offset : 0;
+                    const asymmetry_adjustment = t === 1 ? asymmetry_offset : 0;
+
+                    // Work out where to place the head or tail. t = 0 is special-cased to
+                    // represent the tail for convenience.
+                    const delta = t !== 0 ? bezier.point(t).sub(bezier.point(1)) : Position.zero();
 
                     svg.appendChild(new DOM.SVGElement("path", {
                         d: (top ? `
-                            M ${SVG_PADDING + x} ${SVG_PADDING + height / 2 + asymmetry_adjustment}
+                            M ${SVG_PADDING + x + delta.x} ${SVG_PADDING + height / 2 + asymmetry_adjustment + y_adjust_min + delta.y}
                             a ${head_width + asymmetry_adjustment}
                                 ${head_height / 2 + asymmetry_adjustment} 0 0 1
                                 -${head_width + asymmetry_adjustment}
                                 -${head_height / 2 + asymmetry_adjustment}
                         ` : "") + (bottom ? `
-                            M ${SVG_PADDING + x} ${SVG_PADDING + height / 2 - asymmetry_adjustment}
+                            M ${SVG_PADDING + x + delta.x} ${SVG_PADDING + height / 2 - asymmetry_adjustment + y_adjust_min + delta.y}
                             a ${head_width + asymmetry_adjustment}
                                 ${head_height / 2 + asymmetry_adjustment} 0 0 0
                                 -${head_width + asymmetry_adjustment}
                                 ${head_height / 2 + asymmetry_adjustment}
                         ` : "").trim().replace(/\s+/g, " ")
-                    }).element);
+                    }, end_transform(x, asymmetry_adjustment, t)).element);
+
+                    draw_arrowhead_mask(x, t, top, bottom);
+                };
+
+                const draw_arrowhead_mask = (x, t = 1, top = true, bottom = true) => {
+                    // Currently only arrowheads drawn for heads may be asymmetric.
+                    const asymmetry_adjustment = t === 1 ? asymmetry_offset : 0;
+
+                    // Work out where to place the head or tail. t = 0 is special-cased to
+                    // represent the tail for convenience.
+                    const delta = t !== 0 ? bezier.point(t).sub(bezier.point(1)) : Position.zero();
+
+                    let p;
+                    if (mask === null) return;
+                    mask.add(p = new DOM.SVGElement("path", {
+                        d: (top ? `
+                            ${t === 0 ? `M ${SVG_PADDING} ${SVG_PADDING + height / 2 + asymmetry_adjustment + y_adjust_min + delta.y}` : ""}
+                            ${t === 0 ? "L" : "M"} ${SVG_PADDING + x + delta.x} ${SVG_PADDING + height / 2 + asymmetry_adjustment + y_adjust_min + delta.y}
+                            a ${head_width + asymmetry_adjustment}
+                                ${head_height / 2 + asymmetry_adjustment} 0 0 1
+                                -${head_width + asymmetry_adjustment}
+                                -${head_height / 2 + asymmetry_adjustment}
+                            L ${SVG_PADDING + (delta.x + length) * Math.ceil(t)} ${SVG_PADDING + height / 2 + asymmetry_adjustment + y_adjust_min + delta.y - head_height / 2 - asymmetry_adjustment}
+                        ` : "") + (bottom ? `
+                            ${t === 0 ? `M ${SVG_PADDING} ${SVG_PADDING + height / 2 + asymmetry_adjustment + y_adjust_min + delta.y}` : ""}
+                            ${t === 0 ? "L" : "M"} ${SVG_PADDING + x + delta.x} ${SVG_PADDING + height / 2 - asymmetry_adjustment + y_adjust_min + delta.y}
+                            a ${head_width + asymmetry_adjustment}
+                                ${head_height / 2 + asymmetry_adjustment} 0 0 0
+                                -${head_width + asymmetry_adjustment}
+                                ${head_height / 2 + asymmetry_adjustment}
+                            L ${SVG_PADDING + (delta.x + length) * Math.ceil(t)} ${SVG_PADDING + height / 2 - asymmetry_adjustment + y_adjust_min + delta.y + head_height / 2 + asymmetry_adjustment}
+                        ` : "").trim().replace(/\s+/g, " ")
+                    }, end_transform(x, asymmetry_adjustment, t)));
+                    p.element.style.fill = "black";
                 };
 
                 // Draw the arrow tail.
@@ -4303,14 +4646,14 @@ class Edge extends Cell {
                     case "maps to":
                         svg.appendChild(new DOM.SVGElement("path", {
                             d: `
-                                M ${SVG_PADDING} ${SVG_PADDING + (height - tail_height) / 2}
+                                M ${SVG_PADDING} ${SVG_PADDING + (height - tail_height) / 2 + y_adjust_min}
                                 l 0 ${tail_height}
                             `.trim().replace(/\s+/g, " ")
-                        }).element);
+                        }, end_transform(0, 0, 0)).element);
                         break;
 
                     case "mono":
-                        draw_arrowhead(head_width, true);
+                        draw_arrowhead(head_width, 0);
                         break;
 
                     case "hook":
@@ -4320,11 +4663,21 @@ class Edge extends Cell {
                             svg.appendChild(new DOM.SVGElement("path", {
                                 d: `
                                     M ${SVG_PADDING + head_width}
-                                        ${SVG_PADDING + height / 2 + y}
+                                        ${SVG_PADDING + height / 2 + y + y_adjust_min}
                                     a ${head_width} ${head_width} 0 0 ${flip === 1 ? 1 : 0} 0
                                         ${-head_width * 2 * flip}
                                 `.trim().replace(/\s+/g, " ")
-                            }).element);
+                            }, end_transform(head_width, y, 0)).element);
+                        }
+                        if (mask !== null) {
+                            let p;
+                            mask.add(p = new DOM.SVGElement("rect", {
+                                x: SVG_PADDING,
+                                y: SVG_PADDING,
+                                width: head_width,
+                                height,
+                            }));
+                            p.element.style.fill = "black";
                         }
                         break;
                 }
@@ -4333,14 +4686,17 @@ class Edge extends Cell {
                 switch (options.style.head.name) {
                     case "arrowhead":
                     case "epi":
+                        // We need to space the multiple epi arrowheads based on arc length,
+                        // not linear distance.
+                        const t_after_length = bezier.t_after_length();
                         for (let i = 0; i < heads; ++i) {
-                            draw_arrowhead(width - i * HEAD_SPACING);
+                            draw_arrowhead(width, 1 - t_after_length(HEAD_SPACING * i));
                         }
                         break;
 
                     case "harpoon":
                         const top = options.style.head.side === "top";
-                        draw_arrowhead(width, false, top, !top);
+                        draw_arrowhead(width, 1, top, !top);
                         break;
                 }
 
@@ -4351,7 +4707,7 @@ class Edge extends Cell {
                 // in the previous step.
                 svg.appendChild(new DOM.SVGElement("path", {
                     d: `
-                        M ${SVG_PADDING} ${SVG_PADDING + height / 2}
+                        M ${SVG_PADDING} ${SVG_PADDING + height / 2 + y_adjust_max}
                         l ${width} 0
                         m 0 ${-height / 2}
                         l 0 ${height}
@@ -4370,9 +4726,9 @@ class Edge extends Cell {
                 const angle = Math.PI + PI_4 * Math.round(4 * direction / Math.PI) - direction;
                 svg.appendChild(new DOM.SVGElement("path", {
                     d: `
-                        M ${SVG_PADDING + width} ${SVG_PADDING + width}
+                        M ${SVG_PADDING + width} ${SVG_PADDING + y_adjust_max + width}
                         l ${Math.cos(angle - PI_4) * side} ${Math.sin(angle - PI_4) * side}
-                        M ${SVG_PADDING + width} ${SVG_PADDING + width}
+                        M ${SVG_PADDING + width} ${SVG_PADDING + y_adjust_max + width}
                         l ${Math.cos(angle + PI_4) * side} ${Math.sin(angle + PI_4) * side}
                     `.trim().replace(/\s+/g, " ")
                 }).element);
@@ -4381,7 +4737,7 @@ class Edge extends Cell {
         }
 
         svg.setAttribute("width", width + SVG_PADDING * 2);
-        svg.setAttribute("height", height + SVG_PADDING * 2);
+        svg.setAttribute("height", height + Math.abs(bezier.height) + SVG_PADDING * 2);
 
         return {
             dimensions: new Dimensions(width + SVG_PADDING * 2, height + SVG_PADDING * 2),
@@ -4482,7 +4838,7 @@ class Edge extends Cell {
             );
         }
 
-        // Reverse the label alignment and edge offset as well as any oriented styles.
+        // Reverse the label alignment and edge offset and curve as well as any oriented styles.
         // Note that since we do this, the position of the edge will remain the same, which means
         // we don't need to rerender any of this edge's dependencies.
         this.options.label_alignment = {
@@ -4492,6 +4848,7 @@ class Edge extends Cell {
             right: "left",
         }[this.options.label_alignment];
         this.options.offset = -this.options.offset;
+        this.options.curve = -this.options.curve;
         if (this.options.style.name === "arrow") {
             const swap_sides = { top: "bottom", bottom: "top" };
             if (this.options.style.tail.name === "hook") {
@@ -4515,6 +4872,8 @@ class Edge extends Cell {
 Edge.SVG_PADDING = 6;
 // How much space to leave between adjacent parallel arrows.
 Edge.OFFSET_DISTANCE = 8;
+// How many pixels each unit of curve height corresponds to.
+Edge.CURVE_HEIGHT = 24;
 
 // Which library to use for rendering labels.
 const RENDER_METHOD = "KaTeX";
