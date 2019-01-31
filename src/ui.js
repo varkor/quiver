@@ -979,7 +979,10 @@ UIState.Connect = class extends UIState {
         return this.source.level <= 1 &&
             // To allow `valid_connection` to be used to simply check whether the source is valid,
             // we ignore source–target compatibility if `target` is null.
-            (target === null || this.source.level === target.level);
+            // We allow cells to be connected even if they do not have the same level. This is
+            // because it's often useful when drawing diagrams, even if it may not always be
+            // semantically valid.
+            (target === null || target.level <= 1);
     }
 
     /// Connects the source and target. Note that this does *not* check whether the source and
