@@ -1703,9 +1703,36 @@ class UI {
         return document.activeElement.matches('label input[type="text"]');
     }
 
+    /// Resizes a label to fit within a cell.
+    resize_label(cell, label) {
+        if (cell.is_vertex()) {
+            // How wide, relative to the cell, a label can be. This needs to be smaller than
+            // 1.0 to leave room for arrows between cells, as cells are immediately adjacent.
+            const MAX_LABEL_WIDTH = 0.8;
+            // The text scaling decrement size. Must be strictly between 0 and 1.
+            const LABEL_SCALE_STEP = 0.9;
+
+            // Reset the label font size.
+            label.element.style.fontSize = "";
+            // Ensure that the label fits within the cell by dynamically resizing it.
+            while (label.element.offsetWidth > this.cell_size * MAX_LABEL_WIDTH) {
+                const new_size = parseFloat(
+                    window.getComputedStyle(label.element).fontSize,
+                ) * LABEL_SCALE_STEP;
+                label.element.style.fontSize = `${new_size}px`;
+            }
+        }
+    }
+
     /// Renders TeX with MathJax and returns the corresponding element.
-    render_tex(tex = "", after = x => x) {
+    render_tex(cell, tex = "", callback = x => x) {
         const label = new DOM.Element("div", { class: "label" });
+
+        const after = (x) => {
+            this.resize_label(cell, label);
+
+            callback(x);
+        };
 
         switch (this.render_method) {
             case null:
@@ -2577,7 +2604,9 @@ class Panel {
         const label = new DOM.Element(cell.element.querySelector(".label:not(.buffer)"));
         label.class_list.remove("error");
 
-        const update_label_transformation = () =>{
+        const update_label_transformation = () => {
+            ui.resize_label(cell, label);
+
             if (cell.is_edge()) {
                 cell.update_label_transformation();
             }
@@ -3389,9 +3418,9 @@ class Vertex extends Cell {
         // Remove any existing content.
         content.clear();
         // Create the label.
-        content.add(ui.render_tex(this.label));
+        content.add(ui.render_tex(this, this.label));
         // Create an empty label buffer for flicker-free rendering.
-        const buffer = ui.render_tex(this.label);
+        const buffer = ui.render_tex(this, this.label);
         buffer.class_list.add("buffer");
         content.add(buffer);
     }
@@ -3590,10 +3619,10 @@ class Edge extends Cell {
             label.remove();
         }
         // Create the edge label.
-        const label = ui.render_tex(this.label, () => this.update_label_transformation());
+        const label = ui.render_tex(this, this.label, () => this.update_label_transformation());
         this.element.appendChild(label.element);
         // Create an empty label buffer for flicker-free rendering.
-        const buffer = ui.render_tex();
+        const buffer = ui.render_tex(this);
         buffer.class_list.add("buffer");
         this.element.appendChild(buffer.element);
     }
