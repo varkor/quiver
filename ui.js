@@ -1762,7 +1762,7 @@ class UI {
             case "KaTeX":
                 try {
                     katex.render(
-                        tex,
+                        tex.replace(/\$/g, "\\$"),
                         label.element,
                         { throwOnError: false, errorColor: "hsl(0, 100%, 40%)" },
                     );
@@ -2641,7 +2641,7 @@ class Panel {
                 label.clear();
                 try {
                     katex.render(
-                        cell.label,
+                        cell.label.replace(/\$/g, "\\$"),
                         label.element,
                         { throwOnError: false, errorColor: "hsl(0, 100%, 40%)" },
                     );
