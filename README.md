@@ -38,7 +38,7 @@ issue](https://github.com/varkor/quiver/issues/new) detailing the problem.
 <details>
 <summary>__Common errors:__ "There are no scenarios; must have at least one."</summary>
 
-__Solution:__ [uninstall `cmdtest`](https://yarnpkg.com/lang/en/docs/install/#debian-stable).
+__Solution:__ [uninstall `cmdtest`](https://yarnpkg.com/en/docs/install#debian-stable).
 </details>
 </blockquote>
 
