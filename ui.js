@@ -1734,8 +1734,13 @@ class UI {
 
             case "KaTeX":
                 try {
-                    katex.render(tex, label.element);
+                    katex.render(
+                        tex,
+                        label.element,
+                        { throwOnError: false, errorColor: "hsl(0, 100%, 40%)" },
+                    );
                 } catch (_) {
+                    // Currently all errors are disabled, so we don't expect to encounter this case.
                     label.class_list.add("error");
                     label.add(tex);
                 }
@@ -2606,8 +2611,13 @@ class Panel {
             case "KaTeX":
                 label.clear();
                 try {
-                    katex.render(cell.label, label.element);
+                    katex.render(
+                        cell.label,
+                        label.element,
+                        { throwOnError: false, errorColor: "hsl(0, 100%, 40%)" },
+                    );
                 } catch (_) {
+                    // Currently all errors are disabled, so we don't expect to encounter this case.
                     label.add(cell.label);
                     label.class_list.add("error");
                 }
@@ -4211,7 +4221,7 @@ document.addEventListener("DOMContentLoaded", () => {
             case "MathJax":
                 window.MathJax = {
                     jax: ["input/TeX", "output/SVG"],
-                    extensions: ["tex2jax.js", "TeX/noErrors.js"],
+                    extensions: ["tex2jax.js", "TeX/noErrors.js", "TeX/noUndefined.js"],
                     messageStyle: "none",
                     skipStartupTypeset: true,
                     positionToHash: false,
@@ -4225,7 +4235,14 @@ document.addEventListener("DOMContentLoaded", () => {
                                 font: "20px monospace",
                                 color: "hsl(0, 100%, 40%)",
                             },
-                        }
+                        },
+                        noUndefined: {
+                            attributes: {
+                                mathcolor: "hsl(0, 100%, 40%)",
+                                mathsize: "90%",
+                                mathfont: "monospace",
+                            }
+                        },
                     },
                 };
                 break;
