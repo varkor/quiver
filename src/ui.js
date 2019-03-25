@@ -776,6 +776,9 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
                 .sub(ui.offset_from_position(ui.view, offset.div(vertices)))
         );
 
+        // If the quiver is now nonempty, some toolbar actions will be available.
+        ui.toolbar.update(ui);
+
         if (errors.length > 0) {
             // Just throw the first error.
             throw errors[0];
