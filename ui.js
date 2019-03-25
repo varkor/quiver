@@ -1705,22 +1705,33 @@ class UI {
 
     /// Resizes a label to fit within a cell.
     resize_label(cell, label) {
-        if (cell.is_vertex()) {
-            // How wide, relative to the cell, a label can be. This needs to be smaller than
-            // 1.0 to leave room for arrows between cells, as cells are immediately adjacent.
-            const MAX_LABEL_WIDTH = 0.8;
-            // The text scaling decrement size. Must be strictly between 0 and 1.
-            const LABEL_SCALE_STEP = 0.9;
+        // How wide, relative to the cell, a label can be. This needs to be smaller than
+        // 1.0 to leave room for arrows between cells, as cells are immediately adjacent.
+        const MAX_LABEL_WIDTH = 0.8;
+        // We want to prevent labels from becoming too small. Strictly speaking, if
+        // `MIN_LABEL_WIDTH` is greater then `1.0 - MAX_LABEL_WIDTH`, we may get
+        // overlap of vertex and edge labels, but this is better than not being able
+        // to see the labels at all.
+        const MIN_LABEL_WIDTH = 0.6;
+        // The text scaling decrement size. Must be strictly between 0 and 1.
+        const LABEL_SCALE_STEP = 0.9;
 
-            // Reset the label font size.
-            label.element.style.fontSize = "";
-            // Ensure that the label fits within the cell by dynamically resizing it.
-            while (label.element.offsetWidth > this.cell_size * MAX_LABEL_WIDTH) {
-                const new_size = parseFloat(
-                    window.getComputedStyle(label.element).fontSize,
-                ) * LABEL_SCALE_STEP;
-                label.element.style.fontSize = `${new_size}px`;
-            }
+        let max_width;
+        if (cell.is_vertex()) {
+            max_width = this.cell_size * MAX_LABEL_WIDTH;
+        } else {
+            const length = cell.target.position.sub(cell.source.position).length();
+            max_width = this.cell_size * Math.max((length - MAX_LABEL_WIDTH), MIN_LABEL_WIDTH);
+        }
+
+        // Reset the label font size.
+        label.style.fontSize = "";
+        // Ensure that the label fits within the cell by dynamically resizing it.
+        while (label.offsetWidth > max_width) {
+            const new_size = parseFloat(
+                window.getComputedStyle(label).fontSize,
+            ) * LABEL_SCALE_STEP;
+            label.style.fontSize = `${new_size}px`;
         }
     }
 
@@ -1729,7 +1740,7 @@ class UI {
         const label = new DOM.Element("div", { class: "label" });
 
         const after = (x) => {
-            this.resize_label(cell, label);
+            this.resize_label(cell, label.element);
 
             callback(x);
         };
@@ -2605,10 +2616,11 @@ class Panel {
         label.class_list.remove("error");
 
         const update_label_transformation = () => {
-            ui.resize_label(cell, label);
-
             if (cell.is_edge()) {
-                cell.update_label_transformation();
+                cell.update_label_transformation(ui);
+            } else {
+                // `update_label_transformation` performs label resizing itself.
+                ui.resize_label(cell, label.element);
             }
         };
 
@@ -3607,7 +3619,7 @@ class Edge extends Cell {
         // If the label has already been rendered, then clear the edge for it.
         // If it has not already been rendered, this is a no-op: it will be called
         // again when the label is rendered.
-        this.update_label_transformation(target_position.sub(source_position).angle());
+        this.update_label_transformation(ui, target_position.sub(source_position).angle());
     }
 
     /// Create the HTML element associated with the label (and label buffer).
@@ -3619,7 +3631,7 @@ class Edge extends Cell {
             label.remove();
         }
         // Create the edge label.
-        const label = ui.render_tex(this, this.label, () => this.update_label_transformation());
+        const label = ui.render_tex(this, this.label, () => this.update_label_transformation(ui));
         this.element.appendChild(label.element);
         // Create an empty label buffer for flicker-free rendering.
         const buffer = ui.render_tex(this);
@@ -4053,7 +4065,7 @@ class Edge extends Cell {
     /// Update the `label` transformation (translation and rotation) as well as
     /// the edge clearing size for `centre` alignment in accordance with the
     /// dimensions of the label.
-    update_label_transformation(angle = this.angle()) {
+    update_label_transformation(ui, angle = this.angle()) {
         const label = this.element.querySelector(".label:not(.buffer)");
 
         // Bound an `angle` to [0, π/2).
@@ -4076,6 +4088,9 @@ class Edge extends Cell {
                 label_offset = 1;
                 break;
         }
+
+        // Expand or shrink the label to fit the available space.
+        ui.resize_label(this, label);
 
         // Reverse the rotation for the label, so that it always displays upright and offset it
         // so that it is aligned correctly.
