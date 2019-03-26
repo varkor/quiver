@@ -807,19 +807,23 @@ class Position {
     }
 
     add(other) {
-        return new Position(this.x + other.x, this.y + other.y);
+        return new (this.constructor)(this.x + other.x, this.y + other.y);
     }
 
     sub(other) {
-        return new Position(this.x - other.x, this.y - other.y);
+        return new (this.constructor)(this.x - other.x, this.y - other.y);
     }
 
     div(divisor) {
-        return new Position(this.x / divisor, this.y / divisor);
+        return new (this.constructor)(this.x / divisor, this.y / divisor);
     }
 
     min(other) {
-        return new Position(Math.min(this.x, other.x), Math.min(this.y, other.y));
+        return new (this.constructor)(Math.min(this.x, other.x), Math.min(this.y, other.y));
+    }
+
+    max(other) {
+        return new (this.constructor)(Math.max(this.x, other.x), Math.max(this.y, other.y));
     }
 
     length() {
@@ -838,6 +842,11 @@ class Position {
 /// An (width, height) pair. This is functionally equivalent to `Position`, but has different
 /// semantic intent.
 const Dimensions = class extends Position {
+    /// Returns a `Dimensions` with `{ width: 0, height: 0}`.
+    static zero() {
+        return new Dimensions(0, 0);
+    }
+
     get width() {
         return this.x;
     }
@@ -870,7 +879,7 @@ class Offset {
     }
 
     sub(other) {
-        return new Offset(this.left - other.left, this.top - other.top);
+        return new (this.constructor)(this.left - other.left, this.top - other.top);
     }
 }
 
@@ -953,14 +962,25 @@ UIState.Connect = class extends UIState {
                     this.overlay,
                     svg,
                     this.source.level + 1,
-                    this.source.position,
+                    {
+                        position: this.source.position,
+                        size: this.source.size(),
+                        offset: true,
+                    },
                     // Lock on to the target if present, otherwise simply draw the edge
                     // to the position of the cursor.
-                    this.target !== null ? this.target.position : position,
+                    this.target !== null ? {
+                        position: this.target.position,
+                        size: this.target.size(),
+                        offset: true,
+                    } : {
+                        position,
+                        size: Dimensions.zero(),
+                        offset: false,
+                    },
                     Edge.default_options(null, {
                         body: { name: "cell", level: this.source.level + 1 },
                     }),
-                    { source: true, target: this.target !== null },
                     null,
                 );
             }
@@ -1735,6 +1755,14 @@ class UI {
                 window.getComputedStyle(label).fontSize,
             ) * LABEL_SCALE_STEP;
             label.style.fontSize = `${new_size}px`;
+        }
+
+        if (cell.is_vertex()) {
+            // 1-cells take account of the dimensions of the cell label to be drawn snugly,
+            // so if the label is resized, the edges need to be redrawn.
+            for (const edge of this.quiver.transitive_dependencies([cell], true)) {
+                edge.render(this);
+            }
         }
     }
 
@@ -3381,6 +3409,15 @@ class Cell {
     deselect() {
         this.element.classList.remove("selected");
     }
+
+    size() {
+        if (this.level === 0) {
+            const label = this.element.querySelector(".label:not(.buffer)");
+            return new Dimensions(label.offsetWidth, label.offsetHeight);
+        } else {
+            return Dimensions.zero();
+        }
+    }
 }
 
 /// 0-cells, or vertices. This is primarily specialised in its set up of HTML elements.
@@ -3603,10 +3640,17 @@ class Edge extends Cell {
             this.element,
             svg,
             this.level,
-            source_position,
-            target_position,
+            {
+                position: source_position,
+                size: this.source.size(),
+                offset: endpoint_offset.source,
+            },
+            {
+                position: target_position,
+                size: this.target.size(),
+                offset: endpoint_offset.target,
+            },
             this.options,
-            endpoint_offset,
             null,
             background,
         );
@@ -3650,10 +3694,9 @@ class Edge extends Cell {
         element,
         svg,
         level,
-        source_position,
-        target_position,
+        source,
+        target,
         options,
-        endpoint_offset,
         gap,
         background = null,
     ) {
@@ -3662,8 +3705,10 @@ class Edge extends Cell {
         const OFFSET_DISTANCE = Edge.OFFSET_DISTANCE;
         // How much (vertical) space to give around the SVG.
         const EDGE_PADDING = 4;
-        // How much space to leave between the cells this edge spans. (Less for other edges.)
-        let MARGIN = level === 1 ? ui.cell_size / 4 : ui.cell_size / 8;
+        // How much space to leave at minimum between the cells this edge spans.
+        const MARGIN = ui.cell_size / 8;
+        // How much padding to place between a cell label and an edge.
+        const PADDING = ui.cell_size / 16;
         // The minimum length of the `element`. This is defined so that very small edges (e.g.
         // adjunctions or pullbacks) are still large enough to manipulate by clicking on them or
         // their handles.
@@ -3672,11 +3717,38 @@ class Edge extends Cell {
         // The SVG for the arrow itself.
         const offset_delta = ui.offset_from_position(
             Offset.zero(),
-            target_position.sub(source_position),
+            target.position.sub(source.position),
             false,
         );
+        const direction = Math.atan2(offset_delta.top, offset_delta.left);
+
+        // Returns the distance from midpoint of the rectangle with the given `size` to any edge,
+        // at the given `angle`.
+        const edge_distance = (size, angle) => {
+            const [h, v] = [size.width / Math.cos(angle), size.height / Math.sin(angle)]
+                .map(Math.abs);
+            return Number.isNaN(h) ? v : Number.isNaN(v) ? h : Math.min(h, v) / 2;
+        };
+
+        const padding = new Dimensions(PADDING, PADDING);
+        // The content area of a vertex is reserved for vertices: edges will not encroach upon that
+        // space.
+        const min_size =
+            level === 1 ? new Dimensions(ui.cell_size / 2, ui.cell_size / 2) : Dimensions.zero();
+
+        const margin = {
+            source: source.offset ? Math.max(
+                edge_distance(source.size.add(padding).max(min_size), direction),
+                MARGIN,
+            ) : 0,
+            target: target.offset ? Math.max(
+                edge_distance(target.size.add(padding).max(min_size), direction + Math.PI),
+               MARGIN,
+            ) : 0,
+        };
+
         const length = Math.hypot(offset_delta.top, offset_delta.left)
-            - MARGIN * ((endpoint_offset.source ? 1 : 0) + (endpoint_offset.target ? 1 : 0));
+            - (margin.source + margin.target);
 
         // If the arrow has zero or negative length, then we can just return here.
         // Otherwise we just get SVG errors from drawing invalid shapes.
@@ -3716,13 +3788,12 @@ class Edge extends Cell {
                 margin_adjustment = 1;
                 break;
         }
-        const margin = (endpoint_offset.source ? MARGIN : 0) + width_shortfall * margin_adjustment;
+        const margin_offset = margin.source + width_shortfall * margin_adjustment;
 
         // Transform the `element` so that the arrow points in the correct direction.
-        const direction = Math.atan2(offset_delta.top, offset_delta.left);
-        const source_offset = ui.offset_from_position(ui.view, source_position);
-        element.style.left = `${source_offset.left + Math.cos(direction) * margin}px`;
-        element.style.top = `${source_offset.top + Math.sin(direction) * margin}px`;
+        const source_offset = ui.offset_from_position(ui.view, source.position);
+        element.style.left = `${source_offset.left + Math.cos(direction) * margin_offset}px`;
+        element.style.top = `${source_offset.top + Math.sin(direction) * margin_offset}px`;
         [element.style.width, element.style.height]
             = new Offset(clamped_width, dimensions.height + EDGE_PADDING * 2).to_CSS();
         element.style.transformOrigin

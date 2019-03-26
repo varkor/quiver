@@ -159,7 +159,6 @@ body {
 
     border-radius: 100%;
 
-    line-height: calc(var(--cell-size) / 2);
     text-align: center;
 }
 
