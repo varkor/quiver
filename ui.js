@@ -1228,7 +1228,7 @@ class UI {
         this.render_method = null;
 
         /// LaTeX macro definitions.
-        this.macros = {};
+        this.macros = new Map();
 
         /// The URL from which the macros have been fetched (if at all).
         this.macro_url = null;
@@ -1788,6 +1788,28 @@ class UI {
         }
     }
 
+    /// Returns the declared macros in a format amenable to passing to the LaTeX renderer.
+    latex_macros() {
+        switch (this.render_method) {
+            case null:
+                return this.macros;
+
+            case "MathJax":
+                // This seems to be more effective than defining macros using `MathJax.Hub.Config`.
+                return Array.from(this.macros).map(([name, { definition, arity }]) => {
+                    return `\\newcommand{${name}}[${arity}]{${definition}}`;
+                }).join("");
+
+            case "KaTeX":
+                const macros = {};
+                for (const [name, { definition }] of this.macros) {
+                    // Arities are implicit in KaTeX.
+                    macros[name] = definition;
+                }
+                return macros;
+        }
+    }
+
     /// Renders TeX with MathJax and returns the corresponding element.
     render_tex(cell, label, tex = "", callback = x => x) {
         const after = (x) => {
@@ -1804,12 +1826,7 @@ class UI {
                 break;
 
             case "MathJax":
-                // This seems to be more effective than defining macros using `MathJax.Hub.Config`.
-                const macros = Object.entries(this.macros).map(([key, value]) => {
-                    return `\\newcommand{${key}}{${value}}`;
-                }).join("");
-
-                label.add(`\\(${macros}${tex}\\)`);
+                label.add(`\\(${this.latex_macros()}${tex}\\)`);
 
                 // We're going to fade the label in once it's rendered, so it looks less janky.
                 label.element.style.display = "none";
@@ -1834,7 +1851,7 @@ class UI {
                         {
                             throwOnError: false,
                             errorColor: "hsl(0, 100%, 40%)",
-                            macros: this.macros,
+                            macros: this.latex_macros(),
                         },
                     );
                 } catch (_) {
@@ -1944,9 +1961,9 @@ class UI {
     /// Load macros from a string, which will be used in all LaTeX labels.
     load_macros(definitions) {
         // Currently, only macros without arguments are supported.
-        const newcommand = /^\\newcommand\{\\([a-zA-Z]+)\}\{(.*)\}$/;
+        const newcommand = /^\\newcommand\{\\([a-zA-Z]+)\}(?:\[(\d)\])?\{(.*)\}$/;
 
-        const macros = {};
+        const macros = new Map();
         for (let line of definitions.split("\n")) {
             line = line.trim();
             if (line === "" || line.startsWith("%")) {
@@ -1955,7 +1972,11 @@ class UI {
             }
             const match = line.match(newcommand);
             if (match !== null) {
-                macros[`\\${match[1]}`] = match[2];
+                const [, command, arity = 0, definition] = match;
+                macros.set(`\\${command}`, {
+                    definition,
+                    arity,
+                });
             } else {
                 console.warn(`Ignoring unrecognised macro definition: \`${line}\``);
             }
@@ -2828,12 +2849,8 @@ class Panel {
                 if (!buffer.classList.contains("buffering") && jax.length > 0) {
                     buffer.classList.add("buffering");
 
-                    const macros = Object.entries(ui.macros).map(([key, value]) => {
-                        return `\\newcommand{${key}}{${value}}`;
-                    }).join("");
-
                     MathJax.Hub.Queue(
-                        ["Text", jax[0], `${macros}${cell.label}`],
+                        ["Text", jax[0], `${ui.latex_macros()}${cell.label}`],
                         () => {
                             // Swap the label and the label buffer.
                             label.class_list.add("buffer");
@@ -2854,7 +2871,7 @@ class Panel {
                         {
                             throwOnError: false,
                             errorColor: "hsl(0, 100%, 40%)",
-                            macros: ui.macros,
+                            macros: ui.latex_macros(),
                         },
                     );
                 } catch (_) {
