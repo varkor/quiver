@@ -1226,6 +1226,12 @@ class UI {
         /// `null` is a basic HTML fallback: it is used until the relevant library is loaded.
         /// Options include MathJax and KaTeX.
         this.render_method = null;
+
+        /// LaTeX macro definitions.
+        this.macros = {};
+
+        /// The URL from which the macros have been fetched (if at all).
+        this.macro_url = null;
     }
 
     initialise() {
@@ -1636,8 +1642,8 @@ class UI {
     }
 
     /// A helper method to trigger a UI event immediately, but later in the event queue.
-    static delay(f) {
-        setTimeout(f, 0);
+    static delay(f, duration = 0) {
+        setTimeout(f, duration);
     }
 
     /// Selects specific `cells`. Note that this does *not* deselect any cells that were
@@ -1720,10 +1726,26 @@ class UI {
         return this.ids.get(object);
     }
 
-    /// Returns whether the active element is a text input field. If it is, certain
-    /// actions (primarily keyboard shortcuts) will be disabled.
+    /// Returns the active element if it is a text input field. (If it is, certain
+    /// actions (primarily keyboard shortcuts) will be disabled.)
     input_is_active() {
-        return document.activeElement.matches('label input[type="text"]');
+        return document.activeElement.matches('label input[type="text"]') && document.activeElement;
+    }
+
+    /// Gets the label element for a cell and clears it, or creates a new one if it does not exist.
+    static clear_label_for_cell(cell, buffer = false) {
+        let label = cell.element.querySelector(`.label${!buffer ? ":not(.buffer)" : "buffer"}`);
+        if (label !== null) {
+            label = new DOM.Element(label);
+            label.clear();
+            return label;
+        } else {
+            label = new DOM.Element("div", { class: "label" });
+            if (buffer) {
+                label.class_list.add("buffer");
+            }
+            return label;
+        }
     }
 
     /// Resizes a label to fit within a cell.
@@ -1767,9 +1789,7 @@ class UI {
     }
 
     /// Renders TeX with MathJax and returns the corresponding element.
-    render_tex(cell, tex = "", callback = x => x) {
-        const label = new DOM.Element("div", { class: "label" });
-
+    render_tex(cell, label, tex = "", callback = x => x) {
         const after = (x) => {
             this.resize_label(cell, label.element);
 
@@ -1784,7 +1804,12 @@ class UI {
                 break;
 
             case "MathJax":
-                label.add(`\\(${tex}\\)`);
+                // This seems to be more effective than defining macros using `MathJax.Hub.Config`.
+                const macros = Object.entries(this.macros).map(([key, value]) => {
+                    return `\\newcommand{${key}}{${value}}`;
+                }).join("");
+
+                label.add(`\\(${macros}${tex}\\)`);
 
                 // We're going to fade the label in once it's rendered, so it looks less janky.
                 label.element.style.display = "none";
@@ -1806,7 +1831,11 @@ class UI {
                     katex.render(
                         tex.replace(/\$/g, "\\$"),
                         label.element,
-                        { throwOnError: false, errorColor: "hsl(0, 100%, 40%)" },
+                        {
+                            throwOnError: false,
+                            errorColor: "hsl(0, 100%, 40%)",
+                            macros: this.macros,
+                        },
                     );
                 } catch (_) {
                     // Currently all errors are disabled, so we don't expect to encounter this case.
@@ -1819,6 +1848,46 @@ class UI {
         }
 
         return label;
+    }
+
+    // A helper method for displaying error banners.
+    // `type` can be used to selectively dismiss such errors (using the `type` argument on
+    // `dismiss_error`).
+    static display_error(message, type = null) {
+        // If there's already an error, it's not unlikely that subsequent errors will be triggered.
+        // Thus, we don't display an error banner if one is already displayed.
+        if (document.body.querySelector(".error-banner:not(.hidden)") === null) {
+            const error = new DOM.Element("div", { class: "error-banner hidden" })
+                .add(message)
+                .add(
+                    new DOM.Element("button", { class: "close" })
+                        .listen("click", () => UI.dismiss_error())
+                ).element;
+            if (type !== null) {
+                error.setAttribute("data-type", type);
+            }
+            document.body.appendChild(error);
+            // Animate the banner's entry.
+            UI.delay(() => error.classList.remove("hidden"));
+        }
+    }
+
+    /// A helper method for dismissing error banners.
+    /// Returns whether there was any banner to dismiss.
+    /// If `type` is non-null, `dismiss_error` will only dismiss errors whose type matches.
+    static dismiss_error(type = null) {
+        const error = document.body.querySelector(`.error-banner${
+            type !== null ? `[data-type="${type}"]` : ""
+        }`);
+        if (error) {
+            const SECOND = 1000;
+            error.classList.add("hidden");
+            setTimeout(() => error.remove(), 0.2 * SECOND);
+
+            return true;
+        } else {
+            return false;
+        }
     }
 
     // Set the grid background for the canvas.
@@ -1870,6 +1939,72 @@ class UI {
             ${dash_offset + offset.left}px ${offset.top}px,
             ${offset.left}px ${BORDER_WIDTH / 2 + offset.top}px
         `;
+    }
+
+    /// Load macros from a string, which will be used in all LaTeX labels.
+    load_macros(definitions) {
+        // Currently, only macros without arguments are supported.
+        const newcommand = /^\\newcommand\{\\([a-zA-Z]+)\}\{(.*)\}$/;
+
+        const macros = {};
+        for (let line of definitions.split("\n")) {
+            line = line.trim();
+            if (line === "" || line.startsWith("%")) {
+                // Skip empty lines and comments.
+                continue;
+            }
+            const match = line.match(newcommand);
+            if (match !== null) {
+                macros[`\\${match[1]}`] = match[2];
+            } else {
+                console.warn(`Ignoring unrecognised macro definition: \`${line}\``);
+            }
+        }
+        this.macros = macros;
+
+        // Rerender all the existing labels with the new macro definitions.
+        for (const cell of this.quiver.all_cells()) {
+            cell.render_label(this);
+        }
+    }
+
+    /// Load macros from a URL.
+    load_macros_from_url(url) {
+        // Reset the stored macro URL. We don't want to store outdated URLs, but we also don't
+        // want to store invalid URLs, so we'll set `macro_url` when we succeed in fetching the
+        // definitions.
+        this.macro_url = null;
+
+        const macro_input = this.panel.element.querySelector(".bottom input");
+        url = url.trim();
+        macro_input.value = url;
+
+        const success_indicator = macro_input.parentElement.querySelector(".success-indicator");
+        success_indicator.classList.remove("success", "failure");
+        success_indicator.classList.add("unknown");
+
+        // Clear the error banner if it's an error caused by a previous failure of
+        // `load_macros`.
+        UI.dismiss_error("macro-load");
+
+        fetch(url)
+            .then((response) => response.text())
+            .then((text) => {
+                this.load_macros(text);
+                this.macro_url = url;
+                success_indicator.classList.remove("unknown");
+                success_indicator.classList.add("success");
+                macro_input.blur();
+            })
+            .catch(() => {
+                UI.display_error(
+                    "Macro definitions could not be loaded " +
+                    "from the given URL.",
+                    "macro-load",
+                );
+                success_indicator.classList.remove("unknown");
+                success_indicator.classList.add("failure");
+            })
     }
 }
 
@@ -2505,7 +2640,7 @@ class Panel {
             },
         );
 
-        const display_export_pane = (format) => {
+        const display_export_pane = (format, modify = (output) => output) => {
             // Handle export button interaction: export the quiver.
             // If the user clicks on two different exports in a row
             // we will simply switch the displayed export format.
@@ -2523,7 +2658,8 @@ class Panel {
                     // Find the existing export pane.
                     export_pane = new DOM.Element(ui.element.querySelector(".export"));
                 }
-                export_pane.clear().add(output);
+                // The output may be modifier by the caller.
+                export_pane.clear().add(modify(output));
 
                 this.export = format;
 
@@ -2542,9 +2678,34 @@ class Panel {
 
         this.element.appendChild(
             new DOM.Element("div", { class: "bottom" }).add(
+                new DOM.Element("div").add(
+                    new DOM.Element("label").add("Macros: ")
+                        .add(
+                            new DOM.Element("input", {
+                                type: "text",
+                            }).listen("keydown", (event, input) => {
+                                if (event.key === "Enter") {
+                                    ui.load_macros_from_url(input.value);
+                                    input.blur();
+                                }
+                            }).listen("paste", (_, input) => {
+                                UI.delay(() => ui.load_macros_from_url(input.value));
+                            })
+                        ).add(
+                            new DOM.Element("div", { class: "success-indicator" })
+                        )
+                )
+            ).add(
                 // The shareable link button.
                 new DOM.Element("button", { class: "global" }).add("Get shareable link")
-                    .listen("click", () => display_export_pane("base64"))
+                    .listen("click", () => {
+                        display_export_pane("base64", (output) => {
+                            if (ui.macro_url !== null) {
+                                return `${output}&macro_url=${encodeURIComponent(ui.macro_url)}`;
+                            }
+                            return output;
+                        });
+                    })
             ).add(
                 // The export button.
                 new DOM.Element("button", { class: "global" }).add("Export to LaTeX")
@@ -2666,8 +2827,13 @@ class Panel {
                 const jax = MathJax.Hub.getAllJax(buffer);
                 if (!buffer.classList.contains("buffering") && jax.length > 0) {
                     buffer.classList.add("buffering");
+
+                    const macros = Object.entries(ui.macros).map(([key, value]) => {
+                        return `\\newcommand{${key}}{${value}}`;
+                    }).join("");
+
                     MathJax.Hub.Queue(
-                        ["Text", jax[0], cell.label],
+                        ["Text", jax[0], `${macros}${cell.label}`],
                         () => {
                             // Swap the label and the label buffer.
                             label.class_list.add("buffer");
@@ -2681,12 +2847,15 @@ class Panel {
                 break;
 
             case "KaTeX":
-                label.clear();
                 try {
                     katex.render(
                         cell.label.replace(/\$/g, "\\$"),
                         label.element,
-                        { throwOnError: false, errorColor: "hsl(0, 100%, 40%)" },
+                        {
+                            throwOnError: false,
+                            errorColor: "hsl(0, 100%, 40%)",
+                            macros: ui.macros,
+                        },
                     );
                 } catch (_) {
                     // Currently all errors are disabled, so we don't expect to encounter this case.
@@ -2838,9 +3007,14 @@ class Panel {
                     .querySelectorAll('.arrow-style input[type="radio"]')) {
                 option.disabled = !all_edges_are_arrows;
             }
+
+            // Enable all inputs in the bottom section of the panel.
+            this.element.querySelectorAll(`.bottom input[type="text"]`).forEach((input) => {
+                input.disabled = false;
+            });
         } else {
             // Disable all the inputs.
-            this.element.querySelectorAll("input, button:not(.global)")
+            this.element.querySelectorAll("input:not(.global), button:not(.global)")
                 .forEach(element => element.disabled = true);
         }
     }
@@ -3024,6 +3198,11 @@ class Toolbar {
         });
 
         add_shortcut([{ key: "Escape", shift: null, context: SHORTCUT_PRIORITY.Always }], () => {
+            // If an error banner is visible, the first thing Escape will do is dismiss the banner.
+            if (UI.dismiss_error()) {
+                return;
+            }
+
             // Stop trying to connect cells.
             if (ui.in_mode(UIState.Connect)) {
                 if (ui.state.forged_vertex) {
@@ -3046,7 +3225,10 @@ class Toolbar {
                 pending.classList.remove("pending");
             }
             // Defocus the label input.
-            ui.panel.element.querySelector('label input[type="text"]').blur();
+            const input = ui.input_is_active();
+            if (input) {
+                input.blur();
+            }
             // Close any open panes.
             ui.panel.dismiss_export_pane(ui);
         });
@@ -3467,13 +3649,10 @@ class Vertex extends Cell {
     /// be loaded gracefully.
     render_label(ui) {
         const content = new DOM.Element(this.element.querySelector(".content"));
-        // Remove any existing content.
-        content.clear();
         // Create the label.
-        content.add(ui.render_tex(this, this.label));
+        content.add(ui.render_tex(this, UI.clear_label_for_cell(this), this.label));
         // Create an empty label buffer for flicker-free rendering.
-        const buffer = ui.render_tex(this, this.label);
-        buffer.class_list.add("buffer");
+        const buffer = ui.render_tex(this, UI.clear_label_for_cell(this, true), this.label);
         content.add(buffer);
     }
 }
@@ -3673,16 +3852,16 @@ class Edge extends Cell {
     /// This abstraction is necessary to handle situations where MathJax cannot
     /// be loaded gracefully.
     render_label(ui) {
-        // Remove all existing labels (i.e. the label and the label buffer).
-        for (const label of this.element.querySelectorAll(".label")) {
-            label.remove();
-        }
         // Create the edge label.
-        const label = ui.render_tex(this, this.label, () => this.update_label_transformation(ui));
+        const label = ui.render_tex(
+            this,
+            UI.clear_label_for_cell(this),
+            this.label,
+            () => this.update_label_transformation(ui),
+        );
         this.element.appendChild(label.element);
         // Create an empty label buffer for flicker-free rendering.
-        const buffer = ui.render_tex(this);
-        buffer.class_list.add("buffer");
+        const buffer = ui.render_tex(this, UI.clear_label_for_cell(this, true));
         this.element.appendChild(buffer.element);
     }
 
@@ -4267,42 +4446,29 @@ document.addEventListener("DOMContentLoaded", () => {
     let ui = new UI(document.body);
     ui.initialise();
 
-    // A helper method for displaying error banners.
-    const display_error = (message) => {
-        // If there's already an error, it's not unlikely that subsequent errors will be triggered.
-        // Thus, we don't display an error banner if one is already displayed.
-        if (document.body.querySelector(".error-banner") === null) {
-            const error = new DOM.Element("div", { class: "error-banner hidden" })
-                .add(message)
-                .add(
-                    new DOM.Element("button", { class: "close" })
-                        .listen("click", () => {
-                            const SECOND = 1000;
-                            error.classList.add("hidden");
-                            setTimeout(() => error.remove(), 0.2 * SECOND);
-                        })
-                )
-                .element;
-            document.body.appendChild(error);
-            // Animate the banner's entry.
-            UI.delay(() => error.classList.remove("hidden"));
-        }
-    };
-
     const load_quiver_from_query_string = () => {
         // Get the query string (i.e. the part of the URL after the "?").
         const query_string = window.location.href.match(/\?(.*)$/);
         if (query_string !== null) {
             // If there is a query string, try to decode it as a diagram.
             try {
-                QuiverImportExport.base64.import(ui, query_string[1]);
+                const query_data = query_string[1].split("&");
+                // Decode the diagram.
+                QuiverImportExport.base64.import(ui, query_data[0]);
+                // Try to find the `macro_url` to use.
+                for (const segment of query_data.slice(1)) {
+                    const [key, value] = segment.split("=");
+                    if (key === "macro_url") {
+                        ui.load_macros_from_url(decodeURIComponent(value));
+                    }
+                }
             } catch (error) {
                 if (ui.quiver.is_empty()) {
-                    display_error("The saved diagram was malformed and could not be loaded.");
+                    UI.display_error("The saved diagram was malformed and could not be loaded.");
                 } else {
                     // The importer will try to recover from errors, so we may have been mostly
                     // successful.
-                    display_error(
+                    UI.display_error(
                         "The saved diagram was malformed and may have been loaded incorrectly."
                     );
                 }
