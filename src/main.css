@@ -296,7 +296,7 @@ body {
 
 .panel .local {
     position: absolute;
-    width: 100%; height: calc(100% - 84px);
+    width: 100%; height: calc(100% - 114px);
     padding: 24px 16px;
     overflow: auto;
 
@@ -566,6 +566,38 @@ body {
     border-color: hsl(0, 0%, 28%);
 
     color: hsl(0, 0%, 28%);
+}
+
+.panel .success-indicator {
+    display: inline-block;
+    vertical-align: middle;
+    margin-left: 8px;
+    width: 18px; height: 18px;
+
+    background: hsl(0, 0%, 36%);
+    border-radius: 100%;
+
+    color: hsl(0, 0%, 16%);
+    text-align: center;
+    line-height: 18px;
+
+    transform: scale(0);
+
+    transition: transform 0.2s;
+}
+
+.panel .success-indicator.unknown,
+.panel .success-indicator.success,
+.panel .success-indicator.failure {
+    transform: scale(1);
+}
+
+.panel .success-indicator.success::before {
+    content: "✓";
+}
+
+.panel .success-indicator.failure::before {
+    content: "✕";
 }
 
 /* The toolbar */

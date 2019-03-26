@@ -21,6 +21,7 @@ A graphical editor for commutative diagrams that exports to tikz-cd.
 - Multiple selection.
 - A history system with undo and redo.
 - Panning.
+- Support for custom macro definitions.
 
 ## Screenshots
 The interface:
