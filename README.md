@@ -24,7 +24,8 @@ A graphical editor for commutative diagrams that exports to tikz-cd.
 - Support for custom macro definitions.
 
 ## Building
-Make sure you have [installed yarn](https://yarnpkg.com/lang/en/docs/install/).
+Make sure you have [installed yarn](https://yarnpkg.com/lang/en/docs/install/) and have a version of
+make that supports `.ONESHELL` (e.g. GNU Make 3.82).
 
 Clone the repository. Run:
 ```
