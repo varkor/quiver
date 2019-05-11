@@ -23,6 +23,18 @@ A graphical editor for commutative diagrams that exports to tikz-cd.
 - Panning.
 - Support for custom macro definitions.
 
+## Building
+Make sure you have [installed yarn](https://yarnpkg.com/lang/en/docs/install/).
+
+Clone the repository. Run:
+```
+make
+```
+Open `src/index.html` in your favourite web browser.
+
+If that doesn't work, [open an issue](https://github.com/varkor/quiver/issues/new) detailing the
+problem.
+
 ## Screenshots
 The interface:
 
