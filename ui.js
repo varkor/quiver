@@ -4514,7 +4514,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         }).listen("error", () => {
             // Handle MathJax or KaTeX not loading (somewhat) gracefully.
-            display_error(`${RENDER_METHOD} failed to load.`)
+            UI.display_error(`${RENDER_METHOD} failed to load.`)
         });
 
         // Specific, per-library behaviour.
