@@ -195,6 +195,7 @@ body {
     white-space: nowrap;
 
     pointer-events: none;
+    user-select: none;
 
     transition: opacity 0.2s;
 }
@@ -292,6 +293,10 @@ body {
 
     font: 14px sans-serif;
     color: hsl(0, 0%, 80%);
+}
+
+.panel label, .panel button {
+    user-select: none;
 }
 
 .panel .local {
