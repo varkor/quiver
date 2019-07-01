@@ -644,7 +644,8 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
         const VERSION = 0;
         const output = [VERSION, quiver.cells[0].size, ...cells];
 
-        return `${URL_prefix}?${btoa(JSON.stringify(output))}`;
+        // We use this `unescape`-`encodeURIComponent` trick to encode non-ASCII characters.
+        return `${URL_prefix}?${btoa(unescape(encodeURIComponent(JSON.stringify(output))))}`;
     }
 
     import(ui, string) {
@@ -652,7 +653,8 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
 
         let input;
         try {
-            const decoded = atob(string);
+            // We use this `decodeURIComponent`-`escape` trick to encode non-ASCII characters.
+            const decoded = decodeURIComponent(escape(atob(string)));
             if (decoded === "") {
                 return quiver;
             }
