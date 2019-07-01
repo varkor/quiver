@@ -1513,7 +1513,7 @@ class UI {
             // empty grid cell).
             if (this.in_mode(UIState.Connect)) {
                 // We only permit the forgery of vertices, not edges.
-                if (this.state.source.is_vertex()) {
+                if (this.state.source.is_vertex() && this.state.target === null) {
                     insertion_point.classList
                         .toggle("revealed", !this.positions.has(`${position}`));
                 }
@@ -3486,6 +3486,9 @@ class Cell {
                     if (ui.state.valid_connection(this)) {
                         ui.state.target = this;
                         this.element.classList.add("target");
+                        // Hide the insertion point (e.g. if we're connecting a vertex to an edge).
+                        const insertion_point = ui.canvas.element.querySelector(".insertion-point");
+                        insertion_point.classList.remove("revealed", "pending", "active");
                     }
                 }
             }
