@@ -250,7 +250,7 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
 
         // Wrap tikz-cd code with `\begin{tikzcd} ... \end{tikzcd}`.
         const wrap_boilerplate = (output) => {
-            return `\\begin{tikzcd}\n${
+            return `% ${QuiverImportExport.base64.export(quiver)}\n\\begin{tikzcd}\n${
                 output.length > 0 ? `${
                     output.split("\n").map(line => `\t${line}`).join("\n")
                 }\n` : ""
