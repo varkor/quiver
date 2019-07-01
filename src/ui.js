@@ -904,6 +904,14 @@ UIState.Default = class extends UIState {
 };
 UIState.default = new UIState.Default();
 
+UIState.Modal = class extends UIState {
+    constructor() {
+        super();
+
+        this.name = "modal";
+    }
+}
+
 /// Two k-cells are being connected by an (k + 1)-cell.
 UIState.Connect = class extends UIState {
     constructor(ui, source, forged_vertex, reconnect = null) {
@@ -1332,7 +1340,7 @@ class UI {
                     // Record the position the pointer was pressed at, so we can pan relative
                     // to that location by dragging.
                     this.state.origin = this.offset_from_event(event);
-                } else {
+                } else if (!this.in_mode(UIState.Modal)) {
                     if (!event.shiftKey) {
                         // Deselect cells when the mouse is pressed (at least when the Shift key
                         // is not held).
@@ -2667,6 +2675,8 @@ class Panel {
             // we will simply switch the displayed export format.
             // Clicking on the same button twice closes the panel.
             if (this.export !== format) {
+                ui.switch_mode(new UIState.Modal());
+
                 // Get the base 64 URI encoding of the diagram.
                 const output = ui.quiver.export(format);
 
@@ -3041,6 +3051,7 @@ class Panel {
         if (this.export !== null) {
             ui.element.querySelector(".export").remove();
             this.export = null;
+            ui.switch_mode(UIState.default);
             this.update(ui);
         }
     }
@@ -3334,10 +3345,13 @@ class Toolbar {
                                 }
                             }
                         };
-                        if (!editing_input || shortcut.context === SHORTCUT_PRIORITY.Always) {
+
+                        if (!editing_input && !ui.in_mode(UIState.Modal)
+                            || shortcut.context === SHORTCUT_PRIORITY.Always)
+                        {
                             event.preventDefault();
                             effect();
-                        } else if (type === "keydown") {
+                        } else if (!ui.in_mode(UIState.Modal) && type === "keydown") {
                             // If we were editing an input, and the keyboard shortcut doesn't
                             // trigger in that case, then if the keyboard shortcut is deemed
                             // to have had no effect on the input, we either:
