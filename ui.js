@@ -250,11 +250,11 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
 
         // Wrap tikz-cd code with `\begin{tikzcd} ... \end{tikzcd}`.
         const wrap_boilerplate = (output) => {
-            return `% ${QuiverImportExport.base64.export(quiver)}\n\\begin{tikzcd}\n${
+            return `% ${QuiverImportExport.base64.export(quiver)}\n\\[\\begin{tikzcd}\n${
                 output.length > 0 ? `${
                     output.split("\n").map(line => `\t${line}`).join("\n")
                 }\n` : ""
-            }\\end{tikzcd}`;
+            }\\end{tikzcd}\\]`;
         };
 
         // Early exit for empty quivers.
