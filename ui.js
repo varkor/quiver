@@ -501,7 +501,7 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                 }
 
                 output += `\\arrow[${style}` +
-                    (label !== "" ? `${label}${
+                    (label !== "" || label_parameters.length > 0 ? `${label || "\"\""}${
                         label_parameters.length > 0 ? `{${label_parameters.join(", ")}}` : ""
                     }, ` : "") +
                     `from=${cell_reference(edge.source)}, ` +
