@@ -170,6 +170,16 @@ class Quiver {
 
         reverse_dependencies.add(source);
         reverse_dependencies.add(target);
+
+        // Reset the cell's level to ensure correct spacing when changing the level of the
+        // source/target cells.
+        const level = Math.max(source.level, target.level) + 1;
+        if (this.cells.length < level + 1) {
+            this.cells.push(new Set());
+        }
+        this.cells[edge.level].delete(edge);
+        edge.level = level;
+        this.cells[level].add(edge);
     }
 
     /// Returns a collection of all the cells in the quiver.
@@ -498,8 +508,8 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                 // tikz-cd tends to place arrows between arrows directly contiguously
                 // without adding some spacing manually.
                 if (level > 1) {
-                    parameters.push("shorten <=1mm");
-                    parameters.push("shorten >=1mm");
+                    parameters.push("shorten <=2mm");
+                    parameters.push("shorten >=2mm");
                 }
 
                 output += `\\arrow[${style}` +
@@ -973,11 +983,11 @@ UIState.Connect = class extends UIState {
                     ui,
                     this.overlay,
                     svg,
-                    this.source.level + 1,
                     {
                         position: this.source.position,
                         size: this.source.size(),
                         offset: true,
+                        level: this.source.level,
                     },
                     // Lock on to the target if present, otherwise simply draw the edge
                     // to the position of the cursor.
@@ -985,10 +995,12 @@ UIState.Connect = class extends UIState {
                         position: this.target.position,
                         size: this.target.size(),
                         offset: true,
+                        level: this.target.level,
                     } : {
                         position,
                         size: Dimensions.zero(),
                         offset: false,
+                        level: 0,
                     },
                     Edge.default_options(null, {
                         body: { name: "cell", level: this.source.level + 1 },
@@ -3827,6 +3839,7 @@ class Edge extends Cell {
         // reconnected, we override the source/target position (as well as whether we offset
         // the edge endpoints).
         let [source_position, target_position] = [this.source.position, this.target.position];
+        let [source, target] = [this.source, this.target];
         const endpoint_offset = { source: true, target: true };
         const reconnecting = ui.in_mode(UIState.Connect)
             && ui.state.reconnect !== null
@@ -3837,9 +3850,11 @@ class Edge extends Cell {
             switch (ui.state.reconnect.end) {
                 case "source":
                     source_position = connection_position;
+                    source = ui.state.target || source;
                     break;
                 case "target":
                     target_position = connection_position;
+                    target = ui.state.target || target;
                     break;
             }
             if (ui.state.target === null) {
@@ -3865,16 +3880,17 @@ class Edge extends Cell {
             ui,
             this.element,
             svg,
-            this.level,
             {
                 position: source_position,
-                size: this.source.size(),
+                size: source.size(),
                 offset: endpoint_offset.source,
+                level: source.level,
             },
             {
                 position: target_position,
-                size: this.target.size(),
+                size: target.size(),
                 offset: endpoint_offset.target,
+                level: target.level,
             },
             this.options,
             null,
@@ -3919,7 +3935,6 @@ class Edge extends Cell {
         ui,
         element,
         svg,
-        level,
         source,
         target,
         options,
@@ -3959,16 +3974,18 @@ class Edge extends Cell {
         const padding = new Dimensions(PADDING, PADDING);
         // The content area of a vertex is reserved for vertices: edges will not encroach upon that
         // space.
-        const min_size =
-            level === 1 ? new Dimensions(ui.cell_size / 2, ui.cell_size / 2) : Dimensions.zero();
+        const min_size = (cell) => {
+            return cell.level === 0 ?
+                new Dimensions(ui.cell_size / 2, ui.cell_size / 2) : Dimensions.zero();
+        };
 
         const margin = {
             source: source.offset ? Math.max(
-                edge_distance(source.size.add(padding).max(min_size), direction),
+                edge_distance(source.size.add(padding).max(min_size(source)), direction),
                 MARGIN,
             ) : 0,
             target: target.offset ? Math.max(
-                edge_distance(target.size.add(padding).max(min_size), direction + Math.PI),
+                edge_distance(target.size.add(padding).max(min_size(target)), direction + Math.PI),
                MARGIN,
             ) : 0,
         };
