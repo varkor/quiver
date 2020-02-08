@@ -344,40 +344,47 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                 const parameters = [];
                 const label_parameters = [];
                 let align = "";
+                const nonempty_label = edge.label.trim();
 
                 // We only need to give edges names if they're depended on by another edge.
                 if (quiver.dependencies_of(edge).size > 0) {
                     label_parameters.push(`name=${index}`);
                     names.set(edge, index++);
-                    // In this case, because we have a parameter list, we have to also change
-                    // the syntax for alignment (technically, we can always use the quotation
-                    // mark for swap, but it's simpler to be consistent with `description`).
-                    switch (edge.options.label_alignment) {
-                        case "centre":
-                            label_parameters.push("description");
-                            break;
-                        case "over":
-                            label_parameters.push("marking");
-                            break;
-                        case "right":
-                            label_parameters.push("swap");
-                            break;
+                    // tikz-cd has a bug where parameters affect the edge style even the label
+                    // is empty, so we only emit parameters when the label is nonempty.
+                    if (nonempty_label) {
+                        // In this case, because we have a parameter list, we have to also change
+                        // the syntax for alignment (technically, we can always use the quotation
+                        // mark for swap, but it's simpler to be consistent with `description`).
+                        switch (edge.options.label_alignment) {
+                            case "centre":
+                                label_parameters.push("description");
+                                break;
+                            case "over":
+                                label_parameters.push("marking");
+                                break;
+                            case "right":
+                                label_parameters.push("swap");
+                                break;
+                        }
                     }
                 } else {
-                    switch (edge.options.label_alignment) {
-                        case "centre":
-                            // Centring is done by using the `description` style.
-                            align = " description";
-                            break;
-                        case "over":
-                            // Centring without clearing is done by using the `marking` style.
-                            align = " marking";
-                            break;
-                        case "right":
-                            // We can flip the side of the edge on which the label is drawn
-                            // by appending a quotation mark to the label as an edge option.
-                            align = "'";
-                            break;
+                    if (nonempty_label) {
+                        switch (edge.options.label_alignment) {
+                            case "centre":
+                                // Centring is done by using the `description` style.
+                                align = " description";
+                                break;
+                            case "over":
+                                // Centring without clearing is done by using the `marking` style.
+                                align = " marking";
+                                break;
+                            case "right":
+                                // We can flip the side of the edge on which the label is drawn
+                                // by appending a quotation mark to the label as an edge option.
+                                align = "'";
+                                break;
+                        }
                     }
                 }
                 if (edge.options.offset > 0) {
@@ -388,7 +395,7 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                 }
 
                 let style = "";
-                let label = edge.label.trim() !== "" ? `"{${edge.label}}"${align}` : "";
+                let label = nonempty_label !== "" ? `"{${edge.label}}"${align}` : "";
 
                 // Edge styles.
                 switch (edge.options.style.name) {
