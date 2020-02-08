@@ -452,22 +452,24 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                     case "corner":
                         parameters.push("phantom");
 
-                        let angle_offset = 0;
+                        let angle;
 
                         switch (edge.options.style.name) {
                             case "adjunction":
                                 label = "\"\\dashv\"";
+                                // Adjunction symbols should point in the direction of the arrow.
+                                angle = -edge.angle() * 180 / Math.PI;
                                 break;
                             case "corner":
                                 label = "\"\\lrcorner\"";
                                 label_parameters.push("very near start");
-                                angle_offset = 45;
+                                // Round the angle to the nearest 45º, so that the corner always
+                                // appears aligned with horizontal, vertical or diagonal lines.
+                                angle = 45 - 45 * Math.round(4 * edge.angle() / Math.PI);
                                 break;
                         }
 
-                        label_parameters.push(`rotate=${
-                            -edge.angle() * 180 / Math.PI + angle_offset
-                        }`);
+                        label_parameters.push(`rotate=${angle}`);
 
                         // We allow these sorts of edges to have labels attached,
                         // even though it's a little unusual.
@@ -2792,7 +2794,8 @@ class Panel {
 
             const { shared, edge: { length, options, gap = null } } = properties(value, data);
 
-            const { dimensions, alignment } = Edge.draw_edge(svg, options, length, gap);
+            const { dimensions, alignment }
+                = Edge.draw_edge(svg, options, length, Math.PI / 4, gap);
             // Align the background according the alignment of the arrow
             // (`"centre"` is default).
             if (alignment !== "centre") {
@@ -3980,7 +3983,8 @@ class Edge extends Cell {
             return 0;
         }
 
-        const { dimensions, alignment } = Edge.draw_edge(svg, options, length, gap, true);
+        const { dimensions, alignment }
+            = Edge.draw_edge(svg, options, length, direction, gap, true);
 
         const clamped_width = Math.min(Math.max(dimensions.width, MIN_LENGTH), length);
 
@@ -4034,7 +4038,7 @@ class Edge extends Cell {
     /// Note that this does not clear the SVG beforehand.
     /// Returns the (new) dimensions of the SVG and the intended alignment of the edge.
     /// `{ dimensions, alignment }`
-    static draw_edge(svg, options, length, gap, scale = false) {
+    static draw_edge(svg, options, length, direction, gap, scale = false) {
         // Constants for parameters of the arrow shapes.
         const SVG_PADDING = Edge.SVG_PADDING;
         // The width of each stroke (for the tail, body and head).
@@ -4131,10 +4135,11 @@ class Edge extends Cell {
                 [width, height] = [WIDTH, HEIGHT];
                 break;
 
+            // Pullbacks/pushouts.
             case "corner":
                 // The dimensions of the bounding box of the ⌟ symbol.
                 const SIZE = 12;
-                [width, height] = [SIZE / 2 ** 0.5, SIZE * 2 ** 0.5];
+                [width, height] = [SIZE, SIZE * 2];
                 // We want to draw the symbol next to the vertex from which it is drawn.
                 alignment = "left";
                 break;
@@ -4334,11 +4339,17 @@ class Edge extends Cell {
             case "corner":
                 // Draw the ⌟ symbol. The dimensions have already been set up for us
                 // in the previous step.
+                const side = width / 2 ** 0.5;
+                // Round the angle to the nearest 45º and adjust with respect to the
+                // current direction.
+                const PI_4 = Math.PI / 4;
+                const angle = Math.PI + PI_4 * Math.round(4 * direction / Math.PI) - direction;
                 svg.appendChild(new DOM.SVGElement("path", {
                     d: `
-                        M ${SVG_PADDING} ${SVG_PADDING}
-                        l ${width} ${width}
-                        l ${-width} ${width}
+                        M ${SVG_PADDING + width} ${SVG_PADDING + width}
+                        l ${Math.cos(angle - PI_4) * side} ${Math.sin(angle - PI_4) * side}
+                        M ${SVG_PADDING + width} ${SVG_PADDING + width}
+                        l ${Math.cos(angle + PI_4) * side} ${Math.sin(angle + PI_4) * side}
                     `.trim().replace(/\s+/g, " ")
                 }).element);
 
