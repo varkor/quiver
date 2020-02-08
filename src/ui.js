@@ -511,8 +511,8 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                     (parameters.length > 0 ? `, ${parameters.join(", ")}` : "") +
                     "] ";
             }
-            // Remove the trailing space.
-            output = output.slice(0, -1);
+            // Remove any trailing whitespace.
+            output = output.trim();
         }
 
         return wrap_boilerplate(output);
