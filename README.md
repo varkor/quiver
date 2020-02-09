@@ -1,6 +1,8 @@
 # quiver
 A graphical editor for commutative diagrams that exports to tikz-cd.
 
+Try quiver out here: https://varkor.github.io/quiver
+
 ## Features
 - An intuitive graphical interface for creating and modifying commutative diagrams.
 - Support for objects, morphisms, natural transformations.
