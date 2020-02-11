@@ -31,7 +31,8 @@
         // Draw multiple lines.
 
         let drag = null;
-        let curve = 5;
+        let curve = 0;
+        let level = 5;
 
         class Shape {
             constructor(x, y) {
@@ -69,8 +70,11 @@
             }
 
             redraw() {
+                const SPACING = 4.5;
+                const STROKE_WIDTH = 1.5;
+
                 const length = Math.hypot(this.target.y - this.source.y, this.target.x - this.source.x);
-                const height = Math.abs(curve) * 2 + 4;
+                const height = Math.abs(curve) * 2 + level * STROKE_WIDTH + (level - 1) * SPACING + 100;
                 const angle = Math.atan2(this.target.y - this.source.y, this.target.x - this.source.x);
                 this.element.style.width = `${length}px`;
                 this.element.style.height = `${height}px`;
@@ -124,24 +128,91 @@
                         circle.setAttribute("r", 8);
                         circle.setAttribute("fill", colour);
                     }
+                    return intersections.length > 0 ? intersections[0] : null;
                 };
 
-                ir("yellow", this.source, true);
-                ir("lime", this.target, false);
+                const start = ir("yellow", this.source, true);
+                const end = ir("lime", this.target, false);
+
+                const path = `
+                    M 0 ${height / 2}
+                    q ${length / 2} ${curve} ${length} 0
+                `;
+
+                let cut = true;
+                for (let i = level - 1; i > 0; --i) {
+                    const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                    p.setAttribute("d", path);
+                    p.style.strokeWidth = `${(i - (cut ? 1 : 0)) * STROKE_WIDTH + (i - (cut ? 0 : 1)) * SPACING}px`;
+                    p.style.stroke = cut ? "black" : "white";
+                    p.style.fill = "none";
+                    clip.appendChild(p);
+                    cut = !cut;
+                }
 
                 defs.appendChild(clip);
                 clip.appendChild(rect);
                 clip.appendChild(rect2);
                 clip.id = "clip";
-                this.element.appendChild(defs); // l ${length} 0
-                line.setAttribute("d", `
-                    M 0 ${height / 2}
-                    q ${length / 2} ${curve} ${length} 0
-                `);
+                this.element.appendChild(defs);
+                line.setAttribute("d", path);
                 line.setAttribute("mask", "url(#clip)");
-                line.style.strokeWidth = `${4}px`;
+                const line_width = level * STROKE_WIDTH + (level - 1) * SPACING;
+                line.style.strokeWidth = `${line_width}px`;
                 line.style.stroke = "black";
                 line.style.fill = "none";
+
+                const HEAD_WIDTH = SPACING + (level - 1) * 2;
+                const HEAD_HEIGHT = line_width + SPACING * 2;
+
+                const create_head = (where, is_start, mask) => {
+                    if (where !== null) {
+                        const head = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                        head.style.strokeWidth = STROKE_WIDTH;
+                        if (mask) {
+                            head.style.fill = "black";
+                        } else {
+                            head.style.stroke = "black";
+                            head.style.fill = "none";
+                        }
+                        const mul = is_start ? 1 : -1;
+                        const flag = is_start ? 0 : 1;
+                        head.setAttribute("d", `
+                            M ${where.x} ${where.y + height / 2}
+                            a ${mul * HEAD_WIDTH} ${HEAD_HEIGHT / 2} 0 0 ${flag} ${mul * HEAD_WIDTH} ${-HEAD_HEIGHT / 2}
+                            ${mask ? `L ${where.x + mul * HEAD_WIDTH} ${height / 2 - HEAD_HEIGHT / 2 + where.y}
+                            L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 - HEAD_HEIGHT / 2 + where.y}
+                            L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 + where.y}` : ""}
+
+                            M ${where.x} ${where.y + height / 2}
+                            a ${mul * HEAD_WIDTH} ${HEAD_HEIGHT / 2} 0 0 ${1 - flag} ${mul * HEAD_WIDTH} ${HEAD_HEIGHT / 2}
+                            ${mask ? `L ${where.x + mul * HEAD_WIDTH} ${height / 2 + HEAD_HEIGHT / 2 + where.y}
+                            L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 + HEAD_HEIGHT / 2 + where.y}
+                            L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 + where.y}` : ""}
+                        `);
+                        head.setAttribute("transform", `rotate(${where.angle * 180 / Math.PI} ${where.x} ${where.y + height / 2})`);
+                        return head;
+                    }
+                    return null;
+                }
+
+                let draw_head = (where, is_start) => {
+                    const head = create_head(where, is_start, false);
+                    if (head !== null) {
+                        this.element.appendChild(head);
+                    }
+                    const mask = create_head(where, is_start, true);
+                    if (mask !== null) {
+                        clip.appendChild(mask);
+                    }
+                    // const head2 = create_head(where, is_start, false);
+                    // if (head2 !== null) {
+                    //     head2.style.stroke = "white";
+                    //     clip.appendChild(head2);
+                    // }
+                };
+                draw_head(start, true);
+                draw_head(end, false);
             }
         }
 
@@ -169,6 +240,17 @@
                 curve += event.deltaY;
                 arrow.redraw();
             }, { passive: false });
+
+            window.addEventListener("keydown", (event) => {
+                if (event.key === "ArrowLeft") {
+                    --level;
+                }
+                if (event.key === "ArrowRight") {
+                    ++level;
+                }
+                level = Math.max(1, level);
+                arrow.redraw();
+            })
         });
 
         /// The normalised quadratic Bézier curve is the one whose endpoints are (0, 0) and (1, 0)
@@ -213,7 +295,11 @@
             // `min` is true, or the end otherwise.
             min = min ? -1 : 1;
             intersections.sort((a, b) => a.x <= b.x ? min : -min);
-            return intersections.slice(0, 1).map((p) => p.scale(b.l, b.h));
+
+            // Derivative of Bézier curve is `2 - 4x`.
+
+            return intersections.slice(0, 1)
+                .map(p => Object.assign({ angle: Math.atan2((2 - 4 * p.x) * b.h, b.l) }, p.scale(b.l, b.h)));
         }
 
         /// Intersect the line `y = m x + c` with the normalised quadratic Bézier curve and return
