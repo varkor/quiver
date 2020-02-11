@@ -1,0 +1,296 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>quiver</title>
+    <link rel="icon" href="icon.png">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {
+            margin: 0;
+        }
+
+        .box {
+            position: absolute;
+            background: red;
+            border-radius: 4px;
+        }
+
+        svg {
+            position: absolute;
+            pointer-events: none;
+            /* background: lightgrey; */
+        }
+    </style>
+    <script>
+
+        // Remove rounded rect from svg drawing.
+        // Find intersection of Bezier with rounded rect.
+        // Draw tails.
+        // Draw heads.
+        // Draw multiple lines.
+
+        let drag = null;
+        let curve = 5;
+
+        class Shape {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.width = 64;
+                this.height = 64;
+                this.element = document.createElement("div");
+                this.element.classList.add("box");
+                this.redraw();
+                this.element.addEventListener("mousedown", (event) => {
+                    if (drag === null) {
+                        const rect = this.element.getBoundingClientRect();
+                        drag = [this, event.clientX - rect.left - this.width / 2, event.clientY - rect.top - this.height / 2];
+                    }
+                });
+                document.body.appendChild(this.element);
+            }
+
+            redraw() {
+                this.element.style.left = `${this.x - this.width / 2}px`;
+                this.element.style.top = `${this.y - this.height / 2}px`;
+                this.element.style.width = `${this.width}px`;
+                this.element.style.height = `${this.height}px`;
+            }
+        }
+
+        class Arrow {
+            constructor(source, target) {
+                this.source = source;
+                this.target = target;
+                this.element = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+                this.redraw();
+                document.body.appendChild(this.element);
+            }
+
+            redraw() {
+                const length = Math.hypot(this.target.y - this.source.y, this.target.x - this.source.x);
+                const height = Math.abs(curve) * 2 + 4;
+                const angle = Math.atan2(this.target.y - this.source.y, this.target.x - this.source.x);
+                this.element.style.width = `${length}px`;
+                this.element.style.height = `${height}px`;
+                this.element.style.transformOrigin = `0 ${height / 2}px`;
+                this.element.style.transform = `translate(${this.source.x}px, ${this.source.y - height / 2}px) rotate(${angle}rad)`;
+
+                this.element.innerHTML = "";
+                const line = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+                const clip = document.createElementNS("http://www.w3.org/2000/svg", "mask");
+                clip.setAttribute("maskUnits", "userSpaceOnUse");
+                const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+                const rect2 = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+                const fill = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+                clip.appendChild(fill);
+
+                fill.setAttribute("width", length);
+                fill.setAttribute("height", height);
+                fill.setAttribute("fill", "white");
+                rect.setAttribute("x", -this.source.width / 2);
+                rect.setAttribute("y", (height - this.source.height) / 2);
+                rect.setAttribute("width", this.source.width);
+                rect.setAttribute("height", this.source.height);
+                rect.setAttribute("transform", `rotate(${-angle * 180 / Math.PI} 0 ${height / 2})`);
+                rect.setAttribute("fill", "black");
+                rect.setAttribute("rx", "4");
+
+                rect2.setAttribute("x", length - this.target.width / 2);
+                rect2.setAttribute("y", (height - this.target.height) / 2);
+                rect2.setAttribute("width", this.target.width);
+                rect2.setAttribute("height", this.target.height);
+                rect2.setAttribute("transform", `rotate(${-angle * 180 / Math.PI} ${length} ${height / 2})`);
+                rect2.setAttribute("fill", "black");
+                rect2.setAttribute("rx", "4");
+                this.element.appendChild(line);
+
+                const ir = (colour, rect, resolve) => {
+                    const intersections = intersect_bezier_with_rect(
+                        rect.x,
+                        rect.y,
+                        rect.width,
+                        rect.height,
+                        new Bezier(new Point(this.source.x, this.source.y), angle, length, curve),
+                        resolve,
+                    );
+                    for (const inter of intersections) {
+                        const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                        this.element.appendChild(circle);
+                        circle.setAttribute("cx", inter.x);
+                        circle.setAttribute("cy", inter.y + height / 2);
+                        circle.setAttribute("r", 8);
+                        circle.setAttribute("fill", colour);
+                    }
+                };
+
+                ir("yellow", this.source, true);
+                ir("lime", this.target, false);
+
+                defs.appendChild(clip);
+                clip.appendChild(rect);
+                clip.appendChild(rect2);
+                clip.id = "clip";
+                this.element.appendChild(defs); // l ${length} 0
+                line.setAttribute("d", `
+                    M 0 ${height / 2}
+                    q ${length / 2} ${curve} ${length} 0
+                `);
+                line.setAttribute("mask", "url(#clip)");
+                line.style.strokeWidth = `${4}px`;
+                line.style.stroke = "black";
+                line.style.fill = "none";
+            }
+        }
+
+        window.addEventListener("mouseup", () => {
+            drag = null;
+        });
+
+        document.addEventListener("DOMContentLoaded", () => {
+            const source = new Shape(64, 240);
+            const target = new Shape(640, 240);
+            const arrow = new Arrow(source, target);
+
+            window.addEventListener("mousemove", (event) => {
+                if (drag !== null) {
+                    const [shape, x, y] = drag;
+                    shape.x = event.clientX - x;
+                    shape.y = event.clientY - y;
+                    shape.redraw();
+                    arrow.redraw();
+                }
+            });
+
+            window.addEventListener("wheel", (event) => {
+                event.preventDefault();
+                curve += event.deltaY;
+                arrow.redraw();
+            }, { passive: false });
+        });
+
+        /// The normalised quadratic Bézier curve is the one whose endpoints are (0, 0) and (1, 0)
+        /// and whose control point is (0.5, 1). The highest point on the curve is therefore
+        /// (0.5, 0.5). The equation of the curve is `y = 2 x (1 - x)`.
+
+        /// Intersects the rectangle centred on `(x, y)` of width `w` and height `h` with the
+        /// Bézier curve `b`.
+        /// Note that intersecting a Bézier curve with a circle is very difficult in general, so we
+        /// approximate rounded rectangles by rectanges for the sake of finding intersections.
+        function intersect_bezier_with_rect(x, y, w, h, b, min = true) {
+            let points = new Array(4).fill(null).map(() => new Point(x, y));
+            points[0].sub(new Point(w/2, h/2));
+            points[1].sub(new Point(-w/2, h/2));
+            points[2].sub(new Point(-w/2, -h/2));
+            points[3].sub(new Point(w/2, -h/2));
+
+            points = points.map((p) => normalise_point(p, b));
+            let intersections = [];
+            for (let i = 0; i < 4; ++i) {
+                const endpoints = [points[i], points[(i + 1) % 4]];
+                // Special-case the vertical line, within some margin of precision to avoid floating-point artefacts.
+                if (Math.abs(endpoints[0].x - endpoints[1].x) <= 10 ** (-10)) {
+                    const y = intersect_bezier_with_vertical_line(endpoints[0].x);
+                    if (y >= 0 && y >= Math.min(endpoints[0].y, endpoints[1].y) && y <= Math.max(endpoints[0].y, endpoints[1].y)) {
+                        // `y` must be at most 0.5.
+                        intersections.push(new Point(endpoints[0].x, y));
+                    }
+                } else {
+                    const m = (endpoints[1].y - endpoints[0].y) / (endpoints[1].x - endpoints[0].x);
+                    const c = endpoints[0].y - m * endpoints[0].x;
+                    // Horizontal or sloping lines.
+                    intersections = intersections.concat(
+                        intersect_bezier_with_line(m, c)
+                            .filter((x) => x >= 0 && x <= 1 && x >= Math.min(endpoints[0].x, endpoints[1].x) && x <= Math.max(endpoints[0].x, endpoints[1].x))
+                            .map((x) => new Point(x, m * x + c))
+                    );
+                }
+            }
+            // There should be at most one intersection point: any more indicates the Bézier curve
+            // is very thin, in which case we pick the point closest to the start of the curve if
+            // `min` is true, or the end otherwise.
+            min = min ? -1 : 1;
+            intersections.sort((a, b) => a.x <= b.x ? min : -min);
+            return intersections.slice(0, 1).map((p) => p.scale(b.l, b.h));
+        }
+
+        /// Intersect the line `y = m x + c` with the normalised quadratic Bézier curve and return
+        /// the `x` co-ordinate.
+        function intersect_bezier_with_line(m, c) {
+            const determinant = m ** 2 - 4 * m + 4 - 8 * c;
+            if (determinant > 0) {
+                return [(2 - m + determinant ** 0.5) / 4, (2 - m - determinant ** 0.5) / 4];
+            } else if (determinant === 0) {
+                return [(2 - m + determinant ** 0.5) / 4];
+            } else {
+                return [];
+            }
+        }
+
+        /// Intersect the line `x = a` with the normalised quadratic Bézier curve and return the `y`
+        /// co-ordinate.
+        function intersect_bezier_with_vertical_line(a) {
+            return 2 * a * (1 - a);
+        }
+
+        /// Normalise a point `p` with respect to the Bézier curve `b`.
+        function normalise_point(p, b) {
+            // Translate the point with respect to the origin.
+            p.sub(b.o);
+            // Rotate -θ around the origin.
+            p.rotate(-b.theta);
+            // Scale the point horizontally and vertically.
+            p.inv_scale(b.l, b.h);
+            return p;
+        }
+
+        class Bezier {
+            /// A Bézier curve with origin `o`, angle `theta`, length `l` and (control point)
+            /// height `h`.
+            constructor(o, theta, l, h) {
+                this.o = o;
+                this.theta = theta;
+                this.l = l;
+                this.h = h;
+            }
+        }
+
+        class Point {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+            }
+
+            sub(p) {
+                this.x -= p.x;
+                this.y -= p.y;
+                return this;
+            }
+
+            rotate(theta) {
+                [this.x, this.y] = [
+                    this.x * Math.cos(theta) - this.y * Math.sin(theta),
+                    this.y * Math.cos(theta) + this.x * Math.sin(theta),
+                ];
+                return this;
+            }
+
+            scale(w, h) {
+                this.x *= w;
+                this.y *= h;
+                return this;
+            }
+
+            inv_scale(w, h) {
+                this.x /= w;
+                this.y /= h;
+                return this;
+            }
+        }
+    </script>
+</head>
+<body>
+</body>
+</html>
