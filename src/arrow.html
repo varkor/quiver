@@ -131,8 +131,8 @@
                     return intersections.length > 0 ? intersections[0] : null;
                 };
 
-                const start = ir("yellow", this.source, true);
-                const end = ir("lime", this.target, false);
+                const start = ir("none", this.source, true);
+                const end = ir("none", this.target, false);
 
                 const path = `
                     M 0 ${height / 2}
@@ -268,28 +268,66 @@
             points[2].sub(new Point(-w/2, -h/2));
             points[3].sub(new Point(w/2, -h/2));
 
-            points = points.map((p) => normalise_point(p, b));
             let intersections = [];
-            for (let i = 0; i < 4; ++i) {
-                const endpoints = [points[i], points[(i + 1) % 4]];
-                // Special-case the vertical line, within some margin of precision to avoid floating-point artefacts.
-                if (Math.abs(endpoints[0].x - endpoints[1].x) <= 10 ** (-10)) {
-                    const y = intersect_bezier_with_vertical_line(endpoints[0].x);
-                    if (y >= 0 && y >= Math.min(endpoints[0].y, endpoints[1].y) && y <= Math.max(endpoints[0].y, endpoints[1].y)) {
-                        // `y` must be at most 0.5.
-                        intersections.push(new Point(endpoints[0].x, y));
+            let h_scale = b.h || 1;
+            points = points.map((p) => normalise_point(p, new Bezier(b.o, b.theta, b.l, h_scale)));
+
+            const EPSILON = 10 ** (-10);
+
+            if (b.h === 0) {
+                // Special-case a straight line, as we can't normalise with respect to this curve.
+                // We're now trying to intersect with a horizontal line (0, 0) to (1, 0).
+                for (let i = 0; i < 4; ++i) {
+                    const endpoints = [points[i], points[(i + 1) % 4]];
+                    if (Math.abs(endpoints[0].x - endpoints[1].x) <= EPSILON) {
+                        // x = a.
+                        if (endpoints[0].x >= 0 && endpoints[0].x <= 1 && Math.min(endpoints[0].y, endpoints[1].y) <= 0 &&
+                            Math.max(endpoints[0].y, endpoints[1].y) >= 0) {
+                                intersections.push(new Point(endpoints[0].x, 0));
+                            }
+                    } else {
+                        const m = (endpoints[1].y - endpoints[0].y) / (endpoints[1].x - endpoints[0].x);
+                        const c = endpoints[0].y - m * endpoints[0].x;
+                        if (m !== 0) {
+                            const x = -c / m;
+                            if (x >= 0 && x <= 1) {
+                                intersections.push(new Point(x, 0));
+                            }
+                        } else if (Math.abs(endpoints[0].y) <= EPSILON) {
+                            // Lines lie along one another.
+                            const mn = Math.min(endpoints[0].x, endpoints[1].x);
+                            const mx = Math.max(endpoints[0].x, endpoints[1].x);
+                            if (mn <= 1 && mx >= 0) {
+                                intersections.push(new Point(Math.max(mn, 0), 0));
+                                intersections.push(new Point(Math.min(mx, 1), 0));
+                            }
+                        }
                     }
-                } else {
-                    const m = (endpoints[1].y - endpoints[0].y) / (endpoints[1].x - endpoints[0].x);
-                    const c = endpoints[0].y - m * endpoints[0].x;
-                    // Horizontal or sloping lines.
-                    intersections = intersections.concat(
-                        intersect_bezier_with_line(m, c)
-                            .filter((x) => x >= 0 && x <= 1 && x >= Math.min(endpoints[0].x, endpoints[1].x) && x <= Math.max(endpoints[0].x, endpoints[1].x))
-                            .map((x) => new Point(x, m * x + c))
-                    );
+                }
+            } else {
+                // Usual case. Non-trivial.
+                for (let i = 0; i < 4; ++i) {
+                    const endpoints = [points[i], points[(i + 1) % 4]];
+                    // Special-case the vertical line, within some margin of precision to avoid floating-point artefacts.
+                    if (Math.abs(endpoints[0].x - endpoints[1].x) <= EPSILON) {
+                        const y = intersect_bezier_with_vertical_line(endpoints[0].x);
+                        if (y >= 0 && y >= Math.min(endpoints[0].y, endpoints[1].y) && y <= Math.max(endpoints[0].y, endpoints[1].y)) {
+                            // `y` must be at most 0.5.
+                            intersections.push(new Point(endpoints[0].x, y));
+                        }
+                    } else {
+                        const m = (endpoints[1].y - endpoints[0].y) / (endpoints[1].x - endpoints[0].x);
+                        const c = endpoints[0].y - m * endpoints[0].x;
+                        // Horizontal or sloping lines.
+                        intersections = intersections.concat(
+                            intersect_bezier_with_line(m, c)
+                                .filter((x) => x >= 0 && x <= 1 && x >= Math.min(endpoints[0].x, endpoints[1].x) && x <= Math.max(endpoints[0].x, endpoints[1].x))
+                                .map((x) => new Point(x, m * x + c))
+                        );
+                    }
                 }
             }
+
             // There should be at most one intersection point: any more indicates the Bézier curve
             // is very thin, in which case we pick the point closest to the start of the curve if
             // `min` is true, or the end otherwise.
@@ -297,9 +335,8 @@
             intersections.sort((a, b) => a.x <= b.x ? min : -min);
 
             // Derivative of Bézier curve is `2 - 4x`.
-
             return intersections.slice(0, 1)
-                .map(p => Object.assign({ angle: Math.atan2((2 - 4 * p.x) * b.h, b.l) }, p.scale(b.l, b.h)));
+                .map(p => Object.assign({ angle: Math.atan2((2 - 4 * p.x) * h_scale, b.l) }, p.scale(b.l, h_scale)));
         }
 
         /// Intersect the line `y = m x + c` with the normalised quadratic Bézier curve and return
