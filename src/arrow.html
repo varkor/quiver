@@ -12,7 +12,7 @@
 
         .box {
             position: absolute;
-            background: red;
+            background: darkslategrey;
             border-radius: 4px;
         }
 
@@ -73,15 +73,25 @@
                 const SPACING = 4.5;
                 const STROKE_WIDTH = 1.5;
 
+                const PADDING_Y = 0;
+
+                const line_width = level * STROKE_WIDTH + (level - 1) * SPACING;
+
+                const HEAD_WIDTH = SPACING + (level - 1) * 2;
+                const HEAD_HEIGHT = line_width + SPACING * 2;
+
+                const PADDING_X = HEAD_HEIGHT / 2;
+
                 const length = Math.hypot(this.target.y - this.source.y, this.target.x - this.source.x);
-                const height = Math.abs(curve) * 2 + level * STROKE_WIDTH + (level - 1) * SPACING + 100;
+                const height = Math.abs(curve) + HEAD_HEIGHT + PADDING_Y;
                 const angle = Math.atan2(this.target.y - this.source.y, this.target.x - this.source.x);
-                this.element.style.width = `${length}px`;
+                this.element.style.width = `${length + PADDING_X * 2}px`;
                 this.element.style.height = `${height}px`;
                 this.element.style.transformOrigin = `0 ${height / 2}px`;
-                this.element.style.transform = `translate(${this.source.x}px, ${this.source.y - height / 2}px) rotate(${angle}rad)`;
+                this.element.style.transform = `translate(${this.source.x}px, ${this.source.y - height / 2}px) rotate(${angle}rad) translate(${-PADDING_X}px, 0)`;
 
                 this.element.innerHTML = "";
+                this.element.setAttribute("viewBox", `0 0 ${length} ${height}`);
                 const line = document.createElementNS("http://www.w3.org/2000/svg", "path");
                 const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
                 const clip = document.createElementNS("http://www.w3.org/2000/svg", "mask");
@@ -91,8 +101,9 @@
                 const fill = document.createElementNS("http://www.w3.org/2000/svg", "rect");
                 clip.appendChild(fill);
 
-                fill.setAttribute("width", length);
+                fill.setAttribute("width", length + PADDING_X * 2);
                 fill.setAttribute("height", height);
+                fill.setAttribute("x", -PADDING_X);
                 fill.setAttribute("fill", "white");
                 rect.setAttribute("x", -this.source.width / 2);
                 rect.setAttribute("y", (height - this.source.height) / 2);
@@ -157,13 +168,9 @@
                 this.element.appendChild(defs);
                 line.setAttribute("d", path);
                 line.setAttribute("mask", "url(#clip)");
-                const line_width = level * STROKE_WIDTH + (level - 1) * SPACING;
                 line.style.strokeWidth = `${line_width}px`;
                 line.style.stroke = "black";
                 line.style.fill = "none";
-
-                const HEAD_WIDTH = SPACING + (level - 1) * 2;
-                const HEAD_HEIGHT = line_width + SPACING * 2;
 
                 const create_head = (where, is_start, mask) => {
                     if (where !== null) {
