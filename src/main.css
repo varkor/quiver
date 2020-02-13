@@ -110,7 +110,7 @@ body {
 .insertion-point {
     display: block;
     position: absolute;
-    width: var(--cell-size); height: var(--cell-size);
+    width: calc(var(--cell-size) - 2px); height: calc(var(--cell-size) - 2px);
     transform: translate(-50%, -50%);
 
     background: hsla(0, 0%, 0%, 0);
