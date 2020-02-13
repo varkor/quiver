@@ -539,7 +539,9 @@ body {
     position: absolute;
     width: 100%;
     left: 0; bottom: 0;
+    height: calc(114px - 8px);
     padding: 0 8px;
+    overflow: auto;
 }
 
 .panel button {
