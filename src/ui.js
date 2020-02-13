@@ -73,6 +73,33 @@ DOM.SVGElement = class extends DOM.Element {
     }
 };
 
+/// A class for conveniently dealing with canvases.
+DOM.Canvas = class extends DOM.Element {
+    constructor(from, width, height, attributes = {}, style = {}) {
+        super(from || "canvas", attributes, style);
+        this.context = this.element.getContext("2d");
+        if (from === null) {
+            this.resize(width, height);
+        }
+        this.context.setTransform(window.devicePixelRatio, 0, 0, window.devicePixelRatio, 0, 0);
+    }
+
+    /// Resizes and clears the canvas.
+    resize(width, height) {
+        const dpr = window.devicePixelRatio;
+        // Only resize the canvas when necessary.
+        if (width * dpr !== this.element.width || height * dpr != this.element.height) {
+            this.element.width = width * dpr;
+            this.element.height = height * dpr;
+            this.element.style.width = `${width}px`;
+            this.element.style.height = `${height}px`;
+            this.context.setTransform(dpr, 0, 0, dpr, 0, 0);
+        } else {
+            this.context.clearRect(0, 0, width, height);
+        }
+    }
+}
+
 /// A directed n-pseudograph, in which (k + 1)-cells can connect k-cells.
 class Quiver {
     constructor() {
@@ -1300,6 +1327,11 @@ class UI {
             this.pan_view(new Offset(-event.deltaX, -event.deltaY));
         }, { passive: false });
 
+        // The canvas is only as big as the window, so we need to resize it when the window resizes.
+        window.addEventListener("resize", () => {
+            this.update_grid(new DOM.Canvas(this.canvas.element.querySelector(".grid")), this.view);
+        });
+
         // Add a move to the history.
         const commit_move_event = () => {
             if (!this.state.previous.sub(this.state.origin).is_zero()) {
@@ -1598,7 +1630,8 @@ class UI {
         });
 
         // Set the grid background.
-        this.set_background(this.canvas.element, this.view);
+        this.canvas.element.style.setProperty("--cell-size", `${this.cell_size}px`);
+        this.initialise_grid(this.canvas, this.view);
     }
 
     /// Active MathJax or KaTeX when it becomes available,
@@ -1746,7 +1779,7 @@ class UI {
             cell.style.left = `${cell.offsetLeft + offset.left}px`;
             cell.style.top = `${cell.offsetTop + offset.top}px`;
         }
-        this.set_background(this.canvas.element, this.view);
+        this.update_grid(new DOM.Canvas(this.canvas.element.querySelector(".grid")), this.view);
     }
 
     /// Returns a unique identifier for an object.
@@ -1938,55 +1971,55 @@ class UI {
         }
     }
 
-    // Set the grid background for the canvas.
-    set_background(element, offset) {
+    /// Create the canvas upon which the grid will be drawn.
+    initialise_grid(element, offset) {
+        const [width, height] = [document.body.offsetWidth, document.body.offsetHeight];
+        const canvas = new DOM.Canvas(null, width, height, { class: "grid" });
+        element.add(canvas);
+        this.update_grid(canvas, offset);
+    }
+
+    /// Update the grid with respect to the view and size of the window.
+    update_grid(canvas, offset) {
         // Constants for parameters of the grid pattern.
         // The width of the cell border lines.
         const BORDER_WIDTH = 2;
         // The (average) length of the dashes making up the cell border lines.
-        const DASH_LENGTH = 6;
+        const DASH_LENGTH = this.cell_size / 16;
         // The border colour.
         const BORDER_COLOUR = "lightgrey";
 
-        // Because we're perfectionists, we want to position the dashes so that the dashes forming
-        // the corners of each cell make a perfect symmetrical cross. This works out how to offset
-        // the dashes to do so. Full disclosure: I derived this equation observationally and it may
-        // not behave perfectly for all parameters.
-        const dash_offset = (2 * (this.cell_size / 16 % (DASH_LENGTH / 2)) - 1 + DASH_LENGTH)
-            % DASH_LENGTH + 1 - (DASH_LENGTH / 2);
+        const [width, height] = [document.body.offsetWidth, document.body.offsetHeight];
+        canvas.resize(width, height);
 
-        // We only want to set the background image if it's not already set: otherwise we
-        // can update it simply by updating the position without having to reset everything.
-        if (element.style.backgroundImage === "") {
-            // Construct the linear gradient corresponding to the dashed pattern (in a single cell).
-            let dashes = "";
-            for (let x = 0; x + DASH_LENGTH * 2 < this.cell_size;) {
-                dashes += `
-                    transparent ${x += DASH_LENGTH}px, white ${x}px,
-                    white ${x += DASH_LENGTH}px, transparent ${x}px,
-                `;
-            }
-            // Slice off the whitespace and trailing comma.
-            dashes = dashes.trim().slice(0, -1);
+        const mod = (a, b) => ((a % b) + b) % b;
 
-            const grid_background = `
-                linear-gradient(${dashes}),
-                linear-gradient(90deg, transparent ${this.cell_size - BORDER_WIDTH}px,
-                    ${BORDER_COLOUR} 0),
-                linear-gradient(90deg, ${dashes}),
-                linear-gradient(transparent ${this.cell_size - BORDER_WIDTH}px, ${BORDER_COLOUR} 0)
-            `.trim().replace(/\s+/g, " ");
+        const context = canvas.context;
+        context.strokeStyle = BORDER_COLOUR;
+        context.lineWidth = BORDER_WIDTH;
+        context.setLineDash([DASH_LENGTH]);
 
-            element.style.setProperty("--cell-size", `${this.cell_size}px`);
-            element.style.backgroundImage = grid_background;
+        // We want to centre the horizontal and vertical dashes, so we get little crosses in the
+        // corner of each grid cell.
+        const dash_offset = -DASH_LENGTH / 2;
+
+        // Draw the vertical lines.
+        context.beginPath();
+        for (let x = 0; x <= width; x += this.cell_size) {
+            context.moveTo(x + mod(offset.left, this.cell_size), 0);
+            context.lineTo(x + mod(offset.left, this.cell_size), height);
         }
+        context.lineDashOffset = -(offset.top + dash_offset);
+        context.stroke();
 
-        element.style.backgroundPosition = `
-            ${offset.left}px ${dash_offset + offset.top}px,
-            ${BORDER_WIDTH / 2 + offset.left}px ${offset.top}px,
-            ${dash_offset + offset.left}px ${offset.top}px,
-            ${offset.left}px ${BORDER_WIDTH / 2 + offset.top}px
-        `;
+        // Draw the horizontal lines.
+        context.beginPath();
+        for (let y = 0; y <= height; y += this.cell_size) {
+            context.moveTo(0, y + mod(offset.top, this.cell_size));
+            context.lineTo(width, y + mod(offset.top, this.cell_size));
+        }
+        context.lineDashOffset = -(offset.left + dash_offset);
+        context.stroke();
     }
 
     /// Load macros from a string, which will be used in all LaTeX labels.
@@ -2700,7 +2733,7 @@ class Panel {
             if (this.export !== format) {
                 ui.switch_mode(new UIState.Modal());
 
-                // Get the base 64 URI encoding of the diagram.
+                // Get the encoding of the diagram.
                 const output = ui.quiver.export(format);
 
                 let export_pane;
