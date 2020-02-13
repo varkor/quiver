@@ -1209,15 +1209,19 @@ UIState.Move = class extends UIState {
     }
 
     release(ui) {
+        // Make sure we're not trying to release any cells on top of existing ones.
         for (const cell of this.selection) {
-            if (!ui.positions.has(`${cell.position}`)) {
-                ui.positions.set(`${cell.position}`, cell);
-            } else {
+            if (ui.positions.has(`${cell.position}`)) {
                 throw new Error(
                     "new cell position already contains a cell:",
                     ui.positions.get(`${cell.position}`),
                 );
+                return;
             }
+        }
+        // Now we know the positions are free, we can set them with impunity.
+        for (const cell of this.selection) {
+            ui.positions.set(`${cell.position}`, cell);
         }
     }
 };
