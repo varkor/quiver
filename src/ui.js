@@ -1308,6 +1308,9 @@ class UI {
         this.toolbar.initialise(this);
         this.element.appendChild(this.toolbar.element);
 
+        const long_input = new DOM.Element("input", { type: "text", class: "long-input" });
+        this.element.appendChild(long_input.element);
+
         // Add the logo.
         this.element.appendChild(
             new DOM.Element("a", { href: "https://github.com/varkor/quiver", target: "_blank" })

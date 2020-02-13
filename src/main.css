@@ -604,6 +604,47 @@ body {
     content: "✕";
 }
 
+/* The long input */
+
+.long-input {
+    position: fixed;
+    width: 400px;
+    background: red;
+    left: 40%; bottom: 72px;
+    transform: translateX(-50%);
+
+    padding: 2px 4px;
+
+    background: hsl(0, 0%, 16%);
+    border: hsl(0, 0%, 28%) solid 1px;
+    border-radius: 2px;
+    outline: none;
+
+    font-size: 18px;
+    font-family: monospace;
+    color: hsl(0, 0%, 96%);
+}
+
+.long-input:hover {
+    background: hsl(0, 0%, 18%);
+}
+
+.long-input:focus {
+    background: hsl(0, 0%, 96%);
+    border-color: hsl(200, 100%, 40%);
+
+    color: hsl(0, 0%, 16%);
+}
+
+.long-input:disabled {
+    background: hsl(0, 0%, 20%);
+    border-color: hsl(0, 0%, 28%);
+}
+
+.long-input.flash {
+    animation: shadow-flash 0.2s;
+}
+
 /* The toolbar */
 
 .toolbar {
