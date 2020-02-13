@@ -1324,6 +1324,9 @@ class UI {
             // We don't want to scroll while using the mouse wheel.
             event.preventDefault();
 
+            // Hide the insertion point if it is visible.
+            this.element.querySelector(".insertion-point").classList.remove("revealed");
+
             this.pan_view(new Offset(-event.deltaX, -event.deltaY));
         }, { passive: false });
 
@@ -1392,6 +1395,8 @@ class UI {
         this.element.addEventListener("mousedown", (event) => {
             if (event.button === 0) {
                 if (this.in_mode(UIState.Pan)) {
+                    // Hide the insertion point if it is visible.
+                    this.element.querySelector(".insertion-point").classList.remove("revealed");
                     // Record the position the pointer was pressed at, so we can pan relative
                     // to that location by dragging.
                     this.state.origin = this.offset_from_event(event);
@@ -1416,6 +1421,14 @@ class UI {
             return new Vertex(this, label, position);
         };
 
+        // Move the insertion point under the pointer.
+        const reposition_insertion_point = (event) => {
+            const position = this.position_from_event(this.view, event);
+            const offset = this.offset_from_position(this.view, position);
+            offset.reposition(insertion_point);
+            return position;
+        }
+
         // Clicking on the insertion point reveals it,
         // after which another click adds a new node.
         insertion_point.addEventListener("mousedown", (event) => {
@@ -1424,6 +1437,7 @@ class UI {
                     event.preventDefault();
                     if (!insertion_point.classList.contains("revealed")) {
                         // Reveal the insertion point upon a click.
+                        reposition_insertion_point(event);
                         insertion_point.classList.add("revealed", "pending");
                     } else {
                         // We only stop propagation in this branch, so that clicking once in an
@@ -1560,10 +1574,7 @@ class UI {
 
         // Moving the insertion point, panning, and rearranging cells.
         this.element.addEventListener("mousemove", (event) => {
-            // Move the insertion point under the pointer.
-            const position = this.position_from_event(this.view, event);
-            const offset = this.offset_from_position(this.view, position);
-            offset.reposition(insertion_point);
+            const position = reposition_insertion_point(event);
 
             if (this.in_mode(UIState.Pan) && this.state.origin !== null) {
                 const new_offset = this.offset_from_event(event);
