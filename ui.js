@@ -414,11 +414,9 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                         }
                     }
                 }
-                if (edge.options.offset > 0) {
-                    parameters.push(`shift right=${edge.options.offset}`);
-                }
-                if (edge.options.offset < 0) {
-                    parameters.push(`shift left=${-edge.options.offset}`);
+                if (edge.options.offset !== 0) {
+                    const side = edge.options.offset > 0 ? "right" : "left";
+                    parameters.push(`shift ${side}=${Math.abs(edge.options.offset)}`);
                 }
 
                 let style = "";
@@ -752,7 +750,7 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
         assert(vertices <= cells.length, "invalid number of vertices");
 
         // We want to centre the view on the diagram, so we take the mean of all vertex positions.
-        let offset = new Position(0, 0);
+        let offset = Position.zero();
         // If we encounter errors while loading cells, we skip the malformed cell and try to
         // continue loading the diagram, but we want to report the errors we encountered afterwards,
         // to let the user know we were not entirely successful.
@@ -840,6 +838,10 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
 class Position {
     constructor(x, y) {
         [this.x, this.y] = [x, y];
+    }
+
+    static zero() {
+        return new Position(0, 0);
     }
 
     toString() {
@@ -2213,11 +2215,12 @@ class History {
             }
             // Self-inverse actions often work by inverting `from`/`to`.
             const [from, to] = !reverse ? ["from", "to"] : ["to", "from"];
+            // Actions will often require cells to be rendered transitively.
+            const cells = new Set();
             switch (kind) {
                 case "move":
                     // We perform these loops in sequence as cells may move
                     // directly into positions that have just been unoccupied.
-                    const vertices = new Set();
                     for (const displacement of action.displacements) {
                         ui.positions.delete(`${displacement[from]}`);
                     }
@@ -2227,10 +2230,7 @@ class History {
                             `${displacement.vertex.position}`,
                             displacement.vertex,
                         );
-                        vertices.add(displacement.vertex);
-                    }
-                    for (const cell of ui.quiver.transitive_dependencies(vertices)) {
-                        cell.render(ui);
+                        cells.add(displacement.vertex);
                     }
                     break;
                 case "create":
@@ -2261,13 +2261,9 @@ class History {
                     update_panel = true;
                     break;
                 case "offset":
-                    const edges = new Set();
                     for (const offset of action.offsets) {
                         offset.edge.options.offset = offset[to];
-                        edges.add(offset.edge);
-                    }
-                    for (const cell of ui.quiver.transitive_dependencies(edges)) {
-                        cell.render(ui);
+                        cells.add(offset.edge);
                     }
                     update_panel = true;
                     break;
@@ -2295,8 +2291,17 @@ class History {
                     update_panel = true;
                     break;
             }
+            for (const cell of ui.quiver.transitive_dependencies(cells)) {
+                cell.render(ui);
+            }
         }
 
+        if (update_panel) {
+            ui.panel.update(ui);
+        }
+        // Though we have already updated the `panel` if `update_panel`, `undo` and
+        // `redo` may want to update the panel again, if they change which cells are
+        // selected, so we pass this flag on.
         return update_panel;
     }
 
@@ -4051,7 +4056,7 @@ class Edge extends Cell {
         // If the arrow has zero or negative length, then we can just return here.
         // Otherwise we just get SVG errors from drawing invalid shapes.
         if (length <= 0) {
-            // Pick an arbitrary direction to return.
+            // Pick an arbitrary direction (0°) to return.
             return 0;
         }
 
@@ -4253,7 +4258,7 @@ class Edge extends Cell {
                     // Draw all the lines.
                     for (let i = 0; i < level; ++i) {
                         let y = (i + (1 - level) / 2) * SPACING;
-                        // This edge case is necessary simply for very short edges.
+                        // This guard condition is necessary simply for very short edges.
                         if (Math.abs(y) <= head_height / 2) {
                             // If the tail is drawn as a head, as is the case with `"mono"`,
                             // then we need to shift the lines instead of simply shortening
