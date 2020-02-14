@@ -107,6 +107,10 @@ body {
 
 /* Grid interaction */
 
+.grid.hidden {
+    display: none;
+}
+
 .insertion-point {
     display: block;
     position: absolute;

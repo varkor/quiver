@@ -3381,6 +3381,13 @@ class Toolbar {
             }], true);
         });
 
+        // Toggle the grid with `h`.
+        add_shortcut([
+            { key: "h" }
+        ], () => {
+            ui.canvas.element.querySelector(".grid").classList.toggle("hidden");
+        });
+
         // Handle global key presses (such as, but not exclusively limited to, keyboard shortcuts).
         const handle_shortcut = (type, event) => {
             // Many keyboard shortcuts are only relevant when we're not midway
