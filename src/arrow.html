@@ -68,7 +68,11 @@
             constructor(source, target) {
                 this.source = source;
                 this.target = target;
-                this.element = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+                const ns = "http://www.w3.org/2000/svg";
+                this.element = document.createElementNS(ns, "svg");
+                // We need to explicitly set the namespace attribute so that the SVG can be saved as
+                // a standalone file.
+                this.element.setAttribute("xmlns", ns);
                 this.redraw();
                 document.body.appendChild(this.element);
             }
