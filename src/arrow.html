@@ -24,6 +24,10 @@
     </style>
     <script>
 
+        // TODO: cut head/tail as well as edge
+        // TODO: make sure pixel perfect + 0.5px if necessary.
+        // As many of the styles should be combinable (and parametric) as possible.
+
         // Remove rounded rect from svg drawing.
         // Find intersection of Bezier with rounded rect.
         // Draw tails.
@@ -145,10 +149,16 @@
                 const start = ir("none", this.source, true);
                 const end = ir("none", this.target, false);
 
-                const path = `
-                    M 0 ${height / 2}
-                    q ${length / 2} ${curve} ${length} 0
-                `;
+                const body_shape = "none";
+                let path;
+                if (body_shape === "none") {
+                    path = `
+                        M 0 ${height / 2}
+                        q ${length / 2} ${curve} ${length} 0
+                    `;
+                } else if (body_shape === "squiggly") {
+
+                }
 
                 let cut = true;
                 for (let i = level - 1; i > 0; --i) {
@@ -161,18 +171,25 @@
                     cut = !cut;
                 }
 
+                const body_style = "none";
+
                 defs.appendChild(clip);
                 clip.appendChild(rect);
                 clip.appendChild(rect2);
                 clip.id = "clip";
                 this.element.appendChild(defs);
                 line.setAttribute("d", path);
+                if (body_style === "dashed") {
+                    line.setAttribute("stroke-dasharray", "6");
+                } else if (body_style === "dotted") {
+                    line.setAttribute("stroke-dasharray", "2 4");
+                }
                 line.setAttribute("mask", "url(#clip)");
                 line.style.strokeWidth = `${line_width}px`;
                 line.style.stroke = "black";
                 line.style.fill = "none";
 
-                const create_head = (where, is_start, mask) => {
+                const create_head = (type, where, is_start, mask) => {
                     if (where !== null) {
                         const head = document.createElementNS("http://www.w3.org/2000/svg", "path");
                         head.style.strokeWidth = STROKE_WIDTH;
@@ -184,42 +201,112 @@
                         }
                         const mul = is_start ? 1 : -1;
                         const flag = is_start ? 0 : 1;
-                        head.setAttribute("d", `
-                            M ${where.x} ${where.y + height / 2}
-                            a ${mul * HEAD_WIDTH} ${HEAD_HEIGHT / 2} 0 0 ${flag} ${mul * HEAD_WIDTH} ${-HEAD_HEIGHT / 2}
-                            ${mask ? `L ${where.x + mul * HEAD_WIDTH} ${height / 2 - HEAD_HEIGHT / 2 + where.y}
-                            L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 - HEAD_HEIGHT / 2 + where.y}
-                            L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 + where.y}` : ""}
+                        if (type === "arrowhead") {
+                            head.setAttribute("d", `
+                                M ${where.x} ${where.y + height / 2}
+                                a ${mul * HEAD_WIDTH} ${HEAD_HEIGHT / 2} 0 0 ${flag} ${mul * HEAD_WIDTH} ${-HEAD_HEIGHT / 2}
+                                ${mask ? `L ${where.x + mul * HEAD_WIDTH} ${height / 2 - HEAD_HEIGHT / 2 + where.y}
+                                L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 - HEAD_HEIGHT / 2 + where.y}
+                                L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 + where.y}` : ""}
 
-                            M ${where.x} ${where.y + height / 2}
-                            a ${mul * HEAD_WIDTH} ${HEAD_HEIGHT / 2} 0 0 ${1 - flag} ${mul * HEAD_WIDTH} ${HEAD_HEIGHT / 2}
-                            ${mask ? `L ${where.x + mul * HEAD_WIDTH} ${height / 2 + HEAD_HEIGHT / 2 + where.y}
-                            L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 + HEAD_HEIGHT / 2 + where.y}
-                            L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 + where.y}` : ""}
-                        `);
-                        head.setAttribute("transform", `rotate(${where.angle * 180 / Math.PI} ${where.x} ${where.y + height / 2})`);
+                                M ${where.x} ${where.y + height / 2}
+                                a ${mul * HEAD_WIDTH} ${HEAD_HEIGHT / 2} 0 0 ${1 - flag} ${mul * HEAD_WIDTH} ${HEAD_HEIGHT / 2}
+                                ${mask ? `L ${where.x + mul * HEAD_WIDTH} ${height / 2 + HEAD_HEIGHT / 2 + where.y}
+                                L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 + HEAD_HEIGHT / 2 + where.y}
+                                L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 + where.y}` : ""}
+                            `);
+                            head.setAttribute("transform", `rotate(${where.angle * 180 / Math.PI} ${where.x} ${where.y + height / 2})`);
+                        } else if (type === "epi") {
+                            const HEAD_SPACING = HEAD_WIDTH / 2 + 2;
+                            let epi_path = "";
+                            const heads = 2;
+                            for (let i = heads - 1; i >= 0; --i) {
+                                epi_path += `M ${where.x + mul * HEAD_SPACING * i} ${where.y + height / 2}
+                                a ${mul * HEAD_WIDTH} ${HEAD_HEIGHT / 2} 0 0 ${flag} ${mul * HEAD_WIDTH} ${-HEAD_HEIGHT / 2}`;
+                                if (i === heads - 1 && mask) {
+                                    epi_path += `L ${where.x + mul * (HEAD_WIDTH + HEAD_SPACING) * i} ${height / 2 - HEAD_HEIGHT / 2 + where.y}
+                                    L ${where.x + mul * HEAD_SPACING * i - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 - HEAD_HEIGHT / 2 + where.y}
+                                    L ${where.x + mul * HEAD_SPACING * i - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 + where.y}`;
+                                }
+                                epi_path += `M ${where.x + mul * HEAD_SPACING * i} ${where.y + height / 2}
+                                a ${mul * HEAD_WIDTH} ${HEAD_HEIGHT / 2} 0 0 ${1 - flag} ${mul * HEAD_WIDTH} ${HEAD_HEIGHT / 2}`;
+                                if (i === heads - 1 && mask) {
+                                    epi_path += `L ${where.x + mul * (HEAD_WIDTH + HEAD_SPACING) * i} ${height / 2 + HEAD_HEIGHT / 2 + where.y}
+                                    L ${where.x + mul * HEAD_SPACING * i - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 + HEAD_HEIGHT / 2 + where.y}
+                                    L ${where.x + mul * HEAD_SPACING * i - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 + where.y}`;
+                                }
+                            }
+                            head.setAttribute("d", epi_path);
+                            head.setAttribute("transform", `rotate(${where.angle * 180 / Math.PI} ${where.x} ${where.y + height / 2})`);
+                        } else if (type === "mono") {
+                            head.setAttribute("d", `
+                                M ${where.x + mul * HEAD_WIDTH} ${where.y + height / 2}
+                                a ${mul * HEAD_WIDTH} ${HEAD_HEIGHT / 2} 0 0 ${1 - flag} ${-mul * HEAD_WIDTH} ${-HEAD_HEIGHT / 2}
+                                ${mask ? `L ${where.x + mul * HEAD_WIDTH} ${height / 2 - HEAD_HEIGHT / 2 + where.y}
+                                L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 - HEAD_HEIGHT / 2 + where.y}
+                                L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 + where.y}` : ""}
+
+                                M ${where.x + mul * HEAD_WIDTH} ${where.y + height / 2}
+                                a ${mul * HEAD_WIDTH} ${HEAD_HEIGHT / 2} 0 0 ${flag} ${-mul * HEAD_WIDTH} ${HEAD_HEIGHT / 2}
+                                ${mask ? `L ${where.x + mul * HEAD_WIDTH} ${height / 2 + HEAD_HEIGHT / 2 + where.y}
+                                L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 + HEAD_HEIGHT / 2 + where.y}
+                                L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 + where.y}` : ""}
+                            `);
+                            head.setAttribute("transform", `rotate(${where.angle * 180 / Math.PI} ${where.x} ${where.y + height / 2})`);
+                        } else if (type === "maps to") {
+                            const OFFSET_PADDING = 12;
+                            head.setAttribute("d", `
+                                M ${where.x + mul * OFFSET_PADDING} ${where.y + height / 2}
+                                l ${0} ${-HEAD_HEIGHT / 2}
+                                ${mask ? `L ${where.x + mul * HEAD_WIDTH} ${height / 2 - HEAD_HEIGHT / 2 + where.y}
+                                L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 - HEAD_HEIGHT / 2 + where.y}
+                                L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 + where.y}` : ""}
+
+                                M ${where.x + mul * OFFSET_PADDING} ${where.y + height / 2}
+                                l ${0} ${HEAD_HEIGHT / 2}
+                                ${mask ? `L ${where.x + mul * HEAD_WIDTH} ${height / 2 + HEAD_HEIGHT / 2 + where.y}
+                                L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 + HEAD_HEIGHT / 2 + where.y}
+                                L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 + where.y}` : ""}
+                            `);
+                            head.setAttribute("transform", `rotate(${where.angle * 180 / Math.PI} ${where.x} ${where.y + height / 2})`);
+                        } else if (type.startsWith("harpoon")) {
+                            // TODO: this should be shifted up
+                            const h = line_width + SPACING;
+                            const flip = type.endsWith("top") ? 1 : -1;
+                            head.setAttribute("d", `
+                                M ${where.x} ${where.y + height / 2 + flip * line_width / 2}
+                                a ${mul * HEAD_WIDTH} ${h} 0 0 ${flip === 1 ? flag : 1 - flag} ${mul * HEAD_WIDTH} ${-h * flip}
+                                ${mask ? `L ${where.x + mul * HEAD_WIDTH} ${height / 2 - (line_width / 2 + SPACING) * flip + where.y}
+                                L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 - (line_width / 2 + SPACING) * flip + where.y + flip * STROKE_WIDTH * 2}
+                                L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 + flip * line_width / 2 + where.y + flip * STROKE_WIDTH * 2}` : ""}
+                            `);
+                            head.setAttribute("transform", `rotate(${where.angle * 180 / Math.PI} ${where.x} ${where.y + height / 2})`);
+                        } else if (type === "none") {
+                            // Don't do anything.
+                            // TODO: should probably draw padding, though
+                        }
                         return head;
                     }
                     return null;
                 }
 
-                let draw_head = (where, is_start) => {
-                    const head = create_head(where, is_start, false);
+                let draw_head = (type, where, is_start) => {
+                    const head = create_head(type, where, is_start, false);
                     if (head !== null) {
                         this.element.appendChild(head);
                     }
-                    const mask = create_head(where, is_start, true);
+                    const mask = create_head(type, where, is_start, true);
                     if (mask !== null) {
                         clip.appendChild(mask);
                     }
-                    // const head2 = create_head(where, is_start, false);
+                    // const head2 = create_head(type, where, is_start, false);
                     // if (head2 !== null) {
                     //     head2.style.stroke = "white";
                     //     clip.appendChild(head2);
                     // }
                 };
-                draw_head(start, true);
-                draw_head(end, false);
+                draw_head("arrowhead", start, true);
+                draw_head("arrowhead", end, false);
             }
         }
 
