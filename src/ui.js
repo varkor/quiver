@@ -2445,7 +2445,12 @@ class Panel {
         this.create_option_list(
             ui,
             local,
-            [["left",], ["centre",], ["over",], ["right",]],
+            [
+                ["left", "Left align label", {}],
+                ["centre", "Centre align label (clear)", {}],
+                ["over", "Centre align label (over)", {}],
+                ["right", "Right align label", {}]
+            ],
             "label-alignment",
             [],
             false, // `disabled`
@@ -2559,12 +2564,14 @@ class Panel {
 
         // The button to reverse an edge.
         local.add(
-            new DOM.Element("button", { disabled: true }).add("⇌ Reverse").listen("click", () => {
-                ui.history.add(ui, [{
-                    kind: "reverse",
-                    cells: ui.selection,
-                }], true);
-            })
+            new DOM.Element("button", { title: "Reverse arrows", disabled: true })
+                .add("⇌ Reverse")
+                .listen("click", () => {
+                    ui.history.add(ui, [{
+                        kind: "reverse",
+                        cells: ui.selection,
+                    }], true);
+                })
         );
 
         // The list of tail styles.
@@ -2611,11 +2618,11 @@ class Panel {
             ui,
             local,
             [
-                ["none", { name: "none" }],
-                ["maps to", { name: "maps to" }],
-                ["mono", { name: "mono"} ],
-                ["top-hook", { name: "hook", side: "top" }, ["short"]],
-                ["bottom-hook", { name: "hook", side: "bottom" }, ["short"]],
+                ["none", "No tail", { name: "none" }],
+                ["maps to", "Maps to", { name: "maps to" }],
+                ["mono", "Mono", { name: "mono"} ],
+                ["top-hook", "Top hook", { name: "hook", side: "top" }, ["short"]],
+                ["bottom-hook", "Bottom hook", { name: "hook", side: "bottom" }, ["short"]],
             ],
             "tail-type",
             ["vertical", "short", "arrow-style"],
@@ -2642,12 +2649,12 @@ class Panel {
             ui,
             local,
             [
-                ["1-cell", { name: "cell", level: 1 }],
-                ["2-cell", { name: "cell", level: 2 }],
-                ["dashed", { name: "dashed" }],
-                ["dotted", { name: "dotted" }],
-                ["squiggly", { name: "squiggly" }],
-                ["none", { name: "none" }],
+                ["1-cell", "1-cell", { name: "cell", level: 1 }],
+                ["2-cell", "2-cell", { name: "cell", level: 2 }],
+                ["dashed", "Dashed", { name: "dashed" }],
+                ["dotted", "Dotted", { name: "dotted" }],
+                ["squiggly", "Squiggly", { name: "squiggly" }],
+                ["none", "No body", { name: "none" }],
             ],
             "body-type",
             ["vertical", "arrow-style"],
@@ -2673,11 +2680,11 @@ class Panel {
             ui,
             local,
             [
-                ["arrowhead", { name: "arrowhead" }],
-                ["none", { name: "none" }],
-                ["epi", { name: "epi"} ],
-                ["top-harpoon", { name: "harpoon", side: "top" }, ["short"]],
-                ["bottom-harpoon", { name: "harpoon", side: "bottom" }, ["short"]],
+                ["arrowhead", "Arrowhead", { name: "arrowhead" }],
+                ["none", "No arrowhead", { name: "none" }],
+                ["epi", "Epi", { name: "epi"} ],
+                ["top-harpoon", "Top harpoon", { name: "harpoon", side: "top" }, ["short"]],
+                ["bottom-harpoon", "Bottom harpoon", { name: "harpoon", side: "bottom" }, ["short"]],
             ],
             "head-type",
             ["vertical", "short", "arrow-style"],
@@ -2703,9 +2710,9 @@ class Panel {
             ui,
             local,
             [
-                ["arrow", Edge.default_options().style],
-                ["adjunction", { name: "adjunction" }],
-                ["corner", { name: "corner" }],
+                ["arrow", "Arrow", Edge.default_options().style],
+                ["adjunction", "Adjunction", { name: "adjunction" }],
+                ["corner", "Pullback / pushout", { name: "corner" }],
             ],
             "edge-type",
             ["vertical", "centre"],
@@ -2838,11 +2845,12 @@ class Panel {
         const options_list = new DOM.Element("div", { class: `options` });
         options_list.class_list.add(...classes);
 
-        const create_option = (value, data) => {
+        const create_option = (value, tooltip, data) => {
             const button = new DOM.Element("input", {
                 type: "radio",
                 name,
                 value,
+                title: tooltip,
             }).listen("change", (_, button) => {
                 if (button.checked) {
                     const selected_edges = Array.from(ui.selection).filter(cell => cell.is_edge());
@@ -2895,8 +2903,8 @@ class Panel {
             return button;
         };
 
-        for (const [value, data, classes = []] of entries) {
-            create_option(value, data).class_list.add(...classes);
+        for (const [value, tooltip, data, classes = []] of entries) {
+            create_option(value, tooltip, data).class_list.add(...classes);
         }
 
         options_list.element.querySelector(`input[name="${name}"]`).checked = true;
