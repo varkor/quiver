@@ -17,6 +17,7 @@
         }
 
         svg {
+            overflow: visible;
             position: absolute;
             pointer-events: none;
             /* background: lightgrey; */
@@ -220,6 +221,24 @@
                 rect2.setAttribute("fill", "black");
                 rect2.setAttribute("rx", "4");
                 this.element.appendChild(line);
+
+                const label = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+                const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                text.innerHTML = "Label";
+                label.setAttribute("fill", "lime");
+                const [label_width, label_height] = [128, 32];
+                label.setAttribute("width", label_width);
+                label.setAttribute("height", label_height);
+                label.setAttribute("x", (length - label_width) / 2);
+                label.setAttribute("y", (height - label_height + curve) / 2);
+                label.setAttribute("transform", `rotate(${-angle * 180 / Math.PI} ${length / 2} ${(height + curve) / 2})`);
+                text.setAttribute("transform", `rotate(${-angle * 180 / Math.PI} ${length / 2} ${(height + curve) / 2})`);
+                text.setAttribute("x", length / 2);
+                text.setAttribute("y", (height + curve) / 2);
+                text.setAttribute("text-anchor", "middle");
+                text.setAttribute("dominant-baseline", "middle");
+                this.element.appendChild(label);
+                this.element.appendChild(text);
 
                 const ir = (colour, rect, resolve) => {
                     const intersections = intersect_bezier_with_rect(
