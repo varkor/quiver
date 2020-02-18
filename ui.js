@@ -689,7 +689,7 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
         const output = [VERSION, quiver.cells[0].size, ...cells];
 
         // We use this `unescape`-`encodeURIComponent` trick to encode non-ASCII characters.
-        return `${URL_prefix}?${btoa(unescape(encodeURIComponent(JSON.stringify(output))))}`;
+        return `${URL_prefix}?q=${btoa(unescape(encodeURIComponent(JSON.stringify(output))))}`;
     }
 
     import(ui, string) {
@@ -4599,15 +4599,19 @@ document.addEventListener("DOMContentLoaded", () => {
         if (query_string !== null) {
             // If there is a query string, try to decode it as a diagram.
             try {
-                const query_data = query_string[1].split("&");
+                const query_segs = query_string[1].split("&");
+                const query_data = new Map( query_segs.map(segment => segment.split("=")));
                 // Decode the diagram.
-                QuiverImportExport.base64.import(ui, query_data[0]);
-                // Try to find the `macro_url` to use.
-                for (const segment of query_data.slice(1)) {
-                    const [key, value] = segment.split("=");
-                    if (key === "macro_url") {
-                        ui.load_macros_from_url(decodeURIComponent(value));
-                    }
+                if (query_data.has("q")) {
+                    QuiverImportExport.base64.import(ui, query_data.get("q"));
+                } else {
+                    // In earlier versions of quiver, we also supported URLs without the `q` key.
+                    // This may eventually be deprecated.
+                    QuiverImportExport.base64.import(ui, query_segs[0]);
+                }
+                // If there is a `macro_url`, load the macros from it.
+                if (query_data.has("macro_url")) {
+                    ui.load_macros_from_url(decodeURIComponent(query_data.get("macro_url")));
                 }
             } catch (error) {
                 if (ui.quiver.is_empty()) {
