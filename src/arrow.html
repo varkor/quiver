@@ -192,6 +192,7 @@
 
                 this.element.innerHTML = "";
                 this.element.setAttribute("viewBox", `0 0 ${length} ${height}`);
+                const bg = document.createElementNS("http://www.w3.org/2000/svg", "path");
                 const line = document.createElementNS("http://www.w3.org/2000/svg", "path");
                 const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
                 const clip = document.createElementNS("http://www.w3.org/2000/svg", "mask");
@@ -220,6 +221,7 @@
                 rect2.setAttribute("transform", `rotate(${-angle * 180 / Math.PI} ${length} ${height / 2})`);
                 rect2.setAttribute("fill", "black");
                 rect2.setAttribute("rx", "4");
+                this.element.appendChild(bg);
                 this.element.appendChild(line);
 
                 const label = document.createElementNS("http://www.w3.org/2000/svg", "rect");
@@ -364,6 +366,15 @@
                 line.style.strokeWidth = `${line_width}px`;
                 line.style.stroke = "black";
                 line.style.fill = "none";
+
+                bg.style.stroke = "hsla(0, 0%, 0%, 0.2)";
+                bg.style.fill = "none";
+                bg.setAttribute("d", `M 0 ${height / 2}
+                    q ${length / 2} ${curve} ${length} 0`);
+                const PADDING_S = 15;
+                bg.setAttribute("stroke-linecap", "round");
+                bg.style.strokeWidth = `${line_width + PADDING_S * 2}`;
+                // could use: http://web.cse.ohio-state.edu/~dey.8/course/784/note9.pdf
 
                 const create_head = (type, where, is_start, mask) => {
                     if (where !== null) {
