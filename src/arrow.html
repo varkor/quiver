@@ -381,32 +381,7 @@
                     const mul = is_start ? 1 : -1;
                     const flag = is_start ? 0 : 1;
                     const head_path = new Path();
-                    if (type === "arrowhead") {
-                        for (const [iflag, imul] of [[flag, -1], [1 - flag, 1]]) {
-                            head_path.move_to(where.x, where.y + height / 2);
-                            head_path.arc_by(
-                                mul * HEAD_WIDTH,
-                                HEAD_HEIGHT / 2,
-                                0,
-                                false,
-                                iflag,
-                                mul * HEAD_WIDTH,
-                                imul * HEAD_HEIGHT / 2,
-                            );
-                            if (mask) {
-                                head_path.line_to(
-                                    where.x - mul * Math.hypot(this.source.width, this.source.height) / 2,
-                                    height / 2 + imul * HEAD_HEIGHT / 2 + where.y,
-                                );
-                                head_path.line_to(
-                                    where.x - mul * Math.hypot(this.source.width, this.source.height) / 2,
-                                    height / 2 + where.y,
-                                );
-                            }
-                        }
-                        head.element.setAttribute("d", head_path.toString());
-                        head.element.setAttribute("transform", `rotate(${where.angle * 180 / Math.PI} ${where.x} ${where.y + height / 2})`);
-                    } else if ((type === "epi" || type === "mono") && !mask) {
+                    if ((type === "arrowhead" || type === "epi" || type === "mono" || type === "maps to") && !mask) {
                         const HEAD_SPACING = HEAD_WIDTH / 2 + 2;
                         const heads = 30;
                         const start_arclen = bezier.arc_length(where.t) + (type === "mono" ? mul * HEAD_WIDTH : 0);
@@ -422,54 +397,41 @@
                                     off.y + height / 2,
                                 );
                                 const angle = bezier.angle(ts[i]) + (type === "mono" ? Math.PI : 0);
-                                head_path.arc_by(
-                                    mul * HEAD_WIDTH,
-                                    HEAD_HEIGHT / 2,
-                                    angle * 180 / Math.PI,
-                                    false,
-                                    iflag,
-                                    mul * HEAD_WIDTH * Math.cos(angle) - imul * HEAD_HEIGHT / 2 * Math.sin(angle),
-                                    mul * HEAD_WIDTH * Math.sin(angle) + imul * HEAD_HEIGHT / 2 * Math.cos(angle),
-                                );
-                                if (i === heads - 1 && mask) {
-                                    head_path.line_to(
-                                        off.x + mul * (HEAD_WIDTH + HEAD_SPACING) * i,
-                                        height / 2 + imul * HEAD_HEIGHT / 2 + off.y,
+                                if (type === "arrowhead" || type === "epi" || type === "mono") {
+                                    const [dx, dy] = [mul * HEAD_WIDTH, imul * HEAD_HEIGHT / 2];
+                                    head_path.arc_by(
+                                        mul * HEAD_WIDTH,
+                                        HEAD_HEIGHT / 2,
+                                        angle * 180 / Math.PI,
+                                        false,
+                                        iflag,
+                                        dx * Math.cos(angle) - dy * Math.sin(angle),
+                                        dx * Math.sin(angle) + dy * Math.cos(angle),
                                     );
-                                    head_path.line_to(
-                                        off.x - mul * Math.hypot(this.source.width, this.source.height) / 2,
-                                        height / 2 + imul * HEAD_HEIGHT / 2 + off.y,
-                                    );
-                                    head_path.line_to(
-                                        off.x - mul * Math.hypot(this.source.width, this.source.height) / 2,
-                                        height / 2 + off.y,
+                                } else if (type === "maps to") {
+                                    const [dx, dy] = [0, imul * HEAD_HEIGHT / 2];
+                                    head_path.line_by(
+                                        dx * Math.cos(angle) - dy * Math.sin(angle),
+                                        dx * Math.sin(angle) + dy * Math.cos(angle),
                                     );
                                 }
+                                // if (i === heads - 1 && mask) {
+                                //     head_path.line_to(
+                                //         off.x + mul * (HEAD_WIDTH + HEAD_SPACING) * i,
+                                //         height / 2 + imul * HEAD_HEIGHT / 2 + off.y,
+                                //     );
+                                //     head_path.line_to(
+                                //         off.x - mul * Math.hypot(this.source.width, this.source.height) / 2,
+                                //         height / 2 + imul * HEAD_HEIGHT / 2 + off.y,
+                                //     );
+                                //     head_path.line_to(
+                                //         off.x - mul * Math.hypot(this.source.width, this.source.height) / 2,
+                                //         height / 2 + off.y,
+                                //     );
+                                // }
                             }
                         }
                         head.element.setAttribute("d", head_path.toString());
-                    } else if (type === "maps to") {
-                        const OFFSET_PADDING = 12;
-                        for (const imul of [-1, 1]) {
-                            head_path.move_to(where.x + mul * OFFSET_PADDING, where.y + height / 2);
-                            head_path.line_by(0, imul * HEAD_HEIGHT / 2);
-                            if (mask) {
-                                head_path.line_to(
-                                    where.x + mul * HEAD_WIDTH,
-                                    height / 2 + imul * HEAD_HEIGHT / 2 + where.y,
-                                );
-                                head_path.line_to(
-                                    where.x - mul * Math.hypot(this.source.width, this.source.height) / 2,
-                                    height / 2 + imul * HEAD_HEIGHT / 2 + where.y,
-                                );
-                                head_path.line_to(
-                                    where.x - mul * Math.hypot(this.source.width, this.source.height) / 2,
-                                    height / 2 + where.y,
-                                );
-                            }
-                        }
-                        head.element.setAttribute("d", head_path.toString());
-                        head.element.setAttribute("transform", `rotate(${where.angle * 180 / Math.PI} ${where.x} ${where.y + height / 2})`);
                     } else if (type.startsWith("harpoon")) {
                         // TODO: this should be shifted up
                         const h = line_width + SPACING;
@@ -525,8 +487,8 @@
                     //     clip.appendChild(head2);
                     // }
                 };
-                draw_head("mono", bezier, start, true);
-                draw_head("mono", bezier, end, false);
+                draw_head("arrowhead", bezier, start, true);
+                draw_head("arrowhead", bezier, end, false);
             }
         }
 
