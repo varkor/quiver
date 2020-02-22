@@ -34,10 +34,22 @@ DOM.Element = class {
     /// `value` has two forms: a plain string, in which case it is added as a text node, or a
     /// `DOM.Element`, in which case the corresponding element is appended.
     add(value) {
-        if (typeof value !== "string") {
+        if (value instanceof DOM.Element) {
             this.element.appendChild(value.element);
+        } else if (typeof value !== "string") {
+            this.element.appendChild(value);
         } else {
             this.element.appendChild(document.createTextNode(value));
+        }
+        return this;
+    }
+
+    /// Appends this element to the given one.
+    add_to(value) {
+        if (value instanceof DOM.Element) {
+            value.element.appendChild(this.element);
+        } else {
+            value.appendChild(this.element);
         }
         return this;
     }
