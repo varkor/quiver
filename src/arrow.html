@@ -23,6 +23,8 @@
             /* background: lightgrey; */
         }
     </style>
+    <script type="text/javascript" src="ds.js"></script>
+    <script type="text/javascript" src="dom.js"></script>
     <script>
 
         // TODO: cut head/tail as well as edge
@@ -45,23 +47,23 @@
                 this.y = y;
                 this.width = 64;
                 this.height = 64;
-                this.element = document.createElement("div");
-                this.element.classList.add("box");
+                this.svg = document.createElement("div");
+                this.svg.classList.add("box");
                 this.redraw();
-                this.element.addEventListener("mousedown", (event) => {
+                this.svg.addEventListener("mousedown", (event) => {
                     if (drag === null) {
-                        const rect = this.element.getBoundingClientRect();
+                        const rect = this.svg.getBoundingClientRect();
                         drag = [this, event.clientX - rect.left - this.width / 2, event.clientY - rect.top - this.height / 2];
                     }
                 });
-                document.body.appendChild(this.element);
+                document.body.appendChild(this.svg);
             }
 
             redraw() {
-                this.element.style.left = `${this.x - this.width / 2}px`;
-                this.element.style.top = `${this.y - this.height / 2}px`;
-                this.element.style.width = `${this.width}px`;
-                this.element.style.height = `${this.height}px`;
+                this.svg.style.left = `${this.x - this.width / 2}px`;
+                this.svg.style.top = `${this.y - this.height / 2}px`;
+                this.svg.style.width = `${this.width}px`;
+                this.svg.style.height = `${this.height}px`;
             }
         }
 
@@ -156,12 +158,11 @@
                 this.source = source;
                 this.target = target;
                 const ns = "http://www.w3.org/2000/svg";
-                this.element = document.createElementNS(ns, "svg");
                 // We need to explicitly set the namespace attribute so that the SVG can be saved as
                 // a standalone file.
-                this.element.setAttribute("xmlns", ns);
+                this.svg = new DOM.SVGElement("svg", { xmlns: ns });
                 this.redraw();
-                document.body.appendChild(this.element);
+                document.body.appendChild(this.svg.element);
             }
 
             redraw() {
@@ -185,62 +186,66 @@
                 const length = Math.hypot(this.target.y - this.source.y, this.target.x - this.source.x);
                 const height = Math.abs(curve) + HEAD_HEIGHT + PADDING_Y;
                 const angle = Math.atan2(this.target.y - this.source.y, this.target.x - this.source.x);
-                this.element.style.width = `${length + PADDING_X * 2}px`;
-                this.element.style.height = `${height}px`;
-                this.element.style.transformOrigin = `0 ${height / 2}px`;
-                this.element.style.transform = `translate(${this.source.x}px, ${this.source.y - height / 2}px) rotate(${angle}rad) translate(${-PADDING_X}px, 0)`;
+                this.svg.element.style.width = `${length + PADDING_X * 2}px`;
+                this.svg.element.style.height = `${height}px`;
+                this.svg.element.style.transformOrigin = `0 ${height / 2}px`;
+                this.svg.element.style.transform = `translate(${this.source.x}px, ${this.source.y - height / 2}px) rotate(${angle}rad) translate(${-PADDING_X}px, 0)`;
 
-                this.element.innerHTML = "";
-                this.element.setAttribute("viewBox", `0 0 ${length} ${height}`);
-                const bg = document.createElementNS("http://www.w3.org/2000/svg", "path");
-                const line = document.createElementNS("http://www.w3.org/2000/svg", "path");
-                const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
-                const clip = document.createElementNS("http://www.w3.org/2000/svg", "mask");
-                clip.setAttribute("maskUnits", "userSpaceOnUse");
-                const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-                const rect2 = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-                const fill = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-                clip.appendChild(fill);
+                this.svg.element.innerHTML = "";
+                this.svg.element.setAttribute("viewBox", `0 0 ${length} ${height}`);
 
-                fill.setAttribute("width", length + PADDING_X * 2);
-                fill.setAttribute("height", height);
-                fill.setAttribute("x", -PADDING_X);
-                fill.setAttribute("fill", "white");
-                rect.setAttribute("x", -this.source.width / 2);
-                rect.setAttribute("y", (height - this.source.height) / 2);
-                rect.setAttribute("width", this.source.width);
-                rect.setAttribute("height", this.source.height);
-                rect.setAttribute("transform", `rotate(${-angle * 180 / Math.PI} 0 ${height / 2})`);
-                rect.setAttribute("fill", "black");
-                rect.setAttribute("rx", "4");
+                const PADDING_S = 15;
+                const body_style = "none";
 
-                rect2.setAttribute("x", length - this.target.width / 2);
-                rect2.setAttribute("y", (height - this.target.height) / 2);
-                rect2.setAttribute("width", this.target.width);
-                rect2.setAttribute("height", this.target.height);
-                rect2.setAttribute("transform", `rotate(${-angle * 180 / Math.PI} ${length} ${height / 2})`);
-                rect2.setAttribute("fill", "black");
-                rect2.setAttribute("rx", "4");
-                this.element.appendChild(bg);
-                this.element.appendChild(line);
+                const bg = new DOM.SVGElement("path", {
+                    d: `M 0 ${height / 2} q ${length / 2} ${curve} ${length} 0`,
+                    fill: "none",
+                    stroke: "hsla(0, 0%, 0%, 0.2)",
+                    "stroke-width": line_width + PADDING_S * 2,
+                    "stroke-linecap": "round", // could use: http://web.cse.ohio-state.edu/~dey.8/course/784/note9.pdf
+                }).add_to(this.svg);
+                const line = new DOM.SVGElement("path", {
+                    mask: "url(#clip)",
+                    fill: "none",
+                    stroke: "black",
+                    "stroke-width": line_width,
+                }).add_to(this.svg);
+                if (body_style === "dashed") {
+                    line.setAttribute("stroke-dasharray", "6");
+                } else if (body_style === "dotted") {
+                    line.setAttribute("stroke-dasharray", "2 4");
+                }
 
-                const label = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-                const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
-                text.innerHTML = "Label";
-                label.setAttribute("fill", "lime");
+                const defs = new DOM.SVGElement("defs").add_to(this.svg);
+                const clip = new DOM.SVGElement("mask", {
+                    id: "clip",
+                    maskUnits: "userSpaceOnUse",
+                }).add_to(defs);
+
+                const fill = new DOM.SVGElement("rect", {
+                    width: length + PADDING_X * 2,
+                    height,
+                    x: -PADDING_X,
+                    fill: "white",
+                }).add_to(clip);
+
                 const [label_width, label_height] = [128, 32];
-                label.setAttribute("width", label_width);
-                label.setAttribute("height", label_height);
-                label.setAttribute("x", (length - label_width) / 2);
-                label.setAttribute("y", (height - label_height + curve) / 2);
-                label.setAttribute("transform", `rotate(${-angle * 180 / Math.PI} ${length / 2} ${(height + curve) / 2})`);
-                text.setAttribute("transform", `rotate(${-angle * 180 / Math.PI} ${length / 2} ${(height + curve) / 2})`);
-                text.setAttribute("x", length / 2);
-                text.setAttribute("y", (height + curve) / 2);
-                text.setAttribute("text-anchor", "middle");
-                text.setAttribute("dominant-baseline", "middle");
-                this.element.appendChild(label);
-                this.element.appendChild(text);
+                const label = new DOM.SVGElement("rect", {
+                    width: label_width,
+                    height: label_height,
+                    x: (length - label_width) / 2,
+                    y: (height - label_height + curve) / 2,
+                    fill: "lime",
+                    transform: `rotate(${-angle * 180 / Math.PI} ${length / 2} ${(height + curve) / 2})`,
+                }).add_to(this.svg);
+                const text = new DOM.SVGElement("text", {
+                    x: length / 2,
+                    y: (height + curve) / 2,
+                    transform: `rotate(${-angle * 180 / Math.PI} ${length / 2} ${(height + curve) / 2})`,
+                    "text-anchor": "middle",
+                    "dominant-baseline": "middle",
+                }).add_to(this.svg);
+                text.element.innerHTML = "Label";
 
                 const ir = (colour, rect, resolve) => {
                     const intersections = intersect_bezier_with_rect(
@@ -252,12 +257,12 @@
                         resolve,
                     );
                     for (const inter of intersections) {
-                        const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-                        this.element.appendChild(circle);
-                        circle.setAttribute("cx", inter.x);
-                        circle.setAttribute("cy", inter.y + height / 2);
-                        circle.setAttribute("r", 8);
-                        circle.setAttribute("fill", colour);
+                        new DOM.SVGElement("circle", {
+                            cx: inter.x,
+                            cy: inter.y + height / 2,
+                            r: 8,
+                            fill: colour,
+                        }).add_to(this.svg);
                     }
                     return intersections.length > 0 ? intersections[0] : null;
                 };
@@ -340,56 +345,48 @@
 
                 let cut = true;
                 for (let i = level - 1; i > 0; --i) {
-                    const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
-                    p.setAttribute("d", path);
-                    p.style.strokeWidth = `${(i - (cut ? 1 : 0)) * STROKE_WIDTH + (i - (cut ? 0 : 1)) * SPACING}px`;
-                    p.style.stroke = cut ? "black" : "white";
-                    p.style.fill = "none";
-                    clip.appendChild(p);
+                    new DOM.SVGElement("path", {
+                        d: path,
+                        fill: "none",
+                        stroke: cut ? "black" : "white",
+                        "stroke-width": `${(i - (cut ? 1 : 0)) * STROKE_WIDTH + (i - (cut ? 0 : 1)) * SPACING}`,
+                    }).add_to(clip);
                     cut = !cut;
                 }
 
-                const body_style = "none";
+                new DOM.SVGElement("rect", {
+                    width: this.source.width,
+                    height: this.source.height,
+                    x: -this.source.width / 2,
+                    y: (height - this.source.height) / 2,
+                    fill: "black",
+                    transform: `rotate(${-angle * 180 / Math.PI} 0 ${height / 2})`,
+                    rx: 4,
+                }).add_to(clip);
 
-                defs.appendChild(clip);
-                clip.appendChild(rect);
-                clip.appendChild(rect2);
-                clip.id = "clip";
-                this.element.appendChild(defs);
-                line.setAttribute("d", path);
-                if (body_style === "dashed") {
-                    line.setAttribute("stroke-dasharray", "6");
-                } else if (body_style === "dotted") {
-                    line.setAttribute("stroke-dasharray", "2 4");
-                }
-                line.setAttribute("mask", "url(#clip)");
-                line.style.strokeWidth = `${line_width}px`;
-                line.style.stroke = "black";
-                line.style.fill = "none";
+                new DOM.SVGElement("rect", {
+                    width: this.target.width,
+                    height: this.target.height,
+                    x: length - this.target.width / 2,
+                    y: (height - this.target.height) / 2,
+                    fill: "black",
+                    transform: `rotate(${-angle * 180 / Math.PI} ${length} ${height / 2})`,
+                    rx: 4,
+                }).add_to(clip);
 
-                bg.style.stroke = "hsla(0, 0%, 0%, 0.2)";
-                bg.style.fill = "none";
-                bg.setAttribute("d", `M 0 ${height / 2}
-                    q ${length / 2} ${curve} ${length} 0`);
-                const PADDING_S = 15;
-                bg.setAttribute("stroke-linecap", "round");
-                bg.style.strokeWidth = `${line_width + PADDING_S * 2}`;
-                // could use: http://web.cse.ohio-state.edu/~dey.8/course/784/note9.pdf
+                line.element.setAttribute("d", path);
 
                 const create_head = (type, where, is_start, mask) => {
                     if (where !== null) {
-                        const head = document.createElementNS("http://www.w3.org/2000/svg", "path");
-                        head.style.strokeWidth = STROKE_WIDTH;
-                        if (mask) {
-                            head.style.fill = "black";
-                        } else {
-                            head.style.stroke = "black";
-                            head.style.fill = "none";
-                        }
+                        const head = new DOM.SVGElement("path", {
+                            "stroke-width": STROKE_WIDTH,
+                            fill: mask ? "black" : "none",
+                            stroke: !mask ? "black" : "none",
+                        });
                         const mul = is_start ? 1 : -1;
                         const flag = is_start ? 0 : 1;
                         if (type === "arrowhead") {
-                            head.setAttribute("d", `
+                            head.element.setAttribute("d", `
                                 M ${where.x} ${where.y + height / 2}
                                 a ${mul * HEAD_WIDTH} ${HEAD_HEIGHT / 2} 0 0 ${flag} ${mul * HEAD_WIDTH} ${-HEAD_HEIGHT / 2}
                                 ${mask ? `L ${where.x + mul * HEAD_WIDTH} ${height / 2 - HEAD_HEIGHT / 2 + where.y}
@@ -402,7 +399,7 @@
                                 L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 + HEAD_HEIGHT / 2 + where.y}
                                 L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 + where.y}` : ""}
                             `);
-                            head.setAttribute("transform", `rotate(${where.angle * 180 / Math.PI} ${where.x} ${where.y + height / 2})`);
+                            head.element.setAttribute("transform", `rotate(${where.angle * 180 / Math.PI} ${where.x} ${where.y + height / 2})`);
                         } else if (type === "epi") {
                             const HEAD_SPACING = HEAD_WIDTH / 2 + 2;
                             let epi_path = "";
@@ -423,10 +420,10 @@
                                     L ${where.x + mul * HEAD_SPACING * i - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 + where.y}`;
                                 }
                             }
-                            head.setAttribute("d", epi_path);
-                            head.setAttribute("transform", `rotate(${where.angle * 180 / Math.PI} ${where.x} ${where.y + height / 2})`);
+                            head.element.setAttribute("d", epi_path);
+                            head.element.setAttribute("transform", `rotate(${where.angle * 180 / Math.PI} ${where.x} ${where.y + height / 2})`);
                         } else if (type === "mono") {
-                            head.setAttribute("d", `
+                            head.element.setAttribute("d", `
                                 M ${where.x + mul * HEAD_WIDTH} ${where.y + height / 2}
                                 a ${mul * HEAD_WIDTH} ${HEAD_HEIGHT / 2} 0 0 ${1 - flag} ${-mul * HEAD_WIDTH} ${-HEAD_HEIGHT / 2}
                                 ${mask ? `L ${where.x + mul * HEAD_WIDTH} ${height / 2 - HEAD_HEIGHT / 2 + where.y}
@@ -439,10 +436,10 @@
                                 L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 + HEAD_HEIGHT / 2 + where.y}
                                 L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 + where.y}` : ""}
                             `);
-                            head.setAttribute("transform", `rotate(${where.angle * 180 / Math.PI} ${where.x} ${where.y + height / 2})`);
+                            head.element.setAttribute("transform", `rotate(${where.angle * 180 / Math.PI} ${where.x} ${where.y + height / 2})`);
                         } else if (type === "maps to") {
                             const OFFSET_PADDING = 12;
-                            head.setAttribute("d", `
+                            head.element.setAttribute("d", `
                                 M ${where.x + mul * OFFSET_PADDING} ${where.y + height / 2}
                                 l ${0} ${-HEAD_HEIGHT / 2}
                                 ${mask ? `L ${where.x + mul * HEAD_WIDTH} ${height / 2 - HEAD_HEIGHT / 2 + where.y}
@@ -455,19 +452,19 @@
                                 L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 + HEAD_HEIGHT / 2 + where.y}
                                 L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 + where.y}` : ""}
                             `);
-                            head.setAttribute("transform", `rotate(${where.angle * 180 / Math.PI} ${where.x} ${where.y + height / 2})`);
+                            head.element.setAttribute("transform", `rotate(${where.angle * 180 / Math.PI} ${where.x} ${where.y + height / 2})`);
                         } else if (type.startsWith("harpoon")) {
                             // TODO: this should be shifted up
                             const h = line_width + SPACING;
                             const flip = type.endsWith("top") ? 1 : -1;
-                            head.setAttribute("d", `
+                            head.element.setAttribute("d", `
                                 M ${where.x} ${where.y + height / 2 + flip * line_width / 2}
                                 a ${mul * HEAD_WIDTH} ${h} 0 0 ${flip === 1 ? flag : 1 - flag} ${mul * HEAD_WIDTH} ${-h * flip}
                                 ${mask ? `L ${where.x + mul * HEAD_WIDTH} ${height / 2 - (line_width / 2 + SPACING) * flip + where.y}
                                 L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 - (line_width / 2 + SPACING) * flip + where.y + flip * STROKE_WIDTH * 2}
                                 L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 + flip * line_width / 2 + where.y + flip * STROKE_WIDTH * 2}` : ""}
                             `);
-                            head.setAttribute("transform", `rotate(${where.angle * 180 / Math.PI} ${where.x} ${where.y + height / 2})`);
+                            head.element.setAttribute("transform", `rotate(${where.angle * 180 / Math.PI} ${where.x} ${where.y + height / 2})`);
                         } else if (type === "none") {
                             // Don't do anything.
                             // TODO: should probably draw padding, though
@@ -480,11 +477,11 @@
                 let draw_head = (type, where, is_start) => {
                     const head = create_head(type, where, is_start, false);
                     if (head !== null) {
-                        this.element.appendChild(head);
+                        this.svg.add(head);
                     }
                     const mask = create_head(type, where, is_start, true);
                     if (mask !== null) {
-                        clip.appendChild(mask);
+                        clip.add(mask);
                     }
                     // const head2 = create_head(type, where, is_start, false);
                     // if (head2 !== null) {
