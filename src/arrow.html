@@ -39,7 +39,7 @@
 
         let drag = null;
         let curve = 0;
-        let level = 5;
+        let level = 1;
 
         class Shape {
             constructor(x, y) {
@@ -68,14 +68,15 @@
         }
 
         /// A helper class for dealing with symmetric quadratic Bézier curves.
+        /// In all of the following, `t` is expected to range from 0 to 1.
         class Bezier {
             constructor(start, end, height) {
                 this.start = start;
                 this.end = end;
                 this.height = height;
 
-                // The control point. This is twice the distance from the straight line connecting `start`
-                // and `end` as `height`.
+                // The control point. This is twice the distance from the straight line connecting
+                // `start` and `end` as `height`.
                 const midpoint = this.start.add(this.end).div(2);
                 const normal = this.end.sub(this.start).atan() + Math.PI / 2;
                 this.control = midpoint.add(Point.from_length_and_direction(this.height, normal));
@@ -230,18 +231,54 @@
                 }).add_to(clip);
 
                 const [label_width, label_height] = [128, 32];
+                const [cx, cy] = [length / 2, curve / 2];
+                let [rx, ry] = rotate_vector(cx, cy, angle);
+                // Work out where to draw the label.
+                // 1. Transform the co-ordinates of the rectangle so that it is normalise with respect
+                // to the Bézier curve.
+                // 2. The y-co-ordinate of the Bézier curve at that x-co-ordinate, minus the
+                // y-co-ordinate of each vertex is the displacement of the vertex.
+                // 3. Take the maximum displacement of any vertex. We now want to shift the rectangle's
+                // centre by this distance in the direction normal to the curve.
+                let points = rect_corners(
+                    rx,
+                    ry,
+                    label_width,
+                    label_height,
+                );
+                // points = [];
+                points.push(new Point(rx, ry));
+                points = points.map((p) => normalise_point(p, new NormalisedBezier(Point.zero(), angle, 1, 1)));
+                let max_displacement = -Infinity;
+                const nb = new Bezier(Point.zero(), new Point(length, 0), curve);
+                for (const p of points) {
+                    // It may not be within bounds if the Bézier curve is very thin. However, at
+                    // least one point (i.e. the centre) is guaranteed to be in-bounds.
+                    if (p.x >= 0 && p.x <= length) {
+                        max_displacement = Math.max(nb.point(p.x / length).y - p.y, max_displacement);
+                    }
+                }
+                console.log(max_displacement);
+                max_displacement = 40;
+                const [tx, ty] = [
+                    cx + Math.cos(-Math.PI / 2) * max_displacement,
+                    cy + height / 2 + Math.sin(-Math.PI / 2) * max_displacement,
+                ];
+                // Shift the label.
                 const label = new DOM.SVGElement("rect", {
                     width: label_width,
                     height: label_height,
-                    x: (length - label_width) / 2,
-                    y: (height - label_height + curve) / 2,
-                    fill: "lime",
-                    transform: `rotate(${-angle * 180 / Math.PI} ${length / 2} ${(height + curve) / 2})`,
+                    x: tx - label_width / 2,
+                    y: ty - label_height / 2,
+                    fill: "hsla(110, 100%, 50%, 0.5)",
+                    transform: `rotate(${-angle * 180 / Math.PI} ${tx} ${ty})`,
                 }).add_to(this.svg);
+
+
                 const text = new DOM.SVGElement("text", {
-                    x: length / 2,
-                    y: (height + curve) / 2,
-                    transform: `rotate(${-angle * 180 / Math.PI} ${length / 2} ${(height + curve) / 2})`,
+                    x: tx,
+                    y: ty,
+                    transform: `rotate(${-angle * 180 / Math.PI} ${tx} ${ty})`,
                     "text-anchor": "middle",
                     "dominant-baseline": "middle",
                 }).add_to(this.svg);
@@ -567,6 +604,24 @@
             })
         });
 
+        /// Returns the positions of the corners of the rectangle centred on `(x, y)`
+        // of width `w` and height `h`.
+        function rect_corners(x, y, w, h) {
+            let points = new Array(4).fill(null).map(() => new Point(x, y));
+            points[0] = points[0].sub(new Point(w/2, h/2));
+            points[1] = points[1].sub(new Point(-w/2, h/2));
+            points[2] = points[2].sub(new Point(-w/2, -h/2));
+            points[3] = points[3].sub(new Point(w/2, -h/2));
+            return points;
+        }
+
+        function rotate_vector(x, y, angle) {
+            return [
+                x * Math.cos(angle) - y * Math.sin(angle),
+                x * Math.sin(angle) + y * Math.cos(angle),
+            ];
+        }
+
         /// The normalised quadratic Bézier curve is the one whose endpoints are (0, 0) and (1, 0)
         /// and whose control point is (0.5, 1). The highest point on the curve is therefore
         /// (0.5, 0.5). The equation of the curve is `y = 2 x (1 - x)`.
@@ -576,11 +631,7 @@
         /// Note that intersecting a Bézier curve with a circle is very difficult in general, so we
         /// approximate rounded rectangles by rectanges for the sake of finding intersections.
         function intersect_bezier_with_rect(x, y, w, h, b, min = true) {
-            let points = new Array(4).fill(null).map(() => new Point(x, y));
-            points[0] = points[0].sub(new Point(w/2, h/2));
-            points[1] = points[1].sub(new Point(-w/2, h/2));
-            points[2] = points[2].sub(new Point(-w/2, -h/2));
-            points[3] = points[3].sub(new Point(w/2, -h/2));
+            let points = rect_corners(x, y, w, h);
 
             let intersections = [];
             let h_scale = b.h || 1;
