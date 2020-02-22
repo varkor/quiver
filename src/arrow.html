@@ -169,7 +169,7 @@
                 const SPACING = 4.5;
                 const STROKE_WIDTH = 1.5;
 
-                const body_shape = "squiggly";
+                const body_shape = "squiggly"; // "squiggly" or "none"
 
                 // The height (in pixels) of each triangle from the edge.
                 const AMPLITUDE = 2;
@@ -270,12 +270,9 @@
                 const start = ir("none", this.source, true);
                 const end = ir("none", this.target, false);
 
-                let path;
+                const path = [`M 0 ${height / 2}`];
                 if (body_shape === "none") {
-                    path = `
-                        M 0 ${height / 2}
-                        q ${length / 2} ${curve} ${length} 0
-                    `;
+                    path.push(`q ${length / 2} ${curve} ${length} 0`);
                 } else if (body_shape === "squiggly") {
                     if (start === null || end === null) {
                         console.error("no start/end");
@@ -296,8 +293,6 @@
                     const heads = 1;
                     const head_padding = PADDING * (1 + heads);
 
-                    path = `M 0 ${height / 2}`;
-
                     // Draw the padding at the tail of the arrow.
                     const SVG_PADDING = 0;
                     const line_length = length;
@@ -311,7 +306,7 @@
                     const st = bezier.arc_length(start.t) + HEAD_WIDTH + HALF_WAVELENGTH * head_padding;
                     let ll = t_after_length(st);
                     let lp = bezier.point(ll);
-                    path += `l ${lp.x} ${lp.y}`;
+                    path.push(`l ${lp.x} ${lp.y}`);
 
                     for (
                         // The current (arc) length along the curve.
@@ -330,23 +325,23 @@
                         const t = t_after_length(l);
                         const point = bezier.point(t);
                         const angle = bezier.angle(t) + Math.PI / 2 * sign;
-                        path += `L ${
+                        path.push(`L ${
                             point.x + Math.cos(angle) * AMPLITUDE * m
                         } ${
                             height / 2 + point.y + Math.sin(angle) * AMPLITUDE * m
-                        }`;
+                        }`);
                     }
 
                     // Draw the padding at the head of the arrow.
-                    path += `L ${SVG_PADDING + line_length} ${
+                    path.push(`L ${SVG_PADDING + line_length} ${
                         SVG_PADDING + height / 2
-                    }`;
+                    }`);
                 }
 
                 let cut = true;
                 for (let i = level - 1; i > 0; --i) {
                     new DOM.SVGElement("path", {
-                        d: path,
+                        d: path.join("\n"),
                         fill: "none",
                         stroke: cut ? "black" : "white",
                         "stroke-width": `${(i - (cut ? 1 : 0)) * STROKE_WIDTH + (i - (cut ? 0 : 1)) * SPACING}`,
@@ -374,96 +369,162 @@
                     rx: 4,
                 }).add_to(clip);
 
-                line.element.setAttribute("d", path);
+                line.element.setAttribute("d", path.join("\n"));
 
                 const create_head = (type, where, is_start, mask) => {
                     if (where !== null) {
                         const head = new DOM.SVGElement("path", {
-                            "stroke-width": STROKE_WIDTH,
                             fill: mask ? "black" : "none",
                             stroke: !mask ? "black" : "none",
+                            "stroke-width": STROKE_WIDTH,
                         });
                         const mul = is_start ? 1 : -1;
                         const flag = is_start ? 0 : 1;
+                        const head_path = new Path();
                         if (type === "arrowhead") {
-                            head.element.setAttribute("d", `
-                                M ${where.x} ${where.y + height / 2}
-                                a ${mul * HEAD_WIDTH} ${HEAD_HEIGHT / 2} 0 0 ${flag} ${mul * HEAD_WIDTH} ${-HEAD_HEIGHT / 2}
-                                ${mask ? `L ${where.x + mul * HEAD_WIDTH} ${height / 2 - HEAD_HEIGHT / 2 + where.y}
-                                L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 - HEAD_HEIGHT / 2 + where.y}
-                                L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 + where.y}` : ""}
-
-                                M ${where.x} ${where.y + height / 2}
-                                a ${mul * HEAD_WIDTH} ${HEAD_HEIGHT / 2} 0 0 ${1 - flag} ${mul * HEAD_WIDTH} ${HEAD_HEIGHT / 2}
-                                ${mask ? `L ${where.x + mul * HEAD_WIDTH} ${height / 2 + HEAD_HEIGHT / 2 + where.y}
-                                L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 + HEAD_HEIGHT / 2 + where.y}
-                                L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 + where.y}` : ""}
-                            `);
+                            for (const [iflag, imul] of [[flag, -1], [1 - flag, 1]]) {
+                                head_path.move_to(where.x, where.y + height / 2);
+                                head_path.arc_by(
+                                    mul * HEAD_WIDTH,
+                                    HEAD_HEIGHT / 2,
+                                    0,
+                                    false,
+                                    iflag,
+                                    mul * HEAD_WIDTH,
+                                    imul * HEAD_HEIGHT / 2,
+                                );
+                                if (mask) {
+                                    head_path.line_to(
+                                        where.x - mul * Math.hypot(this.source.width, this.source.height) / 2,
+                                        height / 2 + imul * HEAD_HEIGHT / 2 + where.y,
+                                    );
+                                    head_path.line_to(
+                                        where.x - mul * Math.hypot(this.source.width, this.source.height) / 2,
+                                        height / 2 + where.y,
+                                    );
+                                }
+                            }
+                            head.element.setAttribute("d", head_path.toString());
                             head.element.setAttribute("transform", `rotate(${where.angle * 180 / Math.PI} ${where.x} ${where.y + height / 2})`);
                         } else if (type === "epi") {
                             const HEAD_SPACING = HEAD_WIDTH / 2 + 2;
-                            let epi_path = "";
                             const heads = 2;
                             for (let i = heads - 1; i >= 0; --i) {
-                                epi_path += `M ${where.x + mul * HEAD_SPACING * i} ${where.y + height / 2}
-                                a ${mul * HEAD_WIDTH} ${HEAD_HEIGHT / 2} 0 0 ${flag} ${mul * HEAD_WIDTH} ${-HEAD_HEIGHT / 2}`;
-                                if (i === heads - 1 && mask) {
-                                    epi_path += `L ${where.x + mul * (HEAD_WIDTH + HEAD_SPACING) * i} ${height / 2 - HEAD_HEIGHT / 2 + where.y}
-                                    L ${where.x + mul * HEAD_SPACING * i - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 - HEAD_HEIGHT / 2 + where.y}
-                                    L ${where.x + mul * HEAD_SPACING * i - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 + where.y}`;
-                                }
-                                epi_path += `M ${where.x + mul * HEAD_SPACING * i} ${where.y + height / 2}
-                                a ${mul * HEAD_WIDTH} ${HEAD_HEIGHT / 2} 0 0 ${1 - flag} ${mul * HEAD_WIDTH} ${HEAD_HEIGHT / 2}`;
-                                if (i === heads - 1 && mask) {
-                                    epi_path += `L ${where.x + mul * (HEAD_WIDTH + HEAD_SPACING) * i} ${height / 2 + HEAD_HEIGHT / 2 + where.y}
-                                    L ${where.x + mul * HEAD_SPACING * i - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 + HEAD_HEIGHT / 2 + where.y}
-                                    L ${where.x + mul * HEAD_SPACING * i - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 + where.y}`;
+                                for (const [iflag, imul] of [[flag, -1], [1 - flag, 1]]) {
+                                    head_path.move_to(
+                                        where.x + mul * HEAD_SPACING * i,
+                                        where.y + height / 2,
+                                    );
+                                    head_path.arc_by(
+                                        mul * HEAD_WIDTH,
+                                        HEAD_HEIGHT / 2,
+                                        0,
+                                        false,
+                                        iflag,
+                                        mul * HEAD_WIDTH,
+                                        imul * HEAD_HEIGHT / 2,
+                                    );
+                                    if (i === heads - 1 && mask) {
+                                        head_path.line_to(
+                                            where.x + mul * (HEAD_WIDTH + HEAD_SPACING) * i,
+                                            height / 2 + imul * HEAD_HEIGHT / 2 + where.y,
+                                        );
+                                        head_path.line_to(
+                                            where.x + mul * HEAD_SPACING * i - mul * Math.hypot(this.source.width, this.source.height) / 2,
+                                            height / 2 + imul * HEAD_HEIGHT / 2 + where.y,
+                                        );
+                                        head_path.line_to(
+                                            where.x + mul * HEAD_SPACING * i - mul * Math.hypot(this.source.width, this.source.height) / 2,
+                                            height / 2 + where.y,
+                                        );
+                                    }
                                 }
                             }
-                            head.element.setAttribute("d", epi_path);
+                            head.element.setAttribute("d", head_path.toString());
                             head.element.setAttribute("transform", `rotate(${where.angle * 180 / Math.PI} ${where.x} ${where.y + height / 2})`);
                         } else if (type === "mono") {
-                            head.element.setAttribute("d", `
-                                M ${where.x + mul * HEAD_WIDTH} ${where.y + height / 2}
-                                a ${mul * HEAD_WIDTH} ${HEAD_HEIGHT / 2} 0 0 ${1 - flag} ${-mul * HEAD_WIDTH} ${-HEAD_HEIGHT / 2}
-                                ${mask ? `L ${where.x + mul * HEAD_WIDTH} ${height / 2 - HEAD_HEIGHT / 2 + where.y}
-                                L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 - HEAD_HEIGHT / 2 + where.y}
-                                L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 + where.y}` : ""}
-
-                                M ${where.x + mul * HEAD_WIDTH} ${where.y + height / 2}
-                                a ${mul * HEAD_WIDTH} ${HEAD_HEIGHT / 2} 0 0 ${flag} ${-mul * HEAD_WIDTH} ${HEAD_HEIGHT / 2}
-                                ${mask ? `L ${where.x + mul * HEAD_WIDTH} ${height / 2 + HEAD_HEIGHT / 2 + where.y}
-                                L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 + HEAD_HEIGHT / 2 + where.y}
-                                L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 + where.y}` : ""}
-                            `);
+                            for (const [iflag, imul] of [[1 - flag, -1], [flag, 1]]) {
+                                head_path.move_to(where.x + mul * HEAD_WIDTH, where.y + height / 2);
+                                head_path.arc_by(
+                                    mul * HEAD_WIDTH,
+                                    HEAD_HEIGHT / 2,
+                                    0,
+                                    false,
+                                    iflag,
+                                    -mul * HEAD_WIDTH,
+                                    imul * HEAD_HEIGHT / 2,
+                                );
+                                if (mask) {
+                                    head_path.line_to(
+                                        where.x + mul * HEAD_WIDTH,
+                                        height / 2 + imul * HEAD_HEIGHT / 2 + where.y,
+                                    );
+                                    head_path.line_to(
+                                        where.x - mul * Math.hypot(this.source.width, this.source.height) / 2,
+                                        height / 2 + imul * HEAD_HEIGHT / 2 + where.y,
+                                    );
+                                    head_path.line_to(
+                                        where.x - mul * Math.hypot(this.source.width, this.source.height) / 2,
+                                        height / 2 + where.y,
+                                    );
+                                }
+                            }
+                            head.element.setAttribute("d", head_path.toString());
                             head.element.setAttribute("transform", `rotate(${where.angle * 180 / Math.PI} ${where.x} ${where.y + height / 2})`);
                         } else if (type === "maps to") {
                             const OFFSET_PADDING = 12;
-                            head.element.setAttribute("d", `
-                                M ${where.x + mul * OFFSET_PADDING} ${where.y + height / 2}
-                                l ${0} ${-HEAD_HEIGHT / 2}
-                                ${mask ? `L ${where.x + mul * HEAD_WIDTH} ${height / 2 - HEAD_HEIGHT / 2 + where.y}
-                                L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 - HEAD_HEIGHT / 2 + where.y}
-                                L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 + where.y}` : ""}
-
-                                M ${where.x + mul * OFFSET_PADDING} ${where.y + height / 2}
-                                l ${0} ${HEAD_HEIGHT / 2}
-                                ${mask ? `L ${where.x + mul * HEAD_WIDTH} ${height / 2 + HEAD_HEIGHT / 2 + where.y}
-                                L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 + HEAD_HEIGHT / 2 + where.y}
-                                L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 + where.y}` : ""}
-                            `);
+                            for (const imul of [-1, 1]) {
+                                head_path.move_to(where.x + mul * OFFSET_PADDING, where.y + height / 2);
+                                head_path.line_by(0, imul * HEAD_HEIGHT / 2);
+                                if (mask) {
+                                    head_path.line_to(
+                                        where.x + mul * HEAD_WIDTH,
+                                        height / 2 + imul * HEAD_HEIGHT / 2 + where.y,
+                                    );
+                                    head_path.line_to(
+                                        where.x - mul * Math.hypot(this.source.width, this.source.height) / 2,
+                                        height / 2 + imul * HEAD_HEIGHT / 2 + where.y,
+                                    );
+                                    head_path.line_to(
+                                        where.x - mul * Math.hypot(this.source.width, this.source.height) / 2,
+                                        height / 2 + where.y,
+                                    );
+                                }
+                            }
+                            head.element.setAttribute("d", head_path.toString());
                             head.element.setAttribute("transform", `rotate(${where.angle * 180 / Math.PI} ${where.x} ${where.y + height / 2})`);
                         } else if (type.startsWith("harpoon")) {
                             // TODO: this should be shifted up
                             const h = line_width + SPACING;
                             const flip = type.endsWith("top") ? 1 : -1;
-                            head.element.setAttribute("d", `
-                                M ${where.x} ${where.y + height / 2 + flip * line_width / 2}
-                                a ${mul * HEAD_WIDTH} ${h} 0 0 ${flip === 1 ? flag : 1 - flag} ${mul * HEAD_WIDTH} ${-h * flip}
-                                ${mask ? `L ${where.x + mul * HEAD_WIDTH} ${height / 2 - (line_width / 2 + SPACING) * flip + where.y}
-                                L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 - (line_width / 2 + SPACING) * flip + where.y + flip * STROKE_WIDTH * 2}
-                                L ${where.x - mul * Math.hypot(this.source.width, this.source.height) / 2} ${height / 2 + flip * line_width / 2 + where.y + flip * STROKE_WIDTH * 2}` : ""}
-                            `);
+                            head_path.move_to(
+                                where.x,
+                                where.y + height / 2 + flip * line_width / 2,
+                            );
+                            head_path.arc_by(
+                                mul * HEAD_WIDTH,
+                                h,
+                                0,
+                                false,
+                                flip === 1 ? flag : 1 - flag,
+                                mul * HEAD_WIDTH,
+                                -h * flip,
+                            );
+                            if (mask) {
+                                head_path.line_to(
+                                    where.x + mul * HEAD_WIDTH,
+                                    height / 2 - (line_width / 2 + SPACING) * flip + where.y,
+                                );
+                                head_path.line_to(
+                                    where.x - mul * Math.hypot(this.source.width, this.source.height) / 2,
+                                    height / 2 - (line_width / 2 + SPACING) * flip + where.y + flip * STROKE_WIDTH * 2,
+                                );
+                                head_path.line_to(
+                                    where.x - mul * Math.hypot(this.source.width, this.source.height) / 2,
+                                    height / 2 + flip * line_width / 2 + where.y + flip * STROKE_WIDTH * 2,
+                                );
+                            }
+                            head.element.setAttribute("d", head_path.toString());
                             head.element.setAttribute("transform", `rotate(${where.angle * 180 / Math.PI} ${where.x} ${where.y + height / 2})`);
                         } else if (type === "none") {
                             // Don't do anything.
@@ -489,8 +550,8 @@
                     //     clip.appendChild(head2);
                     // }
                 };
-                draw_head("arrowhead", start, true);
-                draw_head("arrowhead", end, false);
+                draw_head("harpoon-top", start, true);
+                draw_head("harpoon-top", end, false);
             }
         }
 

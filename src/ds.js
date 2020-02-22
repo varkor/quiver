@@ -107,3 +107,32 @@ class Offset {
         return new (this.constructor)(this.left - other.left, this.top - other.top);
     }
 }
+
+/// A class for conveniently generating and manipulating SVG paths.
+class Path {
+    constructor() {
+        this.commands = [];
+    }
+
+    toString() {
+        return this.commands.join("\n");
+    }
+
+    move_to(x, y) {
+        this.commands.push(`M ${x} ${y}`);
+    }
+
+    line_to(x, y) {
+        this.commands.push(`L ${x} ${y}`);
+    }
+
+    line_by(x, y) {
+        this.commands.push(`l ${x} ${y}`);
+    }
+
+    arc_by(rx, ry, angle, large_arc, clockwise, next_x, next_y) {
+        this.commands.push(
+            `a ${rx} ${ry} ${angle} ${large_arc ? 1 : 0} ${clockwise ? 1 : 0} ${next_x} ${next_y}`
+        );
+    }
+}
