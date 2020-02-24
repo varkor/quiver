@@ -2446,14 +2446,26 @@ class Toolbar {
                     offset = new Position(0, -1);
                     break;
             }
-            ui.history.add(ui, [{
-                kind: "move",
-                displacements: Array.from(ui.selection).map((vertex) => ({
-                    vertex,
-                    from: vertex.position,
-                    to: vertex.position.add(offset),
-                })),
-            }], true);
+            const vertices = Array.from(ui.selection);
+            for (const vertex of vertices) {
+                ui.positions.delete(`${vertex.position}`);
+            }
+            const all_new_positions_free = vertices.every((vertex) => {
+                return !ui.positions.has(`${vertex.position.add(offset)}`);
+            });
+            for (const vertex of vertices) {
+                ui.positions.set(`${vertex.position}`, vertex);
+            }
+            if (all_new_positions_free) {
+                ui.history.add(ui, [{
+                    kind: "move",
+                    displacements: vertices.map((vertex) => ({
+                        vertex,
+                        from: vertex.position,
+                        to: vertex.position.add(offset),
+                    })),
+                }], true);
+            }
         });
 
         // Toggle the grid with `h`.
