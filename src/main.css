@@ -20,6 +20,8 @@ body {
     margin: 0;
     overflow: hidden;
 
+    -webkit-user-select: none;
+
     font-family: sans-serif;
 }
 
