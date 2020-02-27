@@ -20,9 +20,11 @@ body {
     margin: 0;
     overflow: hidden;
 
-    -webkit-user-select: none;
-
     font-family: sans-serif;
+}
+
+body:not(.modal) {
+    -webkit-user-select: none;
 }
 
 /* Special elements */
