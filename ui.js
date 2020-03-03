@@ -2446,7 +2446,7 @@ class Toolbar {
                     offset = new Position(0, -1);
                     break;
             }
-            const vertices = Array.from(ui.selection);
+            const vertices = Array.from(ui.selection).filter((cell) => cell.is_vertex());
             for (const vertex of vertices) {
                 ui.positions.delete(`${vertex.position}`);
             }
