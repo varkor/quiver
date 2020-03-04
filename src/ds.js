@@ -72,6 +72,11 @@ const Dimensions = class extends Position {
         return new Dimensions(0, 0);
     }
 
+    /// Returns a `Dimensions` with the same width and height.
+    static diag(x) {
+        return new Dimensions(x, x);
+    }
+
     get width() {
         return this.x;
     }
@@ -98,12 +103,50 @@ class Offset {
         return [`${this.left}px`, `${this.top}px`];
     }
 
+    as_dim() {
+        return new Dimensions(this.left, this.top);
+    }
+
     /// Moves an `element` to the offset.
     reposition(element) {
         [element.style.left, element.style.top] = this.to_CSS();
     }
 
+    add(other) {
+        return new (this.constructor)(this.left + other.left, this.top + other.top);
+    }
+
     sub(other) {
         return new (this.constructor)(this.left - other.left, this.top - other.top);
+    }
+
+    neg() {
+        return new (this.constructor)(-this.left, -this.top);
+    }
+
+    div(divisor) {
+        return new (this.constructor)(this.left / divisor, this.top / divisor);
+    }
+
+    min(other) {
+        return new (this.constructor)(
+            Math.min(this.left, other.left),
+            Math.min(this.top, other.top)
+        );
+    }
+
+    max(other) {
+        return new (this.constructor)(
+            Math.max(this.left, other.left),
+            Math.max(this.top, other.top)
+        );
+    }
+
+    length() {
+        return Math.hypot(this.left, this.top);
+    }
+
+    angle() {
+        return Math.atan2(this.top, this.left);
     }
 }

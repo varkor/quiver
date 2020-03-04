@@ -114,6 +114,14 @@ class Quiver {
         return Array.from(this.dependencies.keys()).filter(cell => !this.deleted.has(cell));
     }
 
+    /// Rerender the entire quiver. This is expensive, so should only be used when more
+    /// conservative rerenderings are inappropriate (e.g. when the grid has been resized).
+    rerender(ui) {
+        for (const cell of this.all_cells()) {
+            cell.render(ui);
+        }
+    }
+
     /// Returns whether the quiver is empty.
     is_empty() {
         return this.dependencies.size - this.deleted.size === 0;
@@ -649,8 +657,10 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
         assert_kind(vertices, "natural");
         assert(vertices <= cells.length, "invalid number of vertices");
 
-        // We want to centre the view on the diagram, so we take the mean of all vertex positions.
-        let offset = Position.zero();
+        // We want to centre the view on the diagram, so we take the range of all vertex offsets.
+        let min_offset = new Offset(Infinity, Infinity);
+        let max_offset = new Offset(-Infinity, -Infinity);
+        ui.pan_view(ui.body_offset().neg());
         // If we encounter errors while loading cells, we skip the malformed cell and try to
         // continue loading the diagram, but we want to report the errors we encountered afterwards,
         // to let the user know we were not entirely successful.
@@ -671,7 +681,10 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
                     assert_kind(label, "string");
 
                     const position = new Position(x, y);
-                    offset = offset.add(position);
+                    const offset = ui.centre_offset_from_position(position);
+                    const centre = ui.cell_centre_at_position(position);
+                    min_offset = min_offset.min(offset.sub(centre));
+                    max_offset = max_offset.max(offset.add(centre));
                     const vertex = new Vertex(ui, label, position);
                     indices.push(vertex);
                 } else {
@@ -716,11 +729,13 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
         }
 
         // Centre the view on the quiver.
-        const view_width = ui.element.offsetWidth - ui.panel.element.offsetWidth;
-        ui.pan_view(
-            new Offset(view_width / 2, ui.element.offsetHeight / 2)
-                .sub(ui.offset_from_position(ui.view, offset.div(vertices)))
-        );
+        if (vertices > 0) {
+            const view_offset = new Offset(
+                document.body.offsetWidth - ui.panel.element.offsetWidth,
+                document.body.offsetHeight,
+            );
+            ui.pan_view(view_offset.sub(max_offset.sub(min_offset)).div(2));
+        }
 
         // If the quiver is now nonempty, some toolbar actions will be available.
         ui.toolbar.update(ui);
