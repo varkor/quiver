@@ -2547,7 +2547,7 @@ class Toolbar {
                                         flash(input);
                                     }
                                 }
-                            }, 4);
+                            }, 8);
                         }
                     }
                 }
