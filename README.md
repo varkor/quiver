@@ -6,6 +6,7 @@ Try quiver out here: https://varkor.github.io/quiver
 ## Features
 - An intuitive graphical interface for creating and modifying commutative diagrams.
 - Support for objects, morphisms, natural transformations.
+- A responsive, resizable grid.
 - tikz-cd (LaTeX) export.
 - Shareable links.
 - Smart label alignment and edge offset.

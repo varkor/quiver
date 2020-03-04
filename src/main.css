@@ -5,8 +5,6 @@
 }
 
 :root {
-    /* Cell attributes. */
-    --cell-size: 64px;
     /* Cell states. */
     --cell-hover: hsla(0, 0%, 0%, 0.1);
     --cell-selected: hsla(0, 0%, 0%, 0.2);
@@ -118,14 +116,12 @@ body:not(.modal) {
 .insertion-point {
     display: block;
     position: absolute;
-    width: calc(var(--cell-size) - 2px); height: calc(var(--cell-size) - 2px);
-    transform: translate(-50%, -50%);
+    margin-left: 1px; margin-top: 1px;
 
     background: hsla(0, 0%, 0%, 0);
 
     text-align: center;
     font: 16px sans-serif;
-    line-height: var(--cell-size);
     color: hsla(0, 0%, 0%, 0.4);
 }
 
@@ -150,8 +146,6 @@ body:not(.modal) {
 
 .vertex {
     position: absolute;
-    width: var(--cell-size); height: var(--cell-size);
-    transform: translate(-50%, -50%);
 }
 
 .ui.default .vertex {
@@ -160,11 +154,9 @@ body:not(.modal) {
 
 .vertex .content {
     position: absolute;
-    width: calc(var(--cell-size) / 2); height: calc(var(--cell-size) / 2);
-    left: calc(var(--cell-size) / 2); top: calc(var(--cell-size) / 2);
     transform: translate(-50%, -50%);
 
-    border-radius: 100%;
+    border-radius: 2px;
 
     text-align: center;
 }

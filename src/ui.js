@@ -1,5 +1,22 @@
 "use strict";
 
+/// Various parameters.
+const CONSTANTS = {
+    /// We currently only support 0-cells, 1-cells and 2-cells. This is solely
+    /// due to a restriction with tikz-cd, which does not support 3-cells.
+    /// This restriction is not technical: it can be lifted in the editor without issue.
+    MAXIMUM_CELL_LEVEL: 2,
+    /// The width of the dashed grid lines.
+    GRID_BORDER_WIDTH: 2,
+    /// The padding of the content area of a vertex.
+    CONTENT_PADDING: 8,
+    /// How much (horizontal and vertical) space (in pixels) in the SVG to give around the arrow
+    /// (to account for artefacts around the drawing).
+    SVG_PADDING: 6,
+    // How much space (in pixels) to leave between adjacent parallel arrows.
+    EDGE_OFFSET_DISTANCE: 8,
+};
+
 /// Various states for the UI (e.g. whether cells are being rearranged, or connected, etc.).
 class UIState {
     constructor() {
@@ -75,45 +92,44 @@ UIState.Connect = class extends UIState {
     }
 
     /// Update the overlay with a new cursor position.
-    update(ui, position) {
+    update(ui, offset) {
         // If we're creating a new edge...
         if (this.reconnect === null) {
-            // We're drawing the edge again from scratch, so we need to remove all existing elements.
+            // We're drawing the edge again from scratch, so we need to remove all existing
+            // elements.
             const svg = this.overlay.querySelector("svg");
             new DOM.Element(svg).clear();
-            if (!position.eq(this.source.position)) {
-                Edge.draw_and_position_edge(
-                    ui,
-                    this.overlay,
-                    svg,
-                    {
-                        position: this.source.position,
-                        size: this.source.size(),
-                        offset: true,
-                        level: this.source.level,
-                    },
-                    // Lock on to the target if present, otherwise simply draw the edge
-                    // to the position of the cursor.
-                    this.target !== null ? {
-                        position: this.target.position,
-                        size: this.target.size(),
-                        offset: true,
-                        level: this.target.level,
-                    } : {
-                        position,
-                        size: Dimensions.zero(),
-                        offset: false,
-                        level: 0,
-                    },
-                    Edge.default_options(null, {
-                        body: { name: "cell", level: this.source.level + 1 },
-                    }),
-                    null,
-                );
-            }
+            Edge.draw_and_position_edge(
+                ui,
+                this.overlay,
+                svg,
+                {
+                    offset: this.source.off(ui),
+                    size: this.source.size(),
+                    is_offset: true,
+                    level: this.source.level,
+                },
+                // Lock on to the target if present, otherwise simply draw the edge
+                // to the position of the cursor.
+                this.target !== null ? {
+                    offset: this.target.off(ui),
+                    size: this.target.size(),
+                    is_offset: true,
+                    level: this.target.level,
+                } : {
+                    offset,
+                    size: Dimensions.zero(),
+                    is_offset: false,
+                    level: 0,
+                },
+                Edge.default_options(null, {
+                    body: { name: "cell", level: this.source.level + 1 },
+                }),
+                null,
+            );
         } else {
             // We're reconnecting an existing edge.
-            this.reconnect.edge.render(ui, position);
+            this.reconnect.edge.render(ui, offset);
             for (const cell of ui.quiver.transitive_dependencies([this.reconnect.edge], true)) {
                 cell.render(ui);
             }
@@ -122,17 +138,14 @@ UIState.Connect = class extends UIState {
 
     /// Returns whether the `source` is compatible with the specified `target`.
     /// This first checks that the source is valid at all.
-    // We currently only support 0-cells, 1-cells and 2-cells. This is solely
-    // due to a restriction with tikz-cd. This restriction can be lifted in
-    // the editor with no issue.
     valid_connection(target) {
-        return this.source.level <= 1 &&
+        return this.source.level < CONSTANTS.MAXIMUM_CELL_LEVEL &&
             // To allow `valid_connection` to be used to simply check whether the source is valid,
             // we ignore source–target compatibility if `target` is null.
             // We allow cells to be connected even if they do not have the same level. This is
             // because it's often useful when drawing diagrams, even if it may not always be
             // semantically valid.
-            (target === null || target.level <= 1);
+            (target === null || target.level < CONSTANTS.MAXIMUM_CELL_LEVEL);
     }
 
     /// Connects the source and target. Note that this does *not* check whether the source and
@@ -322,8 +335,17 @@ class UI {
         /// The UI state (e.g. whether cells are being rearranged, or connected, etc.).
         this.state = null;
 
-        /// The size of each 0-cell.
-        this.cell_size = 128;
+        /// The width and height of each grid cell. Defaults to `default_cell_size`.
+        this.cell_width = new Map();
+        this.cell_height = new Map();
+        /// The default (minimum) size of each column and row, if a width or height has not been
+        /// specified.
+        this.default_cell_size = 128;
+        /// The constraints on the width and height of each cell: we use the maximum constaint for
+        /// final width/height. We store these separately from `cell_width` and `cell_height` to
+        /// avoid recomputing the sizes every time, as we access them frequently.
+        this.cell_width_constraints = new Map();
+        this.cell_height_constraints = new Map();
 
         /// All currently selected cells;
         this.selection = new Set();
@@ -341,7 +363,7 @@ class UI {
         /// The element containing all the cells themselves.
         this.canvas = null;
 
-        /// The offset of the view.
+        /// The offset of the view (i.e. the centre of the view).
         this.view = Offset.zero();
 
         /// Undo/redo for actions.
@@ -405,7 +427,9 @@ class UI {
 
         // The canvas is only as big as the window, so we need to resize it when the window resizes.
         window.addEventListener("resize", () => {
-            this.update_grid(new DOM.Canvas(this.canvas.element.querySelector(".grid")), this.view);
+            this.update_grid();
+            // We need to make sure the cells are still aligned with the grid.
+            this.quiver.rerender(this);
         });
 
         // Add a move to the history.
@@ -416,8 +440,7 @@ class UI {
                     kind: "move",
                     displacements: Array.from(this.state.selection).map((vertex) => ({
                         vertex,
-                        from:
-                            vertex.position.sub(this.state.previous.sub(this.state.origin)),
+                        from: vertex.position.sub(this.state.previous.sub(this.state.origin)),
                         to: vertex.position,
                     })),
                 }]);
@@ -496,11 +519,17 @@ class UI {
 
         // Move the insertion point under the pointer.
         const reposition_insertion_point = (event) => {
-            const position = this.position_from_event(this.view, event);
-            const offset = this.offset_from_position(this.view, position);
+            const position = this.position_from_event(event);
+            const offset = this.offset_from_position(position);
             offset.reposition(insertion_point);
+            // Resize the insertion point appropriately for the grid cell.
+            insertion_point.style.width
+                = `${this.cell_size(this.cell_width, position.x) - CONSTANTS.GRID_BORDER_WIDTH}px`;
+            insertion_point.style.height
+                = insertion_point.style.lineHeight
+                = `${this.cell_size(this.cell_height, position.y) - CONSTANTS.GRID_BORDER_WIDTH}px`;
             return position;
-        }
+        };
 
         // Clicking on the insertion point reveals it,
         // after which another click adds a new node.
@@ -526,7 +555,7 @@ class UI {
                         if (!event.shiftKey && !event.metaKey && !event.ctrlKey) {
                             this.deselect();
                         }
-                        const vertex = create_vertex(this.position_from_event(this.view, event));
+                        const vertex = create_vertex(this.position_from_event(event));
                         this.history.add(this, [{
                             kind: "create",
                             cells: new Set([vertex]),
@@ -571,7 +600,7 @@ class UI {
                     // We only want to forge vertices, not edges (and thus 1-cells).
                     if (this.state.source.is_vertex()) {
                         this.state.target
-                            = create_vertex(this.position_from_event(this.view, event));
+                            = create_vertex(this.position_from_event(event));
                         // Usually this vertex will be immediately deselected, except when Shift
                         // is held, in which case we want to select the forged vertices *and* the
                         // new edge.
@@ -632,10 +661,10 @@ class UI {
                 // If the insertion point is `"active"`, we're going to create
                 // a vertex and start connecting it.
                 insertion_point.classList.remove("active");
-                const vertex = create_vertex(this.position_from_offset(this.view, new Offset(
+                const vertex = create_vertex(this.position_from_offset(new Offset(
                     insertion_point.offsetLeft,
                     insertion_point.offsetTop,
-                )));
+                ).sub(this.body_offset())));
                 this.select(vertex);
                 this.switch_mode(new UIState.Connect(this, vertex, true));
                 vertex.element.classList.add("source");
@@ -667,12 +696,13 @@ class UI {
                 }
             }
 
+            // Moving cells around with the mouse.
             if (this.in_mode(UIState.Move)) {
                 // Prevent dragging from selecting random elements.
                 event.preventDefault();
 
                 const new_position = (cell) => {
-                    return position.add(cell.position.sub(this.state.previous));
+                    return cell.position.add(position).sub(this.state.previous);
                 };
 
                 // We will only try to reposition if the new position is actually different
@@ -682,6 +712,7 @@ class UI {
                 const occupied = Array.from(this.state.selection).some((cell) => {
                     return cell.is_vertex() && this.positions.has(`${new_position(cell)}`);
                 });
+
                 if (!position.eq(this.state.previous) && !occupied) {
                     // We'll need to move all of the edges connected to the moved vertices,
                     // so we keep track of the root vertices in `moved.`
@@ -689,16 +720,26 @@ class UI {
                     // Move all the selected vertices.
                     for (const cell of this.state.selection) {
                         if (cell.is_vertex()) {
-                            cell.position = new_position(cell);
+                            cell.set_position(this, new_position(cell));
                             moved.add(cell);
                         }
                     }
-                    this.state.previous = position;
 
-                    // Move all of the edges connected to cells that have moved.
-                    for (const cell of this.quiver.transitive_dependencies(moved)) {
-                        cell.render(this);
+                    // Update the column and row sizes in response to the new positions of the
+                    // vertices.
+                    if (!this.update_col_row_size(...Array.from(moved)
+                        // Undo the transformation performed by `new_position`.
+                        .map((vertex) => vertex.position.sub(position).add(this.state.previous))
+                    )) {
+                        // If we haven't rerendered the entire canvas due to a resize, then
+                        // rerender the dependencies to make sure we move all of the edges connected
+                        // to cells that have moved.
+                        for (const cell of this.quiver.transitive_dependencies(moved)) {
+                            cell.render(this);
+                        }
                     }
+
+                    this.state.previous = position;
 
                     // Update the panel, so that the interface is kept in sync (e.g. the
                     // rotation of the label alignment buttons).
@@ -710,13 +751,14 @@ class UI {
                 // Prevent dragging from selecting random elements.
                 event.preventDefault();
 
-                this.state.update(this, this.position_from_event(this.view, event, false));
+                // Update the position of the cursor.
+                const offset = this.offset_from_event(event).add(this.body_offset());
+                this.state.update(this, offset);
             }
         });
 
         // Set the grid background.
-        this.canvas.element.style.setProperty("--cell-size", `${this.cell_size}px`);
-        this.initialise_grid(this.canvas, this.view);
+        this.initialise_grid(this.canvas);
     }
 
     /// Active MathJax or KaTeX when it becomes available,
@@ -752,33 +794,223 @@ class UI {
         }
     }
 
-    /// A helper method for getting a position from an offset.
-    position_from_offset(view, offset, round = true) {
-        const transform = round ? Math.round : x => x;
-        return new Position(
-            transform((offset.left - view.left) / this.cell_size - 0.5),
-            transform((offset.top - view.top) / this.cell_size - 0.5),
-        );
+    /// Get the width or height of a particular grid cell. You should use this instead of directly
+    /// accessing `cell_width` or `cell_height` to ensure it defaults to `default_cell_size`.
+    cell_size(sizes, index) {
+        return sizes.get(index) || this.default_cell_size;
+    }
+
+    /// Get a column or row number corresponding to an offset (in pixels), as well as the partial
+    /// offset from the absolute position of that column and row origin.
+    cell_from_offset(sizes, offset) {
+        // We explore the grid in both directions, starting from the origin.
+        let index = 0;
+        const original_offset = offset;
+        if (offset === 0) {
+            return [index, 0];
+        }
+        // The following two loops have been kept separate to increase readability.
+        // Explore to the right or bottom...
+        while (offset >= 0) {
+            const size = this.cell_size(sizes, index);
+            if (offset < size) {
+                return [index, original_offset - offset];
+            }
+            offset -= size;
+            ++index;
+        }
+        // Explore to the left or top...
+        while (offset <= 0) {
+            --index;
+            const size = this.cell_size(sizes, index);
+            if (Math.abs(offset) < size) {
+                return [index, original_offset - (offset + size)];
+            }
+            offset += size;
+        }
+    }
+
+    /// Get a column and row number corresponding to an offset, as well as the partial offsets from
+    /// the absolute positions of the column and row. See `cell_from_offset` for details.
+    col_row_offset_from_offset(offset) {
+        return [
+            this.cell_from_offset(this.cell_width, offset.left),
+            this.cell_from_offset(this.cell_height, offset.top),
+        ];
+    }
+
+    /// Get a column and row number corresponding to an offset.
+    col_row_from_offset(offset) {
+        return this.col_row_offset_from_offset(offset).map(([index, _]) => index);
+    }
+
+    /// Convert an `Offset` (pixels) to a `Position` (cell indices).
+    /// The inverse function is `offset_from_position`.
+    position_from_offset(offset) {
+        const [col, row] = this.col_row_from_offset(offset.add(this.view));
+        return new Position(col, row);
+    }
+
+    /// Returns the centre of the canvas.
+    body_offset() {
+        return new Offset(document.body.offsetWidth / 2, document.body.offsetHeight / 2);
     }
 
     /// A helper method for getting a position from an event.
-    position_from_event(view, event, round = true) {
-        return this.position_from_offset(view, this.offset_from_event(event), round);
+    position_from_event(event) {
+        return this.position_from_offset(this.offset_from_event(event));
     }
 
     /// A helper method for getting an offset from an event.
     offset_from_event(event) {
-        return new Offset(event.pageX, event.pageY);
+        return new Offset(event.pageX, event.pageY).sub(this.body_offset());
     }
 
-    /// A helper method for getting an HTML (left, top) position from a grid `Position`.
-    offset_from_position(view, position, account_for_centring = true) {
+    /// Returns half the size of the cell at the given `position`.
+    cell_centre_at_position(position) {
         return new Offset(
-            position.x * this.cell_size + (account_for_centring ? this.cell_size / 2 : 0)
-                + view.left,
-            position.y * this.cell_size + (account_for_centring ? this.cell_size / 2 : 0)
-                + view.top,
+            this.cell_size(this.cell_width, position.x) / 2,
+            this.cell_size(this.cell_height, position.y) / 2,
         );
+    }
+
+    /// Computes the offset to the centre of the cell at `position`.
+    centre_offset_from_position(position) {
+        const offset = this.offset_from_position(position);
+        const centre = this.cell_centre_at_position(position);
+        return offset.add(centre);
+    }
+
+    /// Convert a `Position` (cell indices) to an `Offset` (pixels).
+    /// The inverse function is `position_from_offset`.
+    offset_from_position(position) {
+        const offset = this.view.neg();
+
+        // We attempt to explore in each of the four directions in turn.
+        // These four loops could be simplified, but have been left as-is to aid readability.
+
+        if (position.x > 0) {
+            for (let col = 0; col < Math.floor(position.x); ++col) {
+                offset.left += this.cell_size(this.cell_width, col);
+            }
+            offset.left
+                += this.cell_size(this.cell_width, Math.floor(position.x)) * (position.x % 1);
+        }
+        if (position.x < 0) {
+            for (let col = -1; col >= position.x; --col) {
+                offset.left -= this.cell_size(this.cell_width, col);
+            }
+            offset.left
+                += this.cell_size(this.cell_width, Math.floor(position.x)) * (position.x % 1);
+        }
+
+        if (position.y > 0) {
+            for (let row = 0; row < Math.floor(position.y); ++row) {
+                offset.top += this.cell_size(this.cell_height, row);
+            }
+            offset.top
+                += this.cell_size(this.cell_height, Math.floor(position.y)) * (position.y % 1);
+        }
+        if (position.y < 0) {
+            for (let row = -1; row >= position.y; --row) {
+                offset.top -= this.cell_size(this.cell_height, row);
+            }
+            offset.top
+                += this.cell_size(this.cell_height, Math.floor(position.y)) * (position.y % 1);
+        }
+
+        return offset.add(this.body_offset());
+    }
+
+    /// Update the width of the grid columns and the heights of the grid rows at each of the given
+    /// positions.
+    /// The maximum width/height of each cell in a column/row will be used to determine the width/
+    /// height of each column/row.
+    ///
+    /// Returns whether the entire quiver was rerendered (in which case the caller may be able to
+    /// avoid rerendering).
+    update_col_row_size(...positions) {
+        // If no sizes change, we do not have to redraw the grid and cells. Otherwise, we must
+        // redraw everything, as a resized column or row essentially reflows the entire graph.
+        let rerender = false;
+        // We keep the view centred as best we can, so we have to adjust the view if anything is
+        // resized.
+        let view_offset = Offset.zero();
+
+        for (const position of positions) {
+            // Compute how much each column or row size has changed and update the size in
+            // `cell_width_constraints` or `cell_height_constraints`.
+            const delta = (constraints, sizes, offset, margin) => {
+                // The size of a column or row is determined by the largest cell.
+                const max_size
+                    = Math.max(0, ...Array.from(constraints.get(offset)).map(([_, size]) => size));
+                const new_size = Math.max(this.default_cell_size, max_size + margin);
+                const delta = new_size - this.cell_size(sizes, offset);
+
+                if (delta !== 0) {
+                    sizes.set(offset, new_size);
+                }
+
+                return delta;
+            }
+
+            // We keep a margin around the content of each cell. This gives space for dragging them
+            // with the mouse.
+            const MARGIN_X = this.default_cell_size * 0.5;
+            const MARGIN_Y = this.default_cell_size * 0.5;
+
+            const delta_x = delta(
+                this.cell_width_constraints,
+                this.cell_width,
+                position.x,
+                MARGIN_X,
+            );
+            const delta_y = delta(
+                this.cell_height_constraints,
+                this.cell_height,
+                position.y,
+                MARGIN_Y,
+            );
+
+            if (delta_x !== 0 || delta_y !== 0) {
+                // Compute how much to adjust the view in order to keep it centred appropriately.
+                const offset = new Offset(
+                    delta_x / 2 * (position.x >= 0 ? -1 : 1),
+                    delta_y / 2 * (position.y >= 0 ? -1 : 1),
+                );
+                view_offset = view_offset.add(offset);
+                rerender = true;
+            }
+        }
+
+        if (rerender) {
+            // If any of the column or row sizes changed, we need to rerender everything.
+            // First, we reposition the grid and redraw it.
+            this.pan_view(view_offset);
+            // Then, we rerender all of the cells, which will have changed position.
+            this.quiver.rerender(this);
+        }
+
+        return rerender;
+    }
+
+    /// Updates the size of the content of a cell. If the size is larger than the maximum of all
+    /// other cells in that column or row, we resize the column or row to fit the content in.
+    /// This means we do not have to resize the text inside a cell, for instance, to make things
+    /// fit.
+    update_cell_size(cell, width, height) {
+        const update_size = (constraints, offset, size) => {
+            if (!constraints.has(offset)) {
+                constraints.set(offset, new Map());
+            }
+            constraints.get(offset).set(cell, size);
+        };
+
+        update_size(this.cell_width_constraints, cell.position.x, width);
+        update_size(this.cell_height_constraints, cell.position.y, height);
+
+        // Resize the grid if need be.
+        this.update_col_row_size(cell.position);
     }
 
     /// Returns the current UI selection, excluding the given `cells`.
@@ -856,15 +1088,15 @@ class UI {
     }
 
     /// Repositions the view by a relative offset.
-    /// If `offset` is positive, then everything will appear to move towards the bottom right.
+    /// If `offset` is positive, then everything will appear to move towards the top left.
     pan_view(offset) {
-        this.view.left += offset.left;
-        this.view.top += offset.top;
+        this.view.left -= offset.left;
+        this.view.top -= offset.top;
         for (const cell of this.canvas.element.querySelectorAll(".cell")) {
             cell.style.left = `${cell.offsetLeft + offset.left}px`;
             cell.style.top = `${cell.offsetTop + offset.top}px`;
         }
-        this.update_grid(new DOM.Canvas(this.canvas.element.querySelector(".grid")), this.view);
+        this.update_grid();
     }
 
     /// Returns a unique identifier for an object.
@@ -902,30 +1134,44 @@ class UI {
         // How wide, relative to the cell, a label can be. This needs to be smaller than
         // 1.0 to leave room for arrows between cells, as cells are immediately adjacent.
         const MAX_LABEL_WIDTH = 0.8;
-        // We want to prevent labels from becoming too small. Strictly speaking, if
-        // `MIN_LABEL_WIDTH` is greater then `1.0 - MAX_LABEL_WIDTH`, we may get
-        // overlap of vertex and edge labels, but this is better than not being able
-        // to see the labels at all.
-        const MIN_LABEL_WIDTH = 0.6;
         // The text scaling decrement size. Must be strictly between 0 and 1.
         const LABEL_SCALE_STEP = 0.9;
 
         let max_width;
         if (cell.is_vertex()) {
-            max_width = this.cell_size * MAX_LABEL_WIDTH;
+            max_width = this.cell_size(this.cell_width, cell.position.x) * MAX_LABEL_WIDTH;
         } else {
-            const length = cell.target.position.sub(cell.source.position).length();
-            max_width = this.cell_size * Math.max((length - MAX_LABEL_WIDTH), MIN_LABEL_WIDTH);
+            const offset_for = (endpoint) => {
+                if (endpoint.is_vertex()) {
+                    return this.centre_offset_from_position(endpoint.position);
+                } else {
+                    return endpoint.offset;
+                }
+            };
+            // Calculate the distance between the endpoints.
+            const length = offset_for(cell.target).sub(offset_for(cell.source)).length();
+            max_width = length * MAX_LABEL_WIDTH;
         }
 
-        // Reset the label font size.
-        label.style.fontSize = "";
-        // Ensure that the label fits within the cell by dynamically resizing it.
-        while (label.offsetWidth > max_width) {
-            const new_size = parseFloat(
-                window.getComputedStyle(label).fontSize,
-            ) * LABEL_SCALE_STEP;
-            label.style.fontSize = `${new_size}px`;
+        // If vertices are too large (or too small), we resize the grid to fit them.
+        if (cell.is_vertex()) {
+            this.update_cell_size(
+                cell,
+                label.offsetWidth,
+                label.offsetHeight,
+            );
+        }
+
+        // Reset the label font size for edges, to reduce overlap.
+        if (cell.is_edge()) {
+            label.style.fontSize = "";
+            // Ensure that the label fits within the cell by dynamically resizing it.
+            while (label.offsetWidth > max_width) {
+                const new_size = parseFloat(
+                    window.getComputedStyle(label).fontSize,
+                ) * LABEL_SCALE_STEP;
+                label.style.fontSize = `${new_size}px`;
+            }
         }
 
         if (cell.is_vertex()) {
@@ -935,6 +1181,8 @@ class UI {
                 edge.render(this);
             }
         }
+
+        return [label.offsetWidth, label.offsetHeight];
     }
 
     /// Returns the declared macros in a format amenable to passing to the LaTeX renderer.
@@ -959,10 +1207,14 @@ class UI {
         }
     }
 
-    /// Renders TeX with MathJax and returns the corresponding element.
+    /// Renders TeX with MathJax or KaTeX and returns the corresponding element.
     render_tex(cell, label, tex = "", callback = x => x) {
         const after = (x) => {
-            this.resize_label(cell, label.element);
+            const sizes = this.resize_label(cell, label.element);
+            if (cell.is_vertex()) {
+                // If the cell size has changed, we may need to resize the grid to fit.
+                cell.resize_content(this, sizes);
+            }
 
             callback(x);
         };
@@ -1057,53 +1309,60 @@ class UI {
     }
 
     /// Create the canvas upon which the grid will be drawn.
-    initialise_grid(element, offset) {
+    initialise_grid(element) {
         const [width, height] = [document.body.offsetWidth, document.body.offsetHeight];
         const canvas = new DOM.Canvas(null, width, height, { class: "grid" });
         element.add(canvas);
-        this.update_grid(canvas, offset);
+        this.update_grid();
     }
 
     /// Update the grid with respect to the view and size of the window.
-    update_grid(canvas, offset) {
+    update_grid() {
         // Constants for parameters of the grid pattern.
-        // The width of the cell border lines.
-        const BORDER_WIDTH = 2;
         // The (average) length of the dashes making up the cell border lines.
-        const DASH_LENGTH = this.cell_size / 16;
+        const DASH_LENGTH = this.default_cell_size / 16;
         // The border colour.
         const BORDER_COLOUR = "lightgrey";
 
         const [width, height] = [document.body.offsetWidth, document.body.offsetHeight];
+        const canvas = new DOM.Canvas(this.canvas.element.querySelector(".grid"));
         canvas.resize(width, height);
-
-        const mod = (a, b) => ((a % b) + b) % b;
 
         const context = canvas.context;
         context.strokeStyle = BORDER_COLOUR;
-        context.lineWidth = BORDER_WIDTH;
+        context.lineWidth = CONSTANTS.GRID_BORDER_WIDTH;
         context.setLineDash([DASH_LENGTH]);
 
         // We want to centre the horizontal and vertical dashes, so we get little crosses in the
-        // corner of each grid cell.
+        // corner of each grid cell. This is best effort: it is perfect when each column and row
+        // is the default size, but otherwise may be imperfect.
         const dash_offset = -DASH_LENGTH / 2;
+
+        const [[left_col, left_offset], [top_row, top_offset]] = this.col_row_offset_from_offset(
+            this.view.sub(new Offset(width / 2, height / 2))
+        );
+        const [[right_col,], [bottom_row,]] = this.col_row_offset_from_offset(
+            this.view.add(new Offset(width / 2, height / 2))
+        );
 
         // Draw the vertical lines.
         context.beginPath();
-        for (let x = 0; x <= width; x += this.cell_size) {
-            context.moveTo(x + mod(offset.left, this.cell_size), 0);
-            context.lineTo(x + mod(offset.left, this.cell_size), height);
+        for (let col = left_col, x = left_offset - this.view.left + width / 2;
+                col <= right_col; x += this.cell_size(this.cell_width, col++)) {
+            context.moveTo(x, 0);
+            context.lineTo(x, height);
         }
-        context.lineDashOffset = -(offset.top + dash_offset);
+        context.lineDashOffset = this.view.top - dash_offset - height % this.default_cell_size / 2;
         context.stroke();
 
         // Draw the horizontal lines.
         context.beginPath();
-        for (let y = 0; y <= height; y += this.cell_size) {
-            context.moveTo(0, y + mod(offset.top, this.cell_size));
-            context.lineTo(width, y + mod(offset.top, this.cell_size));
+        for (let row = top_row, y = top_offset - this.view.top + height / 2;
+                row <= bottom_row; y += this.cell_size(this.cell_height, row++)) {
+            context.moveTo(0, y);
+            context.lineTo(width, y);
         }
-        context.lineDashOffset = -(offset.left + dash_offset);
+        context.lineDashOffset = this.view.left - dash_offset - width % this.default_cell_size / 2;
         context.stroke();
     }
 
@@ -1293,12 +1552,21 @@ class History {
                         ui.positions.delete(`${displacement[from]}`);
                     }
                     for (const displacement of action.displacements) {
-                        displacement.vertex.position = displacement[to];
+                        displacement.vertex.set_position(ui, displacement[to]);
                         ui.positions.set(
                             `${displacement.vertex.position}`,
                             displacement.vertex,
                         );
                         cells.add(displacement.vertex);
+                    }
+                    // We may need to resize the columns and rows that the cells moved from, if
+                    // they were what was determining the column/row width/height.
+                    if (ui.update_col_row_size(...action.displacements.map(
+                        (displacement) => displacement[from])
+                    )) {
+                        // If `update_col_row_size` rerendered all the cells, there's no need to
+                        // render them again later.
+                        cells.clear();
                     }
                     break;
                 case "create":
@@ -1998,7 +2266,7 @@ class Panel {
                 cell.update_label_transformation(ui);
             } else {
                 // `update_label_transformation` performs label resizing itself.
-                ui.resize_label(cell, label.element);
+                cell.resize_content(ui, ui.resize_label(cell, label.element));
             }
         };
 
@@ -2111,7 +2379,7 @@ class Panel {
                     // The label alignment buttons are rotated to reflect the direction of the arrow
                     // when all arrows have the same direction (at least to the nearest multiple of
                     // 90°). Otherwise, rotation defaults to 0°.
-                    consider("{angle}", cell.angle());
+                    consider("{angle}", cell.angle(ui));
                     consider("{offset}", cell.options.offset);
                     consider("edge-type", cell.options.style.name);
 
@@ -2627,7 +2895,7 @@ class Cell {
                         ui.switch_mode(
                             new UIState.Move(
                                 ui,
-                                ui.position_from_event(ui.view, event),
+                                ui.position_from_event(event),
                                 move,
                             ),
                         );
@@ -2801,6 +3069,31 @@ class Cell {
         return this.level > 0;
     }
 
+    /// Returns either the position on the grid (if a vertex) or the offset (if an edge). `Position`
+    /// and `Offset` have many of the same methods, so may be usually be used interchangeably in
+    /// appropriate situations. If it is known that a cell is either a vertex or an edge, or if
+    /// the two cases need to be handled differently, `.position` or `.offset` should be used
+    /// directly.
+    pos() {
+        if (this.is_vertex()) {
+            return this.position;
+        } else {
+            return this.offset;
+        }
+    }
+
+    /// Returns the offset of the cell. Both vertices and edges are stored in absolute rather than
+    /// view-relative co-ordinates, so both must be adjusted relative to the current view.
+    /// However, the positions of vertices are stored as `Position`s, whereas the positions of
+    /// edges are stored as `Offset`s, so these must be handled differently.
+    off(ui) {
+        if (this.is_vertex()) {
+            return ui.centre_offset_from_position(this.position);
+        } else {
+            return this.offset.sub(ui.view.add(ui.body_offset()));
+        }
+    }
+
     select() {
         this.element.classList.add("selected");
     }
@@ -2810,7 +3103,7 @@ class Cell {
     }
 
     size() {
-        if (this.level === 0) {
+        if (this.is_vertex()) {
             const label = this.element.querySelector(".label:not(.buffer)");
             return new Dimensions(label.offsetWidth, label.offsetHeight);
         } else {
@@ -2837,9 +3130,17 @@ class Vertex extends Cell {
         }
     }
 
+    /// Changes the vertex's position.
+    /// This helper method ensures that column and row sizes are updated automatically.
+    set_position(ui, position) {
+        ui.cell_width_constraints.get(this.position.x).delete(this);
+        ui.cell_height_constraints.get(this.position.y).delete(this);
+        this.position = position;
+    }
+
     /// Create the HTML element associated with the vertex.
     render(ui) {
-        const offset = ui.offset_from_position(ui.view, this.position);
+        const offset = ui.offset_from_position(this.position);
 
         const construct = this.element === null;
 
@@ -2847,30 +3148,57 @@ class Vertex extends Cell {
         if (construct) {
             this.element = new DOM.Element("div").element;
         }
+
         offset.reposition(this.element);
-        if (!construct) {
-            // If the element already existed, then as soon as we've moved it to the correct
-            // position, nothing remains to be done.
-            return;
+        // Resize according to the grid cell.
+        const cell_width = ui.cell_size(ui.cell_width, this.position.x);
+        const cell_height = ui.cell_size(ui.cell_height, this.position.y);
+        this.element.style.width = `${cell_width}px`;
+        this.element.style.height = `${cell_height}px`;
+
+        if (construct) {
+            this.element.classList.add("vertex");
+
+            // The cell content (containing the label).
+            this.element.appendChild(new DOM.Element("div", { class: "content" }).element);
         }
 
-        this.element.classList.add("vertex");
+        // Resize the content according to the grid cell. This is just the default size: it will be
+        // updated by `render_label`.
+        const content = this.content_element;
+        content.style.width = `${ui.default_cell_size / 2}px`;
+        content.style.left = `${cell_width / 2}px`;
+        content.style.height = `${ui.default_cell_size / 2}px`;
+        content.style.top = `${cell_height / 2}px`;
 
-        // The cell content (containing the label).
-        this.element.appendChild(new DOM.Element("div", { class: "content" }).element);
-        this.render_label(ui);
+        if (construct) {
+            this.render_label(ui);
+        } else {
+            // Ensure we re-render the label when the cell is moved, in case the cell it's moved
+            // into is a different size.
+            ui.panel.render_tex(ui, this);
+        }
     }
 
     /// Create the HTML element associated with the label (and label buffer).
     /// This abstraction is necessary to handle situations where MathJax cannot
     /// be loaded gracefully.
     render_label(ui) {
-        const content = new DOM.Element(this.element.querySelector(".content"));
+        const content = new DOM.Element(this.content_element);
         // Create the label.
         content.add(ui.render_tex(this, UI.clear_label_for_cell(this), this.label));
         // Create an empty label buffer for flicker-free rendering.
         const buffer = ui.render_tex(this, UI.clear_label_for_cell(this, true), this.label);
         content.add(buffer);
+    }
+
+    /// Resize the cell content to match the label width.
+    resize_content(ui, sizes) {
+        const [width, height] = sizes;
+        this.content_element.style.width
+            = `${Math.max(ui.default_cell_size / 2, width + CONSTANTS.CONTENT_PADDING * 2)}px`;
+        this.content_element.style.height
+            = `${Math.max(ui.default_cell_size / 2, height + CONSTANTS.CONTENT_PADDING * 2)}px`;
     }
 }
 
@@ -2909,7 +3237,7 @@ class Edge extends Cell {
     }
 
     /// Create the HTML element associated with the edge.
-    render(ui, pointer_position = null) {
+    render(ui, pointer_offset = null) {
         let [svg, background] = [null, null];
 
         if (this.element !== null) {
@@ -3004,22 +3332,22 @@ class Edge extends Cell {
         // to check what state we're currently in, and if we establish this edge is being
         // reconnected, we override the source/target position (as well as whether we offset
         // the edge endpoints).
-        let [source_position, target_position] = [this.source.position, this.target.position];
+        let [source_offset, target_offset] = [this.source.off(ui), this.target.off(ui)];
         let [source, target] = [this.source, this.target];
         const endpoint_offset = { source: true, target: true };
         const reconnecting = ui.in_mode(UIState.Connect)
             && ui.state.reconnect !== null
             && ui.state.reconnect.edge === this;
-        if (reconnecting && pointer_position !== null) {
-            const connection_position
-                = ui.state.target !== null ? ui.state.target.position : pointer_position;
+        if (reconnecting && pointer_offset !== null) {
+            const connection_offset
+                = ui.state.target !== null ? ui.state.target.off(ui) : pointer_offset;
             switch (ui.state.reconnect.end) {
                 case "source":
-                    source_position = connection_position;
+                    source_offset = connection_offset;
                     source = ui.state.target || source;
                     break;
                 case "target":
-                    target_position = connection_position;
+                    target_offset = connection_offset;
                     target = ui.state.target || target;
                     break;
             }
@@ -3030,38 +3358,36 @@ class Edge extends Cell {
             }
         }
 
-        // Set the edge's position. This is important only for the cells that depend on this one,
-        // so that they can be drawn between the correct positions.
-        const normal = this.angle() + Math.PI / 2;
-        this.position = source_position
-            .add(target_position)
-            .div(2)
-            .add(new Position(
-                Math.cos(normal) * this.options.offset * Edge.OFFSET_DISTANCE / ui.cell_size,
-                Math.sin(normal) * this.options.offset * Edge.OFFSET_DISTANCE / ui.cell_size,
-            ));
-
         // Draw the edge itself.
-        Edge.draw_and_position_edge(
+        let [edge_offset, length, direction] = Edge.draw_and_position_edge(
             ui,
             this.element,
             svg,
             {
-                position: source_position,
+                offset: source_offset,
                 size: source.size(),
-                offset: endpoint_offset.source,
+                is_offset: endpoint_offset.source,
                 level: source.level,
             },
             {
-                position: target_position,
+                offset: target_offset,
                 size: target.size(),
-                offset: endpoint_offset.target,
+                is_offset: endpoint_offset.target,
                 level: target.level,
             },
             this.options,
             null,
             background,
         );
+
+        // Set the edge's offset. This is important only for the cells that depend on this one,
+        // so that they can be drawn between the correct positions.
+        this.offset = edge_offset.add(new Offset(
+            Math.cos(direction) * length / 2 + Math.cos(direction + Math.PI / 2)
+                * CONSTANTS.EDGE_OFFSET_DISTANCE * this.options.offset,
+            Math.sin(direction) * length / 2 + Math.sin(direction + Math.PI / 2)
+                * CONSTANTS.EDGE_OFFSET_DISTANCE * this.options.offset,
+        ));
 
         // Apply the mask to the edge.
         for (const path of svg.querySelectorAll("path")) {
@@ -3074,7 +3400,7 @@ class Edge extends Cell {
         // If the label has already been rendered, then clear the edge for it.
         // If it has not already been rendered, this is a no-op: it will be called
         // again when the label is rendered.
-        this.update_label_transformation(ui, target_position.sub(source_position).angle());
+        this.update_label_transformation(ui, target_offset.sub(source_offset).angle());
     }
 
     /// Create the HTML element associated with the label (and label buffer).
@@ -3108,25 +3434,18 @@ class Edge extends Cell {
         background = null,
     ) {
         // Constants for parameters of the arrow shapes.
-        const SVG_PADDING = Edge.SVG_PADDING;
-        const OFFSET_DISTANCE = Edge.OFFSET_DISTANCE;
+        const SVG_PADDING = CONSTANTS.SVG_PADDING;
+        const OFFSET_DISTANCE = CONSTANTS.EDGE_OFFSET_DISTANCE;
         // How much (vertical) space to give around the SVG.
         const EDGE_PADDING = 4;
-        // How much space to leave at minimum between the cells this edge spans.
-        const MARGIN = ui.cell_size / 8;
-        // How much padding to place between a cell label and an edge.
-        const PADDING = ui.cell_size / 16;
         // The minimum length of the `element`. This is defined so that very small edges (e.g.
         // adjunctions or pullbacks) are still large enough to manipulate by clicking on them or
         // their handles.
         const MIN_LENGTH = 72;
 
         // The SVG for the arrow itself.
-        const offset_delta = ui.offset_from_position(
-            Offset.zero(),
-            target.position.sub(source.position),
-            false,
-        );
+
+        const offset_delta = target.offset.sub(source.offset);
         const direction = Math.atan2(offset_delta.top, offset_delta.left);
 
         // Returns the distance from midpoint of the rectangle with the given `size` to any edge,
@@ -3137,37 +3456,25 @@ class Edge extends Cell {
             return Number.isNaN(h) ? v : Number.isNaN(v) ? h : Math.min(h, v) / 2;
         };
 
-        const padding = new Dimensions(PADDING, PADDING);
+        const padding = Dimensions.diag(CONSTANTS.CONTENT_PADDING * 2);
         // The content area of a vertex is reserved for vertices: edges will not encroach upon that
         // space.
-        const min_size = (cell) => {
-            return cell.level === 0 ?
-                new Dimensions(ui.cell_size / 2, ui.cell_size / 2) : Dimensions.zero();
-        };
-
+        const min_margin = Dimensions.diag(ui.default_cell_size / 2);
         const margin = {
-            source: source.offset ? Math.max(
-                edge_distance(source.size.add(padding).max(min_size(source)), direction),
-                MARGIN,
-            ) : 0,
-            target: target.offset ? Math.max(
-                edge_distance(target.size.add(padding).max(min_size(target)), direction + Math.PI),
-               MARGIN,
-            ) : 0,
+            source: source.is_offset ?
+                edge_distance(source.size.add(padding).max(min_margin), direction) : 0,
+            target: target.is_offset ?
+                edge_distance(target.size.add(padding).max(min_margin), direction + Math.PI) : 0,
         };
 
-        const length = Math.hypot(offset_delta.top, offset_delta.left)
-            - (margin.source + margin.target);
+        const length = Math.max(0, Math.hypot(offset_delta.top, offset_delta.left)
+            - (margin.source + margin.target));
 
-        // If the arrow has zero or negative length, then we can just return here.
-        // Otherwise we just get SVG errors from drawing invalid shapes.
-        if (length <= 0) {
-            // Pick an arbitrary direction (0°) to return.
-            return 0;
-        }
-
+        // If the arrow has zero length, then we skip trying to draw it, as it's
+        // obviously unnecessary, and can cause SVG errors from drawing invalid shapes.
         const { dimensions, alignment }
-            = Edge.draw_edge(svg, options, length, direction, gap, true);
+            = length > 0 ? Edge.draw_edge(svg, options, length, direction, gap, true)
+                : { dimensions: Dimensions.zero(), alignment: "centre" };
 
         const clamped_width = Math.min(Math.max(dimensions.width, MIN_LENGTH), length);
 
@@ -3198,12 +3505,12 @@ class Edge extends Cell {
                 margin_adjustment = 1;
                 break;
         }
+
         const margin_offset = margin.source + width_shortfall * margin_adjustment;
 
         // Transform the `element` so that the arrow points in the correct direction.
-        const source_offset = ui.offset_from_position(ui.view, source.position);
-        element.style.left = `${source_offset.left + Math.cos(direction) * margin_offset}px`;
-        element.style.top = `${source_offset.top + Math.sin(direction) * margin_offset}px`;
+        element.style.left = `${source.offset.left + Math.cos(direction) * margin_offset}px`;
+        element.style.top = `${source.offset.top + Math.sin(direction) * margin_offset}px`;
         [element.style.width, element.style.height]
             = new Offset(clamped_width, dimensions.height + EDGE_PADDING * 2).to_CSS();
         element.style.transformOrigin
@@ -3214,7 +3521,12 @@ class Edge extends Cell {
             translateY(${(options.offset || 0) * OFFSET_DISTANCE}px)
         `;
 
-        return direction;
+        const absolute_offset = ui.view.add(ui.body_offset());
+
+        return [new Offset(
+            absolute_offset.left + source.offset.left + Math.cos(direction) * margin_offset,
+            absolute_offset.top + source.offset.top + Math.sin(direction) * margin_offset,
+        ), clamped_width, direction];
     }
 
     /// Draws an edge on an SVG. `length` must be nonnegative.
@@ -3223,7 +3535,7 @@ class Edge extends Cell {
     /// `{ dimensions, alignment }`
     static draw_edge(svg, options, length, direction, gap, scale = false) {
         // Constants for parameters of the arrow shapes.
-        const SVG_PADDING = Edge.SVG_PADDING;
+        const SVG_PADDING = CONSTANTS.SVG_PADDING;
         // The width of each stroke (for the tail, body and head).
         const STROKE_WIDTH = 1.5;
 
@@ -3549,14 +3861,14 @@ class Edge extends Cell {
     }
 
     /// Returns the angle of this edge.
-    angle() {
-        return this.target.position.sub(this.source.position).angle();
+    angle(ui) {
+        return this.target.off(ui).sub(this.source.off(ui)).angle();
     }
 
     /// Update the `label` transformation (translation and rotation) as well as
     /// the edge clearing size for `centre` alignment in accordance with the
     /// dimensions of the label.
-    update_label_transformation(ui, angle = this.angle()) {
+    update_label_transformation(ui, angle = this.angle(ui)) {
         const label = this.element.querySelector(".label:not(.buffer)");
 
         // Bound an `angle` to [0, π/2).
@@ -3667,13 +3979,6 @@ class Edge extends Cell {
         this.render(ui);
     }
 }
-// The following are constant shared between multiple methods, so we store them in the
-// class variables for `Edge`.
-// How much (horizontal and vertical) space in the SVG to give around the arrow
-// (to account for artefacts around the drawing).
-Edge.SVG_PADDING = 6;
-// How much space to leave between adjacent parallel arrows.
-Edge.OFFSET_DISTANCE = 8;
 
 // Which library to use for rendering labels.
 const RENDER_METHOD = "KaTeX";
@@ -3777,6 +4082,15 @@ document.addEventListener("DOMContentLoaded", () => {
                     rel: "stylesheet",
                     href: "KaTeX/dist/katex.css",
                 }).element);
+                // Preload various fonts to avoid flashes of unformatted text.
+                const preload_fonts = ["Main-Regular", "Math-Italic"];
+                for (const font of preload_fonts) {
+                    document.head.appendChild(new DOM.Element("link", {
+                        rel: "preload",
+                        href: `KaTeX/dist/fonts/KaTeX_${font}.woff2`,
+                        as: "font",
+                    }).element);
+                }
                 break;
         }
 
