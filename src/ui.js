@@ -497,6 +497,16 @@ class UI {
 
         this.element.addEventListener("mousedown", (event) => {
             if (event.button === 0) {
+                // Usually, if `Alt` or `Control` have been held we will have already switched to
+                // the Pan mode. However, if the window is not in focus, they will not have been
+                // detected, so we switch modes on mouse click.
+                if (this.in_mode(UIState.Default)) {
+                    if (event.altKey) {
+                        this.switch_mode(new UIState.Pan("Alt"));
+                    } else if (event.ctrlKey) {
+                        this.switch_mode(new UIState.Pan("Control"));
+                    }
+                }
                 if (this.in_mode(UIState.Pan)) {
                     // Hide the insertion point if it is visible.
                     this.element.querySelector(".insertion-point").classList.remove("revealed");
