@@ -222,14 +222,14 @@ UIState.Connect = class extends UIState {
                 options.offset = offset.keys().next().value;
             }
 
-            if (!event.shiftKey) {
+            if (!event.shiftKey && !event.metaKey && !event.ctrlKey) {
                 ui.deselect();
             }
             const label = "";
             // The edge itself does all the set up, such as adding itself to the page.
             const edge = new Edge(ui, label, this.source, this.target, options);
             ui.select(edge);
-            if (!event.shiftKey) {
+            if (!event.shiftKey && !event.metaKey && !event.ctrlKey) {
                 ui.panel.element.querySelector('label input[type="text"]').focus();
             }
 
@@ -474,9 +474,9 @@ class UI {
                     // to that location by dragging.
                     this.state.origin = this.offset_from_event(event);
                 } else if (!this.in_mode(UIState.Modal)) {
-                    if (!event.shiftKey) {
-                        // Deselect cells when the mouse is pressed (at least when the Shift key
-                        // is not held).
+                    if (!event.shiftKey && !event.metaKey && !event.ctrlKey) {
+                        // Deselect cells when the mouse is pressed (at least when the Shift/Command
+                        // /Control keys are not held).
                         this.deselect();
                     } else {
                         // Otherwise, simply deselect the label input (it's unlikely the user
@@ -522,8 +522,8 @@ class UI {
                         event.stopPropagation();
                         insertion_point.classList.remove("revealed");
                         // We want the new vertex to be the only selected cell, unless we've held
-                        // Shift when creating it.
-                        if (!event.shiftKey) {
+                        // Shift/Command/Control when creating it.
+                        if (!event.shiftKey && !event.metaKey && !event.ctrlKey) {
                             this.deselect();
                         }
                         const vertex = create_vertex(this.position_from_event(this.view, event));
@@ -535,7 +535,7 @@ class UI {
                         // When the user is creating a vertex and adding it to the selection,
                         // it is unlikely they expect to edit all the labels simultaneously,
                         // so in this case we do not focus the input.
-                        if (!event.shiftKey) {
+                        if (!event.shiftKey && !event.metaKey && !event.ctrlKey) {
                             this.panel.element.querySelector('label input[type="text"]').select();
                         }
                     }
@@ -592,10 +592,11 @@ class UI {
                             const edge = this.state.connect(this, event);
                             created.add(edge);
                         } else {
-                            // Unless we're holding Shift (in which case we just add the new vertex
-                            // to the selection) we want to focus and select the new vertex.
+                            // Unless we're holding Shift/Command/Control (in which case we just add
+                            // the new vertex to the selection) we want to focus and select the new
+                            // vertex.
                             const { edge, end } = this.state.reconnect;
-                            if (!event.shiftKey) {
+                            if (!event.shiftKey && !event.metaKey && !event.ctrlKey) {
                                 this.deselect();
                                 this.select(this.state.target);
                                 this.panel.element.querySelector('label input[type="text"]')
@@ -2639,18 +2640,19 @@ class Cell {
                     event.stopPropagation();
                     event.preventDefault();
 
-                    was_previously_selected = !event.shiftKey && ui.selection.has(this) &&
+                    was_previously_selected = !event.shiftKey && !event.metaKey && !event.ctrlKey
+                        && ui.selection.has(this) &&
                         // If the label input is already focused, then we defocus it.
                         // This allows the user to easily switch between editing the
                         // entire cell and the label.
                         !ui.input_is_active();
 
-                    if (!event.shiftKey) {
+                    if (!event.shiftKey && !event.metaKey && !event.ctrlKey) {
                         // Deselect all other nodes.
                         ui.deselect();
                         ui.select(this);
                     } else {
-                        // Toggle selection when holding Shift and clicking.
+                        // Toggle selection when holding Shift/Command/Control and clicking.
                         if (!ui.selection.has(this)) {
                             ui.select(this);
                         } else {
