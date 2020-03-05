@@ -73,9 +73,8 @@ UIState.Connect = class extends UIState {
 
         /// The overlay for drawing an edge between the source and the cursor.
         this.overlay = new DOM.Element("div", { class: "edge overlay" })
-            .add(new DOM.SVGElement("svg"))
-            .element;
-        ui.element.appendChild(this.overlay);
+            .add(new DOM.SVGElement("svg"));
+        ui.canvas.add(this.overlay);
     }
 
     release(ui) {
@@ -97,11 +96,11 @@ UIState.Connect = class extends UIState {
         if (this.reconnect === null) {
             // We're drawing the edge again from scratch, so we need to remove all existing
             // elements.
-            const svg = this.overlay.querySelector("svg");
+            const svg = this.overlay.query_selector("svg");
             new DOM.Element(svg).clear();
             Edge.draw_and_position_edge(
                 ui,
-                this.overlay,
+                this.overlay.element,
                 svg,
                 {
                     offset: this.source.off(ui),
@@ -362,9 +361,14 @@ class UI {
 
         /// The element containing all the cells themselves.
         this.canvas = null;
+        /// The grid background.
+        this.grid = null;
 
         /// The offset of the view (i.e. the centre of the view).
         this.view = Offset.zero();
+
+        /// The size of the view (i.e. the document body dimensions).
+        this.dimensions = new Dimensions(document.body.offsetWidth, document.body.offsetHeight);
 
         /// Undo/redo for actions.
         this.history = new History();
@@ -422,14 +426,17 @@ class UI {
             // Hide the insertion point if it is visible.
             this.element.querySelector(".insertion-point").classList.remove("revealed");
 
-            this.pan_view(new Offset(-event.deltaX, -event.deltaY));
+            this.pan_view(new Offset(event.deltaX, event.deltaY));
         }, { passive: false });
 
         // The canvas is only as big as the window, so we need to resize it when the window resizes.
         window.addEventListener("resize", () => {
-            this.update_grid();
-            // We need to make sure the cells are still aligned with the grid.
-            this.quiver.rerender(this);
+            // Adjust the view so that we keep everything centred.
+            this.pan_view(new Offset(
+                (this.dimensions.width - document.body.offsetWidth) / 2,
+                (this.dimensions.height - document.body.offsetHeight) / 2,
+            ));
+            this.dimensions = new Dimensions(document.body.offsetWidth, document.body.offsetHeight);
         });
 
         // Add a move to the history.
@@ -495,7 +502,7 @@ class UI {
                     this.element.querySelector(".insertion-point").classList.remove("revealed");
                     // Record the position the pointer was pressed at, so we can pan relative
                     // to that location by dragging.
-                    this.state.origin = this.offset_from_event(event);
+                    this.state.origin = this.offset_from_event(event).sub(this.view);
                 } else if (!this.in_mode(UIState.Modal)) {
                     if (!event.shiftKey && !event.metaKey && !event.ctrlKey) {
                         // Deselect cells when the mouse is pressed (at least when the Shift/Command
@@ -664,7 +671,7 @@ class UI {
                 const vertex = create_vertex(this.position_from_offset(new Offset(
                     insertion_point.offsetLeft,
                     insertion_point.offsetTop,
-                ).sub(this.body_offset())));
+                )));
                 this.select(vertex);
                 this.switch_mode(new UIState.Connect(this, vertex, true));
                 vertex.element.classList.add("source");
@@ -680,8 +687,8 @@ class UI {
             const position = reposition_insertion_point(event);
 
             if (this.in_mode(UIState.Pan) && this.state.origin !== null) {
-                const new_offset = this.offset_from_event(event);
-                this.pan_view(new_offset.sub(this.state.origin));
+                const new_offset = this.offset_from_event(event).sub(this.view);
+                this.pan_view(this.state.origin.sub(new_offset));
                 this.state.origin = new_offset;
             }
 
@@ -752,7 +759,7 @@ class UI {
                 event.preventDefault();
 
                 // Update the position of the cursor.
-                const offset = this.offset_from_event(event).add(this.body_offset());
+                const offset = this.offset_from_event(event);
                 this.state.update(this, offset);
             }
         });
@@ -847,7 +854,7 @@ class UI {
     /// Convert an `Offset` (pixels) to a `Position` (cell indices).
     /// The inverse function is `offset_from_position`.
     position_from_offset(offset) {
-        const [col, row] = this.col_row_from_offset(offset.add(this.view));
+        const [col, row] = this.col_row_from_offset(offset);
         return new Position(col, row);
     }
 
@@ -863,7 +870,7 @@ class UI {
 
     /// A helper method for getting an offset from an event.
     offset_from_event(event) {
-        return new Offset(event.pageX, event.pageY).sub(this.body_offset());
+        return new Offset(event.pageX, event.pageY).add(this.view);
     }
 
     /// Returns half the size of the cell at the given `position`.
@@ -884,7 +891,7 @@ class UI {
     /// Convert a `Position` (cell indices) to an `Offset` (pixels).
     /// The inverse function is `position_from_offset`.
     offset_from_position(position) {
-        const offset = this.view.neg();
+        const offset = Offset.zero();
 
         // We attempt to explore in each of the four directions in turn.
         // These four loops could be simplified, but have been left as-is to aid readability.
@@ -919,7 +926,7 @@ class UI {
                 += this.cell_size(this.cell_height, Math.floor(position.y)) * (position.y % 1);
         }
 
-        return offset.add(this.body_offset());
+        return offset;
     }
 
     /// Update the width of the grid columns and the heights of the grid rows at each of the given
@@ -978,7 +985,7 @@ class UI {
                     delta_x / 2 * (position.x >= 0 ? -1 : 1),
                     delta_y / 2 * (position.y >= 0 ? -1 : 1),
                 );
-                view_offset = view_offset.add(offset);
+                view_offset = view_offset.sub(offset);
                 rerender = true;
             }
         }
@@ -1090,13 +1097,36 @@ class UI {
     /// Repositions the view by a relative offset.
     /// If `offset` is positive, then everything will appear to move towards the top left.
     pan_view(offset) {
-        this.view.left -= offset.left;
-        this.view.top -= offset.top;
-        for (const cell of this.canvas.element.querySelectorAll(".cell")) {
-            cell.style.left = `${cell.offsetLeft + offset.left}px`;
-            cell.style.top = `${cell.offsetTop + offset.top}px`;
-        }
+        this.view.left += offset.left;
+        this.view.top += offset.top;
+        this.canvas.element.style.transform
+            = `translate(${-this.view.left}px, ${-this.view.top}px)`;
+        this.grid.element.style.transform = `translate(${this.view.left}px, ${this.view.top}px)`;
         this.update_grid();
+    }
+
+    /// Centre the view on the quiver.
+    centre_view() {
+        if (this.quiver.cells.length > 0 && this.quiver.cells[0].size > 0) {
+            // We want to centre the view on the diagram, so we take the range of all vertex
+            // offsets.
+            let min_offset = new Offset(Infinity, Infinity);
+            let max_offset = new Offset(-Infinity, -Infinity);
+            this.pan_view(this.view.neg());
+
+            for (const vertex of this.quiver.cells[0]) {
+                const offset = this.centre_offset_from_position(vertex.position);
+                const centre = this.cell_centre_at_position(vertex.position);
+                min_offset = min_offset.min(offset.sub(centre));
+                max_offset = max_offset.max(offset.add(centre));
+            }
+
+            const view_offset = new Offset(
+                document.body.offsetWidth - this.panel.element.offsetWidth,
+                document.body.offsetHeight,
+            );
+            this.pan_view(min_offset.add(max_offset).sub(view_offset).div(2));
+        }
     }
 
     /// Returns a unique identifier for an object.
@@ -1311,8 +1341,8 @@ class UI {
     /// Create the canvas upon which the grid will be drawn.
     initialise_grid(element) {
         const [width, height] = [document.body.offsetWidth, document.body.offsetHeight];
-        const canvas = new DOM.Canvas(null, width, height, { class: "grid" });
-        element.add(canvas);
+        this.grid = new DOM.Canvas(null, width, height, { class: "grid" });
+        element.add(this.grid);
         this.update_grid();
     }
 
@@ -1325,7 +1355,7 @@ class UI {
         const BORDER_COLOUR = "lightgrey";
 
         const [width, height] = [document.body.offsetWidth, document.body.offsetHeight];
-        const canvas = new DOM.Canvas(this.canvas.element.querySelector(".grid"));
+        const canvas = this.grid;
         canvas.resize(width, height);
 
         const context = canvas.context;
@@ -1338,31 +1368,33 @@ class UI {
         // is the default size, but otherwise may be imperfect.
         const dash_offset = -DASH_LENGTH / 2;
 
+        const offset = this.view.add(this.body_offset());
+
         const [[left_col, left_offset], [top_row, top_offset]] = this.col_row_offset_from_offset(
-            this.view.sub(new Offset(width / 2, height / 2))
+            offset.sub(new Offset(width / 2, height / 2))
         );
         const [[right_col,], [bottom_row,]] = this.col_row_offset_from_offset(
-            this.view.add(new Offset(width / 2, height / 2))
+            offset.add(new Offset(width / 2, height / 2))
         );
 
         // Draw the vertical lines.
         context.beginPath();
-        for (let col = left_col, x = left_offset - this.view.left + width / 2;
+        for (let col = left_col, x = left_offset - offset.left + width / 2;
                 col <= right_col; x += this.cell_size(this.cell_width, col++)) {
             context.moveTo(x, 0);
             context.lineTo(x, height);
         }
-        context.lineDashOffset = this.view.top - dash_offset - height % this.default_cell_size / 2;
+        context.lineDashOffset = offset.top - dash_offset - height % this.default_cell_size / 2;
         context.stroke();
 
         // Draw the horizontal lines.
         context.beginPath();
-        for (let row = top_row, y = top_offset - this.view.top + height / 2;
+        for (let row = top_row, y = top_offset - offset.top + height / 2;
                 row <= bottom_row; y += this.cell_size(this.cell_height, row++)) {
             context.moveTo(0, y);
             context.lineTo(width, y);
         }
-        context.lineDashOffset = this.view.left - dash_offset - width % this.default_cell_size / 2;
+        context.lineDashOffset = offset.left - dash_offset - width % this.default_cell_size / 2;
         context.stroke();
     }
 
@@ -2639,6 +2671,16 @@ class Toolbar {
             true,
         );
 
+        add_action(
+            "⌖",
+            "Centre view",
+            [],
+            () => {
+                ui.centre_view();
+            },
+            true,
+        );
+
         // Add the other, "invisible", shortcuts.
 
         add_shortcut([{ key: "Enter" }], () => {
@@ -2743,7 +2785,7 @@ class Toolbar {
         add_shortcut([
             { key: "h" }
         ], () => {
-            ui.canvas.element.querySelector(".grid").classList.toggle("hidden");
+            ui.grid.class_list.toggle("hidden");
         });
 
         // Handle global key presses (such as, but not exclusively limited to, keyboard shortcuts).
@@ -2853,6 +2895,7 @@ class Toolbar {
         enable_if("Select all", ui.selection.size < ui.quiver.all_cells().length);
         enable_if("Deselect all", ui.selection.size > 0);
         enable_if("Delete", ui.selection.size > 0);
+        enable_if("Centre view", ui.quiver.cells.length > 0 && ui.quiver.cells[0].size > 0);
     }
 }
 
@@ -2952,7 +2995,7 @@ class Cell {
                         ui.state.target = this;
                         this.element.classList.add("target");
                         // Hide the insertion point (e.g. if we're connecting a vertex to an edge).
-                        const insertion_point = ui.canvas.element.querySelector(".insertion-point");
+                        const insertion_point = ui.canvas.query_selector(".insertion-point");
                         insertion_point.classList.remove("revealed", "pending", "active");
                     }
                 }
@@ -3090,7 +3133,7 @@ class Cell {
         if (this.is_vertex()) {
             return ui.centre_offset_from_position(this.position);
         } else {
-            return this.offset.sub(ui.view.add(ui.body_offset()));
+            return this.offset;
         }
     }
 
@@ -3140,8 +3183,6 @@ class Vertex extends Cell {
 
     /// Create the HTML element associated with the vertex.
     render(ui) {
-        const offset = ui.offset_from_position(this.position);
-
         const construct = this.element === null;
 
         // The container for the cell.
@@ -3149,7 +3190,10 @@ class Vertex extends Cell {
             this.element = new DOM.Element("div").element;
         }
 
+        // Position the vertex.
+        const offset = ui.offset_from_position(this.position);
         offset.reposition(this.element);
+
         // Resize according to the grid cell.
         const cell_width = ui.cell_size(ui.cell_width, this.position.x);
         const cell_height = ui.cell_size(ui.cell_height, this.position.y);
@@ -3521,11 +3565,9 @@ class Edge extends Cell {
             translateY(${(options.offset || 0) * OFFSET_DISTANCE}px)
         `;
 
-        const absolute_offset = ui.view.add(ui.body_offset());
-
         return [new Offset(
-            absolute_offset.left + source.offset.left + Math.cos(direction) * margin_offset,
-            absolute_offset.top + source.offset.top + Math.sin(direction) * margin_offset,
+            source.offset.left + Math.cos(direction) * margin_offset,
+            source.offset.top + Math.sin(direction) * margin_offset,
         ), clamped_width, direction];
     }
 
@@ -3985,6 +4027,12 @@ const RENDER_METHOD = "KaTeX";
 
 // We want until the (minimal) DOM content has loaded, so we have access to `document.body`.
 document.addEventListener("DOMContentLoaded", () => {
+    // We don't want the browser being too clever and trying to restore the scroll position, as that
+    // won't play nicely with the auto-centring.
+    if ("scrollRestoration" in window.history) {
+        window.history.scrollRestoration = "manual";
+    }
+
     // The global UI.
     let ui = new UI(document.body);
     ui.initialise();

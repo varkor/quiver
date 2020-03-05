@@ -42,6 +42,11 @@ DOM.Element = class {
         return this;
     }
 
+    /// Removes the element from the DOM.
+    remove() {
+        this.element.remove();
+    }
+
     /// Adds an event listener.
     listen(type, f) {
         this.element.addEventListener(type, event => f(event, this.element));
@@ -54,6 +59,10 @@ DOM.Element = class {
             this.element.firstChild.remove();
         }
         return this;
+    }
+
+    query_selector(selector) {
+        return this.element.querySelector(selector);
     }
 };
 
