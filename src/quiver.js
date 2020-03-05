@@ -165,10 +165,10 @@ class Quiver {
     /// Currently, the supported formats are:
     /// - "tikz-cd"
     /// - "base64"
-    export(format) {
+    export(ui, format) {
         switch (format) {
             case "tikz-cd":
-                return QuiverExport.tikz_cd.export(this);
+                return QuiverExport.tikz_cd.export(this, ui);
             case "base64":
                 return QuiverImportExport.base64.export(this);
             default:
@@ -190,7 +190,7 @@ class QuiverImportExport extends QuiverExport {
 }
 
 QuiverExport.tikz_cd = new class extends QuiverExport {
-    export(quiver) {
+    export(quiver, ui) {
         let output = "";
 
         // Wrap tikz-cd code with `\begin{tikzcd} ... \end{tikzcd}`.
@@ -408,14 +408,14 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                             case "adjunction":
                                 label = "\"\\dashv\"";
                                 // Adjunction symbols should point in the direction of the arrow.
-                                angle = -edge.angle() * 180 / Math.PI;
+                                angle = -edge.angle(ui) * 180 / Math.PI;
                                 break;
                             case "corner":
                                 label = "\"\\lrcorner\"";
                                 label_parameters.push("very near start");
                                 // Round the angle to the nearest 45º, so that the corner always
                                 // appears aligned with horizontal, vertical or diagonal lines.
-                                angle = 45 - 45 * Math.round(4 * edge.angle() / Math.PI);
+                                angle = 45 - 45 * Math.round(4 * edge.angle(ui) / Math.PI);
                                 break;
                         }
 
