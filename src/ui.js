@@ -2141,7 +2141,7 @@ class Panel {
                 ui.switch_mode(new UIState.Modal());
 
                 // Get the encoding of the diagram.
-                const output = ui.quiver.export(format);
+                const output = ui.quiver.export(ui, format);
 
                 let export_pane;
                 if (this.export === null) {
