@@ -657,10 +657,6 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
         assert_kind(vertices, "natural");
         assert(vertices <= cells.length, "invalid number of vertices");
 
-        // We want to centre the view on the diagram, so we take the range of all vertex offsets.
-        let min_offset = new Offset(Infinity, Infinity);
-        let max_offset = new Offset(-Infinity, -Infinity);
-        ui.pan_view(ui.body_offset().neg());
         // If we encounter errors while loading cells, we skip the malformed cell and try to
         // continue loading the diagram, but we want to report the errors we encountered afterwards,
         // to let the user know we were not entirely successful.
@@ -680,12 +676,7 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
                     assert_kind(y, "natural");
                     assert_kind(label, "string");
 
-                    const position = new Position(x, y);
-                    const offset = ui.centre_offset_from_position(position);
-                    const centre = ui.cell_centre_at_position(position);
-                    min_offset = min_offset.min(offset.sub(centre));
-                    max_offset = max_offset.max(offset.add(centre));
-                    const vertex = new Vertex(ui, label, position);
+                    const vertex = new Vertex(ui, label, new Position(x, y));
                     indices.push(vertex);
                 } else {
                     // This cell is an edge.
@@ -729,13 +720,7 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
         }
 
         // Centre the view on the quiver.
-        if (vertices > 0) {
-            const view_offset = new Offset(
-                document.body.offsetWidth - ui.panel.element.offsetWidth,
-                document.body.offsetHeight,
-            );
-            ui.pan_view(view_offset.sub(max_offset.sub(min_offset)).div(2));
-        }
+        ui.centre_view();
 
         // If the quiver is now nonempty, some toolbar actions will be available.
         ui.toolbar.update(ui);

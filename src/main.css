@@ -109,6 +109,10 @@ body:not(.modal) {
 
 /* Grid interaction */
 
+.grid {
+    pointer-events: none;
+}
+
 .grid.hidden {
     display: none;
 }
