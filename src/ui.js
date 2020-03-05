@@ -1805,8 +1805,10 @@ class Panel {
                 // trigger the currently-checked buttons so that we get
                 // the expected style, rather than the default style.
                 if (data.name === "arrow") {
-                    ui.element.querySelectorAll('.arrow-style input[type="radio"]:checked')
-                        .forEach(element => element.dispatchEvent(new Event("change")));
+                    UI.delay(() => {
+                        ui.element.querySelectorAll('.arrow-style input[type="radio"]:checked')
+                            .forEach(element => element.dispatchEvent(new Event("change")));
+                    });
                 }
             }),
             (_, data) => {
