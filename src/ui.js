@@ -2324,7 +2324,7 @@ class Toolbar {
         const redo = add_action(
             "⎌",
             "Redo",
-            [{ key: "z", modifier: true, shift: true, context: SHORTCUT_PRIORITY.Defer }],
+            [{ key: "Z", modifier: true, shift: true, context: SHORTCUT_PRIORITY.Defer }],
             () => {
                 ui.history.redo(ui);
             },
@@ -2347,7 +2347,7 @@ class Toolbar {
         add_action(
             "□",
             "Deselect all",
-            [{ key: "a", modifier: true, shift: true, context: SHORTCUT_PRIORITY.Defer }],
+            [{ key: "A", modifier: true, shift: true, context: SHORTCUT_PRIORITY.Defer }],
             () => {
                 ui.deselect();
             },
@@ -2494,13 +2494,21 @@ class Toolbar {
                 element.classList.add("flash");
             };
 
-            if (shortcuts.has(event.key)) {
-                for (const shortcut of shortcuts.get(event.key)) {
+            let key = event.key;
+            // On Mac OS X, holding the Command key seems to override the usual capitalisation
+            // modifier that holding Shift does. This is inconsistent with other operating systems,
+            // so we override it manually here.
+            if (event.shiftKey && /[a-z]/.test(key)) {
+                key = key.toUpperCase();
+            }
+
+            if (shortcuts.has(key)) {
+                for (const shortcut of shortcuts.get(key)) {
                     if (
                         (shortcut.shift === null || event.shiftKey === shortcut.shift)
                             && (shortcut.modifier === null
                                 || (event.metaKey || event.ctrlKey) === shortcut.modifier
-                                || ["Control", "Meta"].includes(event.key))
+                                || ["Control", "Meta"].includes(key))
                     ) {
                         const effect = () => {
                             // Trigger the shortcut effect.
