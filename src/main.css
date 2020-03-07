@@ -316,6 +316,11 @@ body:not(.modal) {
     border-bottom: hsl(0, 0%, 36%) solid 1px;
 }
 
+.panel label {
+    display: block;
+    margin-bottom: 8px;
+}
+
 .panel input[type="text"] {
     padding: 2px 4px;
 

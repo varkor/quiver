@@ -326,6 +326,13 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                     const side = edge.options.offset > 0 ? "right" : "left";
                     parameters.push(`shift ${side}=${Math.abs(edge.options.offset)}`);
                 }
+                if (edge.options.curve !== 0) {
+                    const CURVE_MULTIPLIER = 4;
+                    const side = edge.options.curve > 0 ? "right" : "left";
+                    parameters.push(
+                        `bend ${side}=${Math.abs(edge.options.curve) * CONSTANTS.CURVE_HEIGHT}`
+                    );
+                }
 
                 let style = "";
                 let label = nonempty_label !== "" ? `"{${edge.label}}"${align}` : "";

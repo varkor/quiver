@@ -15,6 +15,8 @@ const CONSTANTS = {
     SVG_PADDING: 6,
     // How much space (in pixels) to leave between adjacent parallel arrows.
     EDGE_OFFSET_DISTANCE: 8,
+    // How many pixels each unit of curve height corresponds to.
+    CURVE_HEIGHT: 24,
 };
 
 /// Various states for the UI (e.g. whether cells are being rearranged, or connected, etc.).
@@ -1666,6 +1668,13 @@ class History {
                     }
                     update_panel = true;
                     break;
+                case "curve":
+                    for (const curve of action.curves) {
+                        curve.edge.options.curve = curve[to];
+                        cells.add(curve.edge);
+                    }
+                    update_panel = true;
+                    break;
                 case "reverse":
                     for (const cell of action.cells) {
                         if (cell.is_edge()) {
@@ -1919,55 +1928,72 @@ class Panel {
             },
         );
 
-        // The offset slider.
-        local.add(
-            new DOM.Element("label").add("Offset: ").add(
+        const create_option_slider = (name, property) => {
+            const slider = new DOM.Element("label").add(`${name}: `).add(
                 new DOM.Element(
                     "input",
-                    { type: "range", min: -5, value: 0, max: 5, step: 1, disabled: true }
+                    {
+                        type: "range",
+                        name: property,
+                        min: -5,
+                        value: 0,
+                        max: 5,
+                        step: 1,
+                        disabled: true,
+                    },
                 ).listen("input", (_, slider) => {
                     const value = parseInt(slider.value);
-                    const collapse = ["offset", ui.selection];
+                    const collapse = [property, ui.selection];
                     const actions = ui.history.get_collapsible_actions(collapse);
                     if (actions !== null) {
-                        // If the previous history event was to modify the offset, then
+                        // If the previous history event was to modify the property, then
                         // we're just going to modify that event rather than add a new
                         // one, as with the label input.
                         let unchanged = true;
                         for (const action of actions) {
                             // This ought always to be true.
-                            if (action.kind === "offset") {
-                                // Modify the `to` field of each offset.
-                                action.offsets.forEach((offset) => {
-                                    offset.to = value;
-                                    if (offset.to !== offset.from) {
+                            if (action.kind === property) {
+                                // Modify the `to` field of each property modification.
+                                action[`${property}s`].forEach((modification) => {
+                                    modification.to = value;
+                                    if (modification.to !== modification.from) {
                                         unchanged = false;
                                     }
                                 });
                             }
                         }
-                        // Invoke the new offset changes immediately.
+                        // Invoke the new property changes immediately.
                         ui.history.effect(ui, actions, false);
                         if (unchanged) {
                             ui.history.pop(ui);
                         }
                     } else {
-                        // If this is the start of our offset modification,
+                        // If this is the start of our property modification,
                         // we need to add a new history event.
                         ui.history.add_collapsible(ui, collapse, [{
-                            kind: "offset",
-                            offsets: Array.from(ui.selection)
+                            kind: property,
+                            [`${property}s`]: Array.from(ui.selection)
                                 .filter(cell => cell.is_edge())
                                 .map((edge) => ({
                                     edge,
-                                    from: edge.options.offset,
+                                    from: edge.options[property],
                                     to: value,
                                 })),
                         }], true);
                     }
                 })
-            )
-        );
+            );
+
+            local.add(slider);
+
+            return slider;
+        };
+
+        // The offset slider.
+        create_option_slider("Offset", "offset");
+
+        // The curve slider.
+        create_option_slider("Curve", "curve").class_list.add("arrow-style");
 
         // The button to reverse an edge.
         local.add(
@@ -2150,8 +2176,8 @@ class Panel {
                     }
                 }
 
-                // Enable/disable the arrow style buttons.
-                ui.element.querySelectorAll('.arrow-style input[type="radio"]')
+                // Enable/disable the arrow style buttons and curve slider.
+                ui.element.querySelectorAll(".arrow-style input")
                     .forEach(element => element.disabled = data.name !== "arrow");
 
                 // If we've selected the `"arrow"` style, then we need to
@@ -2405,7 +2431,7 @@ class Panel {
     update(ui) {
         const input = this.element.querySelector('label input[type="text"]');
         const label_alignments = this.element.querySelectorAll('input[name="label-alignment"]');
-        const slider = this.element.querySelector('input[type="range"]');
+        const sliders = this.element.querySelectorAll('input[type="range"]');
 
         // Modifying cells is not permitted when the export pane is visible.
         if (this.export === null) {
@@ -2413,7 +2439,7 @@ class Panel {
             // for inputs that display their state even when disabled.
             if (ui.selection.size === 0) {
                 input.value = "";
-                slider.value = 0;
+                sliders.forEach(slider => slider.value = 0);
             }
 
             // Multiple selection is always permitted, so the following code must provide sensible
@@ -2465,6 +2491,7 @@ class Panel {
                     // 90°). Otherwise, rotation defaults to 0°.
                     consider("{angle}", cell.angle(ui));
                     consider("{offset}", cell.options.offset);
+                    consider("{curve}", cell.options.curve);
                     consider("edge-type", cell.options.style.name);
 
                     // Arrow-specific options.
@@ -2513,6 +2540,9 @@ class Panel {
                         }
                         break;
                     case "{offset}":
+                    case "{curve}":
+                        const property = name.slice(1, -1);
+                        const slider = this.element.querySelector(`input[name="${property}"]`);
                         slider.value = value !== null ? value : 0;
                         break;
                     default:
@@ -2532,13 +2562,12 @@ class Panel {
                 }
             }
 
-            // Update the actual `value` attribute for the offset slider so that we can
+            // Update the actual `value` attribute for the offset and curve sliders so that we can
             // reference it in the CSS.
-            slider.setAttribute("value", slider.value);
+            sliders.forEach(slider => slider.setAttribute("value", slider.value));
 
-            // Disable/enable the arrow style buttons.
-            for (const option of this.element
-                    .querySelectorAll('.arrow-style input[type="radio"]')) {
+            // Disable/enable the arrow style buttons and the curve slider.
+            for (const option of this.element.querySelectorAll(".arrow-style input")) {
                 option.disabled = !all_edges_are_arrows;
             }
 
@@ -3361,6 +3390,7 @@ class Edge extends Cell {
         let options = Object.assign({
             label_alignment: "left",
             offset: 0,
+            curve: 0,
             style: Object.assign({
                 name: "arrow",
                 tail: { name: "none" },
