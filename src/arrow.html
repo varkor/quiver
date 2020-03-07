@@ -40,7 +40,7 @@
 
         let drag = null;
         let curve = 0;
-        let level = 5;
+        let level = 1;
 
         class Shape {
             constructor(x, y) {
@@ -231,6 +231,7 @@
                 }).add_to(clip);
 
                 const [label_width, label_height] = [128, 32];
+                const [label_x, label_y] = [length / 2, (height + curve) / 2];
                 const label = new DOM.SVGElement("rect", {
                     width: label_width,
                     height: label_height,
@@ -240,13 +241,38 @@
                     transform: `rotate(${-angle * 180 / Math.PI} ${length / 2} ${(height + curve) / 2})`,
                 }).add_to(this.svg);
                 const text = new DOM.SVGElement("text", {
-                    x: length / 2,
-                    y: (height + curve) / 2,
+                    x: label_x,
+                    y: label_y,
                     transform: `rotate(${-angle * 180 / Math.PI} ${length / 2} ${(height + curve) / 2})`,
                     "text-anchor": "middle",
                     "dominant-baseline": "middle",
                 }).add_to(this.svg);
                 text.element.innerHTML = "Label";
+
+                // To offset the rectangle properly, we're going to iterately approximate its location.
+                // We first normalise the Bézier curve. Flat Bézier curves must be special-cased.
+                // We then find all the intersects of the rectangle of the label with the curve. We
+                // want the number of intersections to be zero. We also add padding to the rectangle to
+                // simulate thickness of the curve. We set up a range from [0, hypot(width/2, height/2)],
+                // which we will binary search between to find the right distance.
+
+                const rect_centre = new Point(label_x, label_y - height / 2).rotate(angle);
+
+                const intersections = intersect_bezier_with_rect(
+                    rect_centre.x,
+                    rect_centre.y,
+                    label_width,
+                    label_height,
+                    new NormalisedBezier(new Point(0, 0), angle, length, curve),
+                );
+                for (const inter of intersections) {
+                    new DOM.SVGElement("circle", {
+                        cx: inter.x,
+                        cy: inter.y + height / 2,
+                        r: 8,
+                        fill: "red",
+                    }).add_to(this.svg);
+                }
 
                 const ir = (colour, rect, resolve) => {
                     const intersections = intersect_bezier_with_rect(
@@ -256,7 +282,7 @@
                         rect.height,
                         new NormalisedBezier(new Point(this.source.x, this.source.y), angle, length, curve),
                         resolve,
-                    );
+                    ).slice(0, 1);
                     for (const inter of intersections) {
                         new DOM.SVGElement("circle", {
                             cx: inter.x,
@@ -274,8 +300,8 @@
                 const bezier = new Bezier(Point.zero(), new Point(length, 0), curve);
                 const t_after_length = bezier.t_after_length();
 
-                const start = ir("none", this.source, true);
-                const end = ir("none", this.target, false);
+                const start = null; //ir("none", this.source, true);
+                const end = null; //ir("none", this.target, false);
 
                 const path = [`M 0 ${height / 2}`];
                 if (body_shape === "none") {
@@ -521,8 +547,9 @@
                 // const heads = ["mono", "epi"];
                 // const heads = ["epi", "mono"];
                 // const heads = ["mono", "maps to", "epi", "mono", "maps to", "epi"];
-                draw_head(heads, bezier, start, true);
-                draw_head(heads, bezier, end, false);
+
+                // draw_head(heads, bezier, start, true);
+                // draw_head(heads, bezier, end, false);
             }
         }
 
@@ -531,8 +558,8 @@
         });
 
         document.addEventListener("DOMContentLoaded", () => {
-            const source = new Shape(64, 240);
-            const target = new Shape(640, 240);
+            const source = new Shape(640, 48);
+            const target = new Shape(640, 480);
             const arrow = new Arrow(source, target);
 
             window.addEventListener("mousemove", (event) => {
@@ -583,11 +610,18 @@
             points[2] = points[2].sub(new Point(-w/2, -h/2));
             points[3] = points[3].sub(new Point(w/2, -h/2));
 
-            let intersections = [];
+            let intersections = new Set();
             let h_scale = b.h || 1;
             points = points.map((p) => normalise_point(p, new NormalisedBezier(b.o, b.theta, b.l, h_scale)));
 
             const EPSILON = 10 ** (-10);
+
+            const add_intersection = (int) => {
+                intersections.add(new Point(
+                    Math.round(int.x * 10 ** 10) / (10 ** 10),
+                    Math.round(int.y * 10 ** 10) / (10 ** 10),
+                ));
+            };
 
             if (b.h === 0) {
                 // Special-case a straight line, as we can't normalise with respect to this curve.
@@ -598,23 +632,23 @@
                         // x = a.
                         if (endpoints[0].x >= 0 && endpoints[0].x <= 1 && Math.min(endpoints[0].y, endpoints[1].y) <= 0 &&
                             Math.max(endpoints[0].y, endpoints[1].y) >= 0) {
-                                intersections.push(new Point(endpoints[0].x, 0));
+                                add_intersection(new Point(endpoints[0].x, 0));
                             }
                     } else {
                         const m = (endpoints[1].y - endpoints[0].y) / (endpoints[1].x - endpoints[0].x);
                         const c = endpoints[0].y - m * endpoints[0].x;
-                        if (m !== 0) {
+                        if (Math.abs(m) > EPSILON) {
                             const x = -c / m;
-                            if (x >= 0 && x <= 1) {
-                                intersections.push(new Point(x, 0));
+                            if (x >= 0 && x <= 1 && x >= Math.min(endpoints[0].x, endpoints[1].x) && x <= Math.max(endpoints[0].x, endpoints[1].x)) {
+                                add_intersection(new Point(x, 0));
                             }
                         } else if (Math.abs(endpoints[0].y) <= EPSILON) {
                             // Lines lie along one another.
                             const mn = Math.min(endpoints[0].x, endpoints[1].x);
                             const mx = Math.max(endpoints[0].x, endpoints[1].x);
                             if (mn <= 1 && mx >= 0) {
-                                intersections.push(new Point(Math.max(mn, 0), 0));
-                                intersections.push(new Point(Math.min(mx, 1), 0));
+                                add_intersection(new Point(Math.max(mn, 0), 0));
+                                add_intersection(new Point(Math.min(mx, 1), 0));
                             }
                         }
                     }
@@ -628,17 +662,16 @@
                         const y = intersect_bezier_with_vertical_line(endpoints[0].x);
                         if (y >= 0 && y >= Math.min(endpoints[0].y, endpoints[1].y) && y <= Math.max(endpoints[0].y, endpoints[1].y)) {
                             // `y` must be at most 0.5.
-                            intersections.push(new Point(endpoints[0].x, y));
+                            add_intersection(new Point(endpoints[0].x, y));
                         }
                     } else {
                         const m = (endpoints[1].y - endpoints[0].y) / (endpoints[1].x - endpoints[0].x);
                         const c = endpoints[0].y - m * endpoints[0].x;
                         // Horizontal or sloping lines.
-                        intersections = intersections.concat(
-                            intersect_bezier_with_line(m, c)
+                        const ints = intersect_bezier_with_line(m, c)
                                 .filter((x) => x >= 0 && x <= 1 && x >= Math.min(endpoints[0].x, endpoints[1].x) && x <= Math.max(endpoints[0].x, endpoints[1].x))
-                                .map((x) => new Point(x, m * x + c))
-                        );
+                                .map((x) => new Point(x, m * x + c));
+                        ints.forEach((int) => add_intersection(int));
                     }
                 }
             }
@@ -647,11 +680,11 @@
             // is very thin, in which case we pick the point closest to the start of the curve if
             // `min` is true, or the end otherwise.
             min = min ? -1 : 1;
+            intersections = Array.from(intersections);
             intersections.sort((a, b) => a.x <= b.x ? min : -min);
 
             // Derivative of Bézier curve is `2 - 4x`.
-            return intersections.slice(0, 1)
-                .map(p => Object.assign({ t: p.x, angle: Math.atan2((2 - 4 * p.x) * h_scale, b.l) }, p.scale(b.l, h_scale)));
+            return intersections.map(p => Object.assign({ t: p.x, angle: Math.atan2((2 - 4 * p.x) * h_scale, b.l) }, p.scale(b.l, h_scale)));
         }
 
         /// Intersect the line `y = m x + c` with the normalised quadratic Bézier curve and return
@@ -706,7 +739,7 @@
             }
 
             static from_length_and_direction(length, direction) {
-                return new Point(Math.cos(direction) * length, Math.sign(direction) * length);
+                return new Point(Math.cos(direction) * length, Math.sin(direction) * length);
             }
 
             add(p) {
