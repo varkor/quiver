@@ -232,22 +232,6 @@
 
                 const [label_width, label_height] = [128, 32];
                 const [label_x, label_y] = [length / 2, (height + curve) / 2];
-                const label = new DOM.SVGElement("rect", {
-                    width: label_width,
-                    height: label_height,
-                    x: (length - label_width) / 2,
-                    y: (height - label_height + curve) / 2,
-                    fill: "lime",
-                    transform: `rotate(${-angle * 180 / Math.PI} ${length / 2} ${(height + curve) / 2})`,
-                }).add_to(this.svg);
-                const text = new DOM.SVGElement("text", {
-                    x: label_x,
-                    y: label_y,
-                    transform: `rotate(${-angle * 180 / Math.PI} ${length / 2} ${(height + curve) / 2})`,
-                    "text-anchor": "middle",
-                    "dominant-baseline": "middle",
-                }).add_to(this.svg);
-                text.element.innerHTML = "Label";
 
                 // To offset the rectangle properly, we're going to iterately approximate its location.
                 // We first normalise the Bézier curve. Flat Bézier curves must be special-cased.
@@ -256,23 +240,66 @@
                 // simulate thickness of the curve. We set up a range from [0, hypot(width/2, height/2)],
                 // which we will binary search between to find the right distance.
 
-                const rect_centre = new Point(label_x, label_y - height / 2).rotate(angle);
+                // TODO: fix flickering when very thin and horizontal (i.e. when label contains edge completely).
+                // TODO: improve heuristic for n-cells (too much spacing currently).
 
-                const intersections = intersect_bezier_with_rect(
-                    rect_centre.x,
-                    rect_centre.y,
-                    label_width,
-                    label_height,
-                    new NormalisedBezier(new Point(0, 0), angle, length, curve),
-                );
-                for (const inter of intersections) {
-                    new DOM.SVGElement("circle", {
-                        cx: inter.x,
-                        cy: inter.y + height / 2,
-                        r: 8,
-                        fill: "red",
-                    }).add_to(this.svg);
+                let [lmin, lmax] = [
+                    0,
+                    Math.abs(curve) / 2 + Math.hypot((label_width + line_width) / 2, (label_height + line_width) / 2)
+                ];
+                let timeout = 0;
+                while (true) {
+                    const lavg = (lmax + lmin) / 2;
+                    const rect_centre = new Point(label_x, label_y - height / 2).rotate(angle);
+                    const intersections = intersect_bezier_with_rect(
+                        rect_centre.x + Math.cos(angle + Math.PI / 2) * lavg,
+                        rect_centre.y + Math.sin(angle + Math.PI / 2) * lavg,
+                        label_width + line_width,
+                        label_height + line_width,
+                        new NormalisedBezier(new Point(0, 0), angle, length, curve),
+                    );
+                    if (intersections.length === 0) {
+                        if (lmax - lmin < 1) {
+                            break;
+                        }
+                        [lmin, lmax] = [lmin, lavg];
+                    } else {
+                        [lmin, lmax] = [lavg, lmax];
+                    }
+                    ++timeout;
+                    if (timeout > 1000) {
+                        console.log("no", curve / 2, lavg);
+                        break;
+                    }
+                    // for (const inter of intersections) {
+                    //     new DOM.SVGElement("circle", {
+                    //         cx: inter.x,
+                    //         cy: inter.y + height / 2,
+                    //         r: 8,
+                    //         fill: "red",
+                    //     }).add_to(this.svg);
+                    // }
                 }
+
+                const lavg = (lmax + lmin) / 2;
+                // console.log("lavg", lavg, curve / 2);
+
+                const label = new DOM.SVGElement("rect", {
+                    width: label_width,
+                    height: label_height,
+                    x: (length - label_width) / 2 + Math.cos(angle + Math.PI / 2) * lavg,
+                    y: (height - label_height + curve) / 2 + Math.sin(angle + Math.PI / 2) * lavg,
+                    fill: "lime",
+                    transform: `rotate(${-angle * 180 / Math.PI} ${length / 2} ${(height + curve) / 2})`,
+                }).add_to(this.svg);
+                const text = new DOM.SVGElement("text", {
+                    x: label_x + Math.cos(angle + Math.PI / 2) * lavg,
+                    y: label_y + Math.sin(angle + Math.PI / 2) * lavg,
+                    transform: `rotate(${-angle * 180 / Math.PI} ${length / 2} ${(height + curve) / 2})`,
+                    "text-anchor": "middle",
+                    "dominant-baseline": "middle",
+                }).add_to(this.svg);
+                text.element.innerHTML = "Label";
 
                 const ir = (colour, rect, resolve) => {
                     const intersections = intersect_bezier_with_rect(
@@ -558,8 +585,8 @@
         });
 
         document.addEventListener("DOMContentLoaded", () => {
-            const source = new Shape(640, 48);
-            const target = new Shape(640, 480);
+            const source = new Shape(64, 240);
+            const target = new Shape(640, 240);
             const arrow = new Arrow(source, target);
 
             window.addEventListener("mousemove", (event) => {
