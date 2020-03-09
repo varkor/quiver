@@ -158,10 +158,18 @@ UIState.Connect = class extends UIState {
             // Otherwise we revert to the currently-selected label alignment in the panel and the
             // default offset (0).
             const options = {
-                label_alignment:
-                    ui.panel.element.querySelector('input[name="label-alignment"]:checked').value,
+                // We will guess the label alignment below, but in case there's no selected label
+                // alignment, we default to "left".
+                label_alignment: "left",
                 // The default settings for the other options are fine.
             };
+            const selected_alignment
+                = ui.panel.element.querySelector('input[name="label-alignment"]:checked');
+            if (selected_alignment !== null) {
+                // If multiple edges are selected and not all selected edges have the same label
+                // alignment, there will be no checked input.
+                options.label_alignment = selected_alignment.value;
+            }
             // If *every* existing connection to source and target has a consistent label alignment,
             // then `align` will be a singleton, in which case we use that element as the alignment.
             // If it has `left` and `right` in equal measure (regardless of `centre`), then
