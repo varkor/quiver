@@ -235,14 +235,14 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
         }
         // Iterate through the rows and columns in order, outputting the tikz-cd code.
         const prev = new Position(offset.x, offset.y);
-        for (const [y, row] of Array.from(rows).sort()) {
+        for (const [y, row] of Array.from(rows).sort(([y1,], [y2,]) => y1 - y2)) {
             if (y - prev.y > 0) {
                 output += ` ${"\\\\\n".repeat(y - prev.y)}`;
             }
             // This variable is really unnecessary, but it allows us to remove
             //  a leading space on a line, which makes things prettier.
             let first_in_row = true;
-            for (const [x, vertex] of Array.from(row).sort()) {
+            for (const [x, vertex] of Array.from(row).sort(([x1,], [x2,]) => x1 - x2)) {
                 if (x - prev.x > 0) {
                     output += `${!first_in_row ? " " : ""}${"&".repeat(x - prev.x)} `;
                 }
