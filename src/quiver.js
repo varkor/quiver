@@ -662,6 +662,10 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
         // to let the user know we were not entirely successful.
         const errors = [];
 
+        // We don't want to relayout every time we add a new cell: instead, we should perform
+        // layout once, once all of the cells have been created.
+        ui.buffer_updates = true;
+
         const indices = [];
         for (const cell of cells) {
             try {
@@ -721,6 +725,11 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
 
         // Centre the view on the quiver.
         ui.centre_view();
+
+        // Update all the affected columns and rows.
+        UI.delay(() => ui.update_col_row_size(
+            ...indices.filter((cell) => cell.is_vertex()).map((vertex) => vertex.position)
+        ));
 
         // If the quiver is now nonempty, some toolbar actions will be available.
         ui.toolbar.update(ui);

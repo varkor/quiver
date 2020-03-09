@@ -361,8 +361,12 @@ class UI {
 
         /// The element containing all the cells themselves.
         this.canvas = null;
+
         /// The grid background.
         this.grid = null;
+
+        /// Whether to prevent relayout for individual cell changes so as to batch it instead.
+        this.buffer_updates = false;
 
         /// The offset of the view (i.e. the centre of the view).
         this.view = Offset.zero();
@@ -1027,7 +1031,9 @@ class UI {
         update_size(this.cell_height_constraints, cell.position.y, height);
 
         // Resize the grid if need be.
-        this.update_col_row_size(cell.position);
+        if (!this.buffer_updates) {
+            this.update_col_row_size(cell.position);
+        }
     }
 
     /// Returns the current UI selection, excluding the given `cells`.
