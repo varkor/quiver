@@ -379,6 +379,10 @@ class UI {
         /// The offset of the view (i.e. the centre of the view).
         this.view = Offset.zero();
 
+        /// The scale of the view, as a log of 2. E.g. `scale = 0` is normal, `scale = 1` is 2x
+        /// zoom, `scale = -1` is 0.5x and so on.
+        this.scale = 0;
+
         /// The size of the view (i.e. the document body dimensions).
         this.dimensions = new Dimensions(document.body.offsetWidth, document.body.offsetHeight);
 
@@ -406,6 +410,9 @@ class UI {
     initialise() {
         this.element.classList.add("ui");
         this.switch_mode(UIState.default);
+
+        // Set the grid background.
+        this.initialise_grid(new DOM.Element(this.element));
 
         // Set up the element containing all the cells.
         this.canvas = new DOM.Element("div", { class: "canvas" });
@@ -438,17 +445,16 @@ class UI {
             // Hide the insertion point if it is visible.
             this.element.querySelector(".insertion-point").classList.remove("revealed");
 
-            this.pan_view(new Offset(event.deltaX, event.deltaY));
+            this.pan_view(new Offset(
+                event.deltaX * 2 ** -this.scale,
+                event.deltaY * 2 ** -this.scale,
+            ));
         }, { passive: false });
 
         // The canvas is only as big as the window, so we need to resize it when the window resizes.
         window.addEventListener("resize", () => {
-            // Adjust the view so that we keep everything centred.
-            this.pan_view(new Offset(
-                (this.dimensions.width - document.body.offsetWidth) / 2,
-                (this.dimensions.height - document.body.offsetHeight) / 2,
-            ));
-            this.dimensions = new Dimensions(document.body.offsetWidth, document.body.offsetHeight);
+            // Adjust the grid so that it aligns with the content.
+            this.update_grid();
         });
 
         // Add a move to the history.
@@ -785,9 +791,6 @@ class UI {
                 this.state.update(this, offset);
             }
         });
-
-        // Set the grid background.
-        this.initialise_grid(this.canvas);
     }
 
     /// Active MathJax or KaTeX when it becomes available,
@@ -880,11 +883,6 @@ class UI {
         return new Position(col, row);
     }
 
-    /// Returns the centre of the canvas.
-    body_offset() {
-        return new Offset(document.body.offsetWidth / 2, document.body.offsetHeight / 2);
-    }
-
     /// A helper method for getting a position from an event.
     position_from_event(event) {
         return this.position_from_offset(this.offset_from_event(event));
@@ -892,7 +890,11 @@ class UI {
 
     /// A helper method for getting an offset from an event.
     offset_from_event(event) {
-        return new Offset(event.pageX, event.pageY).add(this.view);
+        const scale = 2 ** this.scale;
+        return new Offset(event.pageX, event.pageY)
+            .sub(new Offset(document.body.offsetWidth / 2, document.body.offsetHeight / 2))
+            .div(scale)
+            .add(this.view);
     }
 
     /// Returns half the size of the cell at the given `position`.
@@ -1120,12 +1122,14 @@ class UI {
 
     /// Repositions the view by a relative offset.
     /// If `offset` is positive, then everything will appear to move towards the top left.
-    pan_view(offset) {
+    /// If `zoom` is positive, then everything will grow larger.
+    pan_view(offset, zoom = 0) {
         this.view.left += offset.left;
         this.view.top += offset.top;
+        this.scale += zoom;
+        const view = this.view.mul(2 ** this.scale);
         this.canvas.element.style.transform
-            = `translate(${-this.view.left}px, ${-this.view.top}px)`;
-        this.grid.element.style.transform = `translate(${this.view.left}px, ${this.view.top}px)`;
+            = `translate(${-view.left}px, ${-view.top}px) scale(${2 ** this.scale})`;
         this.update_grid();
     }
 
@@ -1136,7 +1140,7 @@ class UI {
             // offsets.
             let min_offset = new Offset(Infinity, Infinity);
             let max_offset = new Offset(-Infinity, -Infinity);
-            this.pan_view(this.view.neg());
+            this.view = Offset.zero();
 
             for (const vertex of this.quiver.cells[0]) {
                 const offset = this.centre_offset_from_position(vertex.position);
@@ -1145,11 +1149,8 @@ class UI {
                 max_offset = max_offset.max(offset.add(centre));
             }
 
-            const view_offset = new Offset(
-                document.body.offsetWidth - this.panel.element.offsetWidth,
-                document.body.offsetHeight,
-            );
-            this.pan_view(min_offset.add(max_offset).sub(view_offset).div(2));
+            const panel_offset = new Offset(this.panel.element.offsetWidth, 0).div(2);
+            this.pan_view(min_offset.add(max_offset).div(2).add(panel_offset));
         }
     }
 
@@ -1382,43 +1383,45 @@ class UI {
         const canvas = this.grid;
         canvas.resize(width, height);
 
+        const scale = 2 ** this.scale;
+
         const context = canvas.context;
         context.strokeStyle = BORDER_COLOUR;
-        context.lineWidth = CONSTANTS.GRID_BORDER_WIDTH;
-        context.setLineDash([DASH_LENGTH]);
+        context.lineWidth = Math.max(1, CONSTANTS.GRID_BORDER_WIDTH * scale);
+        context.setLineDash([DASH_LENGTH * scale]);
 
         // We want to centre the horizontal and vertical dashes, so we get little crosses in the
         // corner of each grid cell. This is best effort: it is perfect when each column and row
         // is the default size, but otherwise may be imperfect.
-        const dash_offset = -DASH_LENGTH / 2;
+        const dash_offset = -DASH_LENGTH * scale / 2;
 
-        const offset = this.view.add(this.body_offset());
+        const offset = this.view;
 
         const [[left_col, left_offset], [top_row, top_offset]] = this.col_row_offset_from_offset(
-            offset.sub(new Offset(width / 2, height / 2))
+            offset.sub(new Offset(width / scale / 2, height / scale / 2))
         );
         const [[right_col,], [bottom_row,]] = this.col_row_offset_from_offset(
-            offset.add(new Offset(width / 2, height / 2))
+            offset.add(new Offset(width / scale / 2, height / scale / 2))
         );
 
         // Draw the vertical lines.
         context.beginPath();
-        for (let col = left_col, x = left_offset - offset.left + width / 2;
+        for (let col = left_col, x = left_offset - offset.left;
                 col <= right_col; x += this.cell_size(this.cell_width, col++)) {
-            context.moveTo(x, 0);
-            context.lineTo(x, height);
+            context.moveTo(x * scale + width / 2, 0);
+            context.lineTo(x * scale + width / 2, height);
         }
-        context.lineDashOffset = offset.top - dash_offset - height % this.default_cell_size / 2;
+        context.lineDashOffset = offset.top * scale - dash_offset - height % this.default_cell_size / 2;
         context.stroke();
 
         // Draw the horizontal lines.
         context.beginPath();
-        for (let row = top_row, y = top_offset - offset.top + height / 2;
+        for (let row = top_row, y = top_offset - offset.top;
                 row <= bottom_row; y += this.cell_size(this.cell_height, row++)) {
-            context.moveTo(0, y);
-            context.lineTo(width, y);
+            context.moveTo(0, y * scale + height / 2);
+            context.lineTo(width, y * scale + height / 2);
         }
-        context.lineDashOffset = offset.left - dash_offset - width % this.default_cell_size / 2;
+        context.lineDashOffset = offset.left * scale - dash_offset - width % this.default_cell_size / 2;
         context.stroke();
     }
 
@@ -2616,18 +2619,23 @@ class Toolbar {
             // to display more than one shortcut name).
             const shortcut_name = shortcuts_keys.slice(0, 1).join("/");
 
+            const trigger_action_and_update_toolbar = (event) => {
+                action(event);
+                ui.toolbar.update(ui);
+            };
+
             const button = new DOM.Element("button", { class: "action", "data-name": name })
                 .add(new DOM.Element("span", { class: "symbol" }).add(symbol))
                 .add(new DOM.Element("span", { class: "name" }).add(name))
                 .add(new DOM.Element("span", { class: "shortcut" }).add(shortcut_name))
                 .listen("mousedown", (event) => event.stopImmediatePropagation())
-                .listen("click", (event) => action(event));
+                .listen("click", trigger_action_and_update_toolbar);
 
             if (disabled) {
                 button.element.disabled = true;
             }
 
-            add_shortcut(combinations, action, button);
+            add_shortcut(combinations, trigger_action_and_update_toolbar, button);
 
             this.element.appendChild(button.element);
             return button;
@@ -2701,6 +2709,37 @@ class Toolbar {
             [],
             () => {
                 ui.centre_view();
+            },
+            true,
+        );
+
+        add_action(
+            "-",
+            "Zoom out",
+            [{ key: "-", modifier: true, context: SHORTCUT_PRIORITY.Always }],
+            () => {
+                ui.pan_view(Offset.zero(), -0.25);
+            },
+            false,
+        );
+
+        add_action(
+            "+",
+            "Zoom in",
+            [{ key: "=", modifier: true, context: SHORTCUT_PRIORITY.Always }],
+            () => {
+                ui.pan_view(Offset.zero(), 0.25);
+            },
+            false,
+        );
+
+        add_action(
+            "=",
+            "Reset zoom",
+            [],
+            () => {
+                ui.scale = 0;
+                ui.pan_view(Offset.zero());
             },
             true,
         );
@@ -2848,7 +2887,11 @@ class Toolbar {
                             // Trigger the shortcut effect.
                             const action = shortcut[{ keydown: "action", keyup: "unaction" }[type]];
                             if (action !== null) {
-                                action(event);
+                                if (shortcut.button === null || !shortcut.button.element.disabled) {
+                                    // Only trigger the action if the associated button is not
+                                    // disabled.
+                                    action(event);
+                                }
                                 if (shortcut.button !== null) {
                                     // The button might be disabled by `action`, but we still want
                                     // to trigger the visual indication if it was enabled when
@@ -2920,6 +2963,9 @@ class Toolbar {
         enable_if("Deselect all", ui.selection.size > 0);
         enable_if("Delete", ui.selection.size > 0);
         enable_if("Centre view", ui.quiver.cells.length > 0 && ui.quiver.cells[0].size > 0);
+        enable_if("Zoom in", ui.scale < 1);
+        enable_if("Zoom out", ui.scale > -2.5);
+        enable_if("Reset zoom", ui.scale !== 0);
     }
 }
 

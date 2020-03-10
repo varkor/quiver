@@ -124,6 +124,10 @@ class Offset {
         return new (this.constructor)(-this.left, -this.top);
     }
 
+    mul(multiplier) {
+        return new (this.constructor)(this.left * multiplier, this.top * multiplier);
+    }
+
     div(divisor) {
         return new (this.constructor)(this.left / divisor, this.top / divisor);
     }

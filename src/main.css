@@ -18,6 +18,8 @@ body {
     margin: 0;
     overflow: hidden;
 
+    background: white;
+
     font-family: sans-serif;
 }
 
@@ -94,9 +96,11 @@ body:not(.modal) {
 
 .canvas {
     position: absolute;
-    width: 100%; height: 100%;
-
-    background-color: white;
+    width: 100%;
+    height: 100%;
+    left: 50%;
+    top: 50%;
+    transform-origin: top left;
 }
 
 .pan .canvas {
@@ -110,6 +114,7 @@ body:not(.modal) {
 /* Grid interaction */
 
 .grid {
+    position: fixed;
     pointer-events: none;
 }
 
