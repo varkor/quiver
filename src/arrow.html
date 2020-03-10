@@ -13,7 +13,7 @@
         .box {
             position: absolute;
             background: darkslategrey;
-            border-radius: 4px;
+            border-radius: 16px;
         }
 
         svg {
@@ -257,6 +257,7 @@
                         label_width + line_width,
                         label_height + line_width,
                         new NormalisedBezier(new Point(0, 0), angle, length, curve),
+                        line_width / 2,
                     );
                     if (intersections.length === 0) {
                         if (lmax - lmin < 1) {
@@ -308,6 +309,7 @@
                         rect.width,
                         rect.height,
                         new NormalisedBezier(new Point(this.source.x, this.source.y), angle, length, curve),
+                        16,
                         resolve,
                     ).slice(0, 1);
                     for (const inter of intersections) {
@@ -630,12 +632,89 @@
         /// Bézier curve `b`.
         /// Note that intersecting a Bézier curve with a circle is very difficult in general, so we
         /// approximate rounded rectangles by rectanges for the sake of finding intersections.
-        function intersect_bezier_with_rect(x, y, w, h, b, min = true) {
-            let points = new Array(4).fill(null).map(() => new Point(x, y));
-            points[0] = points[0].sub(new Point(w/2, h/2));
-            points[1] = points[1].sub(new Point(-w/2, h/2));
-            points[2] = points[2].sub(new Point(-w/2, -h/2));
-            points[3] = points[3].sub(new Point(w/2, -h/2));
+        function intersect_bezier_with_rect(x, y, w, h, b, border_radius = 0, min = true) {
+            // let points = new Array(4).fill(null).map(() => new Point(x, y));
+            // points[0] = points[0].sub(new Point(w/2, h/2));
+            // points[1] = points[1].sub(new Point(-w/2, h/2));
+            // points[2] = points[2].sub(new Point(-w/2, -h/2));
+            // points[3] = points[3].sub(new Point(w/2, -h/2));
+            let points = [];
+
+            const sides = 16;
+            const points_per_corner_excluding_ends = sides / 4 - 1;
+            const R = border_radius / Math.cos(Math.PI / sides);
+
+            let angle_offset = 0;
+
+            // top right
+            points.push(new Point(
+                x + w/2,
+                y + (h/2 - border_radius),
+            ));
+            for (let i = 0; i < points_per_corner_excluding_ends + 1; ++i) {
+                const angle = (Math.PI / 2) / (points_per_corner_excluding_ends * 2 + 3) * (2 * i + 1) + angle_offset;
+                points.push(new Point(
+                    x + (w/2 - border_radius) + Math.cos(angle) * R,
+                    y + (h/2 - border_radius) + Math.sin(angle) * R,
+                ));
+            }
+            points.push(new Point(
+                x + (w/2 - border_radius),
+                y + h/2,
+            ));
+            // top left
+            angle_offset += Math.PI / 2;
+            points.push(new Point(
+                x - (w/2 - border_radius),
+                y + h/2,
+            ));
+            for (let i = 0; i < points_per_corner_excluding_ends + 1; ++i) {
+                const angle = (Math.PI / 2) / (points_per_corner_excluding_ends * 2 + 3) * (2 * i + 1) + angle_offset;
+                points.push(new Point(
+                    x - (w/2 - border_radius) + Math.cos(angle) * R,
+                    y + (h/2 - border_radius) + Math.sin(angle) * R,
+                ));
+            }
+            points.push(new Point(
+                x - w/2,
+                y + (h/2 - border_radius),
+            ));
+            // bottom left
+            angle_offset += Math.PI / 2;
+            points.push(new Point(
+                x - w/2,
+                y - (h/2 - border_radius),
+            ));
+            for (let i = 0; i < points_per_corner_excluding_ends + 1; ++i) {
+                const angle = (Math.PI / 2) / (points_per_corner_excluding_ends * 2 + 3) * (2 * i + 1) + angle_offset;
+                points.push(new Point(
+                    x - (w/2 - border_radius) + Math.cos(angle) * R,
+                    y - (h/2 - border_radius) + Math.sin(angle) * R,
+                ));
+            }
+            points.push(new Point(
+                x - (w/2 - border_radius),
+                y - h/2,
+            ));
+            // bottom right
+            angle_offset += Math.PI / 2;
+            points.push(new Point(
+                x + (w/2 - border_radius),
+                y - h/2,
+            ));
+            for (let i = 0; i < points_per_corner_excluding_ends + 1; ++i) {
+                const angle = (Math.PI / 2) / (points_per_corner_excluding_ends * 2 + 3) * (2 * i + 1) + angle_offset;
+                points.push(new Point(
+                    x + (w/2 - border_radius) + Math.cos(angle) * R,
+                    y - (h/2 - border_radius) + Math.sin(angle) * R,
+                ));
+            }
+            points.push(new Point(
+                x,
+                y + (h/2 - border_radius),
+            ));
+
+            points = points.reverse();
 
             let intersections = new Set();
             let h_scale = b.h || 1;
