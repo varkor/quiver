@@ -731,6 +731,9 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
             ...indices.filter((cell) => cell.is_vertex()).map((vertex) => vertex.position)
         ));
 
+        // Stop buffering updates, so that individual changes to cells will resize the grid.
+        ui.buffer_updates = false;
+
         // If the quiver is now nonempty, some toolbar actions will be available.
         ui.toolbar.update(ui);
 
