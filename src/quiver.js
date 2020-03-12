@@ -459,7 +459,7 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                     `from=${cell_reference(edge.source)}, ` +
                     `to=${cell_reference(edge.target)}` +
                     (parameters.length > 0 ? `, ${parameters.join(", ")}` : "") +
-                    "] ";
+                    "]\n";
             }
             // Remove any trailing whitespace.
             output = output.trim();
