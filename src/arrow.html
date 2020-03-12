@@ -31,12 +31,9 @@
         // TODO: make sure pixel perfect + 0.5px if necessary.
         // As many of the styles should be combinable (and parametric) as possible.
         // Handle extreme edge cases gracefully.
-
+        // TODO: fix flickering when very thin and horizontal (i.e. when label contains edge completely).
         // Remove rounded rect from svg drawing.
-        // Find intersection of Bezier with rounded rect.
-        // Draw tails.
-        // Draw heads.
-        // Draw multiple lines.
+        // TODO: hook tails.
 
         let drag = null;
         let curve = 0;
@@ -240,9 +237,6 @@
                 // simulate thickness of the curve. We set up a range from [0, hypot(width/2, height/2)],
                 // which we will binary search between to find the right distance.
 
-                // TODO: fix flickering when very thin and horizontal (i.e. when label contains edge completely).
-                // TODO: improve heuristic for n-cells (too much spacing currently).
-
                 let [lmin, lmax] = [
                     0,
                     Math.abs(curve) / 2 + Math.hypot((label_width + line_width) / 2, (label_height + line_width) / 2)
@@ -302,6 +296,26 @@
                 }).add_to(this.svg);
                 text.element.innerHTML = "Label";
 
+                // const points = create_rounded_rect(
+                //     label_x, label_y, label_width, label_height, line_width / 2,
+                // );
+                // let rr_path = "";
+                // let first = true;
+                // for (const p of points) {
+                //     if (first) {
+                //         rr_path += `M ${p.x} ${p.y} `;
+                //         first = false;
+                //     } else {
+                //         rr_path += `L ${p.x} ${p.y} `;
+                //     }
+                // }
+
+                // new DOM.SVGElement("path", {
+                //     d: rr_path,
+                //     fill: "red",
+                //     stroke: "none",
+                // }).add_to(this.svg);
+
                 const ir = (colour, rect, resolve) => {
                     const intersections = intersect_bezier_with_rect(
                         rect.x,
@@ -329,8 +343,8 @@
                 const bezier = new Bezier(Point.zero(), new Point(length, 0), curve);
                 const t_after_length = bezier.t_after_length();
 
-                const start = null; //ir("none", this.source, true);
-                const end = null; //ir("none", this.target, false);
+                const start = ir("none", this.source, true);
+                const end = ir("none", this.target, false);
 
                 const path = [`M 0 ${height / 2}`];
                 if (body_shape === "none") {
@@ -415,6 +429,8 @@
                     transform: `rotate(${-angle * 180 / Math.PI} 0 ${height / 2})`,
                     rx: 4,
                 }).add_to(clip);
+
+                // visualise_rounded_rect(this.svg, 0, height / 2, this.source.width, this.source.height, 16);
 
                 new DOM.SVGElement("rect", {
                     width: this.target.width,
@@ -577,8 +593,10 @@
                 // const heads = ["epi", "mono"];
                 // const heads = ["mono", "maps to", "epi", "mono", "maps to", "epi"];
 
-                // draw_head(heads, bezier, start, true);
-                // draw_head(heads, bezier, end, false);
+                if (start !== null)
+                    draw_head(heads, bezier, start, true);
+                if (end !== null)
+                    draw_head(heads, bezier, end, false);
             }
         }
 
@@ -624,6 +642,118 @@
             })
         });
 
+        function visualise_rounded_rect(svg, x, y, w, h, border_radius) {
+            const points = create_rounded_rect(
+                x, y, w, h, border_radius,
+            );
+            let rr_path = "";
+            let first = true;
+            for (const p of points) {
+                if (first) {
+                    rr_path += `M ${p.x} ${p.y} `;
+                    first = false;
+                } else {
+                    rr_path += `L ${p.x} ${p.y} `;
+                }
+            }
+
+            new DOM.SVGElement("path", {
+                d: rr_path,
+                fill: "red",
+                stroke: "none",
+            }).add_to(svg);
+        }
+
+        function create_rounded_rect(x, y, w, h, border_radius) {
+            let points = [];
+
+            // must be greater than zero
+            const min_side_length = 5;
+            const n = border_radius !== 0 ? Math.PI / Math.atan(min_side_length / (2 * border_radius)) : 0;
+            const sides = Math.ceil(n);
+            const R = border_radius / Math.cos(Math.PI / sides);
+            let angle_offset = 0;
+
+            // top right
+            points.push(new Point(
+                x + w/2,
+                y - (h/2 - border_radius),
+            ));
+            for (let i = 0; i < sides / 4; ++i) {
+                const angle = (i + 0.5) / sides * 2 * Math.PI + angle_offset;
+                points.push(new Point(
+                    x + (w/2 - border_radius) + Math.cos(angle) * R,
+                    y - (h/2 - border_radius) - Math.sin(angle) * R,
+                ));
+            }
+            points.push(new Point(
+                x + (w/2 - border_radius),
+                y - h/2,
+            ));
+            // top left
+            angle_offset += Math.PI / 2;
+            points.push(new Point(
+                x - (w/2 - border_radius),
+                y - h/2,
+            ));
+            for (let i = 0; i < sides / 4; ++i) {
+                const angle = (i + 0.5) / sides * 2 * Math.PI + angle_offset;
+                points.push(new Point(
+                    x - (w/2 - border_radius) + Math.cos(angle) * R,
+                    y - (h/2 - border_radius) - Math.sin(angle) * R,
+                ));
+            }
+            points.push(new Point(
+                x - w/2,
+                y - (h/2 - border_radius),
+            ));
+            // bottom left
+            angle_offset += Math.PI / 2;
+            points.push(new Point(
+                x - w/2,
+                y + (h/2 - border_radius),
+            ));
+            for (let i = 0; i < sides / 4; ++i) {
+                const angle = (i + 0.5) / sides * 2 * Math.PI + angle_offset;
+                points.push(new Point(
+                    x - (w/2 - border_radius) + Math.cos(angle) * R,
+                    y + (h/2 - border_radius) - Math.sin(angle) * R,
+                ));
+            }
+            points.push(new Point(
+                x - (w/2 - border_radius),
+                y + h/2,
+            ));
+            // bottom right
+            angle_offset += Math.PI / 2;
+            points.push(new Point(
+                x + (w/2 - border_radius),
+                y + h/2,
+            ));
+            for (let i = 0; i < sides / 4; ++i) {
+                const angle = (i + 0.5) / sides * 2 * Math.PI + angle_offset;
+                points.push(new Point(
+                    x + (w/2 - border_radius) + Math.cos(angle) * R,
+                    y + (h/2 - border_radius) - Math.sin(angle) * R,
+                ));
+            }
+            points.push(new Point(
+                x + w/2,
+                y + (h/2 - border_radius),
+            ));
+
+            const EPSILON = 10 ** (-10);
+
+            // Remove zero-length segments.
+            for (let i = points.length - 2; i >= 0; --i) {
+                if (Math.abs(points[i].x - points[i + 1].x) <= EPSILON && Math.abs(points[i].y - points[i + 1].y) <= EPSILON) {
+                    points.splice(i + 1, 1);
+                }
+            }
+
+            return points;
+        }
+
         /// The normalised quadratic Bézier curve is the one whose endpoints are (0, 0) and (1, 0)
         /// and whose control point is (0.5, 1). The highest point on the curve is therefore
         /// (0.5, 0.5). The equation of the curve is `y = 2 x (1 - x)`.
@@ -638,81 +768,9 @@
             // points[1] = points[1].sub(new Point(-w/2, h/2));
             // points[2] = points[2].sub(new Point(-w/2, -h/2));
             // points[3] = points[3].sub(new Point(w/2, -h/2));
-            let points = [];
+            // console.log(border_radius);
 
-            const sides = 16;
-            const points_per_corner_excluding_ends = sides / 4 - 1;
-            const R = border_radius / Math.cos(Math.PI / sides);
-
-            let angle_offset = 0;
-
-            // top right
-            points.push(new Point(
-                x + w/2,
-                y + (h/2 - border_radius),
-            ));
-            for (let i = 0; i < points_per_corner_excluding_ends + 1; ++i) {
-                const angle = (Math.PI / 2) / (points_per_corner_excluding_ends * 2 + 3) * (2 * i + 1) + angle_offset;
-                points.push(new Point(
-                    x + (w/2 - border_radius) + Math.cos(angle) * R,
-                    y + (h/2 - border_radius) + Math.sin(angle) * R,
-                ));
-            }
-            points.push(new Point(
-                x + (w/2 - border_radius),
-                y + h/2,
-            ));
-            // top left
-            angle_offset += Math.PI / 2;
-            points.push(new Point(
-                x - (w/2 - border_radius),
-                y + h/2,
-            ));
-            for (let i = 0; i < points_per_corner_excluding_ends + 1; ++i) {
-                const angle = (Math.PI / 2) / (points_per_corner_excluding_ends * 2 + 3) * (2 * i + 1) + angle_offset;
-                points.push(new Point(
-                    x - (w/2 - border_radius) + Math.cos(angle) * R,
-                    y + (h/2 - border_radius) + Math.sin(angle) * R,
-                ));
-            }
-            points.push(new Point(
-                x - w/2,
-                y + (h/2 - border_radius),
-            ));
-            // bottom left
-            angle_offset += Math.PI / 2;
-            points.push(new Point(
-                x - w/2,
-                y - (h/2 - border_radius),
-            ));
-            for (let i = 0; i < points_per_corner_excluding_ends + 1; ++i) {
-                const angle = (Math.PI / 2) / (points_per_corner_excluding_ends * 2 + 3) * (2 * i + 1) + angle_offset;
-                points.push(new Point(
-                    x - (w/2 - border_radius) + Math.cos(angle) * R,
-                    y - (h/2 - border_radius) + Math.sin(angle) * R,
-                ));
-            }
-            points.push(new Point(
-                x - (w/2 - border_radius),
-                y - h/2,
-            ));
-            // bottom right
-            angle_offset += Math.PI / 2;
-            points.push(new Point(
-                x + (w/2 - border_radius),
-                y - h/2,
-            ));
-            for (let i = 0; i < points_per_corner_excluding_ends + 1; ++i) {
-                const angle = (Math.PI / 2) / (points_per_corner_excluding_ends * 2 + 3) * (2 * i + 1) + angle_offset;
-                points.push(new Point(
-                    x + (w/2 - border_radius) + Math.cos(angle) * R,
-                    y - (h/2 - border_radius) + Math.sin(angle) * R,
-                ));
-            }
-            points.push(new Point(
-                x,
-                y + (h/2 - border_radius),
-            ));
+            let points = create_rounded_rect(x, y, w, h, border_radius);
 
             points = points.reverse();
 
@@ -732,8 +790,8 @@
             if (b.h === 0) {
                 // Special-case a straight line, as we can't normalise with respect to this curve.
                 // We're now trying to intersect with a horizontal line (0, 0) to (1, 0).
-                for (let i = 0; i < 4; ++i) {
-                    const endpoints = [points[i], points[(i + 1) % 4]];
+                for (let i = 0; i < points.length; ++i) {
+                    const endpoints = [points[i], points[(i + 1) % points.length]];
                     if (Math.abs(endpoints[0].x - endpoints[1].x) <= EPSILON) {
                         // x = a.
                         if (endpoints[0].x >= 0 && endpoints[0].x <= 1 && Math.min(endpoints[0].y, endpoints[1].y) <= 0 &&
@@ -761,8 +819,8 @@
                 }
             } else {
                 // Usual case. Non-trivial.
-                for (let i = 0; i < 4; ++i) {
-                    const endpoints = [points[i], points[(i + 1) % 4]];
+                for (let i = 0; i < points.length; ++i) {
+                    const endpoints = [points[i], points[(i + 1) % points.length]];
                     // Special-case the vertical line, within some margin of precision to avoid floating-point artefacts.
                     if (Math.abs(endpoints[0].x - endpoints[1].x) <= EPSILON) {
                         const y = intersect_bezier_with_vertical_line(endpoints[0].x);
