@@ -27,13 +27,22 @@
     <script type="text/javascript" src="dom.js"></script>
     <script>
 
-        // TODO: cut head/tail as well as edge
-        // TODO: make sure pixel perfect + 0.5px if necessary.
-        // As many of the styles should be combinable (and parametric) as possible.
-        // Handle extreme edge cases gracefully.
-        // TODO: fix flickering when very thin and horizontal (i.e. when label contains edge completely).
-        // Remove rounded rect from svg drawing.
-        // TODO: hook tails.
+        // TODO: add the remaining arrow types: hook tails, and one-sided heads.
+        // TODO: make sure we can draw arrows between arrows and that they get cropped properly.
+        // TODO: make the transition from short arrows to long arrows smooth (e.g. scaling heads, etc.)
+        // TODO: add cropping of other arrows (e.g. depth/crossing-over), as well as the label box.
+        // TODO: make sure everything looks pixel-perfect.
+        // TODO: reinstate the masks for heads and tails.
+        // TODO: add padding around arrow heads/tails.
+        // TODO: fix the rounded ends of the backgrounds of the arrows.
+        // TODO: fix handling when edge is very small (e.g. when the label contains the entire edge).
+        // TODO: fix handling for n-cells for high n.
+        // TODO: investigate saving as SVG.
+        // TODO: add other edge kinds (e.g. adjunction and pullback).
+        // TODO: investigate loops.
+        // TODO: work out how to output tikz-cd code for curved edges.
+        // TODO: use the new arrow library for quiver.
+        // TODO: allow shortening edges.
 
         let drag = null;
         let curve = 0;
