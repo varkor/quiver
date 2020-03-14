@@ -27,7 +27,7 @@
     <script type="text/javascript" src="dom.js"></script>
     <script>
 
-        // TODO: add the remaining arrow types: hook tails, and one-sided heads.
+        // TODO: add the remaining arrow types: one-sided heads.
         // TODO: make sure we can draw arrows between arrows and that they get cropped properly.
         // TODO: make the transition from short arrows to long arrows smooth (e.g. scaling heads, etc.)
         // TODO: add cropping of other arrows (e.g. depth/crossing-over), as well as the label box.
@@ -478,6 +478,7 @@
                                     [margin_left, margin_right, margin_start]
                                         = [HEAD_WIDTH, 0, 0]; break;
                                 case "mono":
+                                case "hook":
                                     [margin_left, margin_right, margin_start]
                                         = [0, HEAD_WIDTH, HEAD_WIDTH]; break;
                                 case "maps to":
@@ -507,7 +508,7 @@
                                     off.x,
                                     off.y + height / 2,
                                 );
-                                const angle = bezier.angle(ts[i]) + (type === "mono" ? Math.PI : 0);
+                                const angle = bezier.angle(ts[i]) + (type === "mono" || type === "hook" ? Math.PI : 0);
                                 if (type === "epi" || type === "mono") {
                                     const [dx, dy] = [mul * HEAD_WIDTH, imul * HEAD_HEIGHT / 2];
                                     head_path.arc_by(
@@ -522,6 +523,20 @@
                                 } else if (type === "maps to") {
                                     const [dx, dy] = [0, imul * HEAD_HEIGHT / 2];
                                     head_path.line_by(
+                                        dx * Math.cos(angle) - dy * Math.sin(angle),
+                                        dx * Math.sin(angle) + dy * Math.cos(angle),
+                                    );
+                                } else if (type === "hook") {
+                                    const [dx, dy] = [0, -imul * HEAD_WIDTH * 2];
+                                    head_path.arc_by(
+                                        -mul * HEAD_WIDTH,
+                                        HEAD_WIDTH,
+                                        // We're drawing a semicircle,
+                                        // so the angle is actually unimportant.
+                                        angle * 180 / Math.PI,
+                                        // This flag appears to be unimportant here.
+                                        false,
+                                        !iflag,
                                         dx * Math.cos(angle) - dy * Math.sin(angle),
                                         dx * Math.sin(angle) + dy * Math.cos(angle),
                                     );
@@ -596,8 +611,9 @@
                     // }
                 };
                 // const heads = Array(10).fill("maps to");
-                const heads = Array(10).fill("epi");
+                // const heads = Array(10).fill("epi");
                 // const heads = Array(10).fill("mono");
+                const heads = ["hook"];
                 // const heads = ["mono", "epi"];
                 // const heads = ["epi", "mono"];
                 // const heads = ["mono", "maps to", "epi", "mono", "maps to", "epi"];
