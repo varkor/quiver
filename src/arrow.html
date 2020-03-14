@@ -36,7 +36,6 @@
         // TODO: fix handling when edge is very small (e.g. when the label contains the entire edge).
         // TODO: fix handling for n-cells for high n.
         // TODO: investigate saving as SVG.
-        // TODO: add other edge kinds (i.e. pullback).
         // TODO: investigate loops.
         // TODO: work out how to output tikz-cd code for curved edges.
         // TODO: use the new arrow library for quiver.
@@ -184,7 +183,7 @@
                 const SPACING = 4.5;
                 const STROKE_WIDTH = 1.5;
 
-                const body_shape = "adjunction"; // "squiggly" or "none" or "adjunction"
+                const body_shape = "none"; // "squiggly", "line", "none", "adjunction"
 
                 // The height (in pixels) of each triangle from the edge.
                 const AMPLITUDE = 2;
@@ -407,7 +406,7 @@
 
                 // this should be a Path
                 let path = [`M 0 ${height / 2}`];
-                if (body_shape === "none") {
+                if (body_shape === "line") {
                     path.push(`q ${length / 2} ${curve} ${length} 0`);
                 } else if (body_shape === "adjunction") {
                     const proper_path = new Path();
@@ -523,7 +522,7 @@
                     });
                     const mul = is_start ? 1 : -1;
                     const flag = is_start ? 0 : 1;
-                    const head_path = new Path();
+                    let head_path = new Path();
 
                     const is_harpoon = heads.length === 1 && heads[0].startsWith("harpoon");
 
@@ -537,6 +536,7 @@
                             let margin_left, margin_right, margin_start;
                             switch (heads[i]) {
                                 case "epi":
+                                case "corner":
                                     [margin_left, margin_right, margin_start]
                                         = [HEAD_WIDTH, 0, 0]; break;
                                 case "mono":
@@ -581,6 +581,27 @@
                                         iflag,
                                         dx * Math.cos(angle) - dy * Math.sin(angle),
                                         dx * Math.sin(angle) + dy * Math.cos(angle),
+                                    );
+                                } else if (type === "corner") {
+                                    // we need to adjust the background padding here, depending on the angle
+                                    const LENGTH = 12;
+                                    const base_2 = LENGTH / Math.sqrt(2);
+                                    const p = bezier.point(t_after_length(bezier.arc_length(ts[i]) + base_2 * mul));
+                                    // the initial move is unncessary here
+                                    head_path.move_to(
+                                        p.x,
+                                        p.y + height / 2,
+                                    );
+
+                                    // Round the angle to the nearest 45º and adjust with respect to the
+                                    // current direction.
+                                    const PI_4 = Math.PI / 4;
+                                    const direction = Math.atan2(this.target.y - this.source.y, this.target.x - this.source.x);
+                                    const ang = Math.PI + PI_4 * Math.round(4 * direction / Math.PI) - direction;
+
+                                    head_path.line_by(
+                                        Math.cos(ang + Math.PI * (1 - flag) + imul * Math.PI / 4) * LENGTH,
+                                        Math.sin(ang + Math.PI * (1 - flag) + imul * Math.PI / 4) * LENGTH,
                                     );
                                 } else if (type === "maps to") {
                                     const [dx, dy] = [0, imul * HEAD_HEIGHT / 2];
@@ -678,7 +699,7 @@
                 // const heads = Array(10).fill("maps to");
                 // const heads = Array(10).fill("epi");
                 // const heads = Array(10).fill("mono");
-                const heads = ["epi"];
+                const heads = ["corner"];
                 // const heads = ["mono", "epi"];
                 // const heads = ["epi", "mono"];
                 // const heads = ["mono", "maps to", "epi", "mono", "maps to", "epi"];
