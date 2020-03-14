@@ -27,7 +27,7 @@
     <script type="text/javascript" src="dom.js"></script>
     <script>
 
-        // TODO: add the remaining arrow types: one-sided heads.
+        // TODO: add the remaining arrow types: one-sided heads, and fix the harpoon style.
         // TODO: make sure we can draw arrows between arrows and that they get cropped properly.
         // TODO: make the transition from short arrows to long arrows smooth (e.g. scaling heads, etc.)
         // TODO: add cropping of other arrows (e.g. depth/crossing-over), as well as the label box.
@@ -41,12 +41,13 @@
         // TODO: investigate loops.
         // TODO: work out how to output tikz-cd code for curved edges.
         // TODO: use the new arrow library for quiver.
-        // TODO: allow shortening edges.
         // TODO: refactor.
 
         let drag = null;
         let curve = 0;
         let level = 1;
+        // How much padding (in pixels) to add between the endpoints and the arrowheads/tails.
+        let shorten = 20;
 
         function rad_to_deg(rad) {
             return rad * 180 / Math.PI;
@@ -390,6 +391,7 @@
                             x: start ? -w : 0,
                             y: -h / 2,
                             fill: "black",
+                            // we can use the extra two arguments of rotate instead of x and y here
                             transform: `translate(${endpoint.x}, ${height / 2 + endpoint.y}) rotate(${endpoint.angle * 180 / Math.PI})`,
                         }).add_to(bg_mask);
                         new DOM.SVGElement("circle", {
@@ -516,7 +518,7 @@
 
                     if (!is_harpoon) {
                         const HEAD_SPACING = 2;
-                        let arclen = bezier.arc_length(where.t);
+                        let arclen = bezier.arc_length(where.t) + shorten * mul;
                         const ts = [];
                         let prev_margin = 0;
                         for (let i = 0; i < heads.length; ++i) {
@@ -608,9 +610,12 @@
                         }
                         head.element.setAttribute("d", head_path.toString());
                     } else if (is_harpoon) {
-                        // TODO: this should be shifted up
                         const h = line_width + SPACING;
-                        const flip = type.endsWith("top") ? 1 : -1;
+                        const flip = heads[0].endsWith("top") ? 1 : -1;
+                        // Overwrite `where` to taken `shorten` into account.
+                        const t = t_after_length(bezier.arc_length(where.t) + shorten * mul);
+                        where = bezier.point(t);
+                        where.angle = bezier.angle(t);
                         head_path.move_to(
                             where.x,
                             where.y + height / 2 + flip * line_width / 2,
@@ -662,7 +667,7 @@
                 // const heads = Array(10).fill("maps to");
                 // const heads = Array(10).fill("epi");
                 // const heads = Array(10).fill("mono");
-                const heads = ["hook"];
+                const heads = ["epi"];
                 // const heads = ["mono", "epi"];
                 // const heads = ["epi", "mono"];
                 // const heads = ["mono", "maps to", "epi", "mono", "maps to", "epi"];
