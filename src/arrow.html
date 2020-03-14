@@ -27,17 +27,16 @@
     <script type="text/javascript" src="dom.js"></script>
     <script>
 
-        // TODO: add the remaining arrow types: one-sided heads, and fix the harpoon style.
+        // TODO: add the remaining arrow types: fix the harpoon style.
         // TODO: make sure we can draw arrows between arrows and that they get cropped properly.
         // TODO: make the transition from short arrows to long arrows smooth (e.g. scaling heads, etc.)
         // TODO: add cropping of other arrows (e.g. depth/crossing-over), as well as the label box.
         // TODO: make sure everything looks pixel-perfect.
         // TODO: reinstate the masks for heads and tails.
-        // TODO: add padding around arrow heads/tails.
         // TODO: fix handling when edge is very small (e.g. when the label contains the entire edge).
         // TODO: fix handling for n-cells for high n.
         // TODO: investigate saving as SVG.
-        // TODO: add other edge kinds (e.g. adjunction and pullback).
+        // TODO: add other edge kinds (i.e. pullback).
         // TODO: investigate loops.
         // TODO: work out how to output tikz-cd code for curved edges.
         // TODO: use the new arrow library for quiver.
@@ -185,7 +184,7 @@
                 const SPACING = 4.5;
                 const STROKE_WIDTH = 1.5;
 
-                const body_shape = "none"; // "squiggly" or "none"
+                const body_shape = "adjunction"; // "squiggly" or "none" or "adjunction"
 
                 // The height (in pixels) of each triangle from the edge.
                 const AMPLITUDE = 2;
@@ -406,9 +405,21 @@
                 mask_bg_end(start, true);
                 mask_bg_end(end, false);
 
-                const path = [`M 0 ${height / 2}`];
+                // this should be a Path
+                let path = [`M 0 ${height / 2}`];
                 if (body_shape === "none") {
                     path.push(`q ${length / 2} ${curve} ${length} 0`);
+                } else if (body_shape === "adjunction") {
+                    const proper_path = new Path();
+                    const centre = bezier.point(0.5);
+                    const angle = bezier.angle(0.5);
+                    const normal = angle + Math.PI / 2;
+                    const LENGTH = 16;
+                    proper_path.move_to(centre.x - Math.cos(angle) * LENGTH / 2, height / 2 + centre.y - Math.sin(angle) * LENGTH / 2);
+                    proper_path.line_by(Math.cos(angle) * LENGTH, Math.sin(angle) * LENGTH);
+                    proper_path.move_to(centre.x + Math.cos(angle) * LENGTH / 2 - Math.cos(normal) * LENGTH / 2, height / 2 + centre.y + Math.sin(angle) * LENGTH / 2 - Math.sin(normal) * LENGTH / 2);
+                    proper_path.line_by(Math.cos(normal) * LENGTH, Math.sin(normal) * LENGTH);
+                    path = proper_path.commands;
                 } else if (body_shape === "squiggly") {
                     if (start === null || end === null) {
                         console.error("no start/end");
@@ -672,10 +683,12 @@
                 // const heads = ["epi", "mono"];
                 // const heads = ["mono", "maps to", "epi", "mono", "maps to", "epi"];
 
-                if (start !== null)
-                    draw_head(heads, bezier, start, true);
-                if (end !== null)
-                    draw_head(heads, bezier, end, false);
+                if (body_shape !== "adjunction") {
+                    if (start !== null)
+                        draw_head(heads, bezier, start, true);
+                    if (end !== null)
+                        draw_head(heads, bezier, end, false);
+                }
             }
         }
 
