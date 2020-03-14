@@ -34,7 +34,6 @@
         // TODO: make sure everything looks pixel-perfect.
         // TODO: reinstate the masks for heads and tails.
         // TODO: add padding around arrow heads/tails.
-        // TODO: fix the rounded ends of the backgrounds of the arrows.
         // TODO: fix handling when edge is very small (e.g. when the label contains the entire edge).
         // TODO: fix handling for n-cells for high n.
         // TODO: investigate saving as SVG.
@@ -43,10 +42,19 @@
         // TODO: work out how to output tikz-cd code for curved edges.
         // TODO: use the new arrow library for quiver.
         // TODO: allow shortening edges.
+        // TODO: refactor.
 
         let drag = null;
         let curve = 0;
         let level = 1;
+
+        function rad_to_deg(rad) {
+            return rad * 180 / Math.PI;
+        }
+
+        function deg_to_rad(deg) {
+            return deg * Math.PI / 180;
+        }
 
         class Shape {
             constructor(x, y) {
@@ -181,27 +189,28 @@
                 // The height (in pixels) of each triangle from the edge.
                 const AMPLITUDE = 2;
 
-                const PADDING_Y = body_shape === "squiggly" ? (AMPLITUDE + STROKE_WIDTH) * 2 : 0;
+                const PADDING_Y = body_shape === "squiggly" ? (AMPLITUDE + STROKE_WIDTH) : 0;
 
                 const line_width = level * STROKE_WIDTH + (level - 1) * SPACING;
 
                 const HEAD_WIDTH = SPACING + (level - 1) * 2;
                 const HEAD_HEIGHT = line_width + SPACING * 2;
 
-                const PADDING_X = HEAD_HEIGHT / 2;
+                const PADDING_S = 15;
+                const PADDING_X = HEAD_HEIGHT / 2 + PADDING_S;
 
                 const length = Math.hypot(this.target.y - this.source.y, this.target.x - this.source.x);
-                const height = Math.abs(curve) + HEAD_HEIGHT + PADDING_Y;
+                const height = Math.abs(curve) + HEAD_HEIGHT + PADDING_Y * 2 + PADDING_S * 2;
                 const angle = Math.atan2(this.target.y - this.source.y, this.target.x - this.source.x);
-                this.svg.element.style.width = `${length + PADDING_X * 2}px`;
-                this.svg.element.style.height = `${height}px`;
+                const [svg_width, svg_height] = [length + PADDING_X * 2, height];
+                this.svg.element.style.width = `${svg_width}px`;
+                this.svg.element.style.height = `${svg_height}px`;
                 this.svg.element.style.transformOrigin = `0 ${height / 2}px`;
                 this.svg.element.style.transform = `translate(${this.source.x}px, ${this.source.y - height / 2}px) rotate(${angle}rad) translate(${-PADDING_X}px, 0)`;
 
                 this.svg.element.innerHTML = "";
                 this.svg.element.setAttribute("viewBox", `0 0 ${length} ${height}`);
 
-                const PADDING_S = 15;
                 const body_style = "none";
 
                 const bg = new DOM.SVGElement("path", {
@@ -209,7 +218,7 @@
                     fill: "none",
                     stroke: "hsla(0, 0%, 0%, 0.2)",
                     "stroke-width": line_width + PADDING_S * 2,
-                    "stroke-linecap": "round", // could use: http://web.cse.ohio-state.edu/~dey.8/course/784/note9.pdf
+                    // "stroke-linecap": "round", // could use: http://web.cse.ohio-state.edu/~dey.8/course/784/note9.pdf
                 }).add_to(this.svg);
                 const line = new DOM.SVGElement("path", {
                     mask: "url(#clip)",
@@ -354,6 +363,46 @@
 
                 const start = ir("none", this.source, true);
                 const end = ir("none", this.target, false);
+
+                const bg_mask = new DOM.SVGElement("mask", {
+                    id: "bg-mask",
+                    maskUnits: "userSpaceOnUse",
+                }).add_to(defs);
+                bg.set_attribute("mask", "url(#bg-mask)");
+                new DOM.SVGElement("rect", {
+                    width: svg_width,
+                    height: svg_height,
+                    x: -PADDING_X,
+                    y: -PADDING_Y,
+                    fill: "white",
+                }).add_to(bg_mask);
+
+                const mask_bg_end = (endpoint, start) => {
+                    if (endpoint !== null) {
+                        const MASK_PADDING = 4;
+                        const [w, h] = [
+                            Math.hypot(endpoint.x - (start ? 0 : length), endpoint.y) + MASK_PADDING,
+                            line_width + PADDING_S * 2 + MASK_PADDING * 2
+                        ];
+                        new DOM.SVGElement("rect", {
+                            width: w, // overapproximation
+                            height: h,
+                            x: start ? -w : 0,
+                            y: -h / 2,
+                            fill: "black",
+                            transform: `translate(${endpoint.x}, ${height / 2 + endpoint.y}) rotate(${endpoint.angle * 180 / Math.PI})`,
+                        }).add_to(bg_mask);
+                        new DOM.SVGElement("circle", {
+                            cx: endpoint.x,
+                            cy: endpoint.y + height / 2,
+                            r: line_width / 2 + PADDING_S,
+                            fill: "white",
+                        }).add_to(bg_mask);
+                    }
+                }
+
+                mask_bg_end(start, true);
+                mask_bg_end(end, false);
 
                 const path = [`M 0 ${height / 2}`];
                 if (body_shape === "none") {

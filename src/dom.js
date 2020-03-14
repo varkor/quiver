@@ -76,6 +76,10 @@ DOM.Element = class {
     query_selector(selector) {
         return this.element.querySelector(selector);
     }
+
+    set_attribute(attribute, value) {
+        this.element.setAttribute(attribute, value);
+    }
 };
 
 /// A class for conveniently dealing with SVGs.
