@@ -183,7 +183,7 @@
                 const SPACING = 4.5;
                 const STROKE_WIDTH = 1.5;
 
-                const body_shape = "none"; // "squiggly", "line", "none", "adjunction"
+                const body_shape = "line"; // "squiggly", "line", "none", "adjunction"
 
                 // The height (in pixels) of each triangle from the edge.
                 const AMPLITUDE = 2;
@@ -363,6 +363,16 @@
                 const start = ir("none", this.source, true);
                 const end = ir("none", this.target, false);
 
+                if (start !== null && end !== null) {
+                    const start_len = bezier.arc_length(start.t) + shorten;
+                    const end_len = bezier.arc_length(end.t) - shorten;
+                    const full_len = bezier.arc_length(1);
+                    line.set_attribute("stroke-dasharray", `0 ${start_len} ${end_len - start_len} ${full_len - end_len}`);
+                    // line.set_attribute("stroke-dashoffset", bezier.arc_length(start.t));
+                }
+
+                const MASK_PADDING = 4;
+
                 const bg_mask = new DOM.SVGElement("mask", {
                     id: "bg-mask",
                     maskUnits: "userSpaceOnUse",
@@ -378,7 +388,6 @@
 
                 const mask_bg_end = (endpoint, start) => {
                     if (endpoint !== null) {
-                        const MASK_PADDING = 4;
                         const [w, h] = [
                             Math.hypot(endpoint.x - (start ? 0 : length), endpoint.y) + MASK_PADDING,
                             line_width + PADDING_S * 2 + MASK_PADDING * 2
@@ -497,7 +506,7 @@
                     y: (height - this.source.height) / 2,
                     fill: "black",
                     transform: `rotate(${-angle * 180 / Math.PI} 0 ${height / 2})`,
-                    rx: 4,
+                    rx: 16,
                 }).add_to(clip);
 
                 // visualise_rounded_rect(this.svg, 0, height / 2, this.source.width, this.source.height, 16);
@@ -509,14 +518,14 @@
                     y: (height - this.target.height) / 2,
                     fill: "black",
                     transform: `rotate(${-angle * 180 / Math.PI} ${length} ${height / 2})`,
-                    rx: 4,
+                    rx: 16,
                 }).add_to(clip);
 
                 line.element.setAttribute("d", path.join("\n"));
 
                 const create_head = (heads, bezier, where, is_start, mask) => {
                     const head = new DOM.SVGElement("path", {
-                        fill: mask ? "black" : "none",
+                        fill: mask ? "red" : "none",
                         stroke: !mask ? "black" : "none",
                         "stroke-width": STROKE_WIDTH,
                     });
@@ -582,6 +591,30 @@
                                         dx * Math.cos(angle) - dy * Math.sin(angle),
                                         dx * Math.sin(angle) + dy * Math.cos(angle),
                                     );
+                                    if (mask && type === "epi") {
+                                        let [mdx, mdy] = [-mul * (HEAD_WIDTH + MASK_PADDING), 0];
+                                        head_path.line_by(
+                                            mdx * Math.cos(angle) - mdy * Math.sin(angle),
+                                            mdx * Math.sin(angle) + mdy * Math.cos(angle),
+                                        );
+                                        [mdx, mdy] = [0, -imul * HEAD_HEIGHT / 2];
+                                        head_path.line_by(
+                                            mdx * Math.cos(angle) - mdy * Math.sin(angle),
+                                            mdx * Math.sin(angle) + mdy * Math.cos(angle),
+                                        );
+                                    }
+                                    if (mask && type === "mono") {
+                                        let [mdx, mdy] = [mul * MASK_PADDING, 0];
+                                        head_path.line_by(
+                                            mdx * Math.cos(angle) - mdy * Math.sin(angle),
+                                            mdx * Math.sin(angle) + mdy * Math.cos(angle),
+                                        );
+                                        [mdx, mdy] = [0, -imul * HEAD_HEIGHT / 2];
+                                        head_path.line_by(
+                                            mdx * Math.cos(angle) - mdy * Math.sin(angle),
+                                            mdx * Math.sin(angle) + mdy * Math.cos(angle),
+                                        );
+                                    }
                                 } else if (type === "corner") {
                                     // we need to adjust the background padding here, depending on the angle
                                     const LENGTH = 12;
@@ -623,6 +656,18 @@
                                         dx * Math.cos(angle) - dy * Math.sin(angle),
                                         dx * Math.sin(angle) + dy * Math.cos(angle),
                                     );
+                                    if (mask) {
+                                        let [mdx, mdy] = [mul * (HEAD_WIDTH + MASK_PADDING), 0];
+                                        head_path.line_by(
+                                            mdx * Math.cos(angle) - mdy * Math.sin(angle),
+                                            mdx * Math.sin(angle) + mdy * Math.cos(angle),
+                                        );
+                                        [mdx, mdy] = [0, imul * HEAD_WIDTH * 2];
+                                        head_path.line_by(
+                                            mdx * Math.cos(angle) - mdy * Math.sin(angle),
+                                            mdx * Math.sin(angle) + mdy * Math.cos(angle),
+                                        );
+                                    }
                                 }
                                 // if (i === heads - 1 && mask) {
                                 //     head_path.line_to(
@@ -686,7 +731,8 @@
                     if (head !== null) {
                         this.svg.add(head);
                     }
-                    // const mask = create_head(types, bezier, where, is_start, true);
+                    const mask = create_head(types, bezier, where, is_start, true);
+                    this.svg.add(mask);
                     // if (mask !== null) {
                     //     clip.add(mask);
                     // }
@@ -699,7 +745,10 @@
                 // const heads = Array(10).fill("maps to");
                 // const heads = Array(10).fill("epi");
                 // const heads = Array(10).fill("mono");
-                const heads = ["corner"];
+
+                // mono, epi, maps to, harpoon, hook, corner
+                const heads = ["epi"];
+
                 // const heads = ["mono", "epi"];
                 // const heads = ["epi", "mono"];
                 // const heads = ["mono", "maps to", "epi", "mono", "maps to", "epi"];
