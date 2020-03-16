@@ -3571,14 +3571,24 @@ class Edge extends Cell {
         };
 
         const padding = Dimensions.diag(CONSTANTS.CONTENT_PADDING * 2);
-        // The content area of a vertex is reserved for vertices: edges will not encroach upon that
-        // space.
-        const min_margin = Dimensions.diag(ui.default_cell_size / 2);
+
+        const min_margin = (cell) => {
+            if (cell.level === 0) {
+                // The content area of a vertex is reserved for vertices: edges will not encroach
+                // upon that space.
+                return Dimensions.diag(ui.default_cell_size / 2);
+            } else {
+                // We don't currently add any margin for edges. This allows us to draw edges between
+                // arrows that are very close to one another.
+                return Dimensions.zero();
+            }
+        };
         const margin = {
             source: source.is_offset ?
-                edge_distance(source.size.add(padding).max(min_margin), direction) : 0,
+                edge_distance(source.size.add(padding).max(min_margin(source)), direction) : 0,
             target: target.is_offset ?
-                edge_distance(target.size.add(padding).max(min_margin), direction + Math.PI) : 0,
+                edge_distance(target.size.add(padding).max(min_margin(target)), direction + Math.PI)
+                : 0,
         };
 
         const length = Math.max(0, Math.hypot(offset_delta.top, offset_delta.left)
