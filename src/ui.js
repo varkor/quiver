@@ -1912,7 +1912,7 @@ class Panel {
             new DOM.Element("label").add("Offset: ").add(
                 new DOM.Element(
                     "input",
-                    { type: "range", min: -3, value: 0, max: 3, step: 1, disabled: true }
+                    { type: "range", min: -5, value: 0, max: 5, step: 1, disabled: true }
                 ).listen("input", (_, slider) => {
                     const value = parseInt(slider.value);
                     const collapse = ["offset", ui.selection];
