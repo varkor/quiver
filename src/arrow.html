@@ -42,6 +42,7 @@
         // TODO: work out how to output tikz-cd code for curved edges.
         // TODO: use the new arrow library for quiver.
         // TODO: refactor.
+        // TODO: make sure shortening works for hooks (i.e. shorten = 0 should still give some spacing).
 
         let drag = null;
         let curve = 0;
@@ -91,8 +92,8 @@
                 const SPACING = 4.5;
                 const STROKE_WIDTH = 1.5;
 
-                const body_shape = "squiggly"; // "squiggly", "line", "none", "adjunction"
-                const body_style = "dotted"; // none, dashed, dotted
+                const body_shape = "line"; // "squiggly", "line", "none", "adjunction"
+                const body_style = "none"; // none, dashed, dotted
 
                 // The height (in pixels) of each triangle from the edge.
                 const AMPLITUDE = 2;
@@ -506,8 +507,9 @@
                     let head_path = new Path();
 
                     const is_harpoon = heads.length === 1 && heads[0].startsWith("harpoon");
+                    const is_hook = heads.length === 1 && heads[0].startsWith("hook");
 
-                    if (!is_harpoon) {
+                    if (!is_harpoon && !is_hook) {
                         const HEAD_SPACING = 2;
                         let arclen = bezier.arc_length(where.t) + shorten * mul;
                         const ts = [];
@@ -521,7 +523,6 @@
                                     [margin_left, margin_right, margin_start]
                                         = [HEAD_WIDTH, 0, 0]; break;
                                 case "mono":
-                                case "hook":
                                     [margin_left, margin_right, margin_start]
                                         = [0, HEAD_WIDTH, HEAD_WIDTH]; break;
                                 case "maps to":
@@ -551,7 +552,7 @@
                                     off.x,
                                     off.y + height / 2,
                                 );
-                                const angle = bezier.tangent(ts[i]) + (type === "mono" || type === "hook" ? Math.PI : 0);
+                                const angle = bezier.tangent(ts[i]) + (type === "mono" ? Math.PI : 0);
                                 if (type === "epi" || type === "mono") {
                                     const [dx, dy] = [mul * HEAD_WIDTH, imul * HEAD_HEIGHT / 2];
                                     head_path.arc_by(
@@ -614,32 +615,6 @@
                                         dx * Math.cos(angle) - dy * Math.sin(angle),
                                         dx * Math.sin(angle) + dy * Math.cos(angle),
                                     );
-                                } else if (type === "hook") {
-                                    const [dx, dy] = [0, -imul * HEAD_WIDTH * 2];
-                                    head_path.arc_by(
-                                        -mul * HEAD_WIDTH,
-                                        HEAD_WIDTH,
-                                        // We're drawing a semicircle,
-                                        // so the angle is actually unimportant.
-                                        angle * 180 / Math.PI,
-                                        // This flag appears to be unimportant here.
-                                        false,
-                                        !iflag,
-                                        dx * Math.cos(angle) - dy * Math.sin(angle),
-                                        dx * Math.sin(angle) + dy * Math.cos(angle),
-                                    );
-                                    if (mask) {
-                                        let [mdx, mdy] = [mul * (HEAD_WIDTH + MASK_PADDING), 0];
-                                        head_path.line_by(
-                                            mdx * Math.cos(angle) - mdy * Math.sin(angle),
-                                            mdx * Math.sin(angle) + mdy * Math.cos(angle),
-                                        );
-                                        [mdx, mdy] = [0, imul * HEAD_WIDTH * 2];
-                                        head_path.line_by(
-                                            mdx * Math.cos(angle) - mdy * Math.sin(angle),
-                                            mdx * Math.sin(angle) + mdy * Math.cos(angle),
-                                        );
-                                    }
                                 }
                                 // only draw mask for final head/tail
                                 // if (i === heads - 1 && mask) {
@@ -699,6 +674,31 @@
                         }
                         head.element.setAttribute("d", head_path.toString());
                         // head.element.setAttribute("transform", `rotate(${where.angle * 180 / Math.PI} ${where.x} ${where.y + height / 2})`);
+                    } else if (is_hook) {
+                        const t = t_after_length(bezier.arc_length(where.t) + shorten * mul);
+                        where = bezier.point(t);
+                        where.angle = bezier.tangent(t);
+                        const angle = where.angle;
+                        const flip = heads[0].endsWith("top") ? -1 : 1;
+                        const [dx, dy] = [0, flip * HEAD_WIDTH * 2];
+                        for (let i = 0; i < level; ++i) {
+                            const p = where.add(new Point(0, height / 2))
+                                .add(new Point(0, flip * line_width / 2 - flip * STROKE_WIDTH / 2 - flip * (SPACING + STROKE_WIDTH) * i).rotate(angle));
+                            head_path.move_to(p.x, p.y);
+                            head_path.arc_by(
+                                mul * HEAD_WIDTH,
+                                HEAD_WIDTH,
+                                // We're drawing a semicircle,
+                                // so the angle is actually unimportant.
+                                angle * 180 / Math.PI,
+                                // This flag appears to be unimportant here.
+                                false,
+                                flip === 1 ? flag : 1 - flag,
+                                dx * Math.cos(angle) - dy * Math.sin(angle),
+                                dx * Math.sin(angle) + dy * Math.cos(angle),
+                            );
+                        }
+                        head.element.setAttribute("d", head_path.toString());
                     }
                     head.element.setAttribute("stroke-linecap", "round");
                     return head;
@@ -725,7 +725,7 @@
                 // const heads = Array(10).fill("mono");
 
                 // epi, mono, maps to, harpoon, hook, corner
-                const heads = ["epi"];
+                const heads = ["hook-top"];
 
                 // const heads = ["mono", "epi"];
                 // const heads = ["epi", "mono"];
