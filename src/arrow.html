@@ -47,7 +47,7 @@
         let curve = 0;
         let level = 1;
         // How much padding (in pixels) to add between the endpoints and the arrowheads/tails.
-        let shorten = 20;
+        let shorten = 60;
 
         class Shape {
             constructor(x, y) {
@@ -91,7 +91,8 @@
                 const SPACING = 4.5;
                 const STROKE_WIDTH = 1.5;
 
-                const body_shape = "line"; // "squiggly", "line", "none", "adjunction"
+                const body_shape = "squiggly"; // "squiggly", "line", "none", "adjunction"
+                const body_style = "dotted"; // none, dashed, dotted
 
                 // The height (in pixels) of each triangle from the edge.
                 const AMPLITUDE = 2;
@@ -117,9 +118,6 @@
 
                 this.svg.element.innerHTML = "";
                 this.svg.element.setAttribute("viewBox", `0 0 ${length} ${height}`);
-
-                // none, dashed, dotted
-                const body_style = "dotted";
 
                 const bg = new DOM.SVGElement("path", {
                     d: `M 0 ${height / 2} q ${length / 2} ${curve} ${length} 0`,
@@ -274,50 +272,6 @@
                 const start = ir("none", this.source, true);
                 const end = ir("none", this.target, false);
 
-                if (start !== null && end !== null) {
-                    const start_len = bezier.arc_length(start.t) + shorten;
-                    const end_len = bezier.arc_length(end.t) - shorten;
-                    const full_len = bezier.arc_length(1);
-                    let actual_line_array = [end_len - start_len];
-                    if (body_style === "dashed") {
-                        // 6
-                        const sum = 6;
-                        let dashes_and_gaps = (end_len - start_len) / sum;
-                        actual_line_array = Array(Math.floor(dashes_and_gaps)).fill(sum);
-                        if (dashes_and_gaps % 1 !== 0) {
-                            actual_line_array.push(sum * (dashes_and_gaps % 1));
-                        }
-                        if (actual_line_array.length % 2 !== 1) {
-                            // length of `actual_line_array` should be odd
-                            actual_line_array.push(0);
-                        }
-                    } else if (body_style === "dotted") {
-                        const arr = [2, 4];
-                        const sum = arr.reduce((a, b) => a + b, 0);
-                        // 2 4
-                        let dashes_and_gaps = (end_len - start_len) / sum;
-                        actual_line_array = Array(Math.floor(dashes_and_gaps)).fill(arr).flat();
-                        if (dashes_and_gaps % 1 !== 0) {
-                            let deficit = (end_len - start_len) - Math.floor(dashes_and_gaps) * sum;
-                            for (const l of arr) {
-                                if (l <= deficit) {
-                                    actual_line_array.push(l);
-                                    deficit -= l;
-                                } else {
-                                    break;
-                                }
-                            }
-                            actual_line_array.push(deficit);
-                            if (actual_line_array.length % 2 !== 1) {
-                                // length of `actual_line_array` should be odd
-                                actual_line_array.push(0);
-                            }
-                        }
-                    }
-                    line.set_attribute("stroke-dasharray", `0 ${start_len} ${actual_line_array.join(" ")} ${full_len - end_len}`);
-                    // line.set_attribute("stroke-dashoffset", bezier.arc_length(start.t));
-                }
-
                 const MASK_PADDING = 4;
 
                 const bg_mask = new DOM.SVGElement("mask", {
@@ -360,6 +314,22 @@
                 mask_bg_end(start, true);
                 mask_bg_end(end, false);
 
+                let start_len = bezier.arc_length(start.t) + shorten;
+                let end_len = bezier.arc_length(end.t) - shorten;
+                let full_len = bezier.arc_length(1);
+
+                // Each triangle has a width equal to twice its height.
+                const HALF_WAVELENGTH = AMPLITUDE * 2;
+
+                // Padding at the start of the edge (measured in triangles), where the curve
+                // will be flat (though possibly curved).
+                const PADDING = 1;
+
+                // These constants are for squiggly lines, but we use them elsewhere too.
+                // We provide twice as much padding for the head as for the tail.
+                const num_heads = 1;
+                const head_padding = PADDING * (1 + num_heads);
+
                 // this should be a Path
                 let path = [`M 0 ${height / 2}`];
                 if (body_shape === "line") {
@@ -380,30 +350,25 @@
                         console.error("no start/end");
                     }
 
-                    // Each triangle has a width equal to twice its height.
-                    const HALF_WAVELENGTH = AMPLITUDE * 2;
-
-                    // Padding at the start of the edge (measured in triangles), where the curve
-                    // will be flat (though possibly curved).
-                    const PADDING = 1;
-
-                    // We provide twice as much padding for the head as for the tail.
-                    const heads = 1;
-                    const head_padding = PADDING * (1 + heads);
-
                     // Draw the padding at the tail of the arrow.
                     const SVG_PADDING = 0;
                     const line_length = length;
                     const angle = bezier.tangent(0);
 
-                    const arc_length = bezier.arc_length(end.t) - bezier.arc_length(start.t);
-                    const squiggle_length = bezier.arc_length(end.t) - (HEAD_WIDTH + HALF_WAVELENGTH * head_padding);
+                    const arc_length = bezier.arc_length(end.t) - bezier.arc_length(start.t) - shorten * 2;
+                    const squiggle_end = bezier.arc_length(end.t) - (HEAD_WIDTH + HALF_WAVELENGTH * head_padding + shorten);
 
                     // should really be tail width
-                    const st = bezier.arc_length(start.t) + HEAD_WIDTH + HALF_WAVELENGTH * head_padding;
-                    let ll = t_after_length(st);
-                    let lp = bezier.point(ll);
-                    path.push(`l ${lp.x} ${lp.y}`);
+                    const st0p = bezier.point(t_after_length(bezier.arc_length(start.t) + shorten));
+                    const st = bezier.arc_length(start.t) + shorten + HEAD_WIDTH + HALF_WAVELENGTH * head_padding;
+                    const lp = bezier.point(t_after_length(st));
+                    const ep = bezier.point(t_after_length(bezier.arc_length(end.t) - shorten));
+
+                    path.push(`m ${st0p.x} ${st0p.y}`);
+                    path.push(`L ${lp.x} ${height / 2 + lp.y}`);
+
+                    let prev_point = [lp.x, lp.y];
+                    let al = Math.hypot(lp.x - st0p.x, lp.y - st0p.y);
 
                     for (
                         // The current (arc) length along the curve.
@@ -412,7 +377,7 @@
                         sign = -1,
                         // Whether to draw offset by `AMPLITUDE` (`1`) or not (`0`).
                         m = 1;
-                        l + m * HALF_WAVELENGTH / 2 < squiggle_length;
+                        l + m * HALF_WAVELENGTH / 2 < squiggle_end;
                         // Flip the direction of the triangle each time a triangle
                         // is drawn. We alternate between drawing tips and bases of
                         // the triangles.
@@ -422,6 +387,11 @@
                         const t = t_after_length(l);
                         const point = bezier.point(t);
                         const angle = bezier.tangent(t) + Math.PI / 2 * sign;
+                        al += Math.hypot(
+                            (point.x + Math.cos(angle) * AMPLITUDE * m) - prev_point[0],
+                            (point.y + Math.sin(angle) * AMPLITUDE * m) - prev_point[1],
+                        );
+                        prev_point = [point.x + Math.cos(angle) * AMPLITUDE * m, point.y + Math.sin(angle) * AMPLITUDE * m];
                         path.push(`L ${
                             point.x + Math.cos(angle) * AMPLITUDE * m
                         } ${
@@ -430,9 +400,64 @@
                     }
 
                     // Draw the padding at the head of the arrow.
-                    path.push(`L ${SVG_PADDING + line_length} ${
-                        SVG_PADDING + height / 2
-                    }`);
+                    path.push(`L ${ep.x} ${height / 2 + ep.y}`);
+
+                    al += Math.hypot(
+                        ep.x - prev_point[0],
+                        ep.y - prev_point[1],
+                    );
+
+                    start_len = 0;
+                    end_len = al;
+                    full_len = al;
+                }
+
+                if (start !== null && end !== null) {
+                    let full_length = end_len - start_len;
+                    let actual_line_array = [full_length];
+                    if (body_style !== "none") {
+                        actual_line_array = [];
+                        if (body_shape === "squiggly") {
+                            actual_line_array.push(HEAD_WIDTH + HALF_WAVELENGTH * head_padding);
+                            actual_line_array.push(0);
+                            full_length -= 2 * (HEAD_WIDTH + HALF_WAVELENGTH * head_padding);
+                        }
+                        if (full_length > 0) {
+                            let arr;
+                            if (body_style === "dashed") {
+                                arr = body_shape !== "squiggly" ? [6, 6] : [2 * HALF_WAVELENGTH * Math.sqrt(2), 1 * HALF_WAVELENGTH * Math.sqrt(2)];
+                            }
+                            if (body_style === "dotted") {
+                                arr = body_shape !== "squiggly" ? [2, 4] : [0.5 * HALF_WAVELENGTH * Math.sqrt(2), 0.25 * HALF_WAVELENGTH * Math.sqrt(2)];
+                            }
+                            const sum = arr.reduce((a, b) => a + b, 0);
+                            let dashes_and_gaps = full_length / sum;
+                            actual_line_array = actual_line_array.concat(Array(Math.floor(dashes_and_gaps)).fill(arr).flat());
+                            if (dashes_and_gaps % 1 !== 0) {
+                                let deficit = full_length - Math.floor(dashes_and_gaps) * sum;
+                                for (const l of arr) {
+                                    if (l <= deficit) {
+                                        actual_line_array.push(l);
+                                        deficit -= l;
+                                    } else {
+                                        break;
+                                    }
+                                }
+                                actual_line_array.push(deficit);
+                                if (actual_line_array.length % 2 !== 1) {
+                                    // length of `actual_line_array` should be odd
+                                    actual_line_array.push(0);
+                                }
+                            }
+                        } else {
+                            actual_line_array = [full_length];
+                        }
+                    }
+                    if (body_shape === "squiggly") {
+                        actual_line_array.push(0);
+                        actual_line_array.push(HEAD_WIDTH + HALF_WAVELENGTH * head_padding);
+                    }
+                    line.set_attribute("stroke-dasharray", `0 ${start_len} ${actual_line_array.join(" ")} ${full_len - end_len}`);
                 }
 
                 let cut = true;
@@ -635,6 +660,8 @@
                         }
                         head.element.setAttribute("d", head_path.toString());
                     } else if (is_harpoon) {
+                        // we don't centre harpoons on their points, because it would lead to odd
+                        // results with other tails
                         const h = line_width + SPACING;
                         const flip = heads[0].endsWith("top") ? 1 : -1;
                         // Overwrite `where` to taken `shorten` into account.
@@ -683,7 +710,7 @@
                         this.svg.add(head);
                     }
                     const mask = create_head(types, bezier, where, is_start, true);
-                    this.svg.add(mask);
+                    // this.svg.add(mask);
                     // if (mask !== null) {
                     //     clip.add(mask);
                     // }
