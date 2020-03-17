@@ -126,6 +126,14 @@ class Offset extends Point {
         return this.y;
     }
 
+    set left(left) {
+        this.x = left;
+    }
+
+    set top(top) {
+        this.y = top;
+    }
+
     /// Return a [left, top] arrow of CSS length values.
     to_CSS() {
         return [`${this.left}px`, `${this.top}px`];

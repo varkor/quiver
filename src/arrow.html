@@ -100,8 +100,8 @@
 
                 const line_width = level * STROKE_WIDTH + (level - 1) * SPACING;
 
-                const HEAD_WIDTH = SPACING + (level - 1) * 2;
-                const HEAD_HEIGHT = line_width + SPACING * 2;
+                const HEAD_WIDTH = (SPACING + STROKE_WIDTH) + (level - 1) * 2;
+                const HEAD_HEIGHT = line_width + (SPACING + STROKE_WIDTH) * 2;
 
                 const PADDING_S = 15;
                 const PADDING_X = HEAD_HEIGHT / 2 + PADDING_S;
@@ -637,6 +637,7 @@
                         head.element.setAttribute("d", head_path.toString());
                         head.element.setAttribute("transform", `rotate(${where.angle * 180 / Math.PI} ${where.x} ${where.y + height / 2})`);
                     }
+                    head.element.setAttribute("stroke-linecap", "round");
                     return head;
                 }
 
@@ -646,7 +647,7 @@
                         this.svg.add(head);
                     }
                     const mask = create_head(types, bezier, where, is_start, true);
-                    this.svg.add(mask);
+                    // this.svg.add(mask);
                     // if (mask !== null) {
                     //     clip.add(mask);
                     // }
