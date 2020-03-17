@@ -3646,8 +3646,8 @@ class Edge extends Cell {
         `;
 
         return [new Offset(
-            source.offset.left + Math.cos(direction) * margin_offset,
-            source.offset.top + Math.sin(direction) * margin_offset,
+            source.offset.left + Math.cos(direction) * margin.source,
+            source.offset.top + Math.sin(direction) * margin.source,
         ), clamped_width, direction];
     }
 
