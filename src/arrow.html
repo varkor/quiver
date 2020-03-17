@@ -33,7 +33,7 @@
         // TODO: make sure we can draw arrows between arrows and that they get cropped properly.
         // TODO: make the transition from short arrows to long arrows smooth (e.g. scaling heads, etc.)
         // TODO: add cropping of other arrows (e.g. depth/crossing-over), as well as the label box.
-        // TODO: make sure everything looks pixel-perfect.
+        // TODO: make sure everything looks pixel-perfect (e.g. nothing gets badly cropped).
         // TODO: reinstate the masks for heads and tails.
         // TODO: fix handling when edge is very small (e.g. when the label contains the entire edge).
         // TODO: fix handling for n-cells for high n.
@@ -583,6 +583,7 @@
                                         );
                                     }
                                 }
+                                // only draw mask for final head/tail
                                 // if (i === heads - 1 && mask) {
                                 //     head_path.line_to(
                                 //         off.x + mul * (HEAD_WIDTH + HEAD_SPACING) * i,
@@ -607,35 +608,37 @@
                         const t = t_after_length(bezier.arc_length(where.t) + shorten * mul);
                         where = bezier.point(t);
                         where.angle = bezier.tangent(t);
+                        const angle = where.angle;
+                        const rotwhere = where.add(new Point(0, height / 2)).add(new Point(0, flip * line_width / 2 - flip * STROKE_WIDTH / 2).rotate(angle));
                         head_path.move_to(
-                            where.x,
-                            where.y + height / 2 + flip * line_width / 2,
+                            rotwhere.x, rotwhere.y,
                         );
+                        // FIXME: refactor out these `dx/dy` parts.
+                        const [dx, dy] = [mul * HEAD_WIDTH, -h * flip];
                         head_path.arc_by(
                             mul * HEAD_WIDTH,
                             h,
-                            0,
+                            angle * 180 / Math.PI,
                             false,
                             flip === 1 ? flag : 1 - flag,
-                            mul * HEAD_WIDTH,
-                            -h * flip,
+                            dx * Math.cos(angle) - dy * Math.sin(angle),
+                            dx * Math.sin(angle) + dy * Math.cos(angle),
                         );
+
                         if (mask) {
-                            head_path.line_to(
-                                where.x + mul * HEAD_WIDTH,
-                                height / 2 - (line_width / 2 + SPACING) * flip + where.y,
+                            let [mdx, mdy] = [-mul * (HEAD_WIDTH + MASK_PADDING), 0];
+                            head_path.line_by(
+                                mdx * Math.cos(angle) - mdy * Math.sin(angle),
+                                mdx * Math.sin(angle) + mdy * Math.cos(angle),
                             );
-                            head_path.line_to(
-                                where.x - mul * Math.hypot(this.source.width, this.source.height) / 2,
-                                height / 2 - (line_width / 2 + SPACING) * flip + where.y + flip * STROKE_WIDTH * 2,
-                            );
-                            head_path.line_to(
-                                where.x - mul * Math.hypot(this.source.width, this.source.height) / 2,
-                                height / 2 + flip * line_width / 2 + where.y + flip * STROKE_WIDTH * 2,
+                            [mdx, mdy] = [0, h * flip];
+                            head_path.line_by(
+                                mdx * Math.cos(angle) - mdy * Math.sin(angle),
+                                mdx * Math.sin(angle) + mdy * Math.cos(angle),
                             );
                         }
                         head.element.setAttribute("d", head_path.toString());
-                        head.element.setAttribute("transform", `rotate(${where.angle * 180 / Math.PI} ${where.x} ${where.y + height / 2})`);
+                        // head.element.setAttribute("transform", `rotate(${where.angle * 180 / Math.PI} ${where.x} ${where.y + height / 2})`);
                     }
                     head.element.setAttribute("stroke-linecap", "round");
                     return head;
@@ -647,7 +650,7 @@
                         this.svg.add(head);
                     }
                     const mask = create_head(types, bezier, where, is_start, true);
-                    // this.svg.add(mask);
+                    this.svg.add(mask);
                     // if (mask !== null) {
                     //     clip.add(mask);
                     // }
@@ -661,8 +664,8 @@
                 // const heads = Array(10).fill("epi");
                 // const heads = Array(10).fill("mono");
 
-                // mono, epi, maps to, harpoon, hook, corner
-                const heads = ["epi"];
+                // epi, mono, maps to, harpoon, hook, corner
+                const heads = ["harpoon-top"];
 
                 // const heads = ["mono", "epi"];
                 // const heads = ["epi", "mono"];
