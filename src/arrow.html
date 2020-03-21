@@ -28,19 +28,25 @@
     <script type="text/javascript" src="bezier.js"></script>
     <script type="text/javascript" src="arrow.js"></script>
     <script>
-
-        // TODO: make sure we can draw arrows between arrows and that they get cropped properly.
-        // TODO: make the transition from short arrows to long arrows smooth (e.g. scaling heads, etc.)
-        // TODO: add cropping of other arrows (e.g. depth/crossing-over), as well as the label box.
-        // TODO: make sure everything looks pixel-perfect (e.g. nothing gets badly cropped).
-        // TODO: reinstate the masks for heads and tails.
-        // TODO: fix handling when edge is very small (e.g. when the label contains the entire edge).
-        // TODO: fix handling for n-cells for high n.
-        // TODO: investigate saving as SVG.
-        // TODO: investigate loops.
-        // TODO: work out how to output tikz-cd code for curved edges.
-        // TODO: use the new arrow library for quiver.
-        // TODO: refactor.
+        // *** WORK TILL COMPLETION ***
+        //
+        // ** Critical features & Bugs **
+        // - Make sure we can draw pretty arrows between arrows.
+        // - Make smooth transitions from small edges to long edges (scaling heads, etc.).
+        // - Crop space for the label.
+        // - Reinstate masks for heads.
+        // - Make label handling work well when edge is very small (and when the label contains the edge).
+        // - Make n-cells draw well even for high n.
+        // - Test and make sure everything looks pixel perfect. Set up a test rig.
+        //
+        // ** quiver integration **
+        // - Refactor the arrow code and provide a clean API.
+        // - Use the new arrow library for quiver.
+        // - Figure out how to export appropriate tikz-cd code for curved edges.
+        //
+        // ** Extra features **
+        // - Loops.
+        // - Saving as SVG.
 
         let drag = null;
         let curve = 0;
