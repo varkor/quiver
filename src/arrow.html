@@ -123,7 +123,7 @@
                 // const heads = Array(10).fill("mono");
 
                 // epi, mono, maps to, harpoon, hook, corner
-                const heads = ["hook"];
+                const heads = ["mono"];
 
                 // const heads = ["mono", "epi"];
                 // const heads = ["epi", "mono"];
@@ -425,6 +425,25 @@
                 }
 
                 if (start !== null && end !== null) {
+
+                    let extra_line_start = 0;
+                    let extra_line_end = 0;
+
+                    // should be tails
+                    if (heads.length === 1 && heads[0] === "mono") {
+                        const tail_angle = bezier.tangent(t_after_length(bezier.arc_length(start.t) + HEAD_WIDTH));
+                        const start_angle = bezier.tangent(start.t);
+                        const diff_angle = start_angle - tail_angle;
+                        extra_line_start = Math.abs(line_width * Math.sin(diff_angle) / 2);
+                    }
+                    // should be, and is, heads
+                    if (heads.length === 1 && heads[0] === "mono") {
+                        const head_angle = bezier.tangent(t_after_length(bezier.arc_length(end.t) - HEAD_WIDTH));
+                        const end_angle = bezier.tangent(end.t);
+                        const diff_angle = end_angle - head_angle;
+                        extra_line_end = Math.abs(line_width * Math.sin(diff_angle) / 2);
+                    }
+
                     let full_length = end_len - start_len;
                     let actual_line_array = [full_length];
                     if (body_style !== "none") {
@@ -469,7 +488,9 @@
                         actual_line_array.push(0);
                         actual_line_array.push(HEAD_WIDTH + HALF_WAVELENGTH * head_padding);
                     }
-                    line.set_attribute("stroke-dasharray", `0 ${start_len} ${actual_line_array.join(" ")} ${full_len - end_len}`);
+                    actual_line_array[0] += extra_line_start;
+                    actual_line_array[actual_line_array.length - 1] += extra_line_end;
+                    line.set_attribute("stroke-dasharray", `0 ${start_len - extra_line_start} ${actual_line_array.join(" ")} ${full_len - end_len + extra_line_end}`);
                 }
 
                 let cut = true;
