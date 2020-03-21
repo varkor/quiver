@@ -34,7 +34,6 @@
         // - Make sure we can draw pretty arrows between arrows.
         // - Make smooth transitions from small edges to long edges (scaling heads, etc.).
         // - Crop space for the label.
-        // - Reinstate masks for heads.
         // - Make label handling work well when edge is very small (and when the label contains the edge).
         // - Make n-cells draw well even for high n.
         // - Test and make sure everything looks pixel perfect. Set up a test rig.
@@ -129,12 +128,12 @@
                 // const heads = Array(10).fill("mono");
 
                 // epi, mono, maps to, harpoon, hook, corner
-                const heads = ["mono"];
-                const tails = ["hook"];
+                // const heads = ["epi"];
+                const tails = ["harpoon"];
 
                 // const heads = ["mono", "epi"];
                 // const heads = ["epi", "mono"];
-                // const heads = ["mono", "maps to", "epi", "mono", "maps to", "epi"];
+                const heads = ["mono", "maps to", "epi", "mono", "maps to", "epi"];
 
                 const shorten_start = (tails.length === 1 && tails[0].startsWith("hook") ? HEAD_WIDTH : 0);
                 const shorten_end = (heads.length === 1 && heads[0].startsWith("hook") ? HEAD_WIDTH : 0);
@@ -432,18 +431,18 @@
                     full_len = al;
                 }
 
+                let extra_line_start = 0;
+                let extra_line_end = 0;
+
                 if (start !== null && end !== null) {
 
-                    let extra_line_start = 0;
-                    let extra_line_end = 0;
-
-                    if (tails.length === 1 && tails[0] === "mono") {
+                    if (tails.length > 0 && tails[0] === "mono") {
                         const tail_angle = bezier.tangent(t_after_length(bezier.arc_length(start.t) + HEAD_WIDTH));
                         const start_angle = bezier.tangent(start.t);
                         const diff_angle = start_angle - tail_angle;
                         extra_line_start = Math.abs(line_width * Math.sin(diff_angle) / 2);
                     }
-                    if (heads.length === 1 && heads[0] === "mono") {
+                    if (heads.length > 0 && heads[0] === "mono") {
                         const head_angle = bezier.tangent(t_after_length(bezier.arc_length(end.t) - HEAD_WIDTH));
                         const end_angle = bezier.tangent(end.t);
                         const diff_angle = end_angle - head_angle;
@@ -583,6 +582,7 @@
                             ts.push(t_after_length(arclen));
                         }
                         for (let i = heads.length - 1; i >= 0; --i) {
+                            if (mask && i !== 0) { continue; }
                             const type = heads[i];
                             for (const [iflag, imul] of [[flag, -1], [1 - flag, 1]]) {
                                 const off = bezier.point(ts[i]);
@@ -615,7 +615,10 @@
                                         );
                                     }
                                     if (mask && type === "mono") {
-                                        let [mdx, mdy] = [mul * MASK_PADDING, 0];
+                                        // we multiply by 2 because we already had part of the line overflowing,
+                                        // and then we added `extra_line_*` everywhere to fix the underflowing part
+                                        const extra_padding = (is_start ? extra_line_start : extra_line_end) * 2;
+                                        let [mdx, mdy] = [mul * (MASK_PADDING + extra_padding), 0];
                                         head_path.line_by(
                                             mdx * Math.cos(angle) - mdy * Math.sin(angle),
                                             mdx * Math.sin(angle) + mdy * Math.cos(angle),
@@ -712,7 +715,7 @@
                         }
                         head.element.setAttribute("d", head_path.toString());
                         // head.element.setAttribute("transform", `rotate(${where.angle * 180 / Math.PI} ${where.x} ${where.y + height / 2})`);
-                    } else if (is_hook) {
+                    } else if (is_hook && !mask) {
                         const t = t_after_length(bezier.arc_length(where.t) + (shorten + is_start ? shorten_start : shorten_end) * mul);
                         where = bezier.point(t);
                         where.angle = bezier.tangent(t);
@@ -749,9 +752,10 @@
                     }
                     const mask = create_head(types, bezier, where, is_start, true);
                     // this.svg.add(mask);
-                    // if (mask !== null) {
-                    //     clip.add(mask);
-                    // }
+                    if (mask !== null) {
+                        mask.element.setAttribute("fill", "black");
+                        clip.add(mask);
+                    }
                     // const head2 = create_head(types, bezier, where, is_start, false);
                     // if (head2 !== null) {
                     //     head2.style.stroke = "white";
