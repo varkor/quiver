@@ -46,7 +46,7 @@
         let curve = 0;
         let level = 1;
         // How much padding (in pixels) to add between the endpoints and the arrowheads/tails.
-        let global_shorten = 20;
+        let shorten = 0;
 
         class Shape {
             constructor(x, y) {
@@ -124,12 +124,14 @@
 
                 // epi, mono, maps to, harpoon, hook, corner
                 const heads = ["mono"];
+                const tails = ["hook"];
 
                 // const heads = ["mono", "epi"];
                 // const heads = ["epi", "mono"];
                 // const heads = ["mono", "maps to", "epi", "mono", "maps to", "epi"];
 
-                const shorten = global_shorten + (heads.length === 1 && heads[0].startsWith("hook") ? HEAD_WIDTH : 0);
+                const shorten_start = (tails.length === 1 && tails[0].startsWith("hook") ? HEAD_WIDTH : 0);
+                const shorten_end = (heads.length === 1 && heads[0].startsWith("hook") ? HEAD_WIDTH : 0);
 
                 const bg = new DOM.SVGElement("path", {
                     d: `M 0 ${height / 2} q ${length / 2} ${curve} ${length} 0`,
@@ -326,8 +328,8 @@
                 mask_bg_end(start, true);
                 mask_bg_end(end, false);
 
-                let start_len = bezier.arc_length(start.t) + shorten;
-                let end_len = bezier.arc_length(end.t) - shorten;
+                let start_len = bezier.arc_length(start.t) + (shorten + shorten_start);
+                let end_len = bezier.arc_length(end.t) - (shorten + shorten_end);
                 let full_len = bezier.arc_length(1);
 
                 // Each triangle has a width equal to twice its height.
@@ -367,14 +369,14 @@
                     const line_length = length;
                     const angle = bezier.tangent(0);
 
-                    const arc_length = bezier.arc_length(end.t) - bezier.arc_length(start.t) - shorten * 2;
-                    const squiggle_end = bezier.arc_length(end.t) - (HEAD_WIDTH + HALF_WAVELENGTH * head_padding + shorten);
+                    const arc_length = bezier.arc_length(end.t) - bezier.arc_length(start.t) - shorten * 2 - shorten_start - shorten_end;
+                    const squiggle_end = bezier.arc_length(end.t) - (HEAD_WIDTH + HALF_WAVELENGTH * head_padding + shorten + shorten_end);
 
                     // should really be tail width
-                    const st0p = bezier.point(t_after_length(bezier.arc_length(start.t) + shorten));
-                    const st = bezier.arc_length(start.t) + shorten + HEAD_WIDTH + HALF_WAVELENGTH * head_padding;
+                    const st0p = bezier.point(t_after_length(bezier.arc_length(start.t) + shorten + shorten_start));
+                    const st = bezier.arc_length(start.t) + shorten + shorten_start + HEAD_WIDTH + HALF_WAVELENGTH * head_padding;
                     const lp = bezier.point(t_after_length(st));
-                    const ep = bezier.point(t_after_length(bezier.arc_length(end.t) - shorten));
+                    const ep = bezier.point(t_after_length(bezier.arc_length(end.t) - shorten - shorten_end));
 
                     path.push(`m ${st0p.x} ${st0p.y}`);
                     path.push(`L ${lp.x} ${height / 2 + lp.y}`);
@@ -429,14 +431,12 @@
                     let extra_line_start = 0;
                     let extra_line_end = 0;
 
-                    // should be tails
-                    if (heads.length === 1 && heads[0] === "mono") {
+                    if (tails.length === 1 && tails[0] === "mono") {
                         const tail_angle = bezier.tangent(t_after_length(bezier.arc_length(start.t) + HEAD_WIDTH));
                         const start_angle = bezier.tangent(start.t);
                         const diff_angle = start_angle - tail_angle;
                         extra_line_start = Math.abs(line_width * Math.sin(diff_angle) / 2);
                     }
-                    // should be, and is, heads
                     if (heads.length === 1 && heads[0] === "mono") {
                         const head_angle = bezier.tangent(t_after_length(bezier.arc_length(end.t) - HEAD_WIDTH));
                         const end_angle = bezier.tangent(end.t);
@@ -543,7 +543,7 @@
 
                     if (!is_harpoon && !is_hook) {
                         const HEAD_SPACING = 2;
-                        let arclen = bezier.arc_length(where.t) + shorten * mul;
+                        let arclen = bezier.arc_length(where.t) + (shorten + is_start ? shorten_start : shorten_end) * mul;
                         const ts = [];
                         let prev_margin = 0;
                         for (let i = 0; i < heads.length; ++i) {
@@ -672,7 +672,7 @@
                         const h = line_width + SPACING;
                         const flip = heads[0].endsWith("top") ? 1 : -1;
                         // Overwrite `where` to taken `shorten` into account.
-                        const t = t_after_length(bezier.arc_length(where.t) + shorten * mul);
+                        const t = t_after_length(bezier.arc_length(where.t) + (shorten + is_start ? shorten_start : shorten_end) * mul);
                         where = bezier.point(t);
                         where.angle = bezier.tangent(t);
                         const angle = where.angle;
@@ -707,7 +707,7 @@
                         head.element.setAttribute("d", head_path.toString());
                         // head.element.setAttribute("transform", `rotate(${where.angle * 180 / Math.PI} ${where.x} ${where.y + height / 2})`);
                     } else if (is_hook) {
-                        const t = t_after_length(bezier.arc_length(where.t) + shorten * mul);
+                        const t = t_after_length(bezier.arc_length(where.t) + (shorten + is_start ? shorten_start : shorten_end) * mul);
                         where = bezier.point(t);
                         where.angle = bezier.tangent(t);
                         const angle = where.angle;
@@ -755,7 +755,7 @@
 
                 if (body_shape !== "adjunction") {
                     if (start !== null)
-                        draw_head(heads, bezier, start, true);
+                        draw_head(tails, bezier, start, true);
                     if (end !== null)
                         draw_head(heads, bezier, end, false);
                 }
