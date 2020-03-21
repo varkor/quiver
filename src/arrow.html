@@ -29,7 +29,6 @@
     <script type="text/javascript" src="arrow.js"></script>
     <script>
 
-        // TODO: add the remaining arrow types: fix the harpoon style.
         // TODO: make sure we can draw arrows between arrows and that they get cropped properly.
         // TODO: make the transition from short arrows to long arrows smooth (e.g. scaling heads, etc.)
         // TODO: add cropping of other arrows (e.g. depth/crossing-over), as well as the label box.
@@ -42,13 +41,12 @@
         // TODO: work out how to output tikz-cd code for curved edges.
         // TODO: use the new arrow library for quiver.
         // TODO: refactor.
-        // TODO: make sure shortening works for hooks (i.e. shorten = 0 should still give some spacing).
 
         let drag = null;
         let curve = 0;
         let level = 1;
         // How much padding (in pixels) to add between the endpoints and the arrowheads/tails.
-        let shorten = 60;
+        let global_shorten = 20;
 
         class Shape {
             constructor(x, y) {
@@ -119,6 +117,19 @@
 
                 this.svg.element.innerHTML = "";
                 this.svg.element.setAttribute("viewBox", `0 0 ${length} ${height}`);
+
+                // const heads = Array(10).fill("maps to");
+                // const heads = Array(10).fill("epi");
+                // const heads = Array(10).fill("mono");
+
+                // epi, mono, maps to, harpoon, hook, corner
+                const heads = ["hook"];
+
+                // const heads = ["mono", "epi"];
+                // const heads = ["epi", "mono"];
+                // const heads = ["mono", "maps to", "epi", "mono", "maps to", "epi"];
+
+                const shorten = global_shorten + (heads.length === 1 && heads[0].startsWith("hook") ? HEAD_WIDTH : 0);
 
                 const bg = new DOM.SVGElement("path", {
                     d: `M 0 ${height / 2} q ${length / 2} ${curve} ${length} 0`,
@@ -720,16 +731,6 @@
                     //     clip.appendChild(head2);
                     // }
                 };
-                // const heads = Array(10).fill("maps to");
-                // const heads = Array(10).fill("epi");
-                // const heads = Array(10).fill("mono");
-
-                // epi, mono, maps to, harpoon, hook, corner
-                const heads = ["hook-top"];
-
-                // const heads = ["mono", "epi"];
-                // const heads = ["epi", "mono"];
-                // const heads = ["mono", "maps to", "epi", "mono", "maps to", "epi"];
 
                 if (body_shape !== "adjunction") {
                     if (start !== null)
