@@ -19,7 +19,7 @@ class Point {
         return new this(0, 0);
     }
 
-    static from_length_and_direction(length, direction) {
+    static lendir(length, direction) {
         return new this(Math.cos(direction) * length, Math.sin(direction) * length);
     }
 
@@ -149,6 +149,11 @@ class Offset extends Point {
     }
 }
 
+/// Convert radians to degrees.
+function rad_to_deg(rad) {
+    return rad * 180 / Math.PI;
+}
+
 /// A class for conveniently generating and manipulating SVG paths.
 class Path {
     constructor() {
@@ -159,21 +164,32 @@ class Path {
         return this.commands.join("\n");
     }
 
-    move_to(x, y) {
-        this.commands.push(`M ${x} ${y}`);
+    move_to(p) {
+        this.commands.push(`M ${p.x} ${p.y}`);
+        return this;
     }
 
-    line_to(x, y) {
-        this.commands.push(`L ${x} ${y}`);
+    line_to(p) {
+        this.commands.push(`L ${p.x} ${p.y}`);
+        return this;
     }
 
-    line_by(x, y) {
-        this.commands.push(`l ${x} ${y}`);
+    line_by(p) {
+        this.commands.push(`l ${p.x} ${p.y}`);
+        return this;
     }
 
-    arc_by(rx, ry, angle, large_arc, clockwise, next_x, next_y) {
+    curve_by(c, d) {
+        this.commands.push(`q ${c.x} ${c.y} ${d.x} ${d.y}`);
+        return this;
+    }
+
+    arc_by(r, angle, large_arc, clockwise, next) {
         this.commands.push(
-            `a ${rx} ${ry} ${angle} ${large_arc ? 1 : 0} ${clockwise ? 1 : 0} ${next_x} ${next_y}`
+            `a ${r.x} ${r.y}
+            ${rad_to_deg(angle)} ${large_arc ? 1 : 0} ${clockwise ? 1 : 0}
+            ${next.x} ${next.y}`
         );
+        return this;
     }
 }

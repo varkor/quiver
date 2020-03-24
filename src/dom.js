@@ -16,10 +16,8 @@ DOM.Element = class {
         } else {
             this.element = document.createElement(from);
         }
-        for (const [attribute, value] of Object.entries(attributes)) {
-            this.element.setAttribute(attribute, value);
-        }
-        Object.assign(this.element.style, style);
+        this.set_attributes(attributes);
+        this.set_style(style);
     }
 
     get id() {
@@ -77,8 +75,15 @@ DOM.Element = class {
         return this.element.querySelector(selector);
     }
 
-    set_attribute(attribute, value) {
-        this.element.setAttribute(attribute, value);
+    set_attributes(attributes = {}) {
+        for (const [attribute, value] of Object.entries(attributes)) {
+            this.element.setAttribute(attribute, value);
+        }
+        return this;
+    }
+
+    set_style(style = {}) {
+        Object.assign(this.element.style, style);
     }
 };
 

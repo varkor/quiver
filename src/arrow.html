@@ -26,7 +26,7 @@
     <script type="text/javascript" src="ds.js"></script>
     <script type="text/javascript" src="dom.js"></script>
     <script type="text/javascript" src="bezier.js"></script>
-    <script type="text/javascript" src="arrow.js"></script>
+    <!-- <script type="text/javascript" src="arrow.js"></script> -->
     <script>
         // *** WORK TILL COMPLETION ***
         //
@@ -46,6 +46,10 @@
         // ** Extra features **
         // - Loops.
         // - Saving as SVG.
+        //
+        // ** Refactoring **
+        // - `new Point(0, height / 2)`
+        // - `rad_to_deg`
 
         let drag = null;
         let curve = 0;
@@ -129,11 +133,12 @@
 
                 // epi, mono, maps to, harpoon, hook, corner
                 // const heads = ["epi"];
-                const tails = ["harpoon"];
+                const tails = ["mono", "mono"];
 
                 // const heads = ["mono", "epi"];
                 // const heads = ["epi", "mono"];
-                const heads = ["mono", "maps to", "epi", "mono", "maps to", "epi"];
+                // const heads = ["mono", "maps to", "epi", "mono", "maps to", "epi"];
+                const heads = ["epi", "epi"];
 
                 const shorten_start = (tails.length === 1 && tails[0].startsWith("hook") ? HEAD_WIDTH : 0);
                 const shorten_end = (heads.length === 1 && heads[0].startsWith("hook") ? HEAD_WIDTH : 0);
@@ -143,7 +148,6 @@
                     fill: "none",
                     stroke: "hsla(0, 0%, 0%, 0.2)",
                     "stroke-width": line_width + PADDING_S * 2,
-                    // "stroke-linecap": "round", // could use: http://web.cse.ohio-state.edu/~dey.8/course/784/note9.pdf
                 }).add_to(this.svg);
                 const line = new DOM.SVGElement("path", {
                     mask: "url(#clip)",
@@ -297,7 +301,7 @@
                     id: "bg-mask",
                     maskUnits: "userSpaceOnUse",
                 }).add_to(defs);
-                bg.set_attribute("mask", "url(#bg-mask)");
+                bg.set_attributes({ mask: "url(#bg-mask)" });
                 new DOM.SVGElement("rect", {
                     width: svg_width,
                     height: svg_height,
@@ -359,10 +363,10 @@
                     const angle = bezier.tangent(0.5);
                     const normal = angle + Math.PI / 2;
                     const LENGTH = 16;
-                    proper_path.move_to(centre.x - Math.cos(angle) * LENGTH / 2, height / 2 + centre.y - Math.sin(angle) * LENGTH / 2);
-                    proper_path.line_by(Math.cos(angle) * LENGTH, Math.sin(angle) * LENGTH);
-                    proper_path.move_to(centre.x + Math.cos(angle) * LENGTH / 2 - Math.cos(normal) * LENGTH / 2, height / 2 + centre.y + Math.sin(angle) * LENGTH / 2 - Math.sin(normal) * LENGTH / 2);
-                    proper_path.line_by(Math.cos(normal) * LENGTH, Math.sin(normal) * LENGTH);
+                    proper_path.move_to(new Point(centre.x - Math.cos(angle) * LENGTH / 2, height / 2 + centre.y - Math.sin(angle) * LENGTH / 2));
+                    proper_path.line_by(new Point(Math.cos(angle) * LENGTH, Math.sin(angle) * LENGTH));
+                    proper_path.move_to(new Point(centre.x + Math.cos(angle) * LENGTH / 2 - Math.cos(normal) * LENGTH / 2, height / 2 + centre.y + Math.sin(angle) * LENGTH / 2 - Math.sin(normal) * LENGTH / 2));
+                    proper_path.line_by(new Point(Math.cos(normal) * LENGTH, Math.sin(normal) * LENGTH));
                     path = proper_path.commands;
                 } else if (body_shape === "squiggly") {
                     if (start === null || end === null) {
@@ -495,7 +499,7 @@
                     }
                     actual_line_array[0] += extra_line_start;
                     actual_line_array[actual_line_array.length - 1] += extra_line_end;
-                    line.set_attribute("stroke-dasharray", `0 ${start_len - extra_line_start} ${actual_line_array.join(" ")} ${full_len - end_len + extra_line_end}`);
+                    line.set_attributes({"stroke-dasharray": `0 ${start_len - extra_line_start} ${actual_line_array.join(" ")} ${full_len - end_len + extra_line_end}`});
                 }
 
                 let cut = true;
@@ -587,47 +591,46 @@
                             for (const [iflag, imul] of [[flag, -1], [1 - flag, 1]]) {
                                 const off = bezier.point(ts[i]);
                                 head_path.move_to(
-                                    off.x,
-                                    off.y + height / 2,
+                                    new Point(off.x, off.y + height / 2),
                                 );
                                 const angle = bezier.tangent(ts[i]) + (type === "mono" ? Math.PI : 0);
                                 if (type === "epi" || type === "mono") {
                                     const [dx, dy] = [mul * HEAD_WIDTH, imul * HEAD_HEIGHT / 2];
-                                    head_path.arc_by(
+                                    head_path.arc_by(new Point(
                                         mul * HEAD_WIDTH,
-                                        HEAD_HEIGHT / 2,
-                                        angle * 180 / Math.PI,
+                                        HEAD_HEIGHT / 2),
+                                        angle,
                                         false,
                                         iflag,
-                                        dx * Math.cos(angle) - dy * Math.sin(angle),
-                                        dx * Math.sin(angle) + dy * Math.cos(angle),
+                                        new Point(dx * Math.cos(angle) - dy * Math.sin(angle),
+                                        dx * Math.sin(angle) + dy * Math.cos(angle))
                                     );
                                     if (mask && type === "epi") {
                                         let [mdx, mdy] = [-mul * (HEAD_WIDTH + MASK_PADDING), 0];
-                                        head_path.line_by(
+                                        head_path.line_by(new Point(
                                             mdx * Math.cos(angle) - mdy * Math.sin(angle),
                                             mdx * Math.sin(angle) + mdy * Math.cos(angle),
-                                        );
+                                        ));
                                         [mdx, mdy] = [0, -imul * HEAD_HEIGHT / 2];
-                                        head_path.line_by(
+                                        head_path.line_by(new Point(
                                             mdx * Math.cos(angle) - mdy * Math.sin(angle),
                                             mdx * Math.sin(angle) + mdy * Math.cos(angle),
-                                        );
+                                        ));
                                     }
                                     if (mask && type === "mono") {
                                         // we multiply by 2 because we already had part of the line overflowing,
                                         // and then we added `extra_line_*` everywhere to fix the underflowing part
                                         const extra_padding = (is_start ? extra_line_start : extra_line_end) * 2;
                                         let [mdx, mdy] = [mul * (MASK_PADDING + extra_padding), 0];
-                                        head_path.line_by(
+                                        head_path.line_by(new Point(
                                             mdx * Math.cos(angle) - mdy * Math.sin(angle),
                                             mdx * Math.sin(angle) + mdy * Math.cos(angle),
-                                        );
+                                        ));
                                         [mdx, mdy] = [0, -imul * HEAD_HEIGHT / 2];
-                                        head_path.line_by(
+                                        head_path.line_by(new Point(
                                             mdx * Math.cos(angle) - mdy * Math.sin(angle),
                                             mdx * Math.sin(angle) + mdy * Math.cos(angle),
-                                        );
+                                        ));
                                     }
                                 } else if (type === "corner") {
                                     // we need to adjust the background padding here, depending on the angle
@@ -636,8 +639,7 @@
                                     const p = bezier.point(t_after_length(bezier.arc_length(ts[i]) + base_2 * mul));
                                     // the initial move is unncessary here
                                     head_path.move_to(
-                                        p.x,
-                                        p.y + height / 2,
+                                        new Point(p.x, p.y + height / 2)
                                     );
 
                                     // Round the angle to the nearest 45º and adjust with respect to the
@@ -646,16 +648,16 @@
                                     const direction = Math.atan2(this.target.y - this.source.y, this.target.x - this.source.x);
                                     const ang = Math.PI + PI_4 * Math.round(4 * direction / Math.PI) - direction;
 
-                                    head_path.line_by(
+                                    head_path.line_by(new Point(
                                         Math.cos(ang + Math.PI * (1 - flag) + imul * Math.PI / 4) * LENGTH,
                                         Math.sin(ang + Math.PI * (1 - flag) + imul * Math.PI / 4) * LENGTH,
-                                    );
+                                    ));
                                 } else if (type === "maps to") {
                                     const [dx, dy] = [0, imul * HEAD_HEIGHT / 2];
-                                    head_path.line_by(
+                                    head_path.line_by(new Point(
                                         dx * Math.cos(angle) - dy * Math.sin(angle),
                                         dx * Math.sin(angle) + dy * Math.cos(angle),
-                                    );
+                                    ));
                                 }
                                 // only draw mask for final head/tail
                                 // if (i === heads - 1 && mask) {
@@ -687,31 +689,31 @@
                         const angle = where.angle;
                         const rotwhere = where.add(new Point(0, height / 2)).add(new Point(0, flip * line_width / 2 - flip * STROKE_WIDTH / 2).rotate(angle));
                         head_path.move_to(
-                            rotwhere.x, rotwhere.y,
+                            new Point(rotwhere.x, rotwhere.y)
                         );
                         // FIXME: refactor out these `dx/dy` parts.
                         const [dx, dy] = [mul * HEAD_WIDTH, -h * flip];
-                        head_path.arc_by(
+                        head_path.arc_by(new Point(
                             mul * HEAD_WIDTH,
-                            h,
-                            angle * 180 / Math.PI,
+                            h),
+                            angle,
                             false,
                             flip === 1 ? flag : 1 - flag,
-                            dx * Math.cos(angle) - dy * Math.sin(angle),
-                            dx * Math.sin(angle) + dy * Math.cos(angle),
+                            new Point(dx * Math.cos(angle) - dy * Math.sin(angle),
+                            dx * Math.sin(angle) + dy * Math.cos(angle))
                         );
 
                         if (mask) {
                             let [mdx, mdy] = [-mul * (HEAD_WIDTH + MASK_PADDING), 0];
-                            head_path.line_by(
+                            head_path.line_by(new Point(
                                 mdx * Math.cos(angle) - mdy * Math.sin(angle),
                                 mdx * Math.sin(angle) + mdy * Math.cos(angle),
-                            );
+                            ));
                             [mdx, mdy] = [0, h * flip];
-                            head_path.line_by(
+                            head_path.line_by(new Point(
                                 mdx * Math.cos(angle) - mdy * Math.sin(angle),
                                 mdx * Math.sin(angle) + mdy * Math.cos(angle),
-                            );
+                            ));
                         }
                         head.element.setAttribute("d", head_path.toString());
                         // head.element.setAttribute("transform", `rotate(${where.angle * 180 / Math.PI} ${where.x} ${where.y + height / 2})`);
@@ -725,18 +727,18 @@
                         for (let i = 0; i < level; ++i) {
                             const p = where.add(new Point(0, height / 2))
                                 .add(new Point(0, flip * line_width / 2 - flip * STROKE_WIDTH / 2 - flip * (SPACING + STROKE_WIDTH) * i).rotate(angle));
-                            head_path.move_to(p.x, p.y);
-                            head_path.arc_by(
+                            head_path.move_to(p);
+                            head_path.arc_by(new Point(
                                 mul * HEAD_WIDTH,
-                                HEAD_WIDTH,
+                                HEAD_WIDTH),
                                 // We're drawing a semicircle,
                                 // so the angle is actually unimportant.
-                                angle * 180 / Math.PI,
+                                angle,
                                 // This flag appears to be unimportant here.
                                 false,
                                 flip === 1 ? flag : 1 - flag,
-                                dx * Math.cos(angle) - dy * Math.sin(angle),
-                                dx * Math.sin(angle) + dy * Math.cos(angle),
+                                new Point(dx * Math.cos(angle) - dy * Math.sin(angle),
+                                dx * Math.sin(angle) + dy * Math.cos(angle))
                             );
                         }
                         head.element.setAttribute("d", head_path.toString());
