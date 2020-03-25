@@ -87,7 +87,19 @@ const CONSTANTS = {
         HOOK_BOTTOM: ["hook-bottom"],
         /// The corner of a square, used for pullbacks and pushouts.
         CORNER: ["corner"],
-    }
+    },
+    /// The various label alignment options.
+    LABEL_ALIGNMENT: new Enum(
+        "LABEL_ALIGNMENT",
+        // In the centre of an edge, cutting out the edge underneath it.
+        "CENTRE",
+        // In the centre of an edge, overlapping the edge underneath it.
+        "OVER",
+        // To the left of the edge, viewed as if the arrow is facing up.
+        "LEFT",
+        // To the right of the edge, viewed as if the arrow is facing up.
+        "RIGHT",
+    ),
 };
 
 
@@ -109,14 +121,19 @@ class ArrowStyle {
 class Label {
     constructor(text) {
         this.text = text;
+        this.width = 128;
+        this.height = 32;
+        this.alignment = CONSTANTS.LABEL_ALIGNMENT.CENTRE;
     }
 }
 
 class Arrow {
-    constructor(source, target, style) {
+    constructor(source, target, style, label) {
         this.source = source;
         this.target = target;
         this.style = style;
+        this.label = label;
+
         // The SVG containing the edge itself, including the arrow head and tail.
         this.svg = new DOM.SVGElement("svg");
         // The mask to be used for any edges having this edge as a source or target.
@@ -211,8 +228,8 @@ class Arrow {
         // target.
         for (const svg of [this.background, this.svg]) {
             svg.set_style({
-                width: `${svg_width}px`,
-                height: `${svg_height}px`,
+                width: `${svg_width}`,
+                height: `${svg_height}`,
                 transformOrigin: `${offset.x}px ${offset.y}px`,
                 transform: `
                     translate(${this.source.x - offset.x}px, ${this.source.y - offset.y}px)
@@ -246,7 +263,7 @@ class Arrow {
         }).add_to(bg_mask);
 
         // Draw the actual background.
-        const bg_path = new DOM.SVGElement("path", {
+        new DOM.SVGElement("path", {
             mask: "url(#bg-mask)",
             d: `${
                 new Path()
@@ -364,7 +381,7 @@ class Arrow {
         // We use some of these variables frequently in other methods, so we package them up for
         // convenience in passing them around.
         const constants = {
-            bezier, start, end, length, height, edge_width, head_width, head_height, shorten,
+            bezier, start, end, length, height, angle, edge_width, head_width, head_height, shorten,
             t_after_length, dash_padding, offset,
         };
 
@@ -419,6 +436,10 @@ class Arrow {
 
         // At present, we don't clip the edge using the source and target masks, but this might be
         // something we do in the future.
+
+        // Draw the label.
+        const label_mask = this.redraw_label(constants);
+        this.svg.add(label_mask);
     }
 
     // Computes the SVG path for the edge itself, whether that's a line, adjunction or squiggly
@@ -929,23 +950,23 @@ class Arrow {
     }
 
     /// Redraw the label attached to the edge. Returns the mask associated to the label.
-    redraw_label(constants, label) {
-        const { length, angle } = constants;
+    redraw_label(constants) {
+        const { length, angle, offset } = constants;
 
-        const centre = this.determine_label_position(constants, label).add(new Point(
-            -label.width / 2,
-            (height - label.height) / 2,
+        const origin = this.determine_label_position(constants).add(offset).add(new Point(
+            (length - this.label.width) / 2,
+            (this.style.curve - this.label.height) / 2,
         ));
 
         // Draw the mask.
         const mask = new DOM.SVGElement("rect", {
-            width: label.width,
-            height: label.height,
-            x: centre.x,
-            y: centre.y,
+            width: this.label.width,
+            height: this.label.height,
             fill: "black",
+            x: 0, y: 0,
             transform:
-                `rotate(${-rad_to_deg(angle)} ${length / 2} ${(height + this.style.curve) / 2})`,
+                `translate(${origin.x} ${origin.y})
+                rotate(${-rad_to_deg(angle)} ${this.label.width / 2} ${this.label.height / 2})`,
         });
 
         return mask;
@@ -954,8 +975,26 @@ class Arrow {
     /// Find the correct position of the label. If the label is centred, this is easy. However, if
     /// it is offset to either side, we want to find the minimum offset from the centre of the edge
     /// such that the label no longer overlaps the edge.
-    determine_label_position(constants, label) {
+    determine_label_position(constants) {
         const { length, angle, edge_width } = constants;
+
+        // The angle we will try to push the label so that it no longer intersects the curve. This
+        // will be set by the following switch block if we do not return by the end of the block.
+        let offset_angle;
+
+        switch (this.label.alignment) {
+            case CONSTANTS.LABEL_ALIGNMENT.CENTRE:
+            case CONSTANTS.LABEL_ALIGNMENT.OVER:
+                return Point.zero();
+
+            case CONSTANTS.LABEL_ALIGNMENT.LEFT:
+                offset_angle = -Math.PI / 2;
+                break;
+
+            case CONSTANTS.LABEL_ALIGNMENT.RIGHT:
+                offset_angle = Math.PI / 2;
+                break;
+        }
 
         // To offset the label bounding rectangle properly, we're going to iterately approximate its
         // location. We first normalise the Bézier curve (flat Bézier curves must be special-cased).
@@ -963,31 +1002,37 @@ class Arrow {
         // number of intersections to be zero. To find this distance, we do a binary search (between
         // 0 and the height of the curve). We also add padding to the bounding rectangle to simulate
         // the thickness of the curve.
+
+        // Unfortunately, floating-point calculations aren't precise, so we need to add some leeway
+        // here, otherwise we sometimes encounter situations where `offset_max` isn't quite
+        // sufficient.
+        const OFFSET_ALLOWANCE = 4;
         let offset_min = 0;
-        let offset_max = Math.abs(this.style.curve) / 2
-            + Math.hypot((label.width + edge_width) / 2, (label.height + edge_width) / 2);
+        let offset_max = OFFSET_ALLOWANCE + Math.abs(this.style.curve) / 2
+            + Math.hypot((this.label.width + edge_width) / 2, (this.label.height + edge_width) / 2);
         // The following variable will be initialised by the following loop, which runs at least
         // once.
-        let offset;
+        let label_offset;
 
         const BAIL_OUT = 1024;
         let i = 0;
         while (true) {
-            // We will try offseting at distance `offset` pixels next.
-            offset = (offset_min + offset_max) / 2;
+            // We will try offseting at distance `label_offset` pixels next.
+            label_offset = (offset_min + offset_max) / 2;
             const rect_centre =
                 new Point(length / 2, this.style.curve / 2)
                     .rotate(angle)
-                    .add(new Point(offset).rotate(angle + Math.PI / 2));
+                    .add(Point.lendir(label_offset, angle + offset_angle));
             // Compute the intersections between the offset bounding rectangle and the edge.
             const intersections = new Bezier(Point.zero(), length, this.style.curve, angle)
                 .intersections_with_rounded_rectangle(new RoundedRectangle(
                     rect_centre.x,
                     rect_centre.y,
-                    label.width + edge_width,
-                    label.height + edge_width,
+                    this.label.width + edge_width,
+                    this.label.height + edge_width,
                     edge_width / 2,
                 ));
+
             if (intersections.length === 0) {
                 // If we've determined the offset to a sufficiently-high precision, we can stop
                 // here, as this offset is sufficient.
@@ -995,12 +1040,12 @@ class Arrow {
                     break;
                 }
                 // Otherwise, we update the bounds to narrow down on the right offset.
-                [offset_min, offset_max] = [offset_min, offset];
+                [offset_min, offset_max] = [offset_min, label_offset];
             } else {
-                [offset_min, offset_max] = [offset, offset_max];
+                [offset_min, offset_max] = [label_offset, offset_max];
             }
 
-            if (i >= BAIL_OUT) {
+            if (++i >= BAIL_OUT) {
                 // Reaching this case is an error: we should always be able to find an offset that
                 // has no intersection. However, it's better to bail out if there's a mistake, than
                 // to cause an infinite loop.
@@ -1009,7 +1054,6 @@ class Arrow {
             }
         }
 
-        return new Point(length / 2, this.style.curve / 2)
-            .add(new Point(offset).rotate(angle + Math.PI / 2));
+        return Point.lendir(label_offset, offset_angle);
     }
 }

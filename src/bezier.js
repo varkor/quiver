@@ -270,33 +270,36 @@ class RoundedRectangle {
         const add_corner_points = (sx, sy, angle_offset) => {
             points.push(new Point(
                 this.x + (this.w / 2 - this.r) * sx + Math.cos(angle_offset) * this.r,
-                this.y + (this.h / 2 - this.r) * sy - Math.sin(angle_offset) * this.r,
+                this.y + (this.h / 2 - this.r) * sy + Math.sin(angle_offset) * this.r,
             ));
             for (let i = 0; i < sides / 4; ++i) {
                 const angle = (i + 0.5) / sides * 2 * Math.PI + angle_offset;
                 points.push(new Point(
                     this.x + (this.w / 2 - this.r) * sx + Math.cos(angle) * R,
-                    this.y + (this.h / 2 - this.r) * sy - Math.sin(angle) * R,
+                    this.y + (this.h / 2 - this.r) * sy + Math.sin(angle) * R,
                 ));
             }
             angle_offset += Math.PI / 2;
             points.push(new Point(
                 this.x + (this.w / 2 - this.r) * sx + Math.cos(angle_offset) * this.r,
-                this.y + (this.h / 2 - this.r) * sy - Math.sin(angle_offset) * this.r,
+                this.y + (this.h / 2 - this.r) * sy + Math.sin(angle_offset) * this.r,
             ));
+            return angle_offset;
         }
 
-        // Top-right corner.
-        add_corner_points(1, -1, 0);
+        let angle_offset = 0;
+
+        // Bottom-right corner.
+        angle_offset = add_corner_points(1, 1, angle_offset);
+
+        // Bottom-left corner.
+        angle_offset = add_corner_points(-1, 1, angle_offset);
 
         // Top-left corner.
-        add_corner_points(-1, -1, Math.PI / 2);
+        angle_offset = add_corner_points(-1, -1, angle_offset);
 
-        // // Bottom-left corner.
-        add_corner_points(-1, 1, Math.PI);
-
-        // // Bottom-right corner.
-        add_corner_points(1, 1, 3 * Math.PI / 2);
+        // Top-right corner.
+        angle_offset = add_corner_points(1, -1, angle_offset);
 
         // Remove zero-length segments. These can occur when the border radius is very small.
         for (let i = points.length - 2; i >= 0; --i) {

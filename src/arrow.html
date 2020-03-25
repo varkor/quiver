@@ -39,16 +39,47 @@
         // - Test and make sure everything looks pixel perfect. Set up a test rig.
         // - Cropping of background.
         // - Add mask for "none" tail for squiggly lines (could maybe use the existing mask background).
-        // - Fix labels.
         //
         // ** quiver integration **
-        // - Refactor the arrow code and provide a clean API.
         // - Use the new arrow library for quiver.
         // - Figure out how to export appropriate tikz-cd code for curved edges.
         //
         // ** Extra features **
         // - Loops.
         // - Saving as SVG.
+
+        let drag = null;
+
+        class Shape {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.width = 64;
+                this.height = 64;
+                this.radius = 16;
+                this.svg = document.createElement("div");
+                this.svg.classList.add("box");
+                this.redraw();
+                this.svg.addEventListener("mousedown", (event) => {
+                    if (drag === null) {
+                        const rect = this.svg.getBoundingClientRect();
+                        drag = [this, event.clientX - rect.left - this.width / 2, event.clientY - rect.top - this.height / 2];
+                    }
+                });
+                document.body.appendChild(this.svg);
+            }
+
+            get origin() {
+                return new Point(this.x, this.y);
+            }
+
+            redraw() {
+                this.svg.style.left = `${this.x - this.width / 2}px`;
+                this.svg.style.top = `${this.y - this.height / 2}px`;
+                this.svg.style.width = `${this.width}px`;
+                this.svg.style.height = `${this.height}px`;
+            }
+        }
 
         window.addEventListener("mouseup", () => {
             drag = null;
@@ -59,12 +90,13 @@
             const target = new Shape(640, 240);
             // const arrow2 = new Arrow2(source, target);
 
-            const arrow = new Arrow(source, target, new ArrowStyle());
+            const arrow = new Arrow(source, target, new ArrowStyle(), new Label("Hello"));
             arrow.style.heads = ["epi"];
             arrow.style.tails = ["mono"];
             arrow.style.level = 1;
             // arrow.style.dash_style = CONSTANTS.ARROW_DASH_STYLE.DASHED;
             arrow.style.body_style = CONSTANTS.ARROW_BODY_STYLE.SQUIGGLY;
+            arrow.label.alignment = CONSTANTS.LABEL_ALIGNMENT.RIGHT;
             arrow.redraw();
             document.body.appendChild(arrow.background.element);
             document.body.appendChild(arrow.svg.element);
