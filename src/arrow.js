@@ -25,7 +25,7 @@ const CONSTANTS = {
     /// The width of each line (in pixels).
     STROKE_WIDTH: 1.5,
     /// The extra padding (in pixels) of the background around an edge.
-    BACKGROUND_PADDING: 16,
+    BACKGROUND_PADDING: 0,
     /// The opacity (0 to 1) of the background.
     BACKGROUND_OPACITY: 0.2,
     /// How much padding (in pixels) to give to masks to ensure they crop sufficiently.
@@ -34,7 +34,7 @@ const CONSTANTS = {
     HEAD_SPACING: 2,
     /// How much padding (in pixels) of straight line to provide around the head/tail of a squiggly
     /// line.
-    SQUIGGLY_PADDING: 8,
+    SQUIGGLY_PADDING: 4,
     /// The height (in pixels) of a single triangle of the squiggly arrow body style.
     SQUIGGLY_TRIANGLE_HEIGHT: 2,
     /// The length of the line segments in an adjunction symbol (⊣).
@@ -134,7 +134,7 @@ class Arrow {
 
         // The total width of the edge line itself, not including the arrowhead, tail, label or /
         // background. This does not take into account the extra height induced if the body style is
-        // squiggly (see the comment on `padding_y`).
+        // squiggly (see the comment on `padding`).
         const edge_width = this.style.level * CONSTANTS.STROKE_WIDTH
                 + (this.style.level - 1) * CONSTANTS.LINE_SPACING;
 
@@ -147,34 +147,33 @@ class Arrow {
         // This was determined by experimenting with what looked nice.
         const head_height = edge_width + (CONSTANTS.LINE_SPACING + CONSTANTS.STROKE_WIDTH) * 2;
 
-        // The horizontal padding. This accounts for the case when the edges are essentially
-        // vertical (with high curves).
-        // const padding_x = head_height / 2 + CONSTANTS.BACKGROUND_PADDING;
-        const padding_x = 0;
-
-        // The vertical padding. We only need to pad vertically if the arrow is squiggly, in which
-        // case, there will be some oscillation around the centre line over the usual edge width.
-        // const padding_y = (this.style.body_style === CONSTANTS.ARROW_BODY_STYLE.SQUIGGLY) ?
-            // (CONSTANTS.SQUIGGLY_TRIANGLE_HEIGHT + CONSTANTS.STROKE_WIDTH) : 0;
-        const padding_y = 0;
+        // The horizontal and vertical padding. We have the same padding for both axes, because
+        // when the curve is very high, the tangent near the source/target can become essentially
+        // vertical. We always pad enough for the arrowhead (plus its stroke width) and the squiggles
+        // in a squiggly line.
+        const padding = CONSTANTS.BACKGROUND_PADDING +
+            + Math.max(head_height, (this.style.body_style === CONSTANTS.ARROW_BODY_STYLE.SQUIGGLY ?
+                CONSTANTS.SQUIGGLY_TRIANGLE_HEIGHT * 2 : 0) + CONSTANTS.STROKE_WIDTH) / 2;
 
         // The distance from the source to the target.
         const length = Math.hypot(this.target.y - this.source.y, this.target.x - this.source.x);
 
         // The vertical distance from the straight line connecting the source to the target, and the
         // peak of the curve.
-        const height = Math.abs(this.style.curve) + head_height
-            + (padding_y + CONSTANTS.BACKGROUND_PADDING) * 2;
+        const height = Math.abs(this.style.curve);
 
         // The angle of the straight line connecting the source to the target.
         const angle = Math.atan2(this.target.y - this.source.y, this.target.x - this.source.x);
 
         // The width and height of the SVG for the arrow.
-        const [svg_width, svg_height] = [length + padding_x * 2, height + padding_y * 2];
+        const [svg_width, svg_height] = [length + padding * 2, height + padding * 2];
 
         // The path of the edge, with a normalised origin and angle.
         const bezier = new Bezier(Point.zero(), length, this.style.curve, 0);
         const t_after_length = bezier.t_after_length();
+
+        // We centre vertically, so we usually have to offset things by half the height.
+        const offset = new Point(padding, padding + height / 2);
 
         /// Finds the intersection of the Bézier curve with either the source or target. There
         /// should be a unique intersection point, and this will be true in all but extraordinary
@@ -222,8 +221,6 @@ class Arrow {
         new DOM.SVGElement("rect", {
             width: svg_width,
             height: svg_height,
-            x: -padding_x,
-            y: -padding_y,
             fill: "white",
         }).add_to(bg_mask);
 
@@ -232,7 +229,7 @@ class Arrow {
             mask: "url(#bg-mask)",
             d: `${
                 new Path()
-                    .move_to(new Point(0, height / 2))
+                    .move_to(offset)
                     .curve_by(new Point(length / 2, this.style.curve), new Point(length, 0))
             }`,
             fill: "none",
@@ -296,18 +293,17 @@ class Arrow {
         this.svg.set_style({
             width: `${svg_width}px`,
             height: `${svg_height}px`,
-            transformOrigin: `0 ${svg_height / 2}px`,
+            transformOrigin: `${offset.x}px ${offset.y}px`,
             transform: `
-                translate(${this.source.x}px, ${this.source.y - svg_height / 2}px)
+                translate(${this.source.x - offset.x}px, ${this.source.y - offset.y}px)
                 rotate(${angle}rad)
-                translate(${-padding_x}px, 0px)
             `
         });
         // We are going to redraw everything from scratch, so clear the current SVG.
         this.svg.clear();
         // Set the view box to match the length and height of the arrow (not taking padding into
         // account).
-        this.svg.set_attributes({ viewBox: `0 0 ${length} ${height}` });
+        this.svg.set_attributes({ viewBox: `0 0 ${svg_width} ${svg_height}` });
 
         // Create a clipping mask for the edge. We use this to cut out the gaps in an n-cell.
         const defs = new DOM.SVGElement("defs").add_to(this.svg);
@@ -319,8 +315,6 @@ class Arrow {
         new DOM.SVGElement("rect", {
             width: svg_width,
             height: svg_height,
-            x: -padding_x,
-            y: -padding_y,
             fill: "white",
         }).add_to(clipping_mask);
 
@@ -366,7 +360,7 @@ class Arrow {
         // convenience in passing them around.
         const constants = {
             bezier, start, end, length, height, edge_width, head_width, head_height, shorten,
-            t_after_length, dash_padding,
+            t_after_length, dash_padding, offset,
         };
 
         // We calculate the widths of the tails and heads whilst drawing them, so we have to
@@ -430,10 +424,12 @@ class Arrow {
         // manually (e.g. for squiggly lines) or to determine dash distances.
         const {
             bezier, start, end, length, height, head_width, shorten, t_after_length, dash_padding,
-            total_width_of_tails, total_width_of_heads,
+            total_width_of_tails, total_width_of_heads, offset,
         } = constants;
-        let arclen_to_start = bezier.arc_length(start.t) + (this.style.shorten + shorten.start);
-        let arclen_to_end = bezier.arc_length(end.t) - (this.style.shorten + shorten.end);
+        let arclen_to_start = bezier.arc_length(start.t) + (this.style.shorten + shorten.start)
+            - dash_padding.start;
+        let arclen_to_end = bezier.arc_length(end.t) - (this.style.shorten + shorten.end)
+            + dash_padding.end;
         let arclen = bezier.arc_length(1);
 
         // Each squiggle triangle has a width equal to twice its height.
@@ -443,14 +439,14 @@ class Arrow {
         switch (this.style.body_style) {
             // The normal case: a straight or curved line.
             case CONSTANTS.ARROW_BODY_STYLE.LINE:
-                path.move_to(new Point(0, height / 2));
+                path.move_to(offset);
                 // A simple quadratic Bézier curve.
                 path.curve_by(new Point(length / 2, this.style.curve), new Point(length, 0));
                 break;
 
             // A ⊣ shape, for adjunctions.
             case CONSTANTS.ARROW_BODY_STYLE.ADJUNCTION:
-                const centre = bezier.point(0.5).add(new Point(0, height / 2));
+                const centre = bezier.point(0.5).add(offset);
                 const angle = bezier.tangent(0.5);
                 const normal = angle + Math.PI / 2;
                 const adj_seg = new Point(CONSTANTS.ADJUNCTION_LINE_LENGTH, 0);
@@ -490,12 +486,11 @@ class Arrow {
                 const start_point = bezier.point(t_after_length(arclen_to_start));
                 const end_point = bezier.point(t_after_length(arclen_to_end));
 
-                const vertical_offset = new Point(0, height / 2);
                 // Move to the tail.
-                path.move_to(start_point.add(vertical_offset));
+                path.move_to(start_point.add(offset));
                 // Draw a straight line segment for the first section. This gives some breathing
                 // space around the tail and the squiggles.
-                path.line_to(squiggle_start_point.add(vertical_offset));
+                path.line_to(squiggle_start_point.add(offset));
 
                 // We keep track of the total length of the squiggly path. This is used to calculate
                 // dash arrays for dashed lines.
@@ -524,18 +519,18 @@ class Arrow {
                     );
                     path_len += next_point.sub(prev_point).length();
                     prev_point = next_point;
-                    path.line_to(next_point.add(vertical_offset));
+                    path.line_to(next_point.add(offset));
                 }
 
                 // Draw the padding next to the head of the arrow.
-                path.line_to(end_point.add(vertical_offset));
+                path.line_to(end_point.add(offset));
                 path_len += end_point.sub(prev_point).length();
 
                 // We draw squiggly lines differently from other lines, in that we start then at
                 // the start point, rather than the source. We have to take this into account when
                 // calculating the arc length.
                 arclen_to_start = 0;
-                arclen_to_end = arclen = path_len;
+                arclen_to_end = arclen = path_len + dash_padding.start + dash_padding.end;
 
                 break;
         }
@@ -556,7 +551,7 @@ class Arrow {
         ) {
             // We can't effectively draw dashed lines when we don't know where the tail and head
             // are. Additionally, drawing dashes doesn't make sense for the adjunction symbol.
-            return { path, dash_array: null, dash_padding: { start: 0, end: 0 }};
+            return { path, dash_array: null };
         }
 
         let arclen_line = arclen_to_end - arclen_to_start;
@@ -566,18 +561,33 @@ class Arrow {
         if (this.style.dash_style !== CONSTANTS.ARROW_DASH_STYLE.SOLID) {
             switch (this.style.body_style) {
                 // It only really makes sense to dash (curved or squiggly) lines.
-                case CONSTANTS.ARROW_BODY_STYLE.LINE:
                 case CONSTANTS.ARROW_BODY_STYLE.SQUIGGLY:
+                    if (this.style.level > 1) {
+                        // We can't draw dashed or dotted n-cells nicely, at least for n > 1, so we
+                        // report this as an error.
+                        console.error(
+                            "Dashed and dotted lines are only supported for squiggly n-cells where "
+                            + "n = 1."
+                        );
+                        break;
+                    }
+
+                    // We are deliberately falling through here.
+                case CONSTANTS.ARROW_BODY_STYLE.LINE:
                     // Reset the dash array, because we're calculating everything manually.
                     dashes = [];
 
                     if (this.style.body_style === CONSTANTS.ARROW_BODY_STYLE.SQUIGGLY) {
+                        // We offset the dashes when the line is squiggly so as to pick the most
+                        // aesthetically pleasing pattern. This is not in `CONSTANTS` because I feel
+                        // it should be close to the `dash_pairs` settings.
+                        const DASH_OFFSET = 4;
                         // The initial padding, free of squiggles.
-                        dashes.push(head_width + total_width_of_tails);
+                        dashes.push(total_width_of_tails + DASH_OFFSET);
                         dashes.push(0);
                         // We need to adjust the length of the line to restrict it to just the
                         // Bézier approximation.
-                        arclen_line -= head_width + total_width_of_tails + total_width_of_heads;
+                        arclen_line -= total_width_of_tails + total_width_of_heads - DASH_OFFSET;
                     }
 
                     // We only try to draw dashes if there's any space for them: otherwise, we can
@@ -645,19 +655,14 @@ class Arrow {
                     if (this.style.body_style === CONSTANTS.ARROW_BODY_STYLE.SQUIGGLY) {
                         // The terminal padding, free of squiggles.
                         dashes.push(0);
-                        dashes.push(head_width + total_width_of_heads);
+                        dashes.push(total_width_of_heads);
                     }
 
                     break;
             }
         }
 
-        // We always have at least a single dash (the line itself).
-        dashes[0] += dash_padding.start;
-        dashes[dashes.length - 1] += dash_padding.end;
-        const dash_array =
-            `0 ${arclen_to_start - dash_padding.start}
-            ${dashes.join(" ")} ${arclen - arclen_to_end + dash_padding.end}`;
+        const dash_array = `0 ${arclen_to_start} ${dashes.join(" ")} ${arclen - arclen_to_end}`;
 
         return { path, dash_array };
     }
@@ -677,12 +682,12 @@ class Arrow {
 
         const {
             bezier, edge_width, head_width, head_height, t_after_length, height, shorten,
-            dash_padding,
+            dash_padding, offset,
         } = constants;
 
         // Early return if we have no arrowheads.
         if (heads.length === 0) {
-            return null;
+            return { path: null, total_width: 0 };
         }
 
         // The following two constants are used frequently to draw things at the correct end of the
@@ -712,7 +717,7 @@ class Arrow {
             const t = t_after_length(arclen_to_endpoint);
             const angle = bezier.tangent(t);
             const point = bezier.point(t)
-                .add(new Point(0, height / 2))
+                .add(offset)
                 .add(new Point(
                     0,
                     side_sign * edge_width / 2 - side_sign * CONSTANTS.STROKE_WIDTH / 2,
@@ -738,7 +743,7 @@ class Arrow {
             if (is_mask) {
                 // We don't need masks for hooks, because they're simply drawn perfectly at the
                 // ends.
-                return null;
+                return { path: null, total_width: 0 };
             }
 
             const t = t_after_length(arclen_to_endpoint);
@@ -749,7 +754,7 @@ class Arrow {
             // We draw a hook connecting to the ends of each of the n lines forming the n-cell.
             for (let i = 0; i < this.style.level; ++i) {
                 const point = base_point
-                    .add(new Point(0, height / 2))
+                    .add(offset)
                     .add(new Point(
                         0,
                         side_sign * edge_width / 2
@@ -825,7 +830,7 @@ class Arrow {
                 const head_style = heads[i];
                 const arclen_to_head = arclen_to_endpoint + arclens_to_head[i] * start_sign;
                 const t = t_after_length(arclen_to_head);
-                const point = bezier.point(t);
+                const point = bezier.point(t).add(offset);
                 let angle = bezier.tangent(t);
 
                 switch (head_style) {
@@ -836,7 +841,7 @@ class Arrow {
                     case "epi":
                         // Draw the two halves of the head.
                         for (const [side_sign, side_ind] of [[-1, end_ind], [1, 1 - end_ind]]) {
-                            path.move_to(point.add(new Point(0, height / 2)));
+                            path.move_to(point);
                             path.arc_by(
                                 new Point(start_sign * head_width, head_height / 2),
                                 angle,
@@ -878,7 +883,7 @@ class Arrow {
                         const base_2 = LENGTH / (2 ** 0.5);
                         const base_point
                             = bezier.point(t_after_length(arclen_to_head + base_2 * start_sign))
-                                .add(new Point(0, height / 2));
+                                .add(offset);
 
                         // Draw the two halves of the head.
                         for (const side_sign of [-1, 1]) {
@@ -899,10 +904,7 @@ class Arrow {
                         break;
 
                     case "maps to":
-                        path.move_to(point.add(
-                            new Point(0, height / 2)
-                                .add(Point.lendir(head_height / 2, angle + Math.PI / 2))
-                        ));
+                        path.move_to(point.add(Point.lendir(head_height / 2, angle + Math.PI / 2)));
                         path.line_by(Point.lendir(head_height, angle - Math.PI / 2));
                         break;
                 }
@@ -910,7 +912,7 @@ class Arrow {
         }
 
         return {
-            path : new DOM.SVGElement("path", {
+            path: new DOM.SVGElement("path", {
                 d: `${path}`,
                 fill: is_mask ? "black" : "none",
                 stroke: !is_mask ? "black" : "none",
@@ -935,7 +937,7 @@ class Arrow {
             width: label.width,
             height: label.height,
             x: centre.x,
-            y : centre.y,
+            y: centre.y,
             fill: "black",
             transform:
                 `rotate(${-rad_to_deg(angle)} ${length / 2} ${(height + this.style.curve) / 2})`,

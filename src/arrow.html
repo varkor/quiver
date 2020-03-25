@@ -20,7 +20,7 @@
             overflow: visible;
             position: absolute;
             pointer-events: none;
-            /* background: lightgrey; */
+            /* background: hsla(0, 0%, 0%, 0.3); */
         }
     </style>
     <script type="text/javascript" src="ds.js"></script>
@@ -48,10 +48,8 @@
         // - Saving as SVG.
         //
         // ** Refactoring **
-        // - `new Point(0, height / 2)`
-        // - Fix padding
-        // - Fix dotted and dashed squiggly lines.
-        // - Probably other stuff too.
+        // - Add mask for "none" tail for squiggly lines.
+        // - Label
 
         let drag = null;
         let curve = 0;
@@ -793,8 +791,8 @@
             const arrow = new Arrow(source, target, new ArrowStyle());
             arrow.style.heads = ["epi"];
             arrow.style.tails = ["mono"];
-            arrow.style.level = 5;
-            arrow.style.dash_style = CONSTANTS.ARROW_DASH_STYLE.DOTTED;
+            arrow.style.level = 1;
+            // arrow.style.dash_style = CONSTANTS.ARROW_DASH_STYLE.DASHED;
             arrow.style.body_style = CONSTANTS.ARROW_BODY_STYLE.SQUIGGLY;
             arrow.redraw();
             document.body.appendChild(arrow.svg.element);
