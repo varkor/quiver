@@ -25,7 +25,7 @@ const CONSTANTS = {
     /// The width of each line (in pixels).
     STROKE_WIDTH: 1.5,
     /// The extra padding (in pixels) of the background around an edge.
-    BACKGROUND_PADDING: 0,
+    BACKGROUND_PADDING: 16,
     /// The opacity (0 to 1) of the background.
     BACKGROUND_OPACITY: 0.2,
     /// How much padding (in pixels) to give to masks to ensure they crop sufficiently.
@@ -207,6 +207,27 @@ class Arrow {
         const start = find_endpoint(this.source, true);
         const end = find_endpoint(this.target, false);
 
+        // Clear the SVGs, resize them, and rotate them about the source, in the direction of the
+        // target.
+        for (const svg of [this.background, this.svg]) {
+            svg.set_style({
+                width: `${svg_width}px`,
+                height: `${svg_height}px`,
+                transformOrigin: `${offset.x}px ${offset.y}px`,
+                transform: `
+                    translate(${this.source.x - offset.x}px, ${this.source.y - offset.y}px)
+                    rotate(${angle}rad)
+                `
+            });
+            // We are going to redraw everything from scratch, so clear the current SVG.
+            svg.clear();
+            // Set the view box to match the length and height of the SVG. It would be nice if we
+            // could just use `length` and `height` here and let SVG handle the offsets for us,
+            // but unfortunately this leads to some content being clipped, so we have to handle it
+            // ourselves.
+            svg.set_attributes({ viewBox: `0 0 ${svg_width} ${svg_height}` });
+        }
+
         // Redraw the mask.
 
         // Redraw the background.
@@ -252,6 +273,7 @@ class Arrow {
                     height: edge_width
                         + (CONSTANTS.BACKGROUND_PADDING + CONSTANTS.MASK_PADDING) * 2,
                 };
+                const point = offset.add(endpoint);
                 // This is an overapproximation of the ends, but this is okay, as we're going to
                 // draw the semicircle ends over the top of this.
                 new DOM.SVGElement("rect", {
@@ -261,20 +283,20 @@ class Arrow {
                     y: -end_cutoff.height / 2,
                     fill: "black",
                     transform:
-                        `translate(${endpoint.x}, ${height / 2 + endpoint.y})
+                        `translate(${point.x}, ${point.y})
                         rotate(${rad_to_deg(endpoint.angle)})`,
                 }).add_to(bg_mask);
                 // Draw the semicircle (actually a circle, but half of it is idempotent).
                 new DOM.SVGElement("circle", {
-                    cx: endpoint.x,
-                    cy: endpoint.y + height / 2,
+                    cx: point.x,
+                    cy: point.y,
                     r: edge_width / 2 + CONSTANTS.BACKGROUND_PADDING,
                     fill: "white",
                 }).add_to(bg_mask);
             }
         }
         round_bg_mask_end(start, true);
-        round_bg_mask_end(end, true);
+        round_bg_mask_end(end, false);
 
         // Redraw the arrow itself.
 
@@ -287,23 +309,6 @@ class Arrow {
             end: this.style.heads.length > 0 && this.style.heads[0].startsWith("hook")
                 ? head_width : 0,
         };
-
-        // Size the SVG correctly, and rotate the arrow about the source, in the direction of the
-        // target.
-        this.svg.set_style({
-            width: `${svg_width}px`,
-            height: `${svg_height}px`,
-            transformOrigin: `${offset.x}px ${offset.y}px`,
-            transform: `
-                translate(${this.source.x - offset.x}px, ${this.source.y - offset.y}px)
-                rotate(${angle}rad)
-            `
-        });
-        // We are going to redraw everything from scratch, so clear the current SVG.
-        this.svg.clear();
-        // Set the view box to match the length and height of the arrow (not taking padding into
-        // account).
-        this.svg.set_attributes({ viewBox: `0 0 ${svg_width} ${svg_height}` });
 
         // Create a clipping mask for the edge. We use this to cut out the gaps in an n-cell.
         const defs = new DOM.SVGElement("defs").add_to(this.svg);
@@ -423,8 +428,8 @@ class Arrow {
         // Various arc lengths, which are used for drawing various parts of the Bézier curve
         // manually (e.g. for squiggly lines) or to determine dash distances.
         const {
-            bezier, start, end, length, height, head_width, shorten, t_after_length, dash_padding,
-            total_width_of_tails, total_width_of_heads, offset,
+            bezier, start, end, length, shorten, t_after_length, dash_padding, total_width_of_tails,
+            total_width_of_heads, offset,
         } = constants;
         let arclen_to_start = bezier.arc_length(start.t) + (this.style.shorten + shorten.start)
             - dash_padding.start;
@@ -681,8 +686,8 @@ class Arrow {
         // the target). This is confusing. Sorry.
 
         const {
-            bezier, edge_width, head_width, head_height, t_after_length, height, shorten,
-            dash_padding, offset,
+            bezier, edge_width, head_width, head_height, t_after_length, shorten, dash_padding,
+            offset,
         } = constants;
 
         // Early return if we have no arrowheads.

@@ -48,7 +48,7 @@
         // - Saving as SVG.
         //
         // ** Refactoring **
-        // - Add mask for "none" tail for squiggly lines.
+        // - Add mask for "none" tail for squiggly lines (could maybe use the existing mask background).
         // - Label
 
         let drag = null;
@@ -795,6 +795,7 @@
             // arrow.style.dash_style = CONSTANTS.ARROW_DASH_STYLE.DASHED;
             arrow.style.body_style = CONSTANTS.ARROW_BODY_STYLE.SQUIGGLY;
             arrow.redraw();
+            document.body.appendChild(arrow.background.element);
             document.body.appendChild(arrow.svg.element);
 
             window.addEventListener("mousemove", (event) => {
