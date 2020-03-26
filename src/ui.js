@@ -98,6 +98,19 @@ UIState.Connect = class extends UIState {
             // elements.
             const svg = this.overlay.query_selector("svg");
             new DOM.Element(svg).clear();
+            // Lock on to the target if present, otherwise simply draw the edge
+            // to the position of the cursor.
+            const target = this.target !== null ? {
+                offset: this.target.off(ui),
+                size: this.target.size(),
+                is_offset: true,
+                level: this.target.level,
+            } : {
+                offset,
+                size: Dimensions.zero(),
+                is_offset: false,
+                level: 0,
+            };
             Edge.draw_and_position_edge(
                 ui,
                 this.overlay.element,
@@ -108,21 +121,12 @@ UIState.Connect = class extends UIState {
                     is_offset: true,
                     level: this.source.level,
                 },
-                // Lock on to the target if present, otherwise simply draw the edge
-                // to the position of the cursor.
-                this.target !== null ? {
-                    offset: this.target.off(ui),
-                    size: this.target.size(),
-                    is_offset: true,
-                    level: this.target.level,
-                } : {
-                    offset,
-                    size: Dimensions.zero(),
-                    is_offset: false,
-                    level: 0,
-                },
+                target,
                 Edge.default_options(null, {
-                    body: { name: "cell", level: this.source.level + 1 },
+                    body: {
+                        name: "cell",
+                        level: Math.max(this.source.level, target.level) + 1,
+                    },
                 }),
                 null,
             );
