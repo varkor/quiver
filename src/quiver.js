@@ -329,6 +329,9 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
 
                 let style = "";
                 let label = nonempty_label !== "" ? `"{${edge.label}}"${align}` : "";
+                // If we eventually support multiple labels natively, we can use an array of labels,
+                // but for now it is simpler to special-cased barred arrow.s
+                let barred = false;
 
                 // Edge styles.
                 switch (edge.options.style.name) {
@@ -355,6 +358,10 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
 
                             case "squiggly":
                                 parameters.push("squiggly");
+                                break;
+
+                            case "barred":
+                                barred = true;
                                 break;
 
                             case "none":
@@ -456,6 +463,7 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                     (label !== "" || label_parameters.length > 0 ? `${label || "\"\""}${
                         label_parameters.length > 0 ? `{${label_parameters.join(", ")}}` : ""
                     }, ` : "") +
+                    (barred ? `"\\shortmid" marking, ` : "") +
                     `from=${cell_reference(edge.source)}, ` +
                     `to=${cell_reference(edge.target)}` +
                     (parameters.length > 0 ? `, ${parameters.join(", ")}` : "") +

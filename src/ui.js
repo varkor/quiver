@@ -2053,6 +2053,7 @@ class Panel {
                 ["dashed", "Dashed", { name: "dashed" }],
                 ["dotted", "Dotted", { name: "dotted" }],
                 ["squiggly", "Squiggly", { name: "squiggly" }],
+                ["barred", "Barred", { name: "barred" }],
                 ["none", "No body", { name: "none" }],
             ],
             "body-type",
@@ -3846,6 +3847,14 @@ class Edge extends Cell {
                                 }`);
                             } else {
                                 path.push(`l ${line_length} 0`);
+                            }
+
+                            if (options.style.body.name === "barred") {
+                                const bar_height = Math.max(0, HEAD_WIDTH * 2);
+                                path.push(`M ${SVG_PADDING + line_length / 2} ${
+                                    SVG_PADDING + height / 2 + y - bar_height / 2
+                                }`);
+                                path.push(`l 0 ${bar_height}`);
                             }
 
                             const line = new DOM.SVGElement("path", { d: path.join(" ") }).element;
