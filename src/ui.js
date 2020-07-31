@@ -3608,6 +3608,8 @@ class Edge extends Cell {
         this.update_label_transformation(ui, target_offset.sub(source_offset).angle());
 
         this.arrow.style.curve = this.options.curve * CONSTANTS.CURVE_HEIGHT * 2;
+        this.arrow.style.heads = [];
+        this.arrow.style.tails = [];
         switch (this.options.style.name) {
             case "arrow":
                 // Reset
@@ -3617,10 +3619,10 @@ class Edge extends Cell {
 
                 switch (this.options.style.body.name) {
                     case "squiggly":
-                        this.arrow.style.dash_style = CONSTANTS.ARROW_BODY_STYLE.SQUIGGLY;
+                        this.arrow.style.body_style = CONSTANTS.ARROW_BODY_STYLE.SQUIGGLY;
                         break;
                     case "barred":
-                        this.arrow.style.dash_style = CONSTANTS.ARROW_BODY_STYLE.PROARROW;
+                        this.arrow.style.body_style = CONSTANTS.ARROW_BODY_STYLE.PROARROW;
                         break;
                     case "dashed":
                         this.arrow.style.dash_style = CONSTANTS.ARROW_DASH_STYLE.DASHED;
@@ -3630,6 +3632,42 @@ class Edge extends Cell {
                         break;
                     case "none":
                         this.arrow.style.body_style = CONSTANTS.ARROW_BODY_STYLE.NONE;
+                        break;
+                }
+
+                switch (this.options.style.tail.name) {
+                    case "none":
+                        this.arrow.style.tails = CONSTANTS.ARROW_HEAD_STYLE.NONE;
+                        break;
+                    case "maps to":
+                        this.arrow.style.tails = CONSTANTS.ARROW_HEAD_STYLE.MAPS_TO;
+                        break;
+                    case "mono":
+                        this.arrow.style.tails = CONSTANTS.ARROW_HEAD_STYLE.MONO;
+                        break;
+                    case "hook":
+                        this.arrow.style.tails = CONSTANTS.ARROW_HEAD_STYLE[{
+                            "top": "HOOK_TOP",
+                            "bottom": "HOOK_BOTTOM",
+                        }[this.options.style.tail.side]];
+                        break;
+                }
+
+                switch (this.options.style.head.name) {
+                    case "arrowhead":
+                        this.arrow.style.heads = CONSTANTS.ARROW_HEAD_STYLE.NORMAL;
+                        break;
+                    case "none":
+                        this.arrow.style.heads = CONSTANTS.ARROW_HEAD_STYLE.NONE;
+                        break;
+                    case "epi":
+                        this.arrow.style.heads = CONSTANTS.ARROW_HEAD_STYLE.EPI;
+                        break;
+                    case "harpoon":
+                        this.arrow.style.heads = CONSTANTS.ARROW_HEAD_STYLE[{
+                            "top": "HARPOON_TOP",
+                            "bottom": "HARPOON_BOTTOM",
+                        }[this.options.style.head.side]];
                         break;
                 }
                 break;
@@ -3642,8 +3680,10 @@ class Edge extends Cell {
                 this.arrow.style.body_style = CONSTANTS.ARROW_BODY_STYLE.NONE;
                 this.arrow.style.level = 1;
                 this.arrow.style.curve = 0;
+                this.arrow.style.heads = CONSTANTS.ARROW_HEAD_STYLE.CORNER;
                 break;
         }
+
         this.arrow.label.alignment = {
             left: CONSTANTS.LABEL_ALIGNMENT.LEFT,
             right: CONSTANTS.LABEL_ALIGNMENT.RIGHT,
