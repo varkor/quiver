@@ -1691,6 +1691,13 @@ class History {
                     }
                     update_panel = true;
                     break;
+                case "level":
+                    for (const level of action.levels) {
+                        level.edge.options.level = level[to];
+                        cells.add(level.edge);
+                    }
+                    update_panel = true;
+                    break;
                 case "style":
                     for (const style of action.styles) {
                         style.edge.options.style = style[to];
@@ -1928,16 +1935,16 @@ class Panel {
             },
         );
 
-        const create_option_slider = (name, property) => {
+        const create_option_slider = (name, property, range) => {
             const slider = new DOM.Element("label").add(`${name}: `).add(
                 new DOM.Element(
                     "input",
                     {
                         type: "range",
                         name: property,
-                        min: -5,
-                        value: 0,
-                        max: 5,
+                        min: range.min,
+                        value: range.value,
+                        max: range.max,
                         step: 1,
                         disabled: true,
                     },
@@ -1990,10 +1997,11 @@ class Panel {
         };
 
         // The offset slider.
-        create_option_slider("Offset", "offset");
+        create_option_slider("Offset", "offset", { min: -5, value: 0, max: 5 });
 
         // The curve slider.
-        create_option_slider("Curve", "curve").class_list.add("arrow-style");
+        create_option_slider("Curve", "curve", { min: -5, value: 0, max: 5 })
+            .class_list.add("arrow-style");
 
         // The button to reverse an edge.
         local.add(
@@ -2018,6 +2026,10 @@ class Panel {
                     }], true);
                 })
         );
+
+        // The level slider.
+        const level_slider = create_option_slider("Level", "level", { min: 1, value: 1, max: 5 });
+        level_slider.class_list.add("arrow-style");
 
         // The list of tail styles.
         // The length of the arrow to draw in the centre style buttons.
@@ -2094,12 +2106,11 @@ class Panel {
             ui,
             local,
             [
-                ["1-cell", "1-cell", { name: "cell", level: 1 }],
-                ["2-cell", "2-cell", { name: "cell", level: 2 }],
-                ["dashed", "Dashed", { name: "dashed" }],
-                ["dotted", "Dotted", { name: "dotted" }],
-                ["squiggly", "Squiggly", { name: "squiggly" }],
-                ["barred", "Barred", { name: "barred" }],
+                ["solid", "Solid", { name: "cell", level: 1 }],
+                ["dashed", "Dashed", { name: "dashed", level: 1 }],
+                ["dotted", "Dotted", { name: "dotted", level: 1 }],
+                ["squiggly", "Squiggly", { name: "squiggly", level: 1 }],
+                ["barred", "Barred", { name: "barred", level: 1 }],
                 ["none", "No body", { name: "none" }],
             ],
             "body-type",
@@ -2503,7 +2514,7 @@ class Panel {
                             // different components.
                             switch (cell.options.style[component].name) {
                                 case "cell":
-                                    value = `${cell.options.style[component].level}-cell`;
+                                    value = "solid";
                                     break;
                                 case "hook":
                                 case "harpoon":
@@ -3412,6 +3423,7 @@ class Edge extends Cell {
             label_alignment: "left",
             offset: 0,
             curve: 0,
+            level,
             style: Object.assign({
                 name: "arrow",
                 tail: { name: "none" },
@@ -3598,16 +3610,38 @@ class Edge extends Cell {
         this.arrow.style.curve = this.options.curve * CONSTANTS.CURVE_HEIGHT * 2;
         switch (this.options.style.name) {
             case "arrow":
+                // Reset
+                this.arrow.style.level = this.options.level;
+                this.arrow.style.dash_style = CONSTANTS.ARROW_DASH_STYLE.SOLID;
                 this.arrow.style.body_style = CONSTANTS.ARROW_BODY_STYLE.LINE;
-                this.arrow.style.level = this.options.style.body.level;
+
+                switch (this.options.style.body.name) {
+                    case "squiggly":
+                        this.arrow.style.dash_style = CONSTANTS.ARROW_BODY_STYLE.SQUIGGLY;
+                        break;
+                    case "barred":
+                        this.arrow.style.dash_style = CONSTANTS.ARROW_BODY_STYLE.PROARROW;
+                        break;
+                    case "dashed":
+                        this.arrow.style.dash_style = CONSTANTS.ARROW_DASH_STYLE.DASHED;
+                        break;
+                    case "dotted":
+                        this.arrow.style.dash_style = CONSTANTS.ARROW_DASH_STYLE.DOTTED;
+                        break;
+                    case "none":
+                        this.arrow.style.body_style = CONSTANTS.ARROW_BODY_STYLE.NONE;
+                        break;
+                }
                 break;
             case "adjunction":
                 this.arrow.style.body_style = CONSTANTS.ARROW_BODY_STYLE.ADJUNCTION;
                 this.arrow.style.level = 1;
+                this.arrow.style.curve = 0;
                 break;
             case "corner":
                 this.arrow.style.body_style = CONSTANTS.ARROW_BODY_STYLE.NONE;
                 this.arrow.style.level = 1;
+                this.arrow.style.curve = 0;
                 break;
         }
         this.arrow.label.alignment = {
