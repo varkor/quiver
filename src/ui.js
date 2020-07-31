@@ -1674,6 +1674,14 @@ class History {
                     }
                     update_panel = true;
                     break;
+                case "flip":
+                    for (const cell of action.cells) {
+                        if (cell.is_edge()) {
+                            cell.flip(ui);
+                        }
+                    }
+                    update_panel = true;
+                    break;
                 case "style":
                     for (const style of action.styles) {
                         style.edge.options.style = style[to];
@@ -1968,6 +1976,18 @@ class Panel {
                 .listen("click", () => {
                     ui.history.add(ui, [{
                         kind: "reverse",
+                        cells: ui.selection,
+                    }], true);
+                })
+        );
+
+        // The button to flip an edge.
+        local.add(
+            new DOM.Element("button", { title: "Flip arrows", disabled: true })
+                .add("⥮ Flip")
+                .listen("click", () => {
+                    ui.history.add(ui, [{
+                        kind: "flip",
                         cells: ui.selection,
                     }], true);
                 })
@@ -4077,20 +4097,8 @@ class Edge extends Cell {
         }
     }
 
-    /// Reverses the edge, swapping the `source` and `target`.
-    reverse(ui) {
-        // Flip all the dependency relationships.
-        for (const cell of ui.quiver.reverse_dependencies_of(this)) {
-            const dependencies = ui.quiver.dependencies.get(cell);
-            dependencies.set(
-                this,
-                { source: "target", target: "source" }[dependencies.get(this)],
-            );
-        }
-
-        // Reverse the label alignment and edge offset as well as any oriented styles.
-        // Note that since we do this, the position of the edge will remain the same, which means
-        // we don't need to rerender any of this edge's dependencies.
+    /// Flips the edge, including label alignment, offset and head/tail style.
+    flip(ui, skip_dependencies = false) {
         this.options.label_alignment = {
             left: "right",
             centre: "centre",
@@ -4108,10 +4116,34 @@ class Edge extends Cell {
             }
         }
 
+        this.render(ui);
+
+        if (!skip_dependencies) {
+            for (const cell of ui.quiver.transitive_dependencies([this])) {
+                cell.render(ui);
+            }
+        }
+    }
+
+    /// Reverses the edge, swapping the `source` and `target`.
+    reverse(ui) {
+        // Flip all the dependency relationships.
+        for (const cell of ui.quiver.reverse_dependencies_of(this)) {
+            const dependencies = ui.quiver.dependencies.get(cell);
+            dependencies.set(
+                this,
+                { source: "target", target: "source" }[dependencies.get(this)],
+            );
+        }
+
         // Swap the `source` and `target`.
         [this.source, this.target] = [this.target, this.source];
 
-        this.render(ui);
+        // Reverse the label alignment and edge offset as well as any oriented styles.
+        // Flipping the label will also cause a rerender.
+        // Note that since we do this, the position of the edge will remain the same, which means
+        // we don't need to rerender any of this edge's dependencies.
+        this.flip(ui, true);
     }
 }
 
