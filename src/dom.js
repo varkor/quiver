@@ -29,8 +29,8 @@ DOM.Element = class {
     }
 
     /// Appends an element.
-    /// `value` has two forms: a plain string, in which case it is added as a text node, or a
-    /// `DOM.Element`, in which case the corresponding element is appended.
+    /// `value` has three forms: a plain string, in which case it is added as a text node; a
+    /// `DOM.Element`, in which case the corresponding element is appended; or a plain element.
     add(value) {
         if (value instanceof DOM.Element) {
             this.element.appendChild(value.element);

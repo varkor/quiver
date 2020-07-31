@@ -42,16 +42,13 @@
         // - Test and make sure everything looks pixel perfect. Set up a test rig.
         // - Cropping of background (gets cropped inappropriately in edge cases at the moment).
         // - Add mask for "none" tail for squiggly lines (could maybe use the existing mask background).
+        // - Make sure it works in Firefox, etc.
 
         let drag = null;
 
-        class Shape {
+        class Box extends Shape {
             constructor(x, y) {
-                this.x = x;
-                this.y = y;
-                this.width = 64;
-                this.height = 64;
-                this.radius = 16;
+                super(x, y);
                 this.svg = document.createElement("div");
                 this.svg.classList.add("box");
                 this.redraw();
@@ -62,10 +59,6 @@
                     }
                 });
                 document.body.appendChild(this.svg);
-            }
-
-            get origin() {
-                return new Point(this.x, this.y);
             }
 
             redraw() {
@@ -81,20 +74,19 @@
         });
 
         document.addEventListener("DOMContentLoaded", () => {
-            const source = new Shape(64, 240);
-            const target = new Shape(640, 240);
+            const source = new Box(64, 240);
+            const target = new Box(640, 240);
             // const arrow2 = new Arrow2(source, target);
 
             const arrow = new Arrow(source, target, new ArrowStyle(), new Label("Hello"));
             arrow.style.heads = ["epi"];
             arrow.style.tails = ["mono"];
-            arrow.style.level = 1;
+            arrow.style.level = 5;
             // arrow.style.dash_style = CONSTANTS.ARROW_DASH_STYLE.DASHED;
-            arrow.style.body_style = CONSTANTS.ARROW_BODY_STYLE.SQUIGGLY;
-            arrow.label.alignment = CONSTANTS.LABEL_ALIGNMENT.CENTRE;
+            arrow.style.body_style = CONSTANTS.ARROW_BODY_STYLE.PROARROW;
+            arrow.label.alignment = CONSTANTS.LABEL_ALIGNMENT.LEFT;
             arrow.redraw();
-            document.body.appendChild(arrow.background.element);
-            document.body.appendChild(arrow.svg.element);
+            document.body.appendChild(arrow.element.element);
 
             window.addEventListener("mousemove", (event) => {
                 if (drag !== null) {

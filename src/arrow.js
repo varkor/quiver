@@ -129,6 +129,20 @@ class Label {
     }
 }
 
+class Shape {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.width = 64;
+        this.height = 64;
+        this.radius = 16;
+    }
+
+    get origin() {
+        return new Point(this.x, this.y);
+    }
+}
+
 class Arrow {
     constructor(source, target, style, label) {
         this.source = source;
@@ -136,12 +150,13 @@ class Arrow {
         this.style = style;
         this.label = label;
 
+        this.element = new DOM.Element("div", { class: "arrow" });
         // The SVG containing the edge itself, including the arrow head and tail.
-        this.svg = new DOM.SVGElement("svg");
+        this.svg = new DOM.SVGElement("svg").add_to(this.element);
         // The mask to be used for any edges having this edge as a source or target.
         this.mask = new DOM.SVGElement("svg");
         // The background to the edge, with which the user may interact.
-        this.background = new DOM.SVGElement("svg");
+        this.background = new DOM.SVGElement("svg").add_to(this.element);
     }
 
     /// Redraw the arrow, its mask, and its background. We should minimise calls to `redraw`: it

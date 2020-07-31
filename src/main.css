@@ -165,7 +165,7 @@ body:not(.modal) {
     position: absolute;
     transform: translate(-50%, -50%);
 
-    border-radius: 2px;
+    border-radius: 16px;
 
     text-align: center;
 }
@@ -221,6 +221,7 @@ body:not(.modal) {
 
 .edge {
     position: absolute;
+    display: none;
 }
 
 .edge.reconnecting {
@@ -731,4 +732,14 @@ body:not(.modal) {
 
     font: 16px monospace;
     color: white;
+}
+
+/* Arrows */
+
+.arrow > svg {
+    position: absolute;
+    left: 0;
+    top: 0;
+    overflow: visible;
+    pointer-events: none;
 }

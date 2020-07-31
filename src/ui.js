@@ -1,7 +1,7 @@
 "use strict";
 
 /// Various parameters.
-const CONSTANTS = {
+Object.assign(CONSTANTS, {
     /// We currently only support 0-cells, 1-cells and 2-cells. This is solely
     /// due to a restriction with tikz-cd, which does not support 3-cells.
     /// This restriction is not technical: it can be lifted in the editor without issue.
@@ -17,7 +17,7 @@ const CONSTANTS = {
     EDGE_OFFSET_DISTANCE: 8,
     // How many pixels each unit of curve height corresponds to.
     CURVE_HEIGHT: 24,
-};
+});
 
 /// Various states for the UI (e.g. whether cells are being rearranged, or connected, etc.).
 class UIState {
@@ -146,7 +146,7 @@ UIState.Connect = class extends UIState {
     valid_connection(target) {
         return this.source.level < CONSTANTS.MAXIMUM_CELL_LEVEL &&
             // To allow `valid_connection` to be used to simply check whether the source is valid,
-            // we ignore source–target compatibility if `target` is null.
+            // we ignore source--target compatibility if `target` is null.
             // We allow cells to be connected even if they do not have the same level. This is
             // because it's often useful when drawing diagrams, even if it may not always be
             // semantically valid.
@@ -3288,6 +3288,8 @@ class Vertex extends Cell {
         super(ui.quiver, 0, label);
 
         this.position = position;
+        this.shape = new Shape(ui.default_cell_size / 2, ui.default_cell_size / 2);
+
         this.render(ui);
         super.initialise(ui);
     }
@@ -3320,6 +3322,12 @@ class Vertex extends Cell {
         // Position the vertex.
         const offset = ui.offset_from_position(this.position);
         offset.reposition(this.element);
+        const centre_offset = offset.add(ui.cell_centre_at_position(this.position));
+        const size = this.content_size(ui, [0, 0]);
+        this.shape.x = centre_offset.x;
+        this.shape.y = centre_offset.y;
+        this.shape.width = size.width;
+        this.shape.height = size.height;
 
         // Resize according to the grid cell.
         const cell_width = ui.cell_size(ui.cell_width, this.position.x);
@@ -3363,13 +3371,20 @@ class Vertex extends Cell {
         content.add(buffer);
     }
 
+    /// Get the size of the cell content.
+    content_size(ui, sizes) {
+        const [width, height] = sizes;
+        return new Dimensions(
+            Math.max(ui.default_cell_size / 2, width + CONSTANTS.CONTENT_PADDING * 2),
+            Math.max(ui.default_cell_size / 2, height + CONSTANTS.CONTENT_PADDING * 2),
+        );
+    }
+
     /// Resize the cell content to match the label width.
     resize_content(ui, sizes) {
-        const [width, height] = sizes;
-        this.content_element.style.width
-            = `${Math.max(ui.default_cell_size / 2, width + CONSTANTS.CONTENT_PADDING * 2)}px`;
-        this.content_element.style.height
-            = `${Math.max(ui.default_cell_size / 2, height + CONSTANTS.CONTENT_PADDING * 2)}px`;
+        const size = this.content_size(ui, sizes);
+        this.content_element.style.width = `${size.width}px`;
+        this.content_element.style.height = `${size.height}px`;
     }
 }
 
@@ -3379,6 +3394,12 @@ class Edge extends Cell {
         super(ui.quiver, Math.max(source.level, target.level) + 1, label);
 
         this.options = Edge.default_options(options, null, this.level);
+
+        const shape_label = new Label("Hello");
+        shape_label.alignment = CONSTANTS.LABEL_ALIGNMENT.LEFT;
+        this.arrow = new Arrow(source.shape, target.shape, new ArrowStyle(), shape_label);
+        this.arrow.redraw();
+        ui.canvas.add(this.arrow.element);
 
         this.reconnect(ui, source, target);
 
@@ -3573,6 +3594,29 @@ class Edge extends Cell {
         // If it has not already been rendered, this is a no-op: it will be called
         // again when the label is rendered.
         this.update_label_transformation(ui, target_offset.sub(source_offset).angle());
+
+        this.arrow.style.curve = this.options.curve * CONSTANTS.CURVE_HEIGHT * 2;
+        switch (this.options.style.name) {
+            case "arrow":
+                this.arrow.style.body_style = CONSTANTS.ARROW_BODY_STYLE.LINE;
+                this.arrow.style.level = this.options.style.body.level;
+                break;
+            case "adjunction":
+                this.arrow.style.body_style = CONSTANTS.ARROW_BODY_STYLE.ADJUNCTION;
+                this.arrow.style.level = 1;
+                break;
+            case "corner":
+                this.arrow.style.body_style = CONSTANTS.ARROW_BODY_STYLE.NONE;
+                this.arrow.style.level = 1;
+                break;
+        }
+        this.arrow.label.alignment = {
+            left: CONSTANTS.LABEL_ALIGNMENT.LEFT,
+            right: CONSTANTS.LABEL_ALIGNMENT.RIGHT,
+            centre: CONSTANTS.LABEL_ALIGNMENT.CENTRE,
+            over: CONSTANTS.LABEL_ALIGNMENT.OVER,
+        }[this.options.label_alignment];
+        this.arrow.redraw();
     }
 
     /// Create the HTML element associated with the label (and label buffer).
@@ -4139,6 +4183,7 @@ class Edge extends Cell {
             right: "left",
         }[this.options.label_alignment];
         this.options.offset = -this.options.offset;
+        this.options.curve = -this.options.curve;
         if (this.options.style.name === "arrow") {
             const swap_sides = { top: "bottom", bottom: "top" };
             if (this.options.style.tail.name === "hook") {
@@ -4171,6 +4216,7 @@ class Edge extends Cell {
 
         // Swap the `source` and `target`.
         [this.source, this.target] = [this.target, this.source];
+        [this.arrow.source, this.arrow.target] = [this.source.shape, this.target.shape];
 
         // Reverse the label alignment and edge offset as well as any oriented styles.
         // Flipping the label will also cause a rerender.
