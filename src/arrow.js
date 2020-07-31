@@ -52,6 +52,8 @@ const CONSTANTS = {
         "SQUIGGLY",
         // The adjunction symbol: ⊣.
         "ADJUNCTION",
+        // A line with a bar through it (-+-).
+        "PROARROW",
     ),
     /// The standard dash styles for an edge.
     ARROW_DASH_STYLE: new Enum(
@@ -398,6 +400,29 @@ class Arrow {
             return total_width;
         };
 
+        // Draw the the proarrow bar.
+        if (this.style.body_style === CONSTANTS.ARROW_BODY_STYLE.PROARROW) {
+            const centre = bezier.point(0.5).add(offset);
+            const angle = bezier.tangent(0.5);
+            const normal = angle + Math.PI / 2;
+            const adj_seg = new Point(head_height, 0);
+            const adj_seg_2 = adj_seg.div(2);
+
+            const path = new Path();
+            // Top.
+            path.move_to(centre.sub(adj_seg_2.rotate(normal)));
+            // Bottom.
+            path.line_by(adj_seg.rotate(normal));
+
+            this.svg.add(new DOM.SVGElement("path", {
+                d: `${path}`,
+                fill: "none",
+                stroke: "black",
+                "stroke-width": CONSTANTS.STROKE_WIDTH,
+                "stroke-linecap": "round",
+            }));
+        }
+
         // Draw the tails and heads.
         constants.total_width_of_tails = draw_heads(this.style.tails, start, true, false);
         constants.total_width_of_heads = draw_heads(this.style.heads, end, false, false);
@@ -471,6 +496,7 @@ class Arrow {
         switch (this.style.body_style) {
             // The normal case: a straight or curved line.
             case CONSTANTS.ARROW_BODY_STYLE.LINE:
+            case CONSTANTS.ARROW_BODY_STYLE.PROARROW:
                 path.move_to(offset);
                 // A simple quadratic Bézier curve.
                 path.curve_by(new Point(length / 2, this.style.curve), new Point(length, 0));
@@ -604,8 +630,9 @@ class Arrow {
                         break;
                     }
 
-                    // We are deliberately falling through here.
+                // We are deliberately falling through here.
                 case CONSTANTS.ARROW_BODY_STYLE.LINE:
+                case CONSTANTS.ARROW_BODY_STYLE.PROARROW:
                     // Reset the dash array, because we're calculating everything manually.
                     dashes = [];
 
