@@ -4258,11 +4258,16 @@ document.addEventListener("DOMContentLoaded", () => {
                 // Preload various fonts to avoid flashes of unformatted text.
                 const preload_fonts = ["Main-Regular", "Math-Italic"];
                 for (const font of preload_fonts) {
-                    document.head.appendChild(new DOM.Element("link", {
+                    const attributes = {
                         rel: "preload",
                         href: `KaTeX/dist/fonts/KaTeX_${font}.woff2`,
-                        as: "font",
-                    }).element);
+                        as: "font"
+                    };
+                    if (window.location.hostname !== "") {
+                        // Fonts always need to be fetched using `crossorigin`.
+                        attributes.crossorigin = "";
+                    }
+                    document.head.appendChild(new DOM.Element("link", attributes).element);
                 }
                 break;
         }
