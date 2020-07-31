@@ -85,6 +85,10 @@ DOM.Element = class {
     set_style(style = {}) {
         Object.assign(this.element.style, style);
     }
+
+    clone() {
+        return new DOM.Element(this.element.cloneNode());
+    }
 };
 
 /// A class for conveniently dealing with SVGs.

@@ -327,7 +327,8 @@ class Arrow {
                 ? head_width : 0,
         };
 
-        // Create a clipping mask for the edge. We use this to cut out the gaps in an n-cell.
+        // Create a clipping mask for the edge. We use this to cut out the gaps in an n-cell,
+        // and also to cut out space for the label when the alignment is `CENTRE`.
         const defs = new DOM.SVGElement("defs").add_to(this.svg);
         const clipping_mask = new DOM.SVGElement("mask", {
             id: "clipping-mask",
@@ -439,6 +440,11 @@ class Arrow {
 
         // Draw the label.
         const label_mask = this.redraw_label(constants);
+        // Clip the edge by the label mask.
+        if (this.label.alignment === CONSTANTS.LABEL_ALIGNMENT.CENTRE) {
+            label_mask.clone().add_to(clipping_mask);
+        }
+        label_mask.set_attributes({ fill: "hsl(0, 100%, 50%, 0.5)" });
         this.svg.add(label_mask);
     }
 

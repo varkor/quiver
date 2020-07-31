@@ -33,7 +33,6 @@
         // ** Critical features & Bugs **
         // - Make sure we can draw pretty arrows between arrows.
         // - Make smooth transitions from small edges to long edges (scaling heads, etc.).
-        // - Crop space for the label.
         // - Make label handling work well when edge is very small (and when the label contains the edge).
         // - Make n-cells draw well even for high n.
         // - Test and make sure everything looks pixel perfect. Set up a test rig.
@@ -43,10 +42,6 @@
         // ** quiver integration **
         // - Use the new arrow library for quiver.
         // - Figure out how to export appropriate tikz-cd code for curved edges.
-        //
-        // ** Extra features **
-        // - Loops.
-        // - Saving as SVG.
 
         let drag = null;
 
@@ -96,7 +91,7 @@
             arrow.style.level = 1;
             // arrow.style.dash_style = CONSTANTS.ARROW_DASH_STYLE.DASHED;
             arrow.style.body_style = CONSTANTS.ARROW_BODY_STYLE.SQUIGGLY;
-            arrow.label.alignment = CONSTANTS.LABEL_ALIGNMENT.RIGHT;
+            arrow.label.alignment = CONSTANTS.LABEL_ALIGNMENT.CENTRE;
             arrow.redraw();
             document.body.appendChild(arrow.background.element);
             document.body.appendChild(arrow.svg.element);
