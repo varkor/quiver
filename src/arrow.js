@@ -779,8 +779,8 @@ class Arrow {
         // The width of the combined arrowheads. This will be updated before the function returns.
         let total_width = 0;
 
-        let arclen_to_endpoint = bezier.arc_length(endpoint.t)
-                + (this.style.shorten + is_start ? shorten.start : shorten.end) * start_sign;
+        const arclen_to_endpoint = bezier.arc_length(endpoint.t)
+            + (this.style.shorten + (is_start ? shorten.start : shorten.end)) * start_sign;
 
         if (includes_any(heads, "harpoon-top", "harpoon-bottom")) {
             // For 1-cells, it would arguably be more aesthetically-pleasing to centre harpoons on
@@ -791,7 +791,6 @@ class Arrow {
             const edge_bottom = edge_width + CONSTANTS.LINE_SPACING;
             const side_sign
                 = heads.find((head) => head.startsWith("harpoon")).endsWith("top") ? 1 : -1;
-            // Overwrite `where` to taken `shorten` into account.
             const t = t_after_length(arclen_to_endpoint);
             const angle = bezier.tangent(t);
             const point = bezier.point(t)
