@@ -126,6 +126,7 @@ class Label {
         this.width = 128;
         this.height = 32;
         this.alignment = CONSTANTS.LABEL_ALIGNMENT.CENTRE;
+        this.element = null;
     }
 }
 
@@ -489,6 +490,7 @@ class Arrow {
             }
             label_mask.set_attributes({ fill: "hsl(0, 100%, 50%, 0.5)" });
             this.svg.add(label_mask);
+            this.label.element = label_mask;
         }
     }
 

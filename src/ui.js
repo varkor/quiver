@@ -2411,6 +2411,7 @@ class Panel {
         const update_label_transformation = () => {
             if (cell.is_edge()) {
                 cell.update_label_transformation(ui);
+                cell.render(ui);
             } else {
                 // `update_label_transformation` performs label resizing itself.
                 cell.resize_content(ui, ui.resize_label(cell, label.element));
@@ -3366,7 +3367,7 @@ class Vertex extends Cell {
         const offset = ui.offset_from_position(this.position);
         offset.reposition(this.element);
         const centre_offset = offset.add(ui.cell_centre_at_position(this.position));
-        const size = this.content_size(ui, [0, 0]);
+        const size = this.content_size(ui, [0, 0]); // FIXME: take into account label size
         this.shape.x = centre_offset.x;
         this.shape.y = centre_offset.y;
         this.shape.width = size.width;
@@ -3438,10 +3439,12 @@ class Edge extends Cell {
 
         this.options = Edge.default_options(options, null, this.level);
 
-        const shape_label = new Label("Hello");
+        const shape_label = new Label("");
+        shape_label.width = 0;
+        shape_label.height = 0;
         shape_label.alignment = CONSTANTS.LABEL_ALIGNMENT.LEFT;
         this.arrow = new Arrow(source.shape, target.shape, new ArrowStyle(), shape_label);
-        this.arrow.style.shorten = 40;
+        this.arrow.style.shorten = 0;
         this.arrow.redraw();
         ui.canvas.add(this.arrow.element);
 
@@ -3724,16 +3727,33 @@ class Edge extends Cell {
             over: CONSTANTS.LABEL_ALIGNMENT.OVER,
         }[this.options.label_alignment];
 
-        // const label = new DOM.Element("div").add_to(this.arrow.element);
-        // katex.render(
-        //     this.label,
-        //     label.element,
-        //     {
-        //         throwOnError: false,
-        //         errorColor: "hsl(0, 100%, 40%)",
-        //         // macros: this.latex_macros(),
-        //     },
-        // );
+        const existing_label = this.arrow.element.query_selector("span");
+        if (existing_label !== null) {
+            existing_label.remove();
+        }
+        const label = new DOM.Element("span").add_to(this.arrow.element);
+        katex.render(
+            this.label,
+            label.element,
+            {
+                throwOnError: false,
+                errorColor: "hsl(0, 100%, 40%)",
+                // macros: this.latex_macros(),
+            },
+        );
+        const rect = label.element.getBoundingClientRect();
+        this.arrow.label.width = rect.width;
+        this.arrow.label.height = rect.height;
+
+        this.arrow.element.set_style({ position: "relative" });
+        label.set_style({ visibility: "hidden" });
+        setTimeout(() => {
+            const rect_svg = this.arrow.label.element.element.getBoundingClientRect();
+            const rect_arr = this.arrow.element.element.getBoundingClientRect();
+            label.set_style({ position: "absolute", display: "inline-block", left: `${rect_svg.left - rect_arr.left}px`, top: `${rect_svg.top - rect_arr.top}px` });
+            label.set_style({ visibility: "visible" });
+        }, 0);
+
 
         this.arrow.redraw();
     }

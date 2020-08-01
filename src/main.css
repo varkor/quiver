@@ -223,7 +223,7 @@ body:not(.modal) {
 
 .edge {
     position: absolute;
-    display: none;
+    opacity: 0;
 }
 
 .edge.reconnecting {
