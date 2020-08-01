@@ -116,6 +116,7 @@ body:not(.modal) {
 .grid {
     position: fixed;
     pointer-events: none;
+    z-index: -100;
 }
 
 .grid.hidden {
@@ -164,6 +165,7 @@ body:not(.modal) {
 .vertex .content {
     position: absolute;
     transform: translate(-50%, -50%);
+    z-index: 2;
 
     border-radius: 16px;
 
@@ -744,14 +746,18 @@ body:not(.modal) {
     pointer-events: none;
 }
 
-.arrow > svg:first-child > path {
-    pointer-events: stroke;
+.arrow > svg:first-child {
+    z-index: 1;
 }
 
-.arrow:not(.selected) > svg:first-child {
+.arrow > svg:first-child > path {
+    pointer-events: all;
+}
+
+.arrow:not(.selected) > svg:first-child > path {
     opacity: 0;
 }
 
-.arrow > svg:first-child:hover {
-    opacity: 0.5 !important;
+.arrow:not(.selected) > svg:first-child > path:hover {
+    opacity: 0.5;
 }

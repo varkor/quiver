@@ -3092,7 +3092,6 @@ class Cell {
         if (this.element !== content_element) {
             this.element.addEventListener("mousedown", (event) => {
                 if (event.button === 0) {
-                    console.log("ues");
                     if (ui.in_mode(UIState.Default)) {
                         event.stopPropagation();
                         // If the cell we're dragging is part of the existing selection,
@@ -3303,8 +3302,8 @@ class Cell {
     }
 
     select() {
+        this.element.classList.add("selected");
         if (this.is_edge()) {
-            console.log(this.arrow);
             this.arrow.element.class_list.add("selected");
         }
     }
@@ -3442,6 +3441,7 @@ class Edge extends Cell {
         const shape_label = new Label("Hello");
         shape_label.alignment = CONSTANTS.LABEL_ALIGNMENT.LEFT;
         this.arrow = new Arrow(source.shape, target.shape, new ArrowStyle(), shape_label);
+        this.arrow.style.shorten = 40;
         this.arrow.redraw();
         ui.canvas.add(this.arrow.element);
 
@@ -3498,7 +3498,7 @@ class Edge extends Cell {
             this.element = new DOM.Element("div", { class: "edge" }, {
                 // We want to make sure edges always display over vertices (and so on).
                 // This means their handles are actually accessible.
-                zIndex: this.level,
+                zIndex: 2 + this.level,
             }).element;
 
             // We allow users to reconnect edges to different cells by dragging their

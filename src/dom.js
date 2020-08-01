@@ -52,6 +52,16 @@ DOM.Element = class {
         return this;
     }
 
+    /// Prepends this element as the first child of the given one.
+    prepend_to(value) {
+        if (value instanceof DOM.Element) {
+            value.element.prepend(this.element);
+        } else {
+            value.prepend(this.element);
+        }
+        return this;
+    }
+
     /// Removes the element from the DOM.
     remove() {
         this.element.remove();
