@@ -37,6 +37,7 @@
         // - Figure out how to export appropriate tikz-cd code for curved edges.
         // - Make sure that curves are disabled when outputting for adjunctions, etc.
         // - Make sure we're going to load old diagrams with level properly.
+        // - Special-case size=0 for target/source.
         //
         // ** Bugs **
         // - Make label handling work well when edge is very small (and when the label (offset=left/right) contains the edge). At the moment, there are NaN errors, etc. Label doesn't crop head/tail, for instance.
@@ -45,6 +46,7 @@
         // - Cropping of background (gets cropped inappropriately in edge cases at the moment).
         // - Add mask for "none" tail for squiggly lines (could maybe use the existing mask background).
         // - Make sure it works in Firefox, etc.
+        // - Too much rerendering.
 
         let drag = null;
 

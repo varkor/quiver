@@ -743,3 +743,15 @@ body:not(.modal) {
     overflow: visible;
     pointer-events: none;
 }
+
+.arrow > svg:first-child > path {
+    pointer-events: stroke;
+}
+
+.arrow:not(.selected) > svg:first-child {
+    opacity: 0;
+}
+
+.arrow > svg:first-child:hover {
+    opacity: 0.5 !important;
+}

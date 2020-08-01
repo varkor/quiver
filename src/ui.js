@@ -84,7 +84,10 @@ UIState.Connect = class extends UIState {
         this.source.element.classList.remove("source");
         if (this.target !== null) {
             this.target.element.classList.remove("target");
+            this.target = null;
         }
+        ui.arrow.element.remove();
+        ui.arrow = null;
         if (this.reconnect !== null) {
             this.reconnect.edge.element.classList.remove("reconnecting");
             this.reconnect.edge.render(ui);
@@ -109,10 +112,30 @@ UIState.Connect = class extends UIState {
                 level: this.target.level,
             } : {
                 offset,
-                size: Dimensions.zero(),
+                // We don't use zero, because there are issues attempting to intersect a
+                // Bézier curve with a shape with zero area.
+                size: new Dimensions(1, 1),
                 is_offset: false,
                 level: 0,
             };
+
+            const source_offset = this.source.off(ui);
+            const source_shape = new Shape(source_offset.x, source_offset.y);
+            const target_shape = new Shape(target.offset.x, target.offset.y);
+            if (ui.arrow === null) {
+                ui.arrow = new Arrow(source_shape, target_shape, new ArrowStyle());
+                ui.canvas.add(ui.arrow.element);
+                ui.arrow.element.set_style({ "pointer-events": "none" });
+                ui.arrow.svg.set_style({ "pointer-events": "none" });
+                ui.arrow.background.set_style({ display: "none", "pointer-events": "none" });
+            } else {
+                ui.arrow.source = source_shape;
+                ui.arrow.target = target_shape;
+            }
+            ui.arrow.target.width = target.size.width;
+            ui.arrow.target.height = target.size.height;
+            ui.arrow.redraw();
+
             Edge.draw_and_position_edge(
                 ui,
                 this.overlay.element,
@@ -362,6 +385,9 @@ class UI {
 
         /// All currently selected cells;
         this.selection = new Set();
+
+        /// The arrow associated to the cursor.
+        this.arrow = null;
 
         /// The element in which to place the interface elements.
         this.element = element;
@@ -3066,6 +3092,7 @@ class Cell {
         if (this.element !== content_element) {
             this.element.addEventListener("mousedown", (event) => {
                 if (event.button === 0) {
+                    console.log("ues");
                     if (ui.in_mode(UIState.Default)) {
                         event.stopPropagation();
                         // If the cell we're dragging is part of the existing selection,
@@ -3276,11 +3303,17 @@ class Cell {
     }
 
     select() {
-        this.element.classList.add("selected");
+        if (this.is_edge()) {
+            console.log(this.arrow);
+            this.arrow.element.class_list.add("selected");
+        }
     }
 
     deselect() {
         this.element.classList.remove("selected");
+        if (this.is_edge()) {
+            this.arrow.element.class_list.remove("selected");
+        }
     }
 
     size() {
@@ -3690,6 +3723,18 @@ class Edge extends Cell {
             centre: CONSTANTS.LABEL_ALIGNMENT.CENTRE,
             over: CONSTANTS.LABEL_ALIGNMENT.OVER,
         }[this.options.label_alignment];
+
+        // const label = new DOM.Element("div").add_to(this.arrow.element);
+        // katex.render(
+        //     this.label,
+        //     label.element,
+        //     {
+        //         throwOnError: false,
+        //         errorColor: "hsl(0, 100%, 40%)",
+        //         // macros: this.latex_macros(),
+        //     },
+        // );
+
         this.arrow.redraw();
     }
 

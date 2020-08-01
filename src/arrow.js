@@ -144,19 +144,21 @@ class Shape {
 }
 
 class Arrow {
-    constructor(source, target, style, label) {
+    constructor(source, target, style, label = null) {
         this.source = source;
         this.target = target;
         this.style = style;
         this.label = label;
 
+        // We need to have unique `id`s for each arrow, to assign masks and clipping paths.
+        this.id = Arrow.NEXT_ID++;
         this.element = new DOM.Element("div", { class: "arrow" });
+        // The background to the edge, with which the user may interact.
+        this.background = new DOM.SVGElement("svg").add_to(this.element);
         // The SVG containing the edge itself, including the arrow head and tail.
         this.svg = new DOM.SVGElement("svg").add_to(this.element);
         // The mask to be used for any edges having this edge as a source or target.
         this.mask = new DOM.SVGElement("svg");
-        // The background to the edge, with which the user may interact.
-        this.background = new DOM.SVGElement("svg").add_to(this.element);
     }
 
     /// Redraw the arrow, its mask, and its background. We should minimise calls to `redraw`: it
@@ -230,8 +232,8 @@ class Arrow {
             if (intersections.length === 0) {
                 // We should always have at least one intersection, as the Bézier curve spans the
                 // endpoints, so this is an error.
-                console.log(bounding_rect, bezier);
                 console.error("No intersection found for Bézier curve with endpoint.");
+                console.log(bounding_rect, bezier);
                 // Try to continue drawing *something*.
                 return Point.zero();
             }
@@ -269,7 +271,7 @@ class Arrow {
         // Create a clipping mask for the background.
         const bg_defs = new DOM.SVGElement("defs").add_to(this.background);
         const bg_mask = new DOM.SVGElement("mask", {
-            id: "bg-mask",
+            id: `arrow${this.id}-bg-mask`,
             maskUnits: "userSpaceOnUse",
         }).add_to(bg_defs);
         // By default, we draw everything.
@@ -281,7 +283,7 @@ class Arrow {
 
         // Draw the actual background.
         new DOM.SVGElement("path", {
-            mask: "url(#bg-mask)",
+            mask: `url(#arrow${this.id}-bg-mask)`,
             d: `${
                 new Path()
                     .move_to(offset)
@@ -348,7 +350,7 @@ class Arrow {
         // and also to cut out space for the label when the alignment is `CENTRE`.
         const defs = new DOM.SVGElement("defs").add_to(this.svg);
         const clipping_mask = new DOM.SVGElement("mask", {
-            id: "clipping-mask",
+            id: `arrow${this.id}-clipping-mask`,
             maskUnits: "userSpaceOnUse",
         }).add_to(defs);
         // By default, we draw everything.
@@ -360,7 +362,7 @@ class Arrow {
 
         // Draw the edge itself.
         const edge = new DOM.SVGElement("path", {
-            mask: "url(#clipping-mask)",
+            mask: `url(#arrow${this.id}-clipping-mask)`,
             fill: "none",
             stroke: "black",
             "stroke-width": edge_width,
@@ -479,13 +481,15 @@ class Arrow {
         // something we do in the future.
 
         // Draw the label.
-        const label_mask = this.redraw_label(constants);
-        // Clip the edge by the label mask.
-        if (this.label.alignment === CONSTANTS.LABEL_ALIGNMENT.CENTRE) {
-            label_mask.clone().add_to(clipping_mask);
+        if (this.label !== null) {
+            const label_mask = this.redraw_label(constants);
+            // Clip the edge by the label mask.
+            if (this.label.alignment === CONSTANTS.LABEL_ALIGNMENT.CENTRE) {
+                label_mask.clone().add_to(clipping_mask);
+            }
+            label_mask.set_attributes({ fill: "hsl(0, 100%, 50%, 0.5)" });
+            this.svg.add(label_mask);
         }
-        label_mask.set_attributes({ fill: "hsl(0, 100%, 50%, 0.5)" });
-        this.svg.add(label_mask);
     }
 
     // Computes the SVG path for the edge itself, whether that's a line, adjunction or squiggly
@@ -1105,3 +1109,5 @@ class Arrow {
         return Point.lendir(label_offset, offset_angle);
     }
 }
+
+Arrow.NEXT_ID = 0;
