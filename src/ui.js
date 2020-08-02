@@ -2769,6 +2769,16 @@ class Toolbar {
             true,
         );
 
+        add_action(
+            "⌗",
+            "Toggle grid",
+            [{ key: "h", modifier: false, context: SHORTCUT_PRIORITY.Defer }],
+            () => {
+                ui.grid.class_list.toggle("hidden");
+            },
+            false,
+        );
+
         // Add the other, "invisible", shortcuts.
 
         add_shortcut([{ key: "Enter" }], () => {
@@ -2867,13 +2877,6 @@ class Toolbar {
                     })),
                 }], true);
             }
-        });
-
-        // Toggle the grid with `h`.
-        add_shortcut([
-            { key: "h" }
-        ], () => {
-            ui.grid.class_list.toggle("hidden");
         });
 
         // Handle global key presses (such as, but not exclusively limited to, keyboard shortcuts).
