@@ -223,7 +223,7 @@ body:not(.modal) {
 
 .edge {
     position: absolute;
-    opacity: 0;
+    display: none;
 }
 
 .edge.reconnecting {
@@ -750,6 +750,10 @@ body:not(.modal) {
     z-index: 1;
 }
 
+.arrow > svg:nth-child(2) {
+    z-index: 3;
+}
+
 .arrow > svg:first-child > path {
     pointer-events: all;
 }
@@ -760,4 +764,13 @@ body:not(.modal) {
 
 .arrow:not(.selected) > svg:first-child > path:hover {
     opacity: 0.5;
+}
+
+.arrow-endpoint {
+    pointer-events: all;
+}
+
+.arrow-endpoint:hover {
+    stroke: hsl(200, 100%, 40%);
+    stroke-width: 2px;
 }

@@ -102,7 +102,7 @@ UIState.Connect = class extends UIState {
             // We're drawing the edge again from scratch, so we need to remove all existing
             // elements.
             const svg = this.overlay.query_selector("svg");
-            new DOM.Element(svg).clear();
+            svg.clear();
             // Lock on to the target if present, otherwise simply draw the edge
             // to the position of the cursor.
             const target = this.target !== null ? {
@@ -139,7 +139,7 @@ UIState.Connect = class extends UIState {
             Edge.draw_and_position_edge(
                 ui,
                 this.overlay.element,
-                svg,
+                svg.element,
                 {
                     offset: this.source.off(ui),
                     size: this.source.size(),
@@ -3161,7 +3161,7 @@ class Cell {
                         this.element.classList.add("target");
                         // Hide the insertion point (e.g. if we're connecting a vertex to an edge).
                         const insertion_point = ui.canvas.query_selector(".insertion-point");
-                        insertion_point.classList.remove("revealed", "pending", "active");
+                        insertion_point.class_list.remove("revealed", "pending", "active");
                     }
                 }
             }
@@ -3526,11 +3526,12 @@ class Edge extends Cell {
             background = new DOM.SVGElement("svg", { class: "background" }).element;
             this.element.appendChild(background);
 
-            // Create the endpoint handles.
+            // Set up the endpoint handle interaction events.
             for (const end of ["source", "target"]) {
-                const handle = new DOM.Element("div", { class: `handle ${end}` });
+                const handle = this.arrow.element.query_selector(`.arrow-endpoint.${end}`);
+                console.log(handle);
+                handle.listen("hover", () => console.log("yes"));
                 handle.listen("mousedown", (event) => reconnect(event, end));
-                this.element.appendChild(handle.element);
             }
 
             // The arrow SVG itself.
@@ -3742,15 +3743,15 @@ class Edge extends Cell {
             },
         );
         const rect = label.element.getBoundingClientRect();
-        this.arrow.label.width = rect.width;
-        this.arrow.label.height = rect.height;
+        this.arrow.label.width = rect.width + CONSTANTS.CONTENT_PADDING * 2;
+        this.arrow.label.height = rect.height + CONSTANTS.CONTENT_PADDING * 2;
 
         this.arrow.element.set_style({ position: "relative" });
         label.set_style({ visibility: "hidden" });
         setTimeout(() => {
             const rect_svg = this.arrow.label.element.element.getBoundingClientRect();
             const rect_arr = this.arrow.element.element.getBoundingClientRect();
-            label.set_style({ position: "absolute", display: "inline-block", left: `${rect_svg.left - rect_arr.left}px`, top: `${rect_svg.top - rect_arr.top}px` });
+            label.set_style({ position: "absolute", display: "inline-block", left: `${rect_svg.left - rect_arr.left + CONSTANTS.CONTENT_PADDING}px`, top: `${rect_svg.top - rect_arr.top + CONSTANTS.CONTENT_PADDING}px` });
             label.set_style({ visibility: "visible" });
         }, 0);
 

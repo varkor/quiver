@@ -41,6 +41,8 @@ const CONSTANTS = {
     ADJUNCTION_LINE_LENGTH: 16,
     /// The length of the line segments in a corner (i.e. a pullback or pushout).
     CORNER_LINE_LENGTH: 12,
+    /// The radius of the handle for dragging an edge.
+    HANDLE_RADIUS: 14,
     /// The possible styles for an edge.
     ARROW_BODY_STYLE: new Enum(
         "ARROW_BODY_STYLE",
@@ -330,6 +332,15 @@ class Arrow {
                     r: edge_width / 2 + CONSTANTS.BACKGROUND_PADDING,
                     fill: "white",
                 }).add_to(bg_mask);
+                // Add a handle to the endpoint.
+                console.log("new");
+                new DOM.SVGElement("circle", {
+                    class: `arrow-endpoint ${is_start ? "source" : "target"}`,
+                    cx: point.x,
+                    cy: point.y,
+                    r: CONSTANTS.HANDLE_RADIUS,
+                    fill: "white",
+                }).add_to(this.background);
             }
         }
         round_bg_mask_end(start, true);

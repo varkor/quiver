@@ -52,16 +52,6 @@ DOM.Element = class {
         return this;
     }
 
-    /// Prepends this element as the first child of the given one.
-    prepend_to(value) {
-        if (value instanceof DOM.Element) {
-            value.element.prepend(this.element);
-        } else {
-            value.prepend(this.element);
-        }
-        return this;
-    }
-
     /// Removes the element from the DOM.
     remove() {
         this.element.remove();
@@ -82,7 +72,12 @@ DOM.Element = class {
     }
 
     query_selector(selector) {
-        return this.element.querySelector(selector);
+        const element = this.element.querySelector(selector);
+        if (element !== null) {
+            return new DOM.Element(element);
+        } else {
+            return null;
+        }
     }
 
     set_attributes(attributes = {}) {
