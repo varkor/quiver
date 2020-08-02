@@ -164,6 +164,47 @@ class Arrow {
         this.mask = new DOM.SVGElement("svg");
     }
 
+    /// Return an existing element, or create a new one if it does not exist.
+    /// This is more efficient, and also preserves event listeners on the existing elements.
+    /// The `selector` may be of the form `element.class1.class2...`.
+    requisition_element(parent, selector, attributes = {}) {
+        const elements = parent.query_selector_all(selector);
+        switch (elements.length) {
+            case 0:
+                const [name, ...classes] = selector.split(".");
+                return new DOM.SVGElement(
+                    name,
+                    Object.assign(
+                        classes.length > 0 ? { class: classes.join(" ") } : {},
+                        attributes,
+                    ),
+                ).add_to(parent);
+            case 1:
+                // Overwrite existing attributes.
+                elements[0].set_attributes(attributes);
+                return elements[0];
+            default:
+                console.error("Found multiple candidates for requisitioning.");
+                break;
+        }
+    }
+
+    /// Remove an existing element, or do nothing if it does not exist.
+    release_element(parent, selector) {
+        const elements = parent.query_selector_all(selector);
+        switch (elements.length) {
+            case 0:
+                // It's already released, so we can ignore.
+                break;
+            case 1:
+                elements[0].remove();
+                break;
+            default:
+                console.error("Found multiple candidates for releasing.");
+                break;
+        }
+    }
+
     /// Redraw the arrow, its mask, and its background. We should minimise calls to `redraw`: it
     /// should only be called if something has actually changed: for instance, its position or
     /// properties.
@@ -235,8 +276,11 @@ class Arrow {
             if (intersections.length === 0) {
                 // We should always have at least one intersection, as the Bézier curve spans the
                 // endpoints, so this is an error.
-                console.error("No intersection found for Bézier curve with endpoint.");
-                console.log(bounding_rect, bezier);
+                console.error(
+                    "No intersection found for Bézier curve with endpoint.",
+                    bounding_rect,
+                    bezier,
+                );
                 // Try to continue drawing *something*.
                 return Point.zero();
             }
@@ -258,8 +302,6 @@ class Arrow {
                     rotate(${angle}rad)
                 `
             });
-            // We are going to redraw everything from scratch, so clear the current SVG.
-            svg.clear();
             // Set the view box to match the length and height of the SVG. It would be nice if we
             // could just use `length` and `height` here and let SVG handle the offsets for us,
             // but unfortunately this leads to some content being clipped, so we have to handle it
@@ -267,25 +309,23 @@ class Arrow {
             svg.set_attributes({ viewBox: `0 0 ${svg_width} ${svg_height}` });
         }
 
-        // Redraw the mask.
-
         // Redraw the background.
 
         // Create a clipping mask for the background.
-        const bg_defs = new DOM.SVGElement("defs").add_to(this.background);
-        const bg_mask = new DOM.SVGElement("mask", {
+        const bg_defs = this.requisition_element(this.background, "defs");
+        const bg_mask = this.requisition_element(bg_defs, "mask", {
             id: `arrow${this.id}-bg-mask`,
             maskUnits: "userSpaceOnUse",
-        }).add_to(bg_defs);
+        });
         // By default, we draw everything.
-        new DOM.SVGElement("rect", {
+        this.requisition_element(bg_mask, "rect.base", {
             width: svg_width,
             height: svg_height,
             fill: "white",
-        }).add_to(bg_mask);
+        });
 
         // Draw the actual background.
-        new DOM.SVGElement("path", {
+        this.requisition_element(this.background, "path", {
             mask: `url(#arrow${this.id}-bg-mask)`,
             d: `${
                 new Path()
@@ -295,7 +335,7 @@ class Arrow {
             fill: "none",
             stroke: `hsla(0, 0%, 0%, ${CONSTANTS.BACKGROUND_OPACITY})`,
             "stroke-width": edge_width + CONSTANTS.BACKGROUND_PADDING * 2,
-        }).add_to(this.background);
+        });
 
         // The background usually has flat ends, but we want rounded ends. Unfortunately, the
         // `round` endpoint path option in SVG is not suitable, because it takes up too much space,
@@ -313,9 +353,10 @@ class Arrow {
                         + (CONSTANTS.BACKGROUND_PADDING + CONSTANTS.MASK_PADDING) * 2,
                 };
                 const point = offset.add(endpoint);
+                const name = is_start ? "source" : "target";
                 // This is an overapproximation of the ends, but this is okay, as we're going to
                 // draw the semicircle ends over the top of this.
-                new DOM.SVGElement("rect", {
+                this.requisition_element(bg_mask, `rect.${name}`, {
                     width: end_cutoff.width,
                     height: end_cutoff.height,
                     x: is_start ? -end_cutoff.width : 0,
@@ -324,22 +365,21 @@ class Arrow {
                     transform:
                         `translate(${point.x}, ${point.y})
                         rotate(${rad_to_deg(endpoint.angle)})`,
-                }).add_to(bg_mask);
+                });
                 // Draw the semicircle (actually a circle, but half of it is idempotent).
-                new DOM.SVGElement("circle", {
+                this.requisition_element(bg_mask, `circle.${name}`, {
                     cx: point.x,
                     cy: point.y,
                     r: edge_width / 2 + CONSTANTS.BACKGROUND_PADDING,
                     fill: "white",
-                }).add_to(bg_mask);
+                });
                 // Add a handle to the endpoint.
-                new DOM.SVGElement("circle", {
-                    class: `arrow-endpoint ${is_start ? "source" : "target"}`,
+                this.requisition_element(this.background, `circle.arrow-endpoint.${name}`, {
                     cx: point.x,
                     cy: point.y,
                     r: CONSTANTS.HANDLE_RADIUS,
                     fill: "white",
-                }).add_to(this.background);
+                });
             }
         }
         round_bg_mask_end(start, true);
@@ -359,20 +399,22 @@ class Arrow {
 
         // Create a clipping mask for the edge. We use this to cut out the gaps in an n-cell,
         // and also to cut out space for the label when the alignment is `CENTRE`.
-        const defs = new DOM.SVGElement("defs").add_to(this.svg);
-        const clipping_mask = new DOM.SVGElement("mask", {
+        const defs = this.requisition_element(this.svg, "defs");
+        const clipping_mask = this.requisition_element(defs, "mask", {
             id: `arrow${this.id}-clipping-mask`,
             maskUnits: "userSpaceOnUse",
-        }).add_to(defs);
+        });
+        // For simplicity, we clear the clipping mask and recreate everything.
+        clipping_mask.clear();
         // By default, we draw everything.
-        new DOM.SVGElement("rect", {
+        this.requisition_element(clipping_mask, "rect.base", {
             width: svg_width,
             height: svg_height,
             fill: "white",
-        }).add_to(clipping_mask);
+        });
 
         // Draw the edge itself.
-        const edge = new DOM.SVGElement("path", {
+        const edge = this.requisition_element(this.svg, "path.arrow-edge", {
             mask: `url(#arrow${this.id}-clipping-mask)`,
             fill: "none",
             stroke: "black",
@@ -383,7 +425,7 @@ class Arrow {
             // We manually draw rounded ends for the overall path, but we avoid doing this for every
             // dash, as this would be very expensive.
             "stroke-linecap": "butt",
-        }).add_to(this.svg);
+        });
 
         // When we draw squiggly arrows, we have straight line padding near the tail and head, which
         // we need to account for when drawing dashed lines.
@@ -416,18 +458,6 @@ class Arrow {
             t_after_length, dash_padding, offset,
         };
 
-        // We calculate the widths of the tails and heads whilst drawing them, so we have to
-        // sandwich the code to draw heads and tails in between the code to draw the path.
-        const draw_heads = (heads, endpoint, is_start, is_mask) => {
-            const { path: head, total_width }
-                = this.redraw_heads(constants, heads, endpoint, is_start, is_mask);
-            if (head !== null) {
-                const element = !is_mask ? this.svg : clipping_mask;
-                element.add(head);
-            }
-            return total_width;
-        };
-
         // Draw the the proarrow bar.
         if (this.style.body_style === CONSTANTS.ARROW_BODY_STYLE.PROARROW) {
             const centre = bezier.point(0.5).add(offset);
@@ -442,15 +472,31 @@ class Arrow {
             // Bottom.
             path.line_by(adj_seg.rotate(normal));
 
-            this.svg.add(new DOM.SVGElement("path", {
+            this.requisition_element(this.svg, "path.arrow-bar", {
                 d: `${path}`,
                 fill: "none",
                 stroke: "black",
                 "stroke-width": CONSTANTS.STROKE_WIDTH,
                 "stroke-linecap": "round",
-            }));
+            });
+        } else {
+            this.release_element(this.svg, "path.arrow-bar");
         }
 
+        // We calculate the widths of the tails and heads whilst drawing them, so we have to
+        // sandwich the code to draw heads and tails in between the code to draw the path.
+        const draw_heads = (heads, endpoint, is_start, is_mask) => {
+            const { path: head, total_width }
+                = this.redraw_heads(constants, heads, endpoint, is_start, is_mask);
+            if (head !== null) {
+                const element = !is_mask ? this.svg : clipping_mask;
+                element.add(head);
+            }
+            return total_width;
+        };
+
+        // Clear any existing tails and heads: we're going to recreate them.
+        this.svg.query_selector_all(".arrow-head").forEach((element) => element.remove());
         // Draw the tails and heads.
         constants.total_width_of_tails = draw_heads(this.style.tails, start, true, false);
         constants.total_width_of_heads = draw_heads(this.style.heads, end, false, false);
@@ -493,14 +539,16 @@ class Arrow {
 
         // Draw the label.
         if (this.label !== null) {
-            const label_mask = this.redraw_label(constants);
             // Clip the edge by the label mask.
             if (this.label.alignment === CONSTANTS.LABEL_ALIGNMENT.CENTRE) {
-                label_mask.clone().add_to(clipping_mask);
+                this.redraw_label(constants).add_to(clipping_mask);
             }
-            label_mask.set_attributes({ fill: "hsl(0, 100%, 50%, 0.5)" });
-            this.svg.add(label_mask);
-            this.label.element = label_mask;
+            const label = this.redraw_label(constants);
+            label.set_attributes({ fill: "hsl(0, 100%, 50%, 0.5)" });
+            label.set_attributes({ class: "arrow-label" });
+            this.release_element(this.svg, "rect.arrow-label");
+            this.svg.add(label);
+            this.label.element = label;
         }
     }
 
@@ -1002,6 +1050,7 @@ class Arrow {
 
         return {
             path: new DOM.SVGElement("path", {
+                class: "arrow-head",
                 d: `${path}`,
                 fill: is_mask ? "black" : "none",
                 stroke: !is_mask ? "black" : "none",
@@ -1022,7 +1071,7 @@ class Arrow {
         ));
 
         // Draw the mask.
-        const mask = new DOM.SVGElement("rect", {
+        return new DOM.SVGElement("rect", {
             width: this.label.width,
             height: this.label.height,
             fill: "black",
@@ -1031,8 +1080,6 @@ class Arrow {
                 `translate(${origin.x} ${origin.y})
                 rotate(${-rad_to_deg(angle)} ${this.label.width / 2} ${this.label.height / 2})`,
         });
-
-        return mask;
     }
 
     /// Find the correct position of the label. If the label is centred, this is easy. However, if

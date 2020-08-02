@@ -80,6 +80,11 @@ DOM.Element = class {
         }
     }
 
+    query_selector_all(selector) {
+        const elements = Array.from(this.element.querySelectorAll(selector));
+        return elements.map((element) => new DOM.Element(element));
+    }
+
     set_attributes(attributes = {}) {
         for (const [attribute, value] of Object.entries(attributes)) {
             this.element.setAttribute(attribute, value);
