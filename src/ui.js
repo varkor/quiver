@@ -3529,8 +3529,6 @@ class Edge extends Cell {
             // Set up the endpoint handle interaction events.
             for (const end of ["source", "target"]) {
                 const handle = this.arrow.element.query_selector(`.arrow-endpoint.${end}`);
-                console.log(handle);
-                handle.listen("hover", () => console.log("yes"));
                 handle.listen("mousedown", (event) => reconnect(event, end));
             }
 

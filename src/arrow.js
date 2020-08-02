@@ -333,7 +333,6 @@ class Arrow {
                     fill: "white",
                 }).add_to(bg_mask);
                 // Add a handle to the endpoint.
-                console.log("new");
                 new DOM.SVGElement("circle", {
                     class: `arrow-endpoint ${is_start ? "source" : "target"}`,
                     cx: point.x,
