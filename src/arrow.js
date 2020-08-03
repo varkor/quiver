@@ -506,6 +506,8 @@ class Arrow {
         edge.set_attributes({ d: `${path}` });
         if (dash_array !== null) {
             edge.set_attributes({ "stroke-dasharray": dash_array });
+        } else {
+            edge.remove_attributes("stroke-dasharray");
         }
 
         // We now draw the various parts making up the n-cell. The `edge` SVG is drawn as a thick
@@ -544,7 +546,8 @@ class Arrow {
                 this.redraw_label(constants).add_to(clipping_mask);
             }
             const label = this.redraw_label(constants);
-            label.set_attributes({ fill: "hsl(0, 100%, 50%, 0.5)" });
+            // label.set_attributes({ fill: "hsl(0, 100%, 50%, 0.5)" });
+            label.set_attributes({ fill: "transparent" });
             label.set_attributes({ class: "arrow-label" });
             this.release_element(this.svg, "rect.arrow-label");
             this.svg.add(label);

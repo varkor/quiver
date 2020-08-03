@@ -754,7 +754,7 @@ body:not(.modal) {
     z-index: 3;
 }
 
-.arrow > svg:first-child > path {
+.arrow:not(.reconnecting) > svg:first-child > path {
     pointer-events: all;
 }
 
@@ -767,7 +767,12 @@ body:not(.modal) {
 }
 
 .arrow-endpoint {
+    display: none;
     pointer-events: all;
+}
+
+.ui.default .arrow:hover .arrow-endpoint, .ui.default .arrow.selected .arrow-endpoint {
+    display: inline-block;
 }
 
 .arrow-endpoint:hover {

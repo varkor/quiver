@@ -86,10 +86,16 @@ UIState.Connect = class extends UIState {
             this.target.element.classList.remove("target");
             this.target = null;
         }
-        ui.arrow.element.remove();
-        ui.arrow = null;
+        // If we're connecting from an insertion point, then we need to hide it again.
+        ui.element.querySelector(".insertion-point").classList.remove("revealed");
+        if (ui.arrow !== null) {
+            // FIXME: instead of arrow on ui, it would be better on UIState.Connect.
+            // E.g. this.overlay.
+            ui.arrow.element.remove();
+            ui.arrow = null;
+        }
         if (this.reconnect !== null) {
-            this.reconnect.edge.element.classList.remove("reconnecting");
+            this.reconnect.edge.arrow.element.class_list.remove("reconnecting");
             this.reconnect.edge.render(ui);
             this.reconnect = null;
         }
@@ -107,7 +113,10 @@ UIState.Connect = class extends UIState {
             // to the position of the cursor.
             const target = this.target !== null ? {
                 offset: this.target.off(ui),
-                size: this.target.size(),
+                size: new Dimensions(
+                    this.target.shape.width,
+                    this.target.shape.height,
+                ),
                 is_offset: true,
                 level: this.target.level,
             } : {
@@ -134,6 +143,9 @@ UIState.Connect = class extends UIState {
             }
             ui.arrow.target.width = target.size.width;
             ui.arrow.target.height = target.size.height;
+            ui.arrow.target.radius = 0;
+            ui.arrow.style.level = Math.max(this.source.level, target.level) + 1;
+            // FIXME: radius should not be 16 if the size is 1
             ui.arrow.redraw();
 
             Edge.draw_and_position_edge(
@@ -202,13 +214,15 @@ UIState.Connect = class extends UIState {
             // If *every* existing connection to source and target has a consistent label alignment,
             // then `align` will be a singleton, in which case we use that element as the alignment.
             // If it has `left` and `right` in equal measure (regardless of `centre`), then
-            // we will pick `centre`. Otherwise we keep the default. And similarly for `offset`.
+            // we will pick `centre`. Otherwise we keep the default. And similarly for `offset` and
+            // `curve`.
             const align = new Map();
             const offset = new Map();
+            const curve = new Map();
             // We only want to pick `centre` when the source and target are equally constraining
             // (otherwise we end up picking `centre` far too often). So we check that they're both
             // being considered equally. This means `centre` is chosen only rarely, but often in
-            // the situations you want it. (This has no analogue in `offset`.)
+            // the situations you want it. (This has no analogue in `offset` or `curve`.)
             let balance = 0;
 
             const swap = (options) => {
@@ -220,15 +234,17 @@ UIState.Connect = class extends UIState {
                         right: "left",
                     }[options.label_alignment],
                     offset: -options.offset,
+                    curve: -options.curve,
                 };
             };
 
             const conserve = (options, between) => {
                 return {
                     label_alignment: options.label_alignment,
-                    // We ignore the offsets of edges that aren't directly `between` the
+                    // We ignore the offsets and curves of edges that aren't directly `between` the
                     // source and target.
                     offset: between ? options.offset : null,
+                    curve: between ? options.curve : null,
                 };
             };
 
@@ -242,6 +258,12 @@ UIState.Connect = class extends UIState {
                         offset.set(options.offset, 0);
                     }
                     offset.set(options.offset, offset.get(options.offset) + 1);
+                }
+                if (options.curve !== null) {
+                    if (!curve.has(options.curve)) {
+                        curve.set(options.curve, 0);
+                    }
+                    curve.set(options.curve, curve.get(options.curve) + 1);
                 }
                 balance += tip;
             };
@@ -269,6 +291,9 @@ UIState.Connect = class extends UIState {
 
             if (offset.size === 1) {
                 options.offset = offset.keys().next().value;
+            }
+            if (curve.size === 1) {
+                options.curve = curve.keys().next().value;
             }
 
             if (!event.shiftKey && !event.metaKey && !event.ctrlKey) {
@@ -475,7 +500,7 @@ class UI {
             event.preventDefault();
 
             // Hide the insertion point if it is visible.
-            this.element.querySelector(".insertion-point").classList.remove("revealed");
+            insertion_point.classList.remove("revealed");
 
             this.pan_view(new Offset(
                 event.deltaX * 2 ** -this.scale,
@@ -559,7 +584,7 @@ class UI {
                 }
                 if (this.in_mode(UIState.Pan)) {
                     // Hide the insertion point if it is visible.
-                    this.element.querySelector(".insertion-point").classList.remove("revealed");
+                    insertion_point.classList.remove("revealed");
                     // Record the position the pointer was pressed at, so we can pan relative
                     // to that location by dragging.
                     this.state.origin = this.offset_from_event(event).sub(this.view);
@@ -598,8 +623,7 @@ class UI {
             return position;
         };
 
-        // Clicking on the insertion point reveals it,
-        // after which another click adds a new node.
+        // Clicking on the insertion point reveals it, after which another click adds a new node.
         insertion_point.addEventListener("mousedown", (event) => {
             if (event.button === 0) {
                 if (this.in_mode(UIState.Default)) {
@@ -651,66 +675,79 @@ class UI {
             }
         });
 
-        // If we release the mouse while hovering over the insertion point,
-        // there are two possibilities. Either we haven't moved the mouse,
-        // in which case the insertion point loses its `"pending"` or
-        // `"active"` state, or we have, in which case we're mid-connection
-        // and we need to create a new vertex and connect it.
-        insertion_point.addEventListener("mouseup", (event) => {
+        // If we release the mouse while hovering over the insertion point, there are two
+        // possibilities. Either we haven't moved the mouse, in which case the insertion point loses
+        // its `"pending"` or `"active"` state; or we have, in which case we're mid-connection and
+        // we need to create a new vertex and connect it. We add the event listener to the canvas,
+        // rather than the insertion point, so that we don't have to worry about the insertion point
+        // being exactly the same size as a grid cell (there is some padding for aesthetic purposes)
+        // or the insertion point being covered by other elements (like edge endpoints).
+        this.canvas.listen("mouseup", (event) => {
             if (event.button === 0) {
+                // Handle mouse releases without having moved the cursor from the initial cell.
                 insertion_point.classList.remove("pending", "active");
 
-                // When releasing the mouse over an empty grid cell, we want to create a new
-                // cell and connect it to the source.
-                if (this.in_mode(UIState.Connect)) {
-                    event.stopImmediatePropagation();
-                    // We only want to forge vertices, not edges (and thus 1-cells).
-                    if (this.state.source.is_vertex()) {
-                        this.state.target
-                            = create_vertex(this.position_from_event(event));
-                        // Usually this vertex will be immediately deselected, except when Shift
-                        // is held, in which case we want to select the forged vertices *and* the
-                        // new edge.
-                        this.select(this.state.target);
-                        const created = new Set([this.state.target]);
-                        const actions = [{
-                            kind: "create",
-                            cells: created,
-                        }];
+                // We only want to create a connection if the insertion point is visible. E.g. not
+                // if we're hovering over a grid cell that contains a vertex, but not hovering over
+                // the vertex itself (i.e. the whitespace around the vertex).
+                if (insertion_point.classList.contains("revealed")) {
+                    // When releasing the mouse over an empty grid cell, we want to create a new
+                    // cell and connect it to the source.
+                    if (this.in_mode(UIState.Connect)) {
+                        event.stopImmediatePropagation();
+                        // We only want to forge vertices, not edges (and thus 1-cells).
+                        if (this.state.source.is_vertex()) {
+                            this.state.target
+                                = create_vertex(this.position_from_event(event));
+                            // Usually this vertex will be immediately deselected, except when Shift
+                            // is held, in which case we want to select the forged vertices *and*
+                            // the new edge.
+                            this.select(this.state.target);
+                            const created = new Set([this.state.target]);
+                            const actions = [{
+                                kind: "create",
+                                cells: created,
+                            }];
 
-                        if (this.state.forged_vertex) {
-                            created.add(this.state.source);
-                        }
-
-                        if (this.state.reconnect === null) {
-                            // If we're not reconnecting an existing edge, then we need
-                            // to create a new one.
-                            const edge = this.state.connect(this, event);
-                            created.add(edge);
-                        } else {
-                            // Unless we're holding Shift/Command/Control (in which case we just add
-                            // the new vertex to the selection) we want to focus and select the new
-                            // vertex.
-                            const { edge, end } = this.state.reconnect;
-                            if (!event.shiftKey && !event.metaKey && !event.ctrlKey) {
-                                this.deselect();
-                                this.select(this.state.target);
-                                this.panel.element.querySelector('label input[type="text"]')
-                                    .select();
+                            if (this.state.forged_vertex) {
+                                created.add(this.state.source);
                             }
-                            actions.push({
-                                kind: "connect",
-                                edge,
-                                end,
-                                from: edge[end],
-                                to: this.state.target,
-                            });
-                            this.state.connect(this, event);
-                        }
 
-                        this.history.add(this, actions, false, this.selection_excluding(created));
+                            if (this.state.reconnect === null) {
+                                // If we're not reconnecting an existing edge, then we need
+                                // to create a new one.
+                                const edge = this.state.connect(this, event);
+                                created.add(edge);
+                            } else {
+                                // Unless we're holding Shift/Command/Control (in which case we just
+                                // add the new vertex to the selection) we want to focus and select
+                                // the new vertex.
+                                const { edge, end } = this.state.reconnect;
+                                if (!event.shiftKey && !event.metaKey && !event.ctrlKey) {
+                                    this.deselect();
+                                    this.select(this.state.target);
+                                    this.panel.element.querySelector('label input[type="text"]')
+                                        .select();
+                                }
+                                actions.push({
+                                    kind: "connect",
+                                    edge,
+                                    end,
+                                    from: edge[end],
+                                    to: this.state.target,
+                                });
+                                this.state.connect(this, event);
+                            }
+
+                            this.history.add(
+                                this,
+                                actions,
+                                false,
+                                this.selection_excluding(created),
+                            );
+                        }
+                        this.switch_mode(UIState.default);
                     }
-                    this.switch_mode(UIState.default);
                 }
             }
         });
@@ -1138,6 +1175,9 @@ class UI {
             this.positions.set(`${cell.position}`, cell);
         }
         this.canvas.element.appendChild(cell.element);
+        if (cell.is_edge()) {
+            this.canvas.add(cell.arrow.element);
+        }
     }
 
     /// Removes a cell.
@@ -1149,6 +1189,9 @@ class UI {
             }
             this.deselect(removed);
             removed.element.remove();
+            if (removed.is_edge()) {
+                removed.arrow.element.remove();
+            }
         }
     }
 
@@ -2873,9 +2916,6 @@ class Toolbar {
                     }], false, ui.selection_excluding(created));
                 }
                 ui.switch_mode(UIState.default);
-                // If we're connecting from an insertion point,
-                // then we need to hide it again.
-                ui.element.querySelector(".insertion-point").classList.remove("revealed");
             }
             // If we're waiting to start connecting a cell, then we stop waiting.
             const pending = ui.element.querySelector(".cell.pending");
@@ -3089,7 +3129,7 @@ class Cell {
 
         /// For cells with a separate `content_element`, we allow the cell to be moved
         /// by dragging its `element` (under the assumption it doesn't totally overlap
-        /// its `content_element`).
+        /// its `content_element`). For now, these are precisely the vertices.
         if (this.element !== content_element) {
             this.element.addEventListener("mousedown", (event) => {
                 if (event.button === 0) {
@@ -3118,7 +3158,8 @@ class Cell {
         // or we wouldn't be able to immediately delete a cell with Backspace/Delete,
         // as the input field would capture it.
         let was_previously_selected = true;
-        content_element.addEventListener("mousedown", (event) => {
+        const main_element = this.is_vertex() ? content_element : this.arrow.element.element;
+        main_element.addEventListener("mousedown", (event) => {
             if (event.button === 0) {
                 if (ui.in_mode(UIState.Default)) {
                     event.stopPropagation();
@@ -3153,9 +3194,13 @@ class Cell {
             }
         });
 
-        content_element.addEventListener("mouseenter", () => {
+        main_element.addEventListener("mouseenter", () => {
             if (ui.in_mode(UIState.Connect)) {
-                if (ui.state.source !== this) {
+                // The second part of the condition should not be necessary, because pointer events
+                // are disabled for reconnected edges, but this acts as a warranty in case this is
+                // not working.
+                if (ui.state.source !== this
+                    && (ui.state.reconnect === null || ui.state.reconnect.edge !== this)) {
                     if (ui.state.valid_connection(this)) {
                         ui.state.target = this;
                         this.element.classList.add("target");
@@ -3167,7 +3212,7 @@ class Cell {
             }
         });
 
-        content_element.addEventListener("mouseleave", () => {
+        main_element.addEventListener("mouseleave", () => {
             if (this.element.classList.contains("pending")) {
                 this.element.classList.remove("pending");
 
@@ -3191,7 +3236,7 @@ class Cell {
             }
         });
 
-        content_element.addEventListener("mouseup", (event) => {
+        main_element.addEventListener("mouseup", (event) => {
             if (event.button === 0) {
                 // If we release the pointer without ever dragging, then
                 // we never begin connecting the cell.
@@ -3207,6 +3252,7 @@ class Cell {
 
                 if (ui.in_mode(UIState.Connect)) {
                     event.stopImmediatePropagation();
+
                     // Connect two cells if the source is different to the target.
                     if (ui.state.target === this) {
                         const actions = [];
@@ -3332,7 +3378,7 @@ class Vertex extends Cell {
         super(ui.quiver, 0, label);
 
         this.position = position;
-        this.shape = new Shape(ui.default_cell_size / 2, ui.default_cell_size / 2);
+        this.shape = new Shape(this.position.x, this.position.y);
 
         this.render(ui);
         super.initialise(ui);
@@ -3367,11 +3413,9 @@ class Vertex extends Cell {
         const offset = ui.offset_from_position(this.position);
         offset.reposition(this.element);
         const centre_offset = offset.add(ui.cell_centre_at_position(this.position));
-        const size = this.content_size(ui, [0, 0]); // FIXME: take into account label size
         this.shape.x = centre_offset.x;
         this.shape.y = centre_offset.y;
-        this.shape.width = size.width;
-        this.shape.height = size.height;
+        // Shape width is controlled elsewhere.
 
         // Resize according to the grid cell.
         const cell_width = ui.cell_size(ui.cell_width, this.position.x);
@@ -3429,6 +3473,8 @@ class Vertex extends Cell {
         const size = this.content_size(ui, sizes);
         this.content_element.style.width = `${size.width}px`;
         this.content_element.style.height = `${size.height}px`;
+        this.shape.width = size.width;
+        this.shape.height = size.height;
     }
 }
 
@@ -3447,6 +3493,11 @@ class Edge extends Cell {
         this.arrow.style.shorten = 0;
         this.arrow.redraw();
         ui.canvas.add(this.arrow.element);
+
+        this.shape = new Shape(0, 0);
+        this.shape.width = ui.default_cell_size * 0.5;
+        this.shape.height = ui.default_cell_size * 0.5;
+        this.shape.radius = ui.default_cell_size * 0.25;
 
         this.reconnect(ui, source, target);
 
@@ -3513,7 +3564,7 @@ class Edge extends Cell {
                 // we have to do it ourselves.
                 ui.panel.element.querySelector('label input[type="text"]').blur();
 
-                this.element.classList.add("reconnecting");
+                this.arrow.element.class_list.add("reconnecting");
                 const fixed = { source: this.target, target: this.source }[end];
                 ui.switch_mode(new UIState.Connect(ui, fixed, false, {
                     end,
@@ -3715,7 +3766,7 @@ class Edge extends Cell {
                 this.arrow.style.body_style = CONSTANTS.ARROW_BODY_STYLE.NONE;
                 this.arrow.style.level = 1;
                 this.arrow.style.curve = 0;
-                this.arrow.style.heads = CONSTANTS.ARROW_HEAD_STYLE.CORNER;
+                this.arrow.style.tails = CONSTANTS.ARROW_HEAD_STYLE.CORNER;
                 break;
         }
 
@@ -3753,8 +3804,37 @@ class Edge extends Cell {
             label.set_style({ visibility: "visible" });
         }, 0);
 
-
+        const prev_source = this.arrow.source;
+        const prev_target = this.arrow.target;
+        this.arrow.source = new Shape(source_offset.x, source_offset.y);
+        this.arrow.source.width = prev_source.width;
+        this.arrow.source.height = prev_source.height;
+        if (!endpoint_offset.source) {
+            this.arrow.source.width = 1;
+            this.arrow.source.height = 1;
+            this.arrow.source.radius = 0;
+        }
+        this.arrow.target = new Shape(target_offset.x, target_offset.y);
+        this.arrow.target.width = prev_target.width;
+        this.arrow.target.height = prev_target.height;
+        if (!endpoint_offset.target) {
+            this.arrow.target.width = 1;
+            this.arrow.target.height = 1;
+            this.arrow.target.radius = 0;
+        }
         this.arrow.redraw();
+        this.arrow.source = prev_source;
+        this.arrow.target = prev_target;
+        // Offset is centre of
+        // FIXME: unify this.offset and this.shape position.
+        this.offset = new Offset(this.arrow.source.x, this.arrow.source.y)
+            .add(new Point(this.arrow.target.x, this.arrow.target.y))
+            .div(2)
+            .add(new Point(0, this.arrow.style.curve / 2).rotate(
+                // FIXME: use built-in functions for this
+                Math.atan2(this.arrow.target.y - this.arrow.source.y,
+                    this.arrow.target.x - this.arrow.source.x)
+            ));
     }
 
     /// Create the HTML element associated with the label (and label buffer).

@@ -92,6 +92,13 @@ DOM.Element = class {
         return this;
     }
 
+    remove_attributes(...attributes) {
+        for (const attribute of attributes) {
+            this.element.removeAttribute(attribute);
+        }
+        return this;
+    }
+
     set_style(style = {}) {
         Object.assign(this.element.style, style);
     }
