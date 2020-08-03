@@ -931,7 +931,7 @@ class Arrow {
                 switch (heads[i]) {
                     case "epi":
                     case "corner":
-                        [margin_left, margin_right, margin_begin] = [head_width, 0, 0];
+                        [margin_left, margin_right, margin_begin] = [0, head_width, 0];
                         break;
                     case "mono":
                         [margin_left, margin_right, margin_begin] = [0, head_width, head_width];
@@ -1035,7 +1035,7 @@ class Arrow {
 
                             path.line_by(Point.lendir(
                                 LENGTH,
-                                corner_angle + Math.PI * (1 - end_ind) + side_sign * Math.PI / 4,
+                                corner_angle + Math.PI * end_ind + side_sign * Math.PI / 4,
                             ));
                         }
                         break;
