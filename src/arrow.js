@@ -324,6 +324,8 @@ class Arrow {
             // but unfortunately this leads to some content being clipped, so we have to handle it
             // ourselves.
             svg.set_attributes({ viewBox: `0 0 ${svg_width} ${svg_height}` });
+            // Whether `width` and `height` have to be set seems to differ between browsers.
+            svg.set_style({ width: `${svg_width}px`, height: `${svg_height}px` });
         }
 
         // Redraw the background.
