@@ -374,7 +374,7 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                                 // Anything else requires custom support, so for now
                                 // we only special-case 2-cells. Everything else is
                                 // drawn as if it is a 1-cell.
-                                if (edge.options.style.body.level === 2) {
+                                if (edge.options.level === 2) {
                                     style = "Rightarrow, ";
                                 }
                                 break;
