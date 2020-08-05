@@ -147,26 +147,6 @@ UIState.Connect = class extends UIState {
             ui.arrow.style.level = Math.max(this.source.level, target.level) + 1;
             // FIXME: radius should not be 16 if the size is 1
             ui.arrow.redraw();
-
-            Edge.draw_and_position_edge(
-                ui,
-                this.overlay.element,
-                svg.element,
-                {
-                    offset: this.source.off(ui),
-                    size: this.source.size(),
-                    is_offset: true,
-                    level: this.source.level,
-                },
-                target,
-                Edge.default_options(null, {
-                    body: {
-                        name: "cell",
-                        level: Math.max(this.source.level, target.level) + 1,
-                    },
-                }),
-                null,
-            );
         } else {
             // We're reconnecting an existing edge.
             this.reconnect.edge.render(ui, offset);
@@ -3558,31 +3538,7 @@ class Edge extends Cell {
 
     /// Create the HTML element associated with the edge.
     render(ui, pointer_offset = null) {
-        let [svg, background] = [null, null];
-
-        if (this.element !== null) {
-            // If an element already exists for the edge, then can mostly reuse it when
-            // re-rendering it.
-            svg = this.element.querySelector("svg:not(.background)");
-            background = this.element.querySelector("svg.background");
-
-            // Clear the SVGs: we're going to be completely redrawing it. We're going to keep
-            // around any definitions, though, as we can effectively reuse them.
-            for (const element of [svg, background]) {
-                for (const child of Array.from(element.childNodes)) {
-                    if (child.tagName !== "defs") {
-                        child.remove();
-                    }
-                }
-            }
-        } else {
-            // The container for the edge.
-            this.element = new DOM.Element("div", { class: "edge" }, {
-                // We want to make sure edges always display over vertices (and so on).
-                // This means their handles are actually accessible.
-                zIndex: 2 + this.level,
-            }).element;
-
+        if (this.element === null) {
             // We allow users to reconnect edges to different cells by dragging their
             // endpoint handles.
             const reconnect = (event, end) => {
@@ -3600,50 +3556,13 @@ class Edge extends Cell {
                 }));
             };
 
-            // Create the background. We use an SVG rather than colouring the background
-            // of the element so that we can curve it according to the edge shape.
-            background = new DOM.SVGElement("svg", { class: "background" }).element;
-            this.element.appendChild(background);
-
             // Set up the endpoint handle interaction events.
             for (const end of ["source", "target"]) {
                 const handle = this.arrow.element.query_selector(`.arrow-endpoint.${end}`);
                 handle.listen("mousedown", (event) => reconnect(event, end));
             }
 
-            // The arrow SVG itself.
-            svg = new DOM.SVGElement("svg").element;
-            this.element.appendChild(svg);
-
-            // The clear background for the label (for `centre` alignment).
-            const defs = new DOM.SVGElement("defs")
-            const mask = new DOM.SVGElement(
-                "mask",
-                {
-                    id: `mask-${ui.unique_id(this)}`,
-                    // Make sure the `mask` can affect `path`s.
-                    maskUnits: "userSpaceOnUse",
-                },
-            );
-            mask.add(new DOM.SVGElement(
-                "rect",
-                { width: "100%", height: "100%" },
-                { fill: "white" },
-            ));
-            mask.add(
-                new DOM.SVGElement("rect", {
-                    class: "clear",
-                    width: 0,
-                    height: 0,
-                }, {
-                    fill: "black",
-                    stroke: "none",
-                })
-            );
-            defs.add(mask);
-            svg.appendChild(defs.element);
-
-            this.render_label(ui);
+            this.element = this.arrow.element.element;
         }
 
         // If we're reconnecting an edge, then we vary its source/target (depending on
@@ -3676,50 +3595,6 @@ class Edge extends Cell {
                 endpoint_offset[ui.state.reconnect.end] = false;
             }
         }
-
-        // Draw the edge itself.
-        let [edge_offset, length, direction] = Edge.draw_and_position_edge(
-            ui,
-            this.element,
-            svg,
-            {
-                offset: source_offset,
-                size: source.size(),
-                is_offset: endpoint_offset.source,
-                level: source.level,
-            },
-            {
-                offset: target_offset,
-                size: target.size(),
-                is_offset: endpoint_offset.target,
-                level: target.level,
-            },
-            this.options,
-            null,
-            background,
-        );
-
-        // Set the edge's offset. This is important only for the cells that depend on this one,
-        // so that they can be drawn between the correct positions.
-        this.offset = edge_offset.add(new Offset(
-            Math.cos(direction) * length / 2 + Math.cos(direction + Math.PI / 2)
-                * CONSTANTS.EDGE_OFFSET_DISTANCE * this.options.offset,
-            Math.sin(direction) * length / 2 + Math.sin(direction + Math.PI / 2)
-                * CONSTANTS.EDGE_OFFSET_DISTANCE * this.options.offset,
-        ));
-
-        // Apply the mask to the edge.
-        for (const path of svg.querySelectorAll("path")) {
-            path.setAttribute("mask", `url(#mask-${ui.unique_id(this)})`);
-        }
-        // We only want to actually clear part of the edge if the alignment is `centre`.
-        svg.querySelector(".clear").style.display
-            = this.options.label_alignment === "centre" ? "inline" : "none";
-
-        // If the label has already been rendered, then clear the edge for it.
-        // If it has not already been rendered, this is a no-op: it will be called
-        // again when the label is rendered.
-        this.update_label_transformation(ui, target_offset.sub(source_offset).angle());
 
         this.arrow.style.curve = this.options.curve * CONSTANTS.CURVE_HEIGHT * 2;
         this.arrow.style.shift = this.options.offset * CONSTANTS.EDGE_OFFSET_DISTANCE;
@@ -3881,123 +3756,6 @@ class Edge extends Cell {
         // Create an empty label buffer for flicker-free rendering.
         const buffer = ui.render_tex(this, UI.clear_label_for_cell(this, true));
         this.element.appendChild(buffer.element);
-    }
-
-    /// Draw an edge on an existing SVG and positions it with respect to a parent `element`.
-    /// Note that this does not clear the SVG beforehand.
-    /// Returns the direction of the arrow.
-    static draw_and_position_edge(
-        ui,
-        element,
-        svg,
-        source,
-        target,
-        options,
-        gap,
-        background = null,
-    ) {
-        // Constants for parameters of the arrow shapes.
-        const SVG_PADDING = CONSTANTS.SVG_PADDING;
-        const OFFSET_DISTANCE = CONSTANTS.EDGE_OFFSET_DISTANCE;
-        // How much (vertical) space to give around the SVG.
-        const EDGE_PADDING = 4;
-        // The minimum length of the `element`. This is defined so that very small edges (e.g.
-        // adjunctions or pullbacks) are still large enough to manipulate by clicking on them or
-        // their handles.
-        const MIN_LENGTH = 72;
-
-        // The SVG for the arrow itself.
-
-        const offset_delta = target.offset.sub(source.offset);
-        const direction = Math.atan2(offset_delta.top, offset_delta.left);
-
-        // Returns the distance from midpoint of the rectangle with the given `size` to any edge,
-        // at the given `angle`.
-        const edge_distance = (size, angle) => {
-            const [h, v] = [size.width / Math.cos(angle), size.height / Math.sin(angle)]
-                .map(Math.abs);
-            return Number.isNaN(h) ? v : Number.isNaN(v) ? h : Math.min(h, v) / 2;
-        };
-
-        const padding = Dimensions.diag(CONSTANTS.CONTENT_PADDING * 2);
-
-        const min_margin = (cell) => {
-            if (cell.level === 0) {
-                // The content area of a vertex is reserved for vertices: edges will not encroach
-                // upon that space.
-                return Dimensions.diag(ui.default_cell_size / 2);
-            } else {
-                // We don't currently add any margin for edges. This allows us to draw edges between
-                // arrows that are very close to one another.
-                return Dimensions.zero();
-            }
-        };
-        const margin = {
-            source: source.is_offset ?
-                edge_distance(source.size.add(padding).max(min_margin(source)), direction) : 0,
-            target: target.is_offset ?
-                edge_distance(target.size.add(padding).max(min_margin(target)), direction + Math.PI)
-                : 0,
-        };
-
-        const length = Math.max(0, Math.hypot(offset_delta.top, offset_delta.left)
-            - (margin.source + margin.target));
-
-        // If the arrow has zero length, then we skip trying to draw it, as it's
-        // obviously unnecessary, and can cause SVG errors from drawing invalid shapes.
-        const { dimensions, alignment }
-            = length > 0 ? Edge.draw_edge(svg, options, length, direction, gap, true)
-                : { dimensions: Dimensions.zero(), alignment: "centre" };
-
-        const clamped_width = Math.min(Math.max(dimensions.width, MIN_LENGTH), length);
-
-        if (background !== null) {
-            background.setAttribute("width", clamped_width);
-            background.setAttribute("height", dimensions.height + EDGE_PADDING * 2);
-            background.appendChild(new DOM.SVGElement("path", {
-                d: `M 0 ${EDGE_PADDING + dimensions.height / 2} l ${clamped_width} 0`,
-            }, {
-                strokeWidth: `${dimensions.height + EDGE_PADDING * 2}px`,
-            }).element);
-        }
-
-        // If the arrow is shorter than expected (for example, because we are using a
-        // fixed-width arrow style), then we need to make sure that it's still centred
-        // if the `alignment` is `"centre"`.
-        const width_shortfall = length + SVG_PADDING * 2 - clamped_width;
-        let margin_adjustment;
-        switch (alignment) {
-            case "left":
-                margin_adjustment = 0;
-                break;
-            case "centre":
-            case "over":
-                margin_adjustment = 0.5;
-                break;
-            case "right":
-                margin_adjustment = 1;
-                break;
-        }
-
-        const margin_offset = margin.source + width_shortfall * margin_adjustment;
-
-        // Transform the `element` so that the arrow points in the correct direction.
-        element.style.left = `${source.offset.left + Math.cos(direction) * margin_offset}px`;
-        element.style.top = `${source.offset.top + Math.sin(direction) * margin_offset}px`;
-        [element.style.width, element.style.height]
-            = new Offset(clamped_width, dimensions.height + EDGE_PADDING * 2).to_CSS();
-        element.style.transformOrigin
-            = `${SVG_PADDING}px ${dimensions.height / 2 + EDGE_PADDING}px`;
-        element.style.transform = `
-            translate(-${SVG_PADDING}px, -${dimensions.height / 2 + EDGE_PADDING}px)
-            rotate(${direction}rad)
-            translateY(${(options.offset || 0) * OFFSET_DISTANCE}px)
-        `;
-
-        return [new Offset(
-            source.offset.left + Math.cos(direction) * margin.source,
-            source.offset.top + Math.sin(direction) * margin.source,
-        ), clamped_width, direction];
     }
 
     /// Draws an edge on an SVG. `length` must be nonnegative.
