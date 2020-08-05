@@ -111,9 +111,10 @@ DOM.Element = class {
 /// A class for conveniently dealing with SVGs.
 DOM.SVGElement = class extends DOM.Element {
     constructor(tag_name, attributes = {}, style = {}) {
-        super(tag_name, attributes, style, "http://www.w3.org/2000/svg");
+        super(tag_name, attributes, style, DOM.SVGElement.NAMESPACE);
     }
 };
+DOM.SVGElement.NAMESPACE = "http://www.w3.org/2000/svg";
 
 /// A class for conveniently dealing with canvases.
 DOM.Canvas = class extends DOM.Element {

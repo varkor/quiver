@@ -167,21 +167,30 @@ class Arrow {
     /// Return an existing element, or create a new one if it does not exist.
     /// This is more efficient, and also preserves event listeners on the existing elements.
     /// The `selector` may be of the form `element.class1.class2...`.
-    requisition_element(parent, selector, attributes = {}) {
+    requisition_element(
+        parent,
+        selector,
+        attributes = {},
+        style = {},
+        namespace = DOM.SVGElement.NAMESPACE,
+    ) {
         const elements = parent.query_selector_all(selector);
         switch (elements.length) {
             case 0:
                 const [name, ...classes] = selector.split(".");
-                return new DOM.SVGElement(
+                return new DOM.Element(
                     name,
                     Object.assign(
                         classes.length > 0 ? { class: classes.join(" ") } : {},
                         attributes,
                     ),
+                    style,
+                    namespace,
                 ).add_to(parent);
             case 1:
-                // Overwrite existing attributes.
+                // Overwrite existing attributes and styling.
                 elements[0].set_attributes(attributes);
+                elements[0].set_style(style);
                 return elements[0];
             default:
                 console.error("Found multiple candidates for requisitioning.");
@@ -296,11 +305,11 @@ class Arrow {
             svg.set_style({
                 width: `${svg_width}`,
                 height: `${svg_height}`,
-                transformOrigin: `${offset.x}px ${offset.y}px`,
+                "transform-origin": `${offset.x}px ${offset.y}px`,
                 transform: `
                     translate(${this.source.x - offset.x}px, ${this.source.y - offset.y}px)
                     rotate(${angle}rad)
-                `
+                `,
             });
             // Set the view box to match the length and height of the SVG. It would be nice if we
             // could just use `length` and `height` here and let SVG handle the offsets for us,
@@ -376,12 +385,19 @@ class Arrow {
                     fill: "white",
                 });
                 // Add a handle to the endpoint.
-                this.requisition_element(this.background, `circle.arrow-endpoint.${name}`, {
-                    cx: point.x,
-                    cy: point.y,
-                    r: CONSTANTS.HANDLE_RADIUS,
-                    fill: "white",
-                });
+                const origin = Point.diag(CONSTANTS.HANDLE_RADIUS).sub(endpoint);
+                this.requisition_element(this.element, `div.arrow-endpoint.${name}`, {}, {
+                    width: `${CONSTANTS.HANDLE_RADIUS * 2}px`,
+                    height: `${CONSTANTS.HANDLE_RADIUS * 2}px`,
+                    left: `${endpoint.x}px`,
+                    top: `${endpoint.y}px`,
+                    "border-radius": `${CONSTANTS.HANDLE_RADIUS}px`,
+                    "transform-origin": `${origin.x}px ${origin.y}px`,
+                    transform: `
+                        translate(calc(${this.source.x}px - 50%), calc(${this.source.y}px - 50%))
+                        rotate(${angle}rad)
+                    `,
+                }, null);
             }
         }
         round_bg_mask_end(start, true);

@@ -23,6 +23,10 @@ class Point {
         return new this(Math.cos(direction) * length, Math.sin(direction) * length);
     }
 
+    static diag(x) {
+        return new this(x, x);
+    }
+
     toString() {
         return `${this.x} ${this.y}`;
     }
@@ -101,11 +105,6 @@ class Position extends Point {}
 /// An (width, height) pair. This is essentially functionally equivalent to `Point`,
 /// but has different semantic intent.
 const Dimensions = class extends Position {
-    /// Returns a `Dimensions` with the same width and height.
-    static diag(x) {
-        return new Dimensions(x, x);
-    }
-
     get width() {
         return this.x;
     }
