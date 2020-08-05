@@ -418,6 +418,9 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
 
                             case "mono":
                                 parameters.push("tail");
+                                // We could potentially also support this for 2-cells, by using a
+                                // hack: `\arrow[equal, {Implies[reversed]}-Implies]`, but we leave
+                                // this for now.
                                 if (edge.options.level > 1) {
                                     tikz_incompatibilities.add(
                                         "double arrows or higher with mono tails"
