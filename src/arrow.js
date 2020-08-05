@@ -266,11 +266,9 @@ class Arrow {
         // We centre vertically, so we usually have to offset things by half the height.
         const offset = new Point(padding, padding + height / 2);
 
-        // Shift the arrow.
+        // The offset of the arrow. We don't apply this to `this.element`, because that causes
+        // issues with the z-indexes of the handles.
         const shift = new Point(0, this.style.shift).rotate(angle);
-        this.element.set_style({
-            transform: `translate(${shift.x}px, ${shift.y}px)`,
-        });
 
         /// Finds the intersection of the Bézier curve with either the source or target. There
         /// should be a unique intersection point, and this will be true in all but extraordinary
@@ -315,6 +313,7 @@ class Arrow {
                 height: `${svg_height}`,
                 "transform-origin": `${offset.x}px ${offset.y}px`,
                 transform: `
+                    translate(${shift.x}px, ${shift.y}px)
                     translate(${this.source.x - offset.x}px, ${this.source.y - offset.y}px)
                     rotate(${angle}rad)
                 `,
@@ -404,6 +403,7 @@ class Arrow {
                     "border-radius": `${CONSTANTS.HANDLE_RADIUS}px`,
                     "transform-origin": `${origin.x}px ${origin.y}px`,
                     transform: `
+                        translate(${shift.x}px, ${shift.y}px)
                         translate(calc(${this.source.x}px - 50%), calc(${this.source.y}px - 50%))
                         rotate(${angle}rad)
                     `,
