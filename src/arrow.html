@@ -80,18 +80,20 @@
         document.addEventListener("DOMContentLoaded", () => {
             const source = new Box(64, 240);
             const target = new Box(640, 240);
+            target.width = 512;
+            target.redraw();
             // const arrow2 = new Arrow2(source, target);
 
             const arrow = new Arrow(source, target, new ArrowStyle(), new Label("Hello"));
             // arrow.style.heads = ["hook-top"];
             // arrow.style.tails = ["hook-bottom"];
-            arrow.style.heads = CONSTANTS.ARROW_HEAD_STYLE.CORNER;
-            arrow.style.tails = CONSTANTS.ARROW_HEAD_STYLE.CORNER;
+            // arrow.style.heads = CONSTANTS.ARROW_HEAD_STYLE.CORNER;
+            // arrow.style.tails = CONSTANTS.ARROW_HEAD_STYLE.CORNER;
             // arrow.style.heads = CONSTANTS.ARROW_HEAD_STYLE.HARPOON_TOP;
             arrow.style.level = 1;
-            arrow.style.shorten = 40;
+            // arrow.style.shorten = 40;
             // arrow.style.dash_style = CONSTANTS.ARROW_DASH_STYLE.DASHED;
-            arrow.style.body_style = CONSTANTS.ARROW_BODY_STYLE.ADJUNCTION;
+            // arrow.style.body_style = CONSTANTS.ARROW_BODY_STYLE.ADJUNCTION;
             arrow.label.alignment = CONSTANTS.LABEL_ALIGNMENT.LEFT;
             arrow.redraw();
             document.body.appendChild(arrow.element.element);

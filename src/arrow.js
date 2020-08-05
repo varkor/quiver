@@ -325,7 +325,7 @@ class Arrow {
         });
 
         // Draw the actual background.
-        this.requisition_element(this.background, "path", {
+        this.requisition_element(this.background, "path.arrow-background", {
             mask: `url(#arrow${this.id}-bg-mask)`,
             d: `${
                 new Path()
@@ -337,6 +337,28 @@ class Arrow {
             "stroke-width": edge_width + CONSTANTS.BACKGROUND_PADDING * 2,
         });
 
+        // The background is drawn from source to target, but we actually want to draw from endpoint
+        // to endpoint. We could just use `stroke-dasharray` on the background, but then we won't
+        // get rounded endpoints. So, instead, we create a mask and cut out the appropriate ends
+        // from the background, using `stroke-dasharray`.
+        const arclen_to_start = bezier.arc_length(start.t);
+        const arclen_to_end = bezier.arc_length(end.t);
+        const arclen = bezier.arc_length(1);
+        // We need some padding to avoid aliasing issues.
+        const STROKE_PADDING = 1;
+        this.requisition_element(bg_mask, `path.arrow-background-mask`, {
+            d: `${
+                new Path()
+                    .move_to(offset)
+                    .curve_by(new Point(length / 2, this.style.curve), new Point(length, 0))
+            }`,
+            fill: "none",
+            stroke: "black",
+            "stroke-width":
+                edge_width + (CONSTANTS.BACKGROUND_PADDING + STROKE_PADDING) * 2,
+            "stroke-dasharray": `${arclen_to_start} ${arclen_to_end - arclen_to_start} ${arclen - arclen_to_end}`,
+        });
+
         // The background usually has flat ends, but we want rounded ends. Unfortunately, the
         // `round` endpoint path option in SVG is not suitable, because it takes up too much space,
         // so we have to simulate this ourselves.
@@ -344,28 +366,8 @@ class Arrow {
             // We should always have endpoints, but if something's gone wrong, we don't want to
             // trigger another error.
             if (endpoint !== null) {
-                // First, we cut off the end of the existing background. We're going to replace
-                // this with a semicircle.
-                const end_cutoff = {
-                    width: Math.hypot(endpoint.x - (is_start ? 0 : length), endpoint.y)
-                        + CONSTANTS.MASK_PADDING,
-                    height: edge_width
-                        + (CONSTANTS.BACKGROUND_PADDING + CONSTANTS.MASK_PADDING) * 2,
-                };
                 const point = offset.add(endpoint);
                 const name = is_start ? "source" : "target";
-                // This is an overapproximation of the ends, but this is okay, as we're going to
-                // draw the semicircle ends over the top of this.
-                this.requisition_element(bg_mask, `rect.${name}`, {
-                    width: end_cutoff.width,
-                    height: end_cutoff.height,
-                    x: is_start ? -end_cutoff.width : 0,
-                    y: -end_cutoff.height / 2,
-                    fill: "black",
-                    transform:
-                        `translate(${point.x}, ${point.y})
-                        rotate(${rad_to_deg(endpoint.angle)})`,
-                });
                 // Draw the semicircle (actually a circle, but half of it is idempotent).
                 this.requisition_element(bg_mask, `circle.${name}`, {
                     cx: point.x,
@@ -676,10 +678,10 @@ class Arrow {
         }
 
         // Now we will set the dash style for the edge. It would be nice to just use the SVG
-        // `stroke-dasharray` option and be done with it. However, we use `stroke-dasharray` to
-        // avoid drawing the entire Bézier curve. That is, the path of the Bézier curve is between
-        // the source and target for simplicity in calculation (namely, the Bézier curves are then
-        // always symmetric), but we really only want to draw it between the endpoints. The
+        // `stroke-dasharray` option and be done with it. However, we already use `stroke-dasharray`
+        // to avoid drawing the entire Bézier curve. That is, the path of the Bézier curve is
+        // between the source and target for simplicity in calculation (namely, the Bézier curves
+        // are then always symmetric), but we really only want to draw it between the endpoints. The
         // solution we pick is to use `stroke-dasharray` to avoid drawing the stroke except between
         // the endpoints, but this means that when drawing dashes, we need to explicitly calculate
         // how many dashes we're going to draw. This falls into an all-too-common pattern here where
