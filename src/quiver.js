@@ -194,17 +194,34 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
         let output = "";
 
         // Wrap tikz-cd code with `\begin{tikzcd} ... \end{tikzcd}`.
-        const wrap_boilerplate = (output) => {
-            return `% ${QuiverImportExport.base64.export(quiver)}\n\\[\\begin{tikzcd}\n${
+        // We also add custom TikZ styles if required, e.g. for drawing fixed-height curves, which
+        // improve upon the build-in `bend` option.
+        const wrap_boilerplate = (output, include_style) => {
+            // This custom TikZ style for fixed-height curves was designed by @AndréC:
+            // https://tex.stackexchange.com/a/556902/
+            const bend_style =
+`\\tikzset{curve/.style={settings={#1},to path={(\\tikztostart)
+    .. controls ($(\\tikztostart)!\\pv{pos}!(\\tikztotarget)!\\pv{height}!270:(\\tikztotarget)$)
+    and ($(\\tikztostart)!1-\\pv{pos}!(\\tikztotarget)!\\pv{height}!270:(\\tikztotarget)$$)
+    .. (\\tikztotarget)\\tikztonodes}},
+    settings/.code={\\tikzset{quiver/.cd,#1}
+        \\def\\pv##1{\\pgfkeysvalueof{/tikz/quiver/##1}}},
+    quiver/.cd,pos/.initial=0.35,height/.initial=0}`;
+            const tikzcd = `\\[\\begin{tikzcd}\n${
                 output.length > 0 ? `${
                     output.split("\n").map(line => `\t${line}`).join("\n")
                 }\n` : ""
             }\\end{tikzcd}\\]`;
+            return `% ${QuiverImportExport.base64.export(quiver)}\n${
+                include_style ? `{${bend_style}\n` : ""
+            }${tikzcd}${
+                include_style ? "}" : ""
+            }`;
         };
 
         // Early exit for empty quivers.
         if (quiver.is_empty()) {
-            return wrap_boilerplate(output);
+            return wrap_boilerplate(output, false);
         }
 
         // We handle the export in two stages: vertices and edges. These are fundamentally handled
@@ -269,6 +286,10 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
             }
         };
 
+        // We keep track of whether there are any curves in the diagram, because if so we need to
+        // output a custom style to draw fixed-height curves in TikZ.
+        let has_curves = false;
+
         // Output the edges.
         for (let level = 1; level < quiver.cells.length; ++level) {
             if (quiver.cells[level].size > 0) {
@@ -327,10 +348,13 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                     parameters.push(`shift ${side}=${Math.abs(edge.options.offset)}`);
                 }
                 if (edge.options.curve !== 0) {
-                    const CURVE_MULTIPLIER = 4;
-                    const side = edge.options.curve > 0 ? "right" : "left";
+                    has_curves = true;
+                    // Scale the curve to better match the curve in quiver.
+                    const CURVE_MULTIPLIER = 1/3;
                     parameters.push(
-                        `bend ${side}=${Math.abs(edge.options.curve) * CONSTANTS.CURVE_HEIGHT}`
+                        `curve={height=${
+                            edge.options.curve * CONSTANTS.CURVE_HEIGHT * CURVE_MULTIPLIER
+                        }pt}`
                     );
                 }
 
@@ -480,7 +504,7 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
             output = output.trim();
         }
 
-        return wrap_boilerplate(output);
+        return wrap_boilerplate(output, has_curves);
     }
 };
 
