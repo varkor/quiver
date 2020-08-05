@@ -28,26 +28,6 @@
     <script type="text/javascript" src="bezier.js"></script>
     <script type="text/javascript" src="arrow.js"></script>
     <script>
-        // *** WORK TILL COMPLETION ***
-        //
-        // ** Integration **
-        // - Make sure we can draw pretty arrows between arrows.
-        // - Make smooth transitions from small edges to long edges (scaling heads, etc.).
-        // - Use the new arrow library for quiver.
-        // - Figure out how to export appropriate tikz-cd code for curved edges.
-        // - Make sure that curves are disabled when outputting for adjunctions, etc.
-        // - Make sure we're going to load old diagrams with level properly.
-        // - Special-case size=0 for target/source.
-        //
-        // ** Bugs **
-        // - Make label handling work well when edge is very small (and when the label (offset=left/right) contains the edge). At the moment, there are NaN errors, etc. Label doesn't crop head/tail, for instance.
-        // - Make n-cells draw well even for high n.
-        // - Test and make sure everything looks pixel perfect. Set up a test rig.
-        // - Cropping of background (gets cropped inappropriately in edge cases at the moment).
-        // - Add mask for "none" tail for squiggly lines (could maybe use the existing mask background).
-        // - Make sure it works in Firefox, etc.
-        // - Too much rerendering.
-
         let drag = null;
 
         class Box extends Shape {

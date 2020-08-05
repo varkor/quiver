@@ -2599,6 +2599,7 @@ class Panel {
                     consider("{angle}", cell.angle(ui));
                     consider("{offset}", cell.options.offset);
                     consider("{curve}", cell.options.curve);
+                    consider("{level}", cell.options.level);
                     consider("edge-type", cell.options.style.name);
 
                     // Arrow-specific options.
@@ -2648,6 +2649,7 @@ class Panel {
                         break;
                     case "{offset}":
                     case "{curve}":
+                    case "{level}":
                         const property = name.slice(1, -1);
                         const slider = this.element.querySelector(`input[name="${property}"]`);
                         slider.value = value !== null ? value : 0;
@@ -2669,11 +2671,11 @@ class Panel {
                 }
             }
 
-            // Update the actual `value` attribute for the offset and curve sliders so that we can
-            // reference it in the CSS.
+            // Update the actual `value` attribute for the offset, curve and level sliders so that
+            // we can reference it in the CSS.
             sliders.forEach(slider => slider.setAttribute("value", slider.value));
 
-            // Disable/enable the arrow style buttons and the curve slider.
+            // Disable/enable the arrow style buttons and the curve and level sliders.
             for (const option of this.element.querySelectorAll(".arrow-style input")) {
                 option.disabled = !all_edges_are_arrows;
             }
