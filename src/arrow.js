@@ -1029,8 +1029,8 @@ class Arrow {
                                         // We have to pad the mask for "mono" for the same reason we
                                         // add `dash_padding`. In this case, we have to add twice as
                                         // much, because the padding is added everywhere, even where
-                                        // it is not needed, so we need to make sure we cover it with
-                                        // the mask.
+                                        // it is not needed, so we need to make sure we cover it
+                                        // with the mask.
                                         const padding
                                             = (is_start ? dash_padding.start : dash_padding.end)
                                                 * 2;
@@ -1107,9 +1107,13 @@ class Arrow {
             height: this.label.height,
             fill: "black",
             x: 0, y: 0,
-            transform:
-                `translate(${origin.x} ${origin.y})
-                rotate(${-rad_to_deg(angle)} ${this.label.width / 2} ${this.label.height / 2})`,
+            transform: `translate(${origin.x} ${origin.y}) ${
+                // The label should be horizontal for most alignments, but in the direction of the
+                // arrow for `OVER`.
+                this.label.alignment === CONSTANTS.LABEL_ALIGNMENT.OVER ? "" :
+                    `rotate(${-rad_to_deg(angle)}
+                        ${this.label.size.width / 2} ${this.label.size.height / 2})`
+            }`,
         });
     }
 
