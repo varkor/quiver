@@ -727,13 +727,36 @@ body:not(.modal) {
     padding: 20px 24px;
 
     background: hsla(0, 0%, 10%, 0.8);
+}
+
+.export .warning {
+    display: inline-block;
+    width: 100%;
+    background: hsla(50, 100%, 70%, 1);
+    padding: 8pt;
+    margin-bottom: 8pt;
+
+    border-radius: 2px;
+}
+
+.export .warning.hidden {
+    display: none;
+}
+
+.export .warning ul {
+    margin: 4pt 0;
+
+    list-style-type: circle;
+}
+
+.export .code {
+    font: 16px monospace;
+    color: white;
+
     white-space: pre-wrap;
     overflow-wrap: break-word;
     tab-size: 4;
     -moz-tab-size: 4;
-
-    font: 16px monospace;
-    color: white;
 }
 
 /* Arrows */

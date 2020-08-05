@@ -2288,27 +2288,47 @@ class Panel {
             if (this.export !== format) {
                 ui.switch_mode(new UIState.Modal());
 
-                // Get the encoding of the diagram.
-                const output = ui.quiver.export(ui, format);
+                // Get the encoding of the diagram. The output may be modified by the caller.
+                const { data, metadata } = modify(ui.quiver.export(ui, format));
 
-                let export_pane;
+                let export_pane, warning, list, content;
                 if (this.export === null) {
                     // Create the export pane.
                     export_pane = new DOM.Element("div", { class: "export" });
+                    warning = new DOM.Element("span", { class: "warning hidden" })
+                        .add("The exported tikz-cd diagram may not match the quiver diagram " +
+                            "exactly, as tikz-cd does not support:")
+                        .add(list = new DOM.Element("ul"))
+                        .add_to(export_pane);
+                    content = new DOM.Element("div", { class: "code" }).add_to(export_pane);
                     ui.element.appendChild(export_pane.element);
                 } else {
                     // Find the existing export pane.
                     export_pane = new DOM.Element(ui.element.querySelector(".export"));
+                    warning = export_pane.query_selector(".warning");
+                    list = export_pane.query_selector("ul");
+                    content = export_pane.query_selector(".code");
                 }
-                // The output may be modifier by the caller.
-                export_pane.clear().add(modify(output));
+                // Display a warning if necessary.
+                list.clear();
+                const unsupported_items = format === "tikz-cd" ?
+                    Array.from(metadata.tikz_incompatibilities).sort() : [];
+                for (const [index, item] of unsupported_items.entries()) {
+                    list.add(new DOM.Element("li")
+                        .add(`${item}${index + 1 < unsupported_items.length ? ";" : "."}`)
+                    );
+                }
+                warning.class_list.toggle("hidden", unsupported_items.length === 0);
+
+                // At present, the data is always a string.
+                content.clear().add(data);
 
                 this.export = format;
 
                 // Select the code for easy copying.
                 const selection = window.getSelection();
                 const range = document.createRange();
-                range.selectNodeContents(export_pane.element);
+                range.selectNodeContents(content.element);
                 selection.removeAllRanges();
                 selection.addRange(range);
                 // Disable cell data editing while the export pane is visible.
@@ -2343,7 +2363,12 @@ class Panel {
                     .listen("click", () => {
                         display_export_pane("base64", (output) => {
                             if (ui.macro_url !== null) {
-                                return `${output}&macro_url=${encodeURIComponent(ui.macro_url)}`;
+                                return {
+                                    data: `${output.data}&macro_url=${
+                                        encodeURIComponent(ui.macro_url)
+                                    }`,
+                                    metadata,
+                                };
                             }
                             return output;
                         });

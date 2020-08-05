@@ -161,7 +161,7 @@ class Quiver {
         return closure;
     }
 
-    /// Return a string containing the graph in a specific format.
+    /// Return a `{ data, metadata }` object containing the graph in a specific format.
     /// Currently, the supported formats are:
     /// - "tikz-cd"
     /// - "base64"
@@ -212,7 +212,7 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                     output.split("\n").map(line => `\t${line}`).join("\n")
                 }\n` : ""
             }\\end{tikzcd}\\]`;
-            return `% ${QuiverImportExport.base64.export(quiver)}\n${
+            return `% ${QuiverImportExport.base64.export(quiver).data}\n${
                 include_style ? `{${bend_style}\n` : ""
             }${tikzcd}${
                 include_style ? "}" : ""
@@ -286,6 +286,10 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
             }
         };
 
+        // quiver can draw more complex arrows than tikz-cd, and in some cases we are currently
+        // unable to export faithfully to tikz-cd. In this case, we issue a warning to alert the
+        // user that their diagram is not expected to match the quiver representation.
+        const tikz_incompatibilities = new Set();
         // We keep track of whether there are any curves in the diagram, because if so we need to
         // output a custom style to draw fixed-height curves in TikZ.
         let has_curves = false;
@@ -349,7 +353,7 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                 }
                 if (edge.options.curve !== 0) {
                     has_curves = true;
-                    // Scale the curve to better match the curve in quiver.
+                    // Scale the tikz-cd curve to better match the curve in quiver.
                     const CURVE_MULTIPLIER = 1/3;
                     parameters.push(
                         `curve={height=${
@@ -361,7 +365,7 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                 let style = "";
                 let label = nonempty_label !== "" ? `"{${edge.label}}"${align}` : "";
                 // If we eventually support multiple labels natively, we can use an array of labels,
-                // but for now it is simpler to special-cased barred arrow.s
+                // but for now it is simpler to special-cased barred arrows.
                 let barred = false;
 
                 // Edge styles.
@@ -376,6 +380,10 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                                 // drawn as if it is a 1-cell.
                                 if (edge.options.level === 2) {
                                     style = "Rightarrow, ";
+                                } else if (edge.options.level > 2) {
+                                    // TikZ has no built-in support for n-ary arrows, and I have not
+                                    // been able to find any custom styles that are suitable yet.
+                                    tikz_incompatibilities.add("triple arrows or higher");
                                 }
                                 break;
 
@@ -483,8 +491,8 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                         break;
                 }
 
-                // tikz-cd tends to place arrows between arrows directly contiguously
-                // without adding some spacing manually.
+                // tikz-cd tends to place arrows between arrows without any spacing, so we add
+                // some manually ourselves.
                 if (level > 1) {
                     parameters.push("shorten <=2mm");
                     parameters.push("shorten >=2mm");
@@ -504,7 +512,10 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
             output = output.trim();
         }
 
-        return wrap_boilerplate(output, has_curves);
+        return {
+            data: wrap_boilerplate(output, has_curves),
+            metadata: { tikz_incompatibilities },
+        };
     }
 };
 
@@ -635,8 +646,11 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
         const VERSION = 0;
         const output = [VERSION, quiver.cells[0].size, ...cells];
 
-        // We use this `unescape`-`encodeURIComponent` trick to encode non-ASCII characters.
-        return `${URL_prefix}?q=${btoa(unescape(encodeURIComponent(JSON.stringify(output))))}`;
+        return {
+            // We use this `unescape`-`encodeURIComponent` trick to encode non-ASCII characters.
+            data: `${URL_prefix}?q=${btoa(unescape(encodeURIComponent(JSON.stringify(output))))}`,
+            metadata: {},
+        };
     }
 
     import(ui, string) {
