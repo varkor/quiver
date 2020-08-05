@@ -3722,6 +3722,7 @@ class Edge extends Cell {
         this.update_label_transformation(ui, target_offset.sub(source_offset).angle());
 
         this.arrow.style.curve = this.options.curve * CONSTANTS.CURVE_HEIGHT * 2;
+        this.arrow.style.shift = this.options.offset * CONSTANTS.EDGE_OFFSET_DISTANCE;
         this.arrow.style.heads = [];
         this.arrow.style.tails = [];
         switch (this.options.style.name) {

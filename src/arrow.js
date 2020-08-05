@@ -115,6 +115,8 @@ class ArrowStyle {
         this.level = 1;
         // The height of the curve (in pixels). May be positive or negative.
         this.curve = 0;
+        // The offset of the curve (in pixels). May be positive or negative.
+        this.shift = 0;
         this.heads = CONSTANTS.ARROW_HEAD_STYLE.NORMAL;
         this.tails = CONSTANTS.ARROW_HEAD_STYLE.NONE;
         // How much to offset the head and tail of the edge from their endpoints.
@@ -263,6 +265,12 @@ class Arrow {
 
         // We centre vertically, so we usually have to offset things by half the height.
         const offset = new Point(padding, padding + height / 2);
+
+        // Shift the arrow.
+        const shift = new Point(0, this.style.shift).rotate(angle);
+        this.element.set_style({
+            transform: `translate(${shift.x}px, ${shift.y}px)`,
+        });
 
         /// Finds the intersection of the Bézier curve with either the source or target. There
         /// should be a unique intersection point, and this will be true in all but extraordinary
