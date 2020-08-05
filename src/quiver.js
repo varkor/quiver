@@ -371,20 +371,22 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                 // Edge styles.
                 switch (edge.options.style.name) {
                     case "arrow":
+                        // tikz-cd only has supported for 1-cells and 2-cells.
+                        // Anything else requires custom support, so for now
+                        // we only special-case 2-cells. Everything else is
+                        // drawn as if it is a 1-cell.
+                        if (edge.options.level === 2) {
+                            style = "Rightarrow, ";
+                        } else if (edge.options.level > 2) {
+                            // TikZ has no built-in support for n-ary arrows, and I have not
+                            // been able to find any custom styles that are suitable yet.
+                            tikz_incompatibilities.add("triple arrows or higher");
+                        }
+
                         // Body styles.
                         switch (edge.options.style.body.name) {
                             case "cell":
-                                // tikz-cd only has supported for 1-cells and 2-cells.
-                                // Anything else requires custom support, so for now
-                                // we only special-case 2-cells. Everything else is
-                                // drawn as if it is a 1-cell.
-                                if (edge.options.level === 2) {
-                                    style = "Rightarrow, ";
-                                } else if (edge.options.level > 2) {
-                                    // TikZ has no built-in support for n-ary arrows, and I have not
-                                    // been able to find any custom styles that are suitable yet.
-                                    tikz_incompatibilities.add("triple arrows or higher");
-                                }
+                                // This is the default in tikz-cd.
                                 break;
 
                             case "dashed":
@@ -416,12 +418,22 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
 
                             case "mono":
                                 parameters.push("tail");
+                                if (edge.options.level > 1) {
+                                    tikz_incompatibilities.add(
+                                        "double arrows or higher with mono tails"
+                                    );
+                                }
                                 break;
 
                             case "hook":
                                 parameters.push(`hook${
                                     edge.options.style.tail.side === "top" ? "" : "'"
                                 }`);
+                                if (edge.options.level > 1) {
+                                    tikz_incompatibilities.add(
+                                        "double arrows or higher with hook tails"
+                                    );
+                                }
                                 break;
                         }
 
@@ -433,12 +445,22 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
 
                             case "epi":
                                 parameters.push("two heads");
+                                if (edge.options.level > 1) {
+                                    tikz_incompatibilities.add(
+                                        "double arrows or higher with multiple heads"
+                                    );
+                                }
                                 break;
 
                             case "harpoon":
                                 parameters.push(`harpoon${
                                     edge.options.style.head.side === "top" ? "" : "'"
                                 }`);
+                                if (edge.options.level > 1) {
+                                    tikz_incompatibilities.add(
+                                        "double arrows or higher with harpoon heads"
+                                    );
+                                }
                                 break;
                         }
 

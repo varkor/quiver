@@ -2297,7 +2297,8 @@ class Panel {
                     export_pane = new DOM.Element("div", { class: "export" });
                     warning = new DOM.Element("span", { class: "warning hidden" })
                         .add("The exported tikz-cd diagram may not match the quiver diagram " +
-                            "exactly, as tikz-cd does not support:")
+                            "exactly, as tikz-cd does not support the following features that " +
+                            "appear in this diagram:")
                         .add(list = new DOM.Element("ul"))
                         .add_to(export_pane);
                     content = new DOM.Element("div", { class: "code" }).add_to(export_pane);
