@@ -240,10 +240,10 @@ class NormalisedBezier {
 class RoundedRectangle {
     /// Create a rounded rectangle with centre `(cx, cy)`, width `w`, height `h` and border radius
     /// `r`.
-    constructor(cx, cy, w, h, r) {
-        [this.x, this.y] = [cx, cy];
-        [this.w, this.h] = [w, h];
-        this.r = r;
+    constructor(centre, size, radius) {
+        this.centre = centre;
+        this.size = size;
+        this.r = radius;
     }
 
     /// Returns the points forming the rounded rectangle (with an approximation for the rounded
@@ -268,22 +268,22 @@ class RoundedRectangle {
         /// `sx` and `sy` are the signs for the side of the rectangle for which we're drawing
         /// a corner.
         const add_corner_points = (sx, sy, angle_offset) => {
-            points.push(new Point(
-                this.x + (this.w / 2 - this.r) * sx + Math.cos(angle_offset) * this.r,
-                this.y + (this.h / 2 - this.r) * sy + Math.sin(angle_offset) * this.r,
-            ));
+            points.push(this.centre
+                .add(this.size.div(2).sub(Point.diag(this.r)).scale(sx, sy))
+                .add(Point.lendir(this.r, angle_offset))
+            );
             for (let i = 0; i < sides / 4; ++i) {
                 const angle = (i + 0.5) / sides * 2 * Math.PI + angle_offset;
-                points.push(new Point(
-                    this.x + (this.w / 2 - this.r) * sx + Math.cos(angle) * R,
-                    this.y + (this.h / 2 - this.r) * sy + Math.sin(angle) * R,
-                ));
+                points.push(this.centre
+                    .add(this.size.div(2).sub(Point.diag(this.r)).scale(sx, sy))
+                    .add(Point.lendir(R, angle))
+                );
             }
             angle_offset += Math.PI / 2;
-            points.push(new Point(
-                this.x + (this.w / 2 - this.r) * sx + Math.cos(angle_offset) * this.r,
-                this.y + (this.h / 2 - this.r) * sy + Math.sin(angle_offset) * this.r,
-            ));
+            points.push(this.centre
+                .add(this.size.div(2).sub(Point.diag(this.r)).scale(sx, sy))
+                .add(Point.lendir(this.r, angle_offset))
+            );
             return angle_offset;
         }
 

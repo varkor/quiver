@@ -127,24 +127,20 @@ class ArrowStyle {
 class Label {
     constructor(text) {
         this.text = text;
-        this.width = 128;
-        this.height = 32;
+        this.size = new Dimensions(128, 32);
         this.alignment = CONSTANTS.LABEL_ALIGNMENT.CENTRE;
         this.element = null;
     }
 }
 
-class Shape {
-    constructor(x, y) {
-        this.x = x;
-        this.y = y;
-        this.width = 64;
-        this.height = 64;
-        this.radius = 16;
-    }
+class Shape {}
 
-    get origin() {
-        return new Point(this.x, this.y);
+class RoundedRect extends Shape {
+    constructor(origin, size, radius) {
+        super();
+        this.origin = origin;
+        this.size = size;
+        this.radius = radius;
     }
 }
 
@@ -247,14 +243,14 @@ class Arrow {
                 CONSTANTS.SQUIGGLY_TRIANGLE_HEIGHT * 2 : 0) + CONSTANTS.STROKE_WIDTH) / 2;
 
         // The distance from the source to the target.
-        const length = Math.hypot(this.target.y - this.source.y, this.target.x - this.source.x);
+        const length = this.target.origin.sub(this.source.origin).length();
 
         // The vertical distance from the straight line connecting the source to the target, and the
         // peak of the curve.
         const height = Math.abs(this.style.curve);
 
         // The angle of the straight line connecting the source to the target.
-        const angle = Math.atan2(this.target.y - this.source.y, this.target.x - this.source.x);
+        const angle = this.target.origin.sub(this.source.origin).angle();
 
         // The width and height of the SVG for the arrow.
         const [svg_width, svg_height] = [length + padding * 2, height + padding * 2];
@@ -275,17 +271,10 @@ class Arrow {
         /// circumstances: namely, when the source and target are overlapping. In this case, we
         /// pick either the earliest (if `prefer_min`) or latest intersection point (otherwise).
         const find_endpoint = (bounding_rect, prefer_min) => {
-            const bezier = new Bezier(
-                new Point(this.source.x, this.source.y),
-                length,
-                this.style.curve,
-                angle,
-            );
+            const bezier = new Bezier(this.source.origin, length, this.style.curve, angle);
             const intersections = bezier.intersections_with_rounded_rectangle(new RoundedRectangle(
-                bounding_rect.x,
-                bounding_rect.y,
-                bounding_rect.width,
-                bounding_rect.height,
+                bounding_rect.origin,
+                bounding_rect.size,
                 bounding_rect.radius,
             ));
             if (intersections.length === 0) {
@@ -311,10 +300,10 @@ class Arrow {
             svg.set_style({
                 width: `${svg_width}`,
                 height: `${svg_height}`,
-                "transform-origin": `${offset.x}px ${offset.y}px`,
+                "transform-origin": offset.px(false),
                 transform: `
-                    translate(${shift.x}px, ${shift.y}px)
-                    translate(${this.source.x - offset.x}px, ${this.source.y - offset.y}px)
+                    translate(${shift.px()})
+                    translate(${this.source.origin.sub(offset).px()})
                     rotate(${angle}rad)
                 `,
             });
@@ -404,7 +393,8 @@ class Arrow {
                     "transform-origin": `${origin.x}px ${origin.y}px`,
                     transform: `
                         translate(${shift.x}px, ${shift.y}px)
-                        translate(calc(${this.source.x}px - 50%), calc(${this.source.y}px - 50%))
+                        translate(calc(${this.source.origin.x}px - 50%),
+                            calc(${this.source.origin.y}px - 50%))
                         rotate(${angle}rad)
                     `,
                 }, null);
@@ -574,8 +564,8 @@ class Arrow {
                 this.redraw_label(constants).add_to(clipping_mask);
             }
             const label = this.redraw_label(constants);
-            // label.set_attributes({ fill: "hsl(0, 100%, 50%, 0.5)" });
-            label.set_attributes({ fill: "transparent" });
+            label.set_attributes({ fill: "hsl(0, 100%, 50%, 0.5)" });
+            // label.set_attributes({ fill: "transparent" });
             label.set_attributes({ class: "arrow-label" });
             this.release_element(this.svg, "rect.arrow-label");
             this.svg.add(label);
@@ -1097,14 +1087,14 @@ class Arrow {
         const { length, angle, offset } = constants;
 
         const origin = this.determine_label_position(constants).add(offset).add(new Point(
-            (length - this.label.width) / 2,
-            (this.style.curve - this.label.height) / 2,
+            (length - this.label.size.width) / 2,
+            (this.style.curve - this.label.size.height) / 2,
         ));
 
         // Draw the mask.
         return new DOM.SVGElement("rect", {
-            width: this.label.width,
-            height: this.label.height,
+            width: this.label.size.width,
+            height: this.label.size.height,
             fill: "black",
             x: 0, y: 0,
             transform: `translate(${origin.x} ${origin.y}) ${
@@ -1154,7 +1144,7 @@ class Arrow {
         const OFFSET_ALLOWANCE = 4;
         let offset_min = 0;
         let offset_max = OFFSET_ALLOWANCE + Math.abs(this.style.curve) / 2
-            + Math.hypot((this.label.width + edge_width) / 2, (this.label.height + edge_width) / 2);
+            + this.label.size.add(Point.diag(edge_width)).div(2).length();
         // The following variable will be initialised by the following loop, which runs at least
         // once.
         let label_offset;
@@ -1171,10 +1161,8 @@ class Arrow {
             // Compute the intersections between the offset bounding rectangle and the edge.
             const intersections = new Bezier(Point.zero(), length, this.style.curve, angle)
                 .intersections_with_rounded_rectangle(new RoundedRectangle(
-                    rect_centre.x,
-                    rect_centre.y,
-                    this.label.width + edge_width,
-                    this.label.height + edge_width,
+                    rect_centre,
+                    this.label.size.add(Point.diag(edge_width)),
                     edge_width / 2,
                 ));
 

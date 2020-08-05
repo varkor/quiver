@@ -35,6 +35,10 @@ class Point {
         return [this.x, this.y];
     }
 
+    px(comma = true) {
+        return `${this.x}px${comma ? "," : ""} ${this.y}px`;
+    }
+
     eq(other) {
         return this.x === other.x && this.y === other.y;
     }
@@ -117,6 +121,10 @@ const Dimensions = class extends Position {
 /// An HTML position. This is functionally equivalent to `Position`, but has different semantic
 /// intent.
 class Offset extends Point {
+    static from_point(point) {
+        return new Offset(point.x, point.y);
+    }
+
     get left() {
         return this.x;
     }

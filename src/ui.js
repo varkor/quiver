@@ -113,10 +113,7 @@ UIState.Connect = class extends UIState {
             // to the position of the cursor.
             const target = this.target !== null ? {
                 offset: this.target.off(ui),
-                size: new Dimensions(
-                    this.target.shape.width,
-                    this.target.shape.height,
-                ),
+                size: this.target.shape.size,
                 is_offset: true,
                 level: this.target.level,
             } : {
@@ -129,8 +126,8 @@ UIState.Connect = class extends UIState {
             };
 
             const source_offset = this.source.off(ui);
-            const source_shape = new Shape(source_offset.x, source_offset.y);
-            const target_shape = new Shape(target.offset.x, target.offset.y);
+            const source_shape = new RoundedRect(source_offset, new Dimensions(64, 64), 16);
+            const target_shape = new RoundedRect(target.offset, new Dimensions(64, 64), 16);
             if (ui.arrow === null) {
                 ui.arrow = new Arrow(source_shape, target_shape, new ArrowStyle());
                 ui.canvas.add(ui.arrow.element);
@@ -141,8 +138,7 @@ UIState.Connect = class extends UIState {
                 ui.arrow.source = source_shape;
                 ui.arrow.target = target_shape;
             }
-            ui.arrow.target.width = target.size.width;
-            ui.arrow.target.height = target.size.height;
+            ui.arrow.target.size = target.size;
             ui.arrow.target.radius = 0;
             ui.arrow.style.level = Math.max(this.source.level, target.level) + 1;
             // FIXME: radius should not be 16 if the size is 1
@@ -3386,7 +3382,7 @@ class Vertex extends Cell {
         super(ui.quiver, 0, label);
 
         this.position = position;
-        this.shape = new Shape(this.position.x, this.position.y);
+        this.shape = new RoundedRect(Point.zero(), new Dimensions(64, 64), 16);
 
         this.render(ui);
         super.initialise(ui);
@@ -3421,8 +3417,7 @@ class Vertex extends Cell {
         const offset = ui.offset_from_position(this.position);
         offset.reposition(this.element);
         const centre_offset = offset.add(ui.cell_centre_at_position(this.position));
-        this.shape.x = centre_offset.x;
-        this.shape.y = centre_offset.y;
+        this.shape.origin = centre_offset;
         // Shape width is controlled elsewhere.
 
         // Resize according to the grid cell.
@@ -3481,8 +3476,7 @@ class Vertex extends Cell {
         const size = this.content_size(ui, sizes);
         this.content_element.style.width = `${size.width}px`;
         this.content_element.style.height = `${size.height}px`;
-        this.shape.width = size.width;
-        this.shape.height = size.height;
+        this.shape.size = size;
     }
 }
 
@@ -3502,10 +3496,11 @@ class Edge extends Cell {
         this.arrow.redraw();
         ui.canvas.add(this.arrow.element);
 
-        this.shape = new Shape(0, 0);
-        this.shape.width = ui.default_cell_size * 0.5;
-        this.shape.height = ui.default_cell_size * 0.5;
-        this.shape.radius = ui.default_cell_size * 0.25;
+        this.shape = new RoundedRect(
+            Point.zero(),
+            new Dimensions(ui.default_cell_size * 0.5, ui.default_cell_size * 0.5),
+            ui.default_cell_size * 0.25,
+        );
 
         this.reconnect(ui, source, target);
 
@@ -3710,17 +3705,13 @@ class Edge extends Cell {
 
         const prev_source = this.arrow.source;
         const prev_target = this.arrow.target;
-        this.arrow.source = new Shape(source_offset.x, source_offset.y);
-        this.arrow.source.width = prev_source.width;
-        this.arrow.source.height = prev_source.height;
+        this.arrow.source = new RoundedRect(source_offset, prev_source.size, 16);
         if (!endpoint_offset.source) {
             this.arrow.source.width = 1;
             this.arrow.source.height = 1;
             this.arrow.source.radius = 0;
         }
-        this.arrow.target = new Shape(target_offset.x, target_offset.y);
-        this.arrow.target.width = prev_target.width;
-        this.arrow.target.height = prev_target.height;
+        this.arrow.target = new RoundedRect(target_offset, prev_target.size, 16);
         if (!endpoint_offset.target) {
             this.arrow.target.width = 1;
             this.arrow.target.height = 1;
@@ -3731,14 +3722,12 @@ class Edge extends Cell {
         this.arrow.target = prev_target;
         // Offset is centre of
         // FIXME: unify this.offset and this.shape position.
-        this.offset = new Offset(this.arrow.source.x, this.arrow.source.y)
-            .add(new Point(this.arrow.target.x, this.arrow.target.y))
-            .div(2)
-            .add(new Point(0, this.arrow.style.curve / 2).rotate(
-                // FIXME: use built-in functions for this
-                Math.atan2(this.arrow.target.y - this.arrow.source.y,
-                    this.arrow.target.x - this.arrow.source.x)
-            ));
+        this.offset = Offset.from_point(
+            this.arrow.source.origin.add(this.arrow.target.origin).div(2)
+                .add(new Point(0, this.arrow.style.curve / 2).rotate(
+                    this.arrow.target.origin.sub(this.arrow.source.origin).angle()
+                ))
+        );
     }
 
     /// Create the HTML element associated with the label (and label buffer).

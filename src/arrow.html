@@ -30,26 +30,29 @@
     <script>
         let drag = null;
 
-        class Box extends Shape {
+        class Box extends RoundedRect {
             constructor(x, y) {
-                super(x, y);
+                super(new Point(x, y), new Dimensions(64, 64), 16);
                 this.svg = document.createElement("div");
                 this.svg.classList.add("box");
                 this.redraw();
                 this.svg.addEventListener("mousedown", (event) => {
                     if (drag === null) {
                         const rect = this.svg.getBoundingClientRect();
-                        drag = [this, event.clientX - rect.left - this.width / 2, event.clientY - rect.top - this.height / 2];
+                        drag = [
+                            this, event.clientX - rect.left - this.size.width / 2,
+                            event.clientY - rect.top - this.size.height / 2,
+                        ];
                     }
                 });
                 document.body.appendChild(this.svg);
             }
 
             redraw() {
-                this.svg.style.left = `${this.x - this.width / 2}px`;
-                this.svg.style.top = `${this.y - this.height / 2}px`;
-                this.svg.style.width = `${this.width}px`;
-                this.svg.style.height = `${this.height}px`;
+                this.svg.style.left = `${this.origin.x - this.size.width / 2}px`;
+                this.svg.style.top = `${this.origin.y - this.size.height / 2}px`;
+                this.svg.style.width = `${this.size.width}px`;
+                this.svg.style.height = `${this.size.height}px`;
             }
         }
 
@@ -60,7 +63,7 @@
         document.addEventListener("DOMContentLoaded", () => {
             const source = new Box(64, 240);
             const target = new Box(640, 240);
-            target.width = 512;
+            target.size.width = 512;
             target.redraw();
             // const arrow2 = new Arrow2(source, target);
 
@@ -73,16 +76,16 @@
             arrow.style.level = 1;
             // arrow.style.shorten = 40;
             // arrow.style.dash_style = CONSTANTS.ARROW_DASH_STYLE.DASHED;
-            arrow.style.body_style = CONSTANTS.ARROW_BODY_STYLE.SQUIGGLY;
-            arrow.label.alignment = CONSTANTS.LABEL_ALIGNMENT.LEFT;
+            // arrow.style.body_style = CONSTANTS.ARROW_BODY_STYLE.SQUIGGLY;
+            arrow.label.alignment = CONSTANTS.LABEL_ALIGNMENT.OVER;
             arrow.redraw();
             document.body.appendChild(arrow.element.element);
 
             window.addEventListener("mousemove", (event) => {
                 if (drag !== null) {
                     const [shape, x, y] = drag;
-                    shape.x = event.clientX - x;
-                    shape.y = event.clientY - y;
+                    shape.origin.x = event.clientX - x;
+                    shape.origin.y = event.clientY - y;
                     shape.redraw();
                     arrow.redraw();
                 }
