@@ -109,18 +109,19 @@ const CONSTANTS = {
 
 class ArrowStyle {
     constructor() {
-        this.body_style = CONSTANTS.ARROW_BODY_STYLE.LINE;
-        this.dash_style = CONSTANTS.ARROW_DASH_STYLE.SOLID;
         // The "n" in "n-cell". Must be a positive integer.
         this.level = 1;
         // The height of the curve (in pixels). May be positive or negative.
         this.curve = 0;
         // The offset of the curve (in pixels). May be positive or negative.
         this.shift = 0;
-        this.heads = CONSTANTS.ARROW_HEAD_STYLE.NORMAL;
-        this.tails = CONSTANTS.ARROW_HEAD_STYLE.NONE;
         // How much to offset the head and tail of the edge from their endpoints.
         this.shorten = 0;
+        // The various styles for the head, body, and tail.
+        this.body_style = CONSTANTS.ARROW_BODY_STYLE.LINE;
+        this.dash_style = CONSTANTS.ARROW_DASH_STYLE.SOLID;
+        this.heads = CONSTANTS.ARROW_HEAD_STYLE.NORMAL;
+        this.tails = CONSTANTS.ARROW_HEAD_STYLE.NONE;
     }
 }
 

@@ -1476,6 +1476,97 @@ class UI {
         context.stroke();
     }
 
+    /// Get an `ArrowStyle` from the `options` associated to an edge.
+    /// `ArrowStyle` is used simply for styling: we don't use it as an internal data representation
+    /// for quivers. This helps keep a separation between structure and drawing, which makes it
+    /// easiser to maintain backwards-compatibility.
+    static arrow_style_for_options(options) {
+        // By default, `ArrowStyle` have minimal styling.
+        const style = new ArrowStyle();
+
+        // All arrow styles support shifting.
+        style.shift = options.offset * CONSTANTS.EDGE_OFFSET_DISTANCE;
+
+        switch (options.style.name) {
+            case "arrow":
+                style.level = options.level;
+                style.curve = options.curve * CONSTANTS.CURVE_HEIGHT * 2;
+
+                // Body style.
+                switch (options.style.body.name) {
+                    case "squiggly":
+                        style.body_style = CONSTANTS.ARROW_BODY_STYLE.SQUIGGLY;
+                        break;
+                    case "barred":
+                        style.body_style = CONSTANTS.ARROW_BODY_STYLE.PROARROW;
+                        break;
+                    case "dashed":
+                        style.dash_style = CONSTANTS.ARROW_DASH_STYLE.DASHED;
+                        break;
+                    case "dotted":
+                        style.dash_style = CONSTANTS.ARROW_DASH_STYLE.DOTTED;
+                        break;
+                    case "none":
+                        style.body_style = CONSTANTS.ARROW_BODY_STYLE.NONE;
+                        break;
+                }
+
+                // Tail style.
+                switch (options.style.tail.name) {
+                    case "none":
+                        style.tails = CONSTANTS.ARROW_HEAD_STYLE.NONE;
+                        break;
+                    case "maps to":
+                        style.tails = CONSTANTS.ARROW_HEAD_STYLE.MAPS_TO;
+                        break;
+                    case "mono":
+                        style.tails = CONSTANTS.ARROW_HEAD_STYLE.MONO;
+                        break;
+                    case "hook":
+                        style.tails = CONSTANTS.ARROW_HEAD_STYLE[{
+                            "top": "HOOK_TOP",
+                            "bottom": "HOOK_BOTTOM",
+                        }[options.style.tail.side]];
+                        break;
+                }
+
+                // Head style.
+                switch (options.style.head.name) {
+                    case "arrowhead":
+                        style.heads = CONSTANTS.ARROW_HEAD_STYLE.NORMAL;
+                        break;
+                    case "none":
+                        style.heads = CONSTANTS.ARROW_HEAD_STYLE.NONE;
+                        break;
+                    case "epi":
+                        style.heads = CONSTANTS.ARROW_HEAD_STYLE.EPI;
+                        break;
+                    case "harpoon":
+                        style.heads = CONSTANTS.ARROW_HEAD_STYLE[{
+                            "top": "HARPOON_TOP",
+                            "bottom": "HARPOON_BOTTOM",
+                        }[options.style.head.side]];
+                        break;
+                }
+                break;
+
+            // Adjunction (⊣).
+            case "adjunction":
+                style.body_style = CONSTANTS.ARROW_BODY_STYLE.ADJUNCTION;
+                style.heads = CONSTANTS.ARROW_HEAD_STYLE.NONE;
+                break;
+
+            // Pullback/pushout corner.
+            case "corner":
+                style.body_style = CONSTANTS.ARROW_BODY_STYLE.NONE;
+                style.heads = CONSTANTS.ARROW_HEAD_STYLE.NONE;
+                style.tails = CONSTANTS.ARROW_HEAD_STYLE.CORNER;
+                break;
+        }
+
+        return style;
+    }
+
     /// Load macros from a string, which will be used in all LaTeX labels.
     load_macros(definitions) {
         // Currently, only macros without arguments are supported.
@@ -3134,7 +3225,9 @@ class Cell {
         /// For cells with a separate `content_element`, we allow the cell to be moved
         /// by dragging its `element` (under the assumption it doesn't totally overlap
         /// its `content_element`). For now, these are precisely the vertices.
-        if (this.element !== content_element) {
+        // We allow vertices to be moved by dragging its `element` (which contains its
+        // `content_element`, the element with the actual cell content).
+        if (this.is_vertex()) {
             this.element.addEventListener("mousedown", (event) => {
                 if (event.button === 0) {
                     if (ui.in_mode(UIState.Default)) {
@@ -3162,8 +3255,8 @@ class Cell {
         // or we wouldn't be able to immediately delete a cell with Backspace/Delete,
         // as the input field would capture it.
         let was_previously_selected = true;
-        const main_element = this.is_vertex() ? content_element : this.arrow.element.element;
-        main_element.addEventListener("mousedown", (event) => {
+
+        content_element.addEventListener("mousedown", (event) => {
             if (event.button === 0) {
                 if (ui.in_mode(UIState.Default)) {
                     event.stopPropagation();
@@ -3198,7 +3291,7 @@ class Cell {
             }
         });
 
-        main_element.addEventListener("mouseenter", () => {
+        content_element.addEventListener("mouseenter", () => {
             if (ui.in_mode(UIState.Connect)) {
                 // The second part of the condition should not be necessary, because pointer events
                 // are disabled for reconnected edges, but this acts as a warranty in case this is
@@ -3216,7 +3309,7 @@ class Cell {
             }
         });
 
-        main_element.addEventListener("mouseleave", () => {
+        content_element.addEventListener("mouseleave", () => {
             if (this.element.classList.contains("pending")) {
                 this.element.classList.remove("pending");
 
@@ -3240,7 +3333,7 @@ class Cell {
             }
         });
 
-        main_element.addEventListener("mouseup", (event) => {
+        content_element.addEventListener("mouseup", (event) => {
             if (event.button === 0) {
                 // If we release the pointer without ever dragging, then
                 // we never begin connecting the cell.
@@ -3492,9 +3585,10 @@ class Edge extends Cell {
         shape_label.height = 0;
         shape_label.alignment = CONSTANTS.LABEL_ALIGNMENT.LEFT;
         this.arrow = new Arrow(source.shape, target.shape, new ArrowStyle(), shape_label);
-        this.arrow.style.shorten = 0;
         this.arrow.redraw();
         ui.canvas.add(this.arrow.element);
+
+        this.element = this.arrow.element.element;
 
         this.shape = new RoundedRect(
             Point.zero(),
@@ -3504,7 +3598,7 @@ class Edge extends Cell {
 
         this.reconnect(ui, source, target);
 
-        super.initialise(ui);
+        this.initialise(ui);
     }
 
     /// A set of defaults for edge options: a basic arrow (→).
@@ -3517,7 +3611,7 @@ class Edge extends Cell {
             style: Object.assign({
                 name: "arrow",
                 tail: { name: "none" },
-                body: { level },
+                body: { level }, // FIXME: no level here
                 head: { name: "arrowhead" },
             }, override_style),
         }, override_properties);
@@ -3531,35 +3625,48 @@ class Edge extends Cell {
         return options;
     }
 
+    initialise(ui) {
+        super.initialise(ui);
+
+        // We allow users to reconnect edges to different cells by dragging their endpoint handles.
+        const reconnect = (event, end) => {
+            event.stopPropagation();
+            event.preventDefault();
+            // We don't get the default blur behaviour here, as we've prevented it, so we have to do
+            // it ourselves.
+            ui.panel.element.querySelector('label input[type="text"]').blur();
+
+            this.arrow.element.class_list.add("reconnecting");
+            const fixed = { source: this.target, target: this.source }[end];
+            ui.switch_mode(new UIState.Connect(ui, fixed, false, {
+                end,
+                edge: this,
+            }));
+        };
+
+        // Set up the endpoint handle interaction events.
+        for (const end of ["source", "target"]) {
+            const handle = this.arrow.element.query_selector(`.arrow-endpoint.${end}`);
+            handle.listen("mousedown", (event) => reconnect(event, end));
+        }
+    }
+
+    /// Update the `ArrowStyle` associated to the edge, as well as label formatting, etc.
+    /// This is necessary before redrawing.
+    update_style() {
+        // Update the arrow style.
+        this.arrow.style = UI.arrow_style_for_options(this.options);
+        // Update the label style.
+        this.arrow.label.alignment = {
+            left: CONSTANTS.LABEL_ALIGNMENT.LEFT,
+            right: CONSTANTS.LABEL_ALIGNMENT.RIGHT,
+            centre: CONSTANTS.LABEL_ALIGNMENT.CENTRE,
+            over: CONSTANTS.LABEL_ALIGNMENT.OVER,
+        }[this.options.label_alignment];
+    }
+
     /// Create the HTML element associated with the edge.
     render(ui, pointer_offset = null) {
-        if (this.element === null) {
-            // We allow users to reconnect edges to different cells by dragging their
-            // endpoint handles.
-            const reconnect = (event, end) => {
-                event.stopPropagation();
-                event.preventDefault();
-                // We don't get the default blur behaviour, as we've prevented it, here, so
-                // we have to do it ourselves.
-                ui.panel.element.querySelector('label input[type="text"]').blur();
-
-                this.arrow.element.class_list.add("reconnecting");
-                const fixed = { source: this.target, target: this.source }[end];
-                ui.switch_mode(new UIState.Connect(ui, fixed, false, {
-                    end,
-                    edge: this,
-                }));
-            };
-
-            // Set up the endpoint handle interaction events.
-            for (const end of ["source", "target"]) {
-                const handle = this.arrow.element.query_selector(`.arrow-endpoint.${end}`);
-                handle.listen("mousedown", (event) => reconnect(event, end));
-            }
-
-            this.element = this.arrow.element.element;
-        }
-
         // If we're reconnecting an edge, then we vary its source/target (depending on
         // which is being dragged) depending on the pointer position. Thus, we need
         // to check what state we're currently in, and if we establish this edge is being
@@ -3591,90 +3698,7 @@ class Edge extends Cell {
             }
         }
 
-        this.arrow.style.curve = this.options.curve * CONSTANTS.CURVE_HEIGHT * 2;
-        this.arrow.style.shift = this.options.offset * CONSTANTS.EDGE_OFFSET_DISTANCE;
-        this.arrow.style.heads = [];
-        this.arrow.style.tails = [];
-        switch (this.options.style.name) {
-            case "arrow":
-                // Reset
-                this.arrow.style.level = this.options.level;
-                this.arrow.style.dash_style = CONSTANTS.ARROW_DASH_STYLE.SOLID;
-                this.arrow.style.body_style = CONSTANTS.ARROW_BODY_STYLE.LINE;
-
-                switch (this.options.style.body.name) {
-                    case "squiggly":
-                        this.arrow.style.body_style = CONSTANTS.ARROW_BODY_STYLE.SQUIGGLY;
-                        break;
-                    case "barred":
-                        this.arrow.style.body_style = CONSTANTS.ARROW_BODY_STYLE.PROARROW;
-                        break;
-                    case "dashed":
-                        this.arrow.style.dash_style = CONSTANTS.ARROW_DASH_STYLE.DASHED;
-                        break;
-                    case "dotted":
-                        this.arrow.style.dash_style = CONSTANTS.ARROW_DASH_STYLE.DOTTED;
-                        break;
-                    case "none":
-                        this.arrow.style.body_style = CONSTANTS.ARROW_BODY_STYLE.NONE;
-                        break;
-                }
-
-                switch (this.options.style.tail.name) {
-                    case "none":
-                        this.arrow.style.tails = CONSTANTS.ARROW_HEAD_STYLE.NONE;
-                        break;
-                    case "maps to":
-                        this.arrow.style.tails = CONSTANTS.ARROW_HEAD_STYLE.MAPS_TO;
-                        break;
-                    case "mono":
-                        this.arrow.style.tails = CONSTANTS.ARROW_HEAD_STYLE.MONO;
-                        break;
-                    case "hook":
-                        this.arrow.style.tails = CONSTANTS.ARROW_HEAD_STYLE[{
-                            "top": "HOOK_TOP",
-                            "bottom": "HOOK_BOTTOM",
-                        }[this.options.style.tail.side]];
-                        break;
-                }
-
-                switch (this.options.style.head.name) {
-                    case "arrowhead":
-                        this.arrow.style.heads = CONSTANTS.ARROW_HEAD_STYLE.NORMAL;
-                        break;
-                    case "none":
-                        this.arrow.style.heads = CONSTANTS.ARROW_HEAD_STYLE.NONE;
-                        break;
-                    case "epi":
-                        this.arrow.style.heads = CONSTANTS.ARROW_HEAD_STYLE.EPI;
-                        break;
-                    case "harpoon":
-                        this.arrow.style.heads = CONSTANTS.ARROW_HEAD_STYLE[{
-                            "top": "HARPOON_TOP",
-                            "bottom": "HARPOON_BOTTOM",
-                        }[this.options.style.head.side]];
-                        break;
-                }
-                break;
-            case "adjunction":
-                this.arrow.style.body_style = CONSTANTS.ARROW_BODY_STYLE.ADJUNCTION;
-                this.arrow.style.level = 1;
-                this.arrow.style.curve = 0;
-                break;
-            case "corner":
-                this.arrow.style.body_style = CONSTANTS.ARROW_BODY_STYLE.NONE;
-                this.arrow.style.level = 1;
-                this.arrow.style.curve = 0;
-                this.arrow.style.tails = CONSTANTS.ARROW_HEAD_STYLE.CORNER;
-                break;
-        }
-
-        this.arrow.label.alignment = {
-            left: CONSTANTS.LABEL_ALIGNMENT.LEFT,
-            right: CONSTANTS.LABEL_ALIGNMENT.RIGHT,
-            centre: CONSTANTS.LABEL_ALIGNMENT.CENTRE,
-            over: CONSTANTS.LABEL_ALIGNMENT.OVER,
-        }[this.options.label_alignment];
+        this.update_style();
 
         const existing_label = this.arrow.element.query_selector("span");
         if (existing_label !== null) {
