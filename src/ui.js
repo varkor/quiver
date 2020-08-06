@@ -2177,6 +2177,9 @@ class Panel {
         // actions. To avoid this, we prevent `record_edge_style_change` from taking
         // effect when it's already in progress using the `recording` flag.
         let recording = false;
+
+        // Compute the difference in styling effected by `modify` and record the change in the
+        // history.
         const record_edge_style_change = (modify) => {
             if (recording) {
                 return;
@@ -2207,6 +2210,16 @@ class Panel {
             recording = false;
         };
 
+        // Trigger an efect that changes an edge style, optionally recording the change in the
+        // history.
+        const effect_edge_style_change = (record, modify) => {
+            if (record) {
+                record_edge_style_change(modify);
+            } else {
+                modify();
+            }
+        };
+
         this.create_option_list(
             ui,
             local,
@@ -2220,9 +2233,11 @@ class Panel {
             "tail-type",
             ["vertical", "short", "arrow-style"],
             true, // `disabled`
-            (edges, _, data) => record_edge_style_change(() => {
-                edges.forEach(edge => edge.options.style.tail = data);
-            }),
+            (edges, _, data, user_triggered) => {
+                effect_edge_style_change(user_triggered, () => {
+                    edges.forEach(edge => edge.options.style.tail = data);
+                });
+            },
             (_, data) => {
                 return {
                     edge: {
@@ -2252,9 +2267,11 @@ class Panel {
             "body-type",
             ["vertical", "arrow-style"],
             true, // `disabled`
-            (edges, _, data) => record_edge_style_change(() => {
-                edges.forEach(edge => edge.options.style.body = data);
-            }),
+            (edges, _, data, user_triggered) => {
+                effect_edge_style_change(user_triggered, () => {
+                    edges.forEach(edge => edge.options.style.body = data);
+                });
+            },
             (_, data) => {
                 return {
                     edge: {
@@ -2282,9 +2299,11 @@ class Panel {
             "head-type",
             ["vertical", "short", "arrow-style"],
             true, // `disabled`
-            (edges, _, data) => record_edge_style_change(() => {
-                edges.forEach(edge => edge.options.style.head = data);
-            }),
+            (edges, _, data, user_triggered) => {
+                effect_edge_style_change(user_triggered, () => {
+                    edges.forEach(edge => edge.options.style.head = data);
+                });
+            },
             (_, data) => {
                 return {
                     edge: {
@@ -2310,33 +2329,46 @@ class Panel {
             "edge-type",
             ["vertical", "centre"],
             true, // `disabled`
-            (edges, _, data) => record_edge_style_change(() => {
-                for (const edge of edges) {
-                    // Update the edge style.
-                    if (data.name !== "arrow" || edge.options.style.name !== "arrow") {
-                        // The arrow is a special case, because it contains suboptions that we
-                        // don't necessarily want to override. For example, if we have multiple
-                        // edges selected, one of which is a non-default arrow and another which
-                        // has a different style, clicking on the arrow option should not reset
-                        // the style of the existing arrow.
-                        edge.options.style = data;
+            (edges, _, data, user_triggered) => {
+                effect_edge_style_change(user_triggered, () => {
+                    for (const edge of edges) {
+                        // We reset `curve` and `level` for non-arrow edges, because that data isn't
+                        // relevant to them. Otherwise, we set them to whatever the sliders are
+                        // currently set to. This will preserve them under switching between arrow
+                        // styles, because we don't reset the sliders when switching.
+                        if (data.name !== "arrow") {
+                            edge.options.curve = 0;
+                            edge.options.level = 1;
+                        } else if (edge.options.style.name !== "arrow") {
+                            edge.options.curve
+                                = parseInt(ui.element.querySelector('input[name="curve"]').value);
+                            edge.options.level
+                                = parseInt(ui.element.querySelector('input[name="level"]').value);
+                        }
+                        // Update the edge style.
+                        if (data.name !== "arrow" || edge.options.style.name !== "arrow") {
+                            // The arrow is a special case, because it contains suboptions that we
+                            // don't necessarily want to override. For example, if we have multiple
+                            // edges selected, one of which is a non-default arrow and another which
+                            // has a different style, clicking on the arrow option should not reset
+                            // the style of the existing arrow.
+                            edge.options.style = data;
+                        }
                     }
-                }
 
-                // Enable/disable the arrow style buttons and curve slider.
-                ui.element.querySelectorAll(".arrow-style input")
-                    .forEach(element => element.disabled = data.name !== "arrow");
+                    // Enable/disable the arrow style buttons and curve slider.
+                    ui.element.querySelectorAll(".arrow-style input")
+                        .forEach(element => element.disabled = data.name !== "arrow");
 
-                // If we've selected the `"arrow"` style, then we need to
-                // trigger the currently-checked buttons so that we get
-                // the expected style, rather than the default style.
-                if (data.name === "arrow") {
-                    UI.delay(() => {
+                    // If we've selected the `"arrow"` style, then we need to trigger the
+                    // currently-checked buttons and the curve and level sliders so that we get the
+                    // expected style, rather than the default style.
+                    if (data.name === "arrow") {
                         ui.element.querySelectorAll('.arrow-style input[type="radio"]:checked')
-                            .forEach(element => element.dispatchEvent(new Event("change")));
-                    });
-                }
-            }),
+                            .forEach(element => element.dispatchEvent(new Event("change")))
+                    }
+                });
+            },
             (_, data) => {
                 return {
                     edge: {
@@ -2472,10 +2504,10 @@ class Panel {
                 name,
                 value,
                 title: tooltip,
-            }).listen("change", (_, button) => {
+            }).listen("change", (event, button) => {
                 if (button.checked) {
                     const selected_edges = Array.from(ui.selection).filter(cell => cell.is_edge());
-                    on_check(selected_edges, value, data);
+                    on_check(selected_edges, value, data, event.isTrusted);
                     for (const edge of selected_edges) {
                         edge.render(ui);
                     }
