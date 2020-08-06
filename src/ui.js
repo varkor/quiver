@@ -3602,7 +3602,7 @@ class Edge extends Cell {
     }
 
     /// A set of defaults for edge options: a basic arrow (→).
-    static default_options(override_properties, override_style, level = 1) {
+    static default_options(override_properties = null, override_style = null, level = 1) {
         let options = Object.assign({
             label_alignment: "left",
             offset: 0,
@@ -3611,16 +3611,10 @@ class Edge extends Cell {
             style: Object.assign({
                 name: "arrow",
                 tail: { name: "none" },
-                body: { level }, // FIXME: no level here
+                body: { name: "cell" },
                 head: { name: "arrowhead" },
             }, override_style),
         }, override_properties);
-
-        if (typeof options.style.body.name === "undefined") {
-            // Options may simply specify a level for the body,
-            // in which case the default style is the cell.
-            options.style.body.name = "cell";
-        }
 
         return options;
     }

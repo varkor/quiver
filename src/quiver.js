@@ -780,9 +780,19 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
                     // and this permits a limited form of backwards compatibility. We never access
                     // prototype properties on `options`, so this should not be amenable to
                     // injection.
-                    const level = Math.max(indices[source].level, indices[target].level) + 1;
+                    let level = Math.max(indices[source].level, indices[target].level) + 1;
                     const { style = {} } = options;
                     delete options.style;
+
+                    // In previous versions of quiver, `level` was only valid for some arrows, and
+                    // was recorded in the body style, rather than as a property of the edge itself.
+                    // For backwards-compatibility, we check for this case manually here.
+                    if (style.hasOwnProperty("body") && style.body.hasOwnProperty("level")) {
+                        assert_kind(style.body.level, "natural");
+                        assert(style.body.level >= 1, "invalid level");
+                        level = style.body.level;
+                        delete style.body.level;
+                    }
 
                     const edge = new Edge(
                         ui,
