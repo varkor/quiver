@@ -569,7 +569,21 @@ class Arrow {
             }).add_to(clipping_mask);
         }
 
-        // Draw the tail and head masks.
+        // Draw the tail and head masks. There are two components: a mask up until the
+        // endpoints, which deals with general overflow (especially egregious for squiggly arrows);
+        // and specific masks for each of the head styles.
+        // The general overflow mask is drawn in the same way as `.arrow-background-mask`.
+        new DOM.SVGElement("path", {
+            d: `${
+                new Path()
+                    .move_to(offset)
+                    .curve_by(new Point(length / 2, this.style.curve), new Point(length, 0))
+            }`,
+            fill: "none",
+            stroke: "black",
+            "stroke-width": edge_width + (CONSTANTS.BACKGROUND_PADDING + STROKE_PADDING) * 2,
+            "stroke-dasharray": `${arclen_to_start} ${arclen_to_end - arclen_to_start} ${arclen - arclen_to_end}`,
+        }).add_to(clipping_mask);
         draw_heads(this.style.tails, start, true, true);
         draw_heads(this.style.heads, end, false, true);
 
