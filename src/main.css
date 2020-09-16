@@ -210,15 +210,6 @@ body:not(.modal) {
     transition: opacity 0.2s;
 }
 
-.label.buffer {
-    visibility: hidden;
-}
-
-.label.error {
-    font: 22px monospace;
-    color: hsl(0, 100%, 40%);
-}
-
 /* Edges */
 
 .edge {
@@ -806,4 +797,10 @@ body:not(.modal) {
 
 .arrow-endpoint:hover {
     border: hsl(200, 100%, 40%) 2px solid;
+}
+
+/* Arrow labels */
+
+.arrow .katex, .arrow .katex-error {
+    font-size: 1em;
 }

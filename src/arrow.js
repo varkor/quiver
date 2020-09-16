@@ -562,13 +562,20 @@ class Arrow {
         if (this.label !== null) {
             // Clip the edge by the label mask.
             if (this.label.alignment === CONSTANTS.LABEL_ALIGNMENT.CENTRE) {
-                this.redraw_label(constants).add_to(clipping_mask);
+                this.redraw_label(constants, "rect").add_to(clipping_mask);
             }
-            const label = this.redraw_label(constants);
-            label.set_attributes({ fill: "hsl(0, 100%, 50%, 0.5)" });
-            // label.set_attributes({ fill: "transparent" });
+            // Release the existing label.
+            const label_content = this.svg.query_selector(".arrow-label div");
+            this.release_element(this.svg, "foreignObject.arrow-label");
+            // Create a new label.
+            const label = this.redraw_label(constants, "foreignObject");
             label.set_attributes({ class: "arrow-label" });
-            this.release_element(this.svg, "rect.arrow-label");
+            // Add a generic content container, which makes it more convenient to manipulate.
+            // If we previously had content, we reuse that.
+            label.add(label_content || new DOM.Element("div", {
+                xmlns: "http://www.w3.org/1999/xhtml",
+                class: "label",
+            }));
             this.svg.add(label);
             this.label.element = label;
         }
@@ -1084,7 +1091,7 @@ class Arrow {
     }
 
     /// Redraw the label attached to the edge. Returns the mask associated to the label.
-    redraw_label(constants) {
+    redraw_label(constants, tag_name) {
         const { length, angle, offset } = constants;
 
         const origin = this.determine_label_position(constants).add(offset).add(new Point(
@@ -1093,11 +1100,12 @@ class Arrow {
         ));
 
         // Draw the mask.
-        return new DOM.SVGElement("rect", {
+        return new DOM.SVGElement(tag_name, {
             width: this.label.size.width,
             height: this.label.size.height,
             fill: "black",
-            x: 0, y: 0,
+            x: 0,
+            y: 0,
             transform: `translate(${origin.x} ${origin.y}) ${
                 // The label should be horizontal for most alignments, but in the direction of the
                 // arrow for `OVER`.

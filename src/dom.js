@@ -106,6 +106,10 @@ DOM.Element = class {
     clone() {
         return new DOM.Element(this.element.cloneNode());
     }
+
+    bounding_rect() {
+        return this.element.getBoundingClientRect();
+    }
 };
 
 /// A class for conveniently dealing with SVGs.

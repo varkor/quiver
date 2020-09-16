@@ -17,6 +17,8 @@ Object.assign(CONSTANTS, {
     EDGE_OFFSET_DISTANCE: 8,
     // How many pixels each unit of curve height corresponds to.
     CURVE_HEIGHT: 24,
+    // How many pixels of padding to place around labels on edges.
+    EDGE_LABEL_PADDING: 8,
 });
 
 /// Various states for the UI (e.g. whether cells are being rearranged, or connected, etc.).
@@ -428,11 +430,6 @@ class UI {
         /// The toolbar.
         this.toolbar = new Toolbar();
 
-        /// What library to use for rendering labels.
-        /// `null` is a basic HTML fallback: it is used until the relevant library is loaded.
-        /// Options include MathJax and KaTeX.
-        this.render_method = null;
-
         /// LaTeX macro definitions.
         this.macros = new Map();
 
@@ -838,17 +835,6 @@ class UI {
         });
     }
 
-    /// Active MathJax or KaTeX when it becomes available,
-    /// updating all existing labels to make use of the library.
-    activate_render_method(method) {
-        this.render_method = method;
-
-        // Rerender all the existing labels now that MathJax is available.
-        for (const cell of this.quiver.all_cells()) {
-            cell.render_label(this);
-        }
-    }
-
     /// Returns whether the UI has a particular state.
     in_mode(state) {
         return this.state instanceof state;
@@ -1220,18 +1206,12 @@ class UI {
     }
 
     /// Gets the label element for a cell and clears it, or creates a new one if it does not exist.
-    static clear_label_for_cell(cell, buffer = false) {
-        let label = cell.element.querySelector(`.label${!buffer ? ":not(.buffer)" : "buffer"}`);
+    static clear_label_for_cell(cell) {
+        const label = new DOM.Element(cell.element).query_selector(".label");
         if (label !== null) {
-            label = new DOM.Element(label);
-            label.clear();
-            return label;
+            return label.clear();
         } else {
-            label = new DOM.Element("div", { class: "label" });
-            if (buffer) {
-                label.class_list.add("buffer");
-            }
-            return label;
+            return new DOM.Element("div", { class: "label" });
         }
     }
 
@@ -1291,87 +1271,14 @@ class UI {
         return [label.offsetWidth, label.offsetHeight];
     }
 
-    /// Returns the declared macros in a format amenable to passing to the LaTeX renderer.
+    /// Returns the declared macros in a format amenable to passing to KaTeX.
     latex_macros() {
-        switch (this.render_method) {
-            case null:
-                return this.macros;
-
-            case "MathJax":
-                // This seems to be more effective than defining macros using `MathJax.Hub.Config`.
-                return Array.from(this.macros).map(([name, { definition, arity }]) => {
-                    return `\\newcommand{${name}}[${arity}]{${definition}}`;
-                }).join("");
-
-            case "KaTeX":
-                const macros = {};
-                for (const [name, { definition }] of this.macros) {
-                    // Arities are implicit in KaTeX.
-                    macros[name] = definition;
-                }
-                return macros;
+        const macros = {};
+        for (const [name, { definition }] of this.macros) {
+            // Arities are implicit in KaTeX.
+            macros[name] = definition;
         }
-    }
-
-    /// Renders TeX with MathJax or KaTeX and returns the corresponding element.
-    render_tex(cell, label, tex = "", callback = x => x) {
-        const after = (x) => {
-            const sizes = this.resize_label(cell, label.element);
-            if (cell.is_vertex()) {
-                // If the cell size has changed, we may need to resize the grid to fit.
-                cell.resize_content(this, sizes);
-            }
-
-            callback(x);
-        };
-
-        switch (this.render_method) {
-            case null:
-                label.add(tex);
-                // Simulate the usual queue delay.
-                UI.delay(() => after());
-                break;
-
-            case "MathJax":
-                label.add(`\\(${this.latex_macros()}${tex}\\)`);
-
-                // We're going to fade the label in once it's rendered, so it looks less janky.
-                label.element.style.display = "none";
-                label.element.style.opacity = 0;
-
-                MathJax.Hub.queue.Push(
-                    ["Typeset", MathJax.Hub, label.element],
-                    () => {
-                        label.element.style.display = "block";
-                        label.element.style.opacity = 1;
-                    },
-                    after,
-                );
-
-                break;
-
-            case "KaTeX":
-                try {
-                    katex.render(
-                        tex.replace(/\$/g, "\\$"),
-                        label.element,
-                        {
-                            throwOnError: false,
-                            errorColor: "hsl(0, 100%, 40%)",
-                            macros: this.latex_macros(),
-                        },
-                    );
-                } catch (_) {
-                    // Currently all errors are disabled, so we don't expect to encounter this case.
-                    label.class_list.add("error");
-                    label.add(tex);
-                }
-                // Simulate the usual queue delay.
-                UI.delay(() => after());
-                break;
-        }
-
-        return label;
+        return macros;
     }
 
     // A helper method for displaying error banners.
@@ -1594,7 +1501,7 @@ class UI {
 
         // Rerender all the existing labels with the new macro definitions.
         for (const cell of this.quiver.all_cells()) {
-            cell.render_label(this);
+            this.panel.render_tex(this, cell);
         }
     }
 
@@ -2565,72 +2472,41 @@ class Panel {
         local.add(options_list);
     }
 
-    /// We buffer the MathJax rendering to reduce flickering (KaTeX is fast enough not
-    /// to require buffering).
-    /// If the `.buffer` has no extra classes, then we are free to start a new MathJax
-    /// TeX render.
-    /// If the `.buffer` has a `.buffering` class, then we are rendering a label. This
-    /// may be out of date, in which case we add a `.pending` class (which means we're
-    /// going to rerender as soon as the current MathJax render has completed).
+    /// Render the TeX contained in the label of a cell.
     render_tex(ui, cell) {
-        const label = new DOM.Element(cell.element.querySelector(".label:not(.buffer)"));
-        label.class_list.remove("error");
+        const label = new DOM.Element(cell.element).query_selector(".label");
 
         const update_label_transformation = () => {
             if (cell.is_edge()) {
-                cell.update_label_transformation(ui);
+                // Resize the bounding box for the label.
+                const bounding_rect = label.query_selector(".katex, .katex-error").bounding_rect();
+                cell.arrow.label.size = new Dimensions(
+                    bounding_rect.width
+                        + (bounding_rect.width > 0 ? CONSTANTS.EDGE_LABEL_PADDING * 2 : 0),
+                    bounding_rect.height
+                        + (bounding_rect.height > 0 ? CONSTANTS.EDGE_LABEL_PADDING * 2 : 0),
+                );
+                // Rerender the edge with the new label.
                 cell.render(ui);
             } else {
-                // `update_label_transformation` performs label resizing itself.
                 cell.resize_content(ui, ui.resize_label(cell, label.element));
             }
         };
 
-        switch (ui.render_method) {
-            case null:
-                label.clear().add(cell.label);
-                update_label_transformation();
-                break;
-
-            case "MathJax":
-                const buffer = cell.element.querySelector(".buffer");
-                const jax = MathJax.Hub.getAllJax(buffer);
-                if (!buffer.classList.contains("buffering") && jax.length > 0) {
-                    buffer.classList.add("buffering");
-
-                    MathJax.Hub.Queue(
-                        ["Text", jax[0], `${ui.latex_macros()}${cell.label}`],
-                        () => {
-                            // Swap the label and the label buffer.
-                            label.class_list.add("buffer");
-                            buffer.classList.remove("buffer", "buffering");
-                        },
-                        update_label_transformation,
-                    );
-                } else if (!buffer.classList.contains("pending")) {
-                    MathJax.Hub.Queue(() => this.render_tex(ui, cell));
-                }
-                break;
-
-            case "KaTeX":
-                try {
-                    katex.render(
-                        cell.label.replace(/\$/g, "\\$"),
-                        label.element,
-                        {
-                            throwOnError: false,
-                            errorColor: "hsl(0, 100%, 40%)",
-                            macros: ui.latex_macros(),
-                        },
-                    );
-                } catch (_) {
-                    // Currently all errors are disabled, so we don't expect to encounter this case.
-                    label.add(cell.label);
-                    label.class_list.add("error");
-                }
-                update_label_transformation();
-                break;
-        }
+        // Render the label with KaTeX.
+        // Currently all errors are disabled, so we don't wrap this in a try-catch block.
+        KaTeX.then((katex) => {
+            katex.render(
+                cell.label.replace(/\$/g, "\\$"),
+                label.element,
+                {
+                    throwOnError: false,
+                    errorColor: "hsl(0, 100%, 40%)",
+                    macros: ui.latex_macros(),
+                },
+            );
+            update_label_transformation();
+        });
     };
 
     /// Update the panel state (i.e. enable/disable fields as relevant).
@@ -3493,7 +3369,7 @@ class Cell {
 
     size() {
         if (this.is_vertex()) {
-            const label = this.element.querySelector(".label:not(.buffer)");
+            const label = this.element.querySelector(".label");
             return new Dimensions(label.offsetWidth, label.offsetHeight);
         } else {
             return Dimensions.zero();
@@ -3559,7 +3435,7 @@ class Vertex extends Cell {
         }
 
         // Resize the content according to the grid cell. This is just the default size: it will be
-        // updated by `render_label`.
+        // updated by `render_tex`.
         const content = this.content_element;
         content.style.width = `${ui.default_cell_size / 2}px`;
         content.style.left = `${cell_width / 2}px`;
@@ -3567,24 +3443,12 @@ class Vertex extends Cell {
         content.style.top = `${cell_height / 2}px`;
 
         if (construct) {
-            this.render_label(ui);
-        } else {
-            // Ensure we re-render the label when the cell is moved, in case the cell it's moved
-            // into is a different size.
-            ui.panel.render_tex(ui, this);
+            // Create the label.
+            new DOM.Element(this.content_element).add(UI.clear_label_for_cell(this));
         }
-    }
-
-    /// Create the HTML element associated with the label (and label buffer).
-    /// This abstraction is necessary to handle situations where MathJax cannot
-    /// be loaded gracefully.
-    render_label(ui) {
-        const content = new DOM.Element(this.content_element);
-        // Create the label.
-        content.add(ui.render_tex(this, UI.clear_label_for_cell(this), this.label));
-        // Create an empty label buffer for flicker-free rendering.
-        const buffer = ui.render_tex(this, UI.clear_label_for_cell(this, true), this.label);
-        content.add(buffer);
+        // Ensure we re-render the label when the cell is moved, in case the cell it's moved
+        // into is a different size.
+        ui.panel.render_tex(ui, this);
     }
 
     /// Get the size of the cell content.
@@ -3613,11 +3477,9 @@ class Edge extends Cell {
         this.options = Edge.default_options(options, null, this.level);
 
         const shape_label = new Label("");
-        shape_label.width = 0;
-        shape_label.height = 0;
+        shape_label.size = Dimensions.zero();
         shape_label.alignment = CONSTANTS.LABEL_ALIGNMENT.LEFT;
         this.arrow = new Arrow(source.shape, target.shape, new ArrowStyle(), shape_label);
-        this.arrow.redraw();
         ui.canvas.add(this.arrow.element);
 
         this.element = this.arrow.element.element;
@@ -3628,6 +3490,7 @@ class Edge extends Cell {
             ui.default_cell_size * 0.25,
         );
 
+        // FIXME: is this triggering too much rerendering?
         this.reconnect(ui, source, target);
 
         this.initialise(ui);
@@ -3675,6 +3538,8 @@ class Edge extends Cell {
             const handle = this.arrow.element.query_selector(`.arrow-endpoint.${end}`);
             handle.listen("mousedown", (event) => reconnect(event, end));
         }
+
+        ui.panel.render_tex(ui, this);
     }
 
     /// Update the `ArrowStyle` associated to the edge, as well as label formatting, etc.
@@ -3726,33 +3591,6 @@ class Edge extends Cell {
 
         this.update_style();
 
-        const existing_label = this.arrow.element.query_selector("span");
-        if (existing_label !== null) {
-            existing_label.remove();
-        }
-        const label = new DOM.Element("span").add_to(this.arrow.element);
-        katex.render(
-            this.label,
-            label.element,
-            {
-                throwOnError: false,
-                errorColor: "hsl(0, 100%, 40%)",
-                // macros: this.latex_macros(),
-            },
-        );
-        const rect = label.element.getBoundingClientRect();
-        this.arrow.label.width = rect.width + CONSTANTS.CONTENT_PADDING * 2;
-        this.arrow.label.height = rect.height + CONSTANTS.CONTENT_PADDING * 2;
-
-        this.arrow.element.set_style({ position: "relative" });
-        label.set_style({ visibility: "hidden" });
-        setTimeout(() => {
-            const rect_svg = this.arrow.label.element.element.getBoundingClientRect();
-            const rect_arr = this.arrow.element.element.getBoundingClientRect();
-            label.set_style({ position: "absolute", display: "inline-block", left: `${rect_svg.left - rect_arr.left + CONSTANTS.CONTENT_PADDING}px`, top: `${rect_svg.top - rect_arr.top + CONSTANTS.CONTENT_PADDING}px` });
-            label.set_style({ visibility: "visible" });
-        }, 0);
-
         const prev_source = this.arrow.source;
         const prev_target = this.arrow.target;
         this.arrow.source = new RoundedRect(source_offset, prev_source.size, 16);
@@ -3768,6 +3606,17 @@ class Edge extends Cell {
             this.arrow.target.radius = 0;
         }
         this.arrow.redraw();
+
+        this.arrow.element.query_selector(".label").set_style({
+            // background: "hsla(0, 100%, 50%, 0.5)",
+            width: "100%",
+            height: "100%",
+            "line-height": `${
+                this.arrow.element.query_selector(".arrow-label").element.getBBox().height}px`,
+            "text-align": "center",
+        });
+        // `render_tex` triggers redrawing the edge, rather than the other way around.
+
         this.arrow.source = prev_source;
         this.arrow.target = prev_target;
         // Offset is centre of
@@ -3778,23 +3627,6 @@ class Edge extends Cell {
                     this.arrow.target.origin.sub(this.arrow.source.origin).angle()
                 ))
         );
-    }
-
-    /// Create the HTML element associated with the label (and label buffer).
-    /// This abstraction is necessary to handle situations where MathJax cannot
-    /// be loaded gracefully.
-    render_label(ui) {
-        // Create the edge label.
-        const label = ui.render_tex(
-            this,
-            UI.clear_label_for_cell(this),
-            this.label,
-            () => this.update_label_transformation(ui),
-        );
-        this.element.appendChild(label.element);
-        // Create an empty label buffer for flicker-free rendering.
-        const buffer = ui.render_tex(this, UI.clear_label_for_cell(this, true));
-        this.element.appendChild(buffer.element);
     }
 
     /// Draws an edge on an SVG. `length` must be nonnegative.
@@ -4141,74 +3973,6 @@ class Edge extends Cell {
         return this.target.off(ui).sub(this.source.off(ui)).angle();
     }
 
-    /// Update the `label` transformation (translation and rotation) as well as
-    /// the edge clearing size for `centre` alignment in accordance with the
-    /// dimensions of the label.
-    update_label_transformation(ui, angle = this.angle(ui)) {
-        const label = this.element.querySelector(".label:not(.buffer)");
-
-        // Bound an `angle` to [0, π/2).
-        const bound_angle = (angle) => {
-            return Math.PI / 2 - Math.abs(Math.PI / 2 - ((angle % Math.PI) + Math.PI) % Math.PI);
-        };
-
-        // How much to offset the label from the edge.
-        const LABEL_OFFSET = 16;
-        let label_offset;
-        switch (this.options.label_alignment) {
-            case "left":
-                label_offset = -1;
-                break;
-            case "centre":
-            case "over":
-                label_offset = 0;
-                break;
-            case "right":
-                label_offset = 1;
-                break;
-        }
-
-        // Expand or shrink the label to fit the available space.
-        ui.resize_label(this, label);
-
-        // Reverse the rotation for the label, so that it always displays upright and offset it
-        // so that it is aligned correctly.
-        label.style.transform = `
-            translate(-50%, -50%)
-            translateY(${
-                (Math.sin(bound_angle(angle)) * label.offsetWidth / 2 + LABEL_OFFSET) * label_offset
-            }px)
-            rotate(${-angle}rad)
-        `;
-
-        // Make sure the buffer is formatted identically to the label.
-        this.element.querySelector(".label.buffer").style.transform = label.style.transform;
-
-        // Get the length of a line through the centre of the bounds rectangle at an `angle`.
-        const angle_length = (angle) => {
-            // Cut a rectangle out of the edge to leave room for the label text.
-            // How much padding around the label to give (cut out of the edge).
-            const CLEAR_PADDING = 4;
-
-            return (Math.min(
-                label.offsetWidth / (2 * Math.cos(bound_angle(angle))),
-                label.offsetHeight / (2 * Math.sin(bound_angle(angle))),
-            ) + CLEAR_PADDING) * 2;
-        };
-
-        const [width, height]
-            = label.offsetWidth > 0 && label.offsetHeight > 0 ?
-                [angle_length(angle), angle_length(angle + Math.PI / 2)]
-            : [0, 0];
-
-        new DOM.SVGElement(this.element.querySelector("svg mask .clear"), {
-            x: label.offsetLeft - width / 2,
-            y: label.offsetTop - height / 2,
-            width,
-            height,
-        });
-    }
-
     /// Changes the source and target.
     reconnect(ui, source, target) {
         [this.source, this.target] = [source, target];
@@ -4270,8 +4034,8 @@ class Edge extends Cell {
     }
 }
 
-// Which library to use for rendering labels.
-const RENDER_METHOD = "KaTeX";
+// A `Promise` that returns the `katex` global object when it's loaded.
+let KaTeX = null;
 
 // We want until the (minimal) DOM content has loaded, so we have access to `document.body`.
 document.addEventListener("DOMContentLoaded", () => {
@@ -4321,88 +4085,45 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
-    // Immediately load the rendering library.
-    if (RENDER_METHOD !== null) {
-        // All non-`null` rendering libraries add some script.
-        const rendering_library = new DOM.Element("script", {
-            type: "text/javascript",
-            src: {
-                MathJax: "MathJax/MathJax.js",
-                KaTeX: "KaTeX/dist/katex.js",
-            }[RENDER_METHOD],
-        }).listen("load", () => {
-            ui.activate_render_method(RENDER_METHOD);
+    // Immediately load the KaTeX library.
+   const rendering_library = new DOM.Element("script", {
+        type: "text/javascript",
+        src: "KaTeX/dist/katex.js",
+    }).listen("error", () => {
+        // Handle KaTeX not loading (somewhat) gracefully.
+        UI.display_error(`KaTeX failed to load.`)
+    });
 
-            // We delay loading the quiver when using KaTeX (see comment below),
-            // so as soon as the library is loaded, we want to load the quiver.
-            if (RENDER_METHOD === "KaTeX") {
-                load_quiver_from_query_string();
-            }
-        }).listen("error", () => {
-            // Handle MathJax or KaTeX not loading (somewhat) gracefully.
-            UI.display_error(`${RENDER_METHOD} failed to load.`)
-        });
+    KaTeX = new Promise((accept) => {
+        rendering_library.listen("load", () => {
+            accept(katex);
+            // KaTeX is fast enough to be worth waiting for, but not
+            // immediately available. In this case, we delay loading
+            // the quiver until the library has loaded.
+            load_quiver_from_query_string();
+        })
+    });
 
-        // Specific, per-library behaviour.
-        switch (RENDER_METHOD) {
-            case "MathJax":
-                window.MathJax = {
-                    jax: ["input/TeX", "output/SVG"],
-                    extensions: ["tex2jax.js", "TeX/noErrors.js", "TeX/noUndefined.js"],
-                    messageStyle: "none",
-                    skipStartupTypeset: true,
-                    positionToHash: false,
-                    showMathMenu: false,
-                    showMathMenuMSIE: false,
-                    TeX: {
-                        noErrors: {
-                            multiLine: false,
-                            style: {
-                                border: "none",
-                                font: "20px monospace",
-                                color: "hsl(0, 100%, 40%)",
-                            },
-                        },
-                        noUndefined: {
-                            attributes: {
-                                mathcolor: "hsl(0, 100%, 40%)",
-                                mathsize: "90%",
-                                mathfont: "monospace",
-                            }
-                        },
-                    },
-                };
-                break;
-            case "KaTeX":
-                document.head.appendChild(new DOM.Element("link", {
-                    rel: "stylesheet",
-                    href: "KaTeX/dist/katex.css",
-                }).element);
-                // Preload various fonts to avoid flashes of unformatted text.
-                const preload_fonts = ["Main-Regular", "Math-Italic"];
-                for (const font of preload_fonts) {
-                    const attributes = {
-                        rel: "preload",
-                        href: `KaTeX/dist/fonts/KaTeX_${font}.woff2`,
-                        as: "font"
-                    };
-                    if (window.location.hostname !== "") {
-                        // Fonts always need to be fetched using `crossorigin`.
-                        attributes.crossorigin = "";
-                    }
-                    document.head.appendChild(new DOM.Element("link", attributes).element);
-                }
-                break;
+    // Load the style sheet needed for KaTeX.
+    document.head.appendChild(new DOM.Element("link", {
+        rel: "stylesheet",
+        href: "KaTeX/dist/katex.css",
+    }).element);
+    // Preload various fonts to avoid flashes of unformatted text.
+    const preload_fonts = ["Main-Regular", "Math-Italic"];
+    for (const font of preload_fonts) {
+        const attributes = {
+            rel: "preload",
+            href: `KaTeX/dist/fonts/KaTeX_${font}.woff2`,
+            as: "font"
+        };
+        if (window.location.hostname !== "") {
+            // Fonts always need to be fetched using `crossorigin`.
+            attributes.crossorigin = "";
         }
-
-        // Trigger the script load.
-        document.head.appendChild(rendering_library.element);
+        document.head.appendChild(new DOM.Element("link", attributes).element);
     }
 
-    // KaTeX is special in that it's fast enough to be worth waiting for, but not
-    // immediately available. In this case, we delay loading the quiver until the
-    // library has loaded.
-    if (RENDER_METHOD !== "KaTeX") {
-        load_quiver_from_query_string();
-    }
+    // Trigger the script load.
+    document.head.appendChild(rendering_library.element);
 });
