@@ -395,7 +395,7 @@ class Arrow {
                 const point = offset.add(endpoint);
                 const name = is_start ? "source" : "target";
                 // Draw the semicircle (actually a circle, but half of it is idempotent).
-                this.requisition_element(this.background, `circle.${name}`, {
+                this.requisition_element(this.background, `circle.${name}.arrow-background`, {
                     cx: point.x,
                     cy: point.y,
                     r: edge_width / 2 + CONSTANTS.BACKGROUND_PADDING,

@@ -768,16 +768,16 @@ body:not(.modal) {
     z-index: 4;
 }
 
-.arrow:not(.reconnecting) > svg:first-child > path {
+.arrow:not(.reconnecting) > svg:first-child > .arrow-background {
     pointer-events: stroke;
 }
 
-.arrow:not(.selected) > svg:first-child > path {
+.arrow:not(.selected) > svg:first-child:not(:hover) > .arrow-background {
     opacity: 0;
 }
 
-.arrow:not(.selected) > svg:first-child > path:hover {
-    opacity: 0.5;
+.arrow:not(.selected) > svg:first-child:hover {
+    opacity: 0.1 !important;
 }
 
 .arrow-endpoint {
