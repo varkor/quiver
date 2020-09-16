@@ -30,7 +30,7 @@
     <script>
         let drag = null;
 
-        class Box extends RoundedRect {
+        class Box extends Shape.RoundedRect {
             constructor(x, y) {
                 super(new Point(x, y), new Dimensions(64, 64), 16);
                 this.svg = document.createElement("div");

@@ -128,8 +128,8 @@ UIState.Connect = class extends UIState {
             };
 
             const source_offset = this.source.off(ui);
-            const source_shape = new RoundedRect(source_offset, new Dimensions(64, 64), 16);
-            const target_shape = new RoundedRect(target.offset, new Dimensions(64, 64), 16);
+            const source_shape = new Shape.RoundedRect(source_offset, new Dimensions(64, 64), 16);
+            const target_shape = new Shape.RoundedRect(target.offset, new Dimensions(64, 64), 16);
             if (ui.arrow === null) {
                 ui.arrow = new Arrow(source_shape, target_shape, new ArrowStyle());
                 ui.canvas.add(ui.arrow.element);
@@ -141,6 +141,7 @@ UIState.Connect = class extends UIState {
                 ui.arrow.target = target_shape;
             }
             ui.arrow.target.size = target.size;
+            // FIXME: use `Shape.Point` here too
             ui.arrow.target.radius = 0;
             ui.arrow.style.level = Math.max(this.source.level, target.level) + 1;
             // FIXME: radius should not be 16 if the size is 1
@@ -3383,7 +3384,7 @@ class Vertex extends Cell {
         super(ui.quiver, 0, label);
 
         this.position = position;
-        this.shape = new RoundedRect(Point.zero(), new Dimensions(64, 64), 16);
+        this.shape = new Shape.RoundedRect(Point.zero(), new Dimensions(64, 64), 16);
 
         this.render(ui);
         super.initialise(ui);
@@ -3484,7 +3485,7 @@ class Edge extends Cell {
 
         this.element = this.arrow.element.element;
 
-        this.shape = new RoundedRect(
+        this.shape = new Shape.RoundedRect(
             Point.zero(),
             new Dimensions(ui.default_cell_size * 0.5, ui.default_cell_size * 0.5),
             ui.default_cell_size * 0.25,
@@ -3593,15 +3594,13 @@ class Edge extends Cell {
 
         const prev_source = this.arrow.source;
         const prev_target = this.arrow.target;
-        this.arrow.source = new RoundedRect(source_offset, prev_source.size, 16);
+        this.arrow.source = new Shape.RoundedRect(source_offset, prev_source.size, 16);
         if (!endpoint_offset.source) {
-            this.arrow.source.size = new Dimensions(1, 1);
-            this.arrow.source.radius = 0;
+            this.arrow.source = new Shape.Endpoint(source_offset);
         }
-        this.arrow.target = new RoundedRect(target_offset, prev_target.size, 16);
+        this.arrow.target = new Shape.RoundedRect(target_offset, prev_target.size, 16);
         if (!endpoint_offset.target) {
-            this.arrow.target.size = new Dimensions(1, 1);
-            this.arrow.target.radius = 0;
+            this.arrow.target = new Shape.Endpoint(target_offset);
         }
         this.arrow.redraw();
 

@@ -128,7 +128,7 @@ class ArrowStyle {
 class Label {
     constructor(text) {
         this.text = text;
-        this.size = new Dimensions(128, 32);
+        this.size = Dimensions.zero();
         this.alignment = CONSTANTS.LABEL_ALIGNMENT.CENTRE;
         this.element = null;
     }
@@ -136,12 +136,21 @@ class Label {
 
 class Shape {}
 
-class RoundedRect extends Shape {
+Shape.RoundedRect = class extends Shape {
     constructor(origin, size, radius) {
         super();
         this.origin = origin;
         this.size = size;
         this.radius = radius;
+    }
+}
+
+// The endpoint of a Bézier curve. This is used when we want to draw a Bézier curve in
+// its entirety.
+Shape.Endpoint = class extends Shape {
+    constructor(origin) {
+        super();
+        this.origin = origin;
     }
 }
 
@@ -235,10 +244,10 @@ class Arrow {
         // This was determined by experimenting with what looked nice.
         const head_height = edge_width + (CONSTANTS.LINE_SPACING + CONSTANTS.STROKE_WIDTH) * 2;
 
-        // The horizontal and vertical padding. We have the same padding for both axes, because
-        // when the curve is very high, the tangent near the source/target can become essentially
-        // vertical. We always pad enough for the arrowhead (plus its stroke width) and the squiggles
-        // in a squiggly line.
+        // The horizontal and vertical padding. We have the same padding for both axes, because when
+        // the curve is very high, the tangent near the source/target can become essentially
+        // vertical. We always pad enough for the arrowhead (plus its stroke width) and the
+        // squiggles in a squiggly line.
         const padding = CONSTANTS.BACKGROUND_PADDING +
             + Math.max(head_height, (this.style.body_style === CONSTANTS.ARROW_BODY_STYLE.SQUIGGLY ?
                 CONSTANTS.SQUIGGLY_TRIANGLE_HEIGHT * 2 : 0) + CONSTANTS.STROKE_WIDTH) / 2;
@@ -271,23 +280,36 @@ class Arrow {
         /// should be a unique intersection point, and this will be true in all but extraordinary
         /// circumstances: namely, when the source and target are overlapping. In this case, we
         /// pick either the earliest (if `prefer_min`) or latest intersection point (otherwise).
-        const find_endpoint = (bounding_rect, prefer_min) => {
+        const find_endpoint = (endpoint_shape, prefer_min) => {
             const bezier = new Bezier(this.source.origin, length, this.style.curve, angle);
+
+            // The case when the endpoint is simply a point.
+            if (endpoint_shape instanceof Shape.Endpoint) {
+                // In this case, there is a trivial intersection with either the source or target.
+                const t = prefer_min ? 0 : 1;
+                return new BezierPoint(
+                    endpoint_shape.origin.sub(this.source.origin).rotate(-angle),
+                    t,
+                    bezier.tangent(t),
+                );
+            }
+
+            // The case when the endpoint is a rounded rectangle.
             const intersections = bezier.intersections_with_rounded_rectangle(new RoundedRectangle(
-                bounding_rect.origin,
-                bounding_rect.size,
-                bounding_rect.radius,
+                endpoint_shape.origin,
+                endpoint_shape.size,
+                endpoint_shape.radius,
             ));
             if (intersections.length === 0) {
                 // We should always have at least one intersection, as the Bézier curve spans the
                 // endpoints, so this is an error.
                 console.error(
                     "No intersection found for Bézier curve with endpoint.",
-                    bounding_rect,
+                    endpoint_shape,
                     bezier,
                 );
                 // Try to continue drawing *something*.
-                return Point.zero();
+                return new BezierPoint(Point.zero(), 0, 0);
             }
             return intersections[prefer_min ? 0 : intersections.length - 1];
         }
@@ -299,8 +321,8 @@ class Arrow {
         // target.
         for (const svg of [this.background, this.svg]) {
             svg.set_style({
-                width: `${svg_width}`,
-                height: `${svg_height}`,
+                width: `${svg_width}px`,
+                height: `${svg_height}px`,
                 "transform-origin": offset.px(false),
                 transform: `
                     translate(${shift.px()})
@@ -308,16 +330,13 @@ class Arrow {
                     rotate(${angle}rad)
                 `,
             });
-            // Set the view box to match the length and height of the SVG. It would be nice if we
-            // could just use `length` and `height` here and let SVG handle the offsets for us,
-            // but unfortunately this leads to some content being clipped, so we have to handle it
-            // ourselves.
-            svg.set_attributes({ viewBox: `0 0 ${svg_width} ${svg_height}` });
-            // Whether `width` and `height` have to be set seems to differ between browsers.
-            svg.set_style({ width: `${svg_width}px`, height: `${svg_height}px` });
         }
 
         // Redraw the background.
+        // First, set the opacity.
+        this.background.set_style({
+            opacity: CONSTANTS.BACKGROUND_OPACITY,
+        });
 
         // Create a clipping mask for the background.
         const bg_defs = this.requisition_element(this.background, "defs");
@@ -341,7 +360,7 @@ class Arrow {
                     .curve_by(new Point(length / 2, this.style.curve), new Point(length, 0))
             }`,
             fill: "none",
-            stroke: `hsla(0, 0%, 0%, ${CONSTANTS.BACKGROUND_OPACITY})`,
+            stroke: "black",
             "stroke-width": edge_width + CONSTANTS.BACKGROUND_PADDING * 2,
         });
 
@@ -362,8 +381,7 @@ class Arrow {
             }`,
             fill: "none",
             stroke: "black",
-            "stroke-width":
-                edge_width + (CONSTANTS.BACKGROUND_PADDING + STROKE_PADDING) * 2,
+            "stroke-width": edge_width + (CONSTANTS.BACKGROUND_PADDING + STROKE_PADDING) * 2,
             "stroke-dasharray": `${arclen_to_start} ${arclen_to_end - arclen_to_start} ${arclen - arclen_to_end}`,
         });
 
@@ -377,11 +395,11 @@ class Arrow {
                 const point = offset.add(endpoint);
                 const name = is_start ? "source" : "target";
                 // Draw the semicircle (actually a circle, but half of it is idempotent).
-                this.requisition_element(bg_mask, `circle.${name}`, {
+                this.requisition_element(this.background, `circle.${name}`, {
                     cx: point.x,
                     cy: point.y,
                     r: edge_width / 2 + CONSTANTS.BACKGROUND_PADDING,
-                    fill: "white",
+                    fill: "black",
                 });
                 // Add a handle to the endpoint.
                 const origin = Point.diag(CONSTANTS.HANDLE_RADIUS).sub(endpoint);
