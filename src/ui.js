@@ -128,7 +128,7 @@ UIState.Connect = class extends UIState {
             };
 
             const source_offset = this.source.off(ui);
-            const source_shape = new Shape.RoundedRect(source_offset, new Dimensions(64, 64), 16);
+            const source_shape = new Shape.RoundedRect(source_offset, this.source.shape.size, 16);
             const target_shape = new Shape.RoundedRect(target.offset, new Dimensions(64, 64), 16);
             if (ui.arrow === null) {
                 ui.arrow = new Arrow(source_shape, target_shape, new ArrowStyle());
