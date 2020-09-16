@@ -3595,14 +3595,12 @@ class Edge extends Cell {
         const prev_target = this.arrow.target;
         this.arrow.source = new RoundedRect(source_offset, prev_source.size, 16);
         if (!endpoint_offset.source) {
-            this.arrow.source.width = 1;
-            this.arrow.source.height = 1;
+            this.arrow.source.size = new Dimensions(1, 1);
             this.arrow.source.radius = 0;
         }
         this.arrow.target = new RoundedRect(target_offset, prev_target.size, 16);
         if (!endpoint_offset.target) {
-            this.arrow.target.width = 1;
-            this.arrow.target.height = 1;
+            this.arrow.target.size = new Dimensions(1, 1);
             this.arrow.target.radius = 0;
         }
         this.arrow.redraw();
