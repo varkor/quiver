@@ -825,11 +825,11 @@ class Arrow {
                             }
                             // Fill up the remaining gap.
                             dashes.push(deficit);
-                            // We need to always end on an odd length of `dashes`, because the array
-                            // indicates an alternating sequence of dashes and gaps.
-                            if (dashes.length % 2 !== 1) {
-                                dashes.push(0);
-                            }
+                        }
+                        // We need to always end on an odd length of `dashes`, because the array
+                        // indicates an alternating sequence of dashes and gaps.
+                        if (dashes.length % 2 !== 1) {
+                            dashes.push(0);
                         }
 
                     } else {
