@@ -71,13 +71,14 @@
             // arrow.style.heads = ["hook-top"];
             // arrow.style.tails = ["hook-bottom"];
             // arrow.style.heads = CONSTANTS.ARROW_HEAD_STYLE.CORNER;
-            // arrow.style.tails = CONSTANTS.ARROW_HEAD_STYLE.MAPS_TO;
+            arrow.style.tails = CONSTANTS.ARROW_HEAD_STYLE.MAPS_TO;
             // arrow.style.heads = CONSTANTS.ARROW_HEAD_STYLE.HARPOON_TOP;
-            arrow.style.level = 10;
+            arrow.style.level = 3;
             arrow.style.shorten = 40;
             // arrow.style.dash_style = CONSTANTS.ARROW_DASH_STYLE.DOTTED;
-            arrow.style.body_style = CONSTANTS.ARROW_BODY_STYLE.SQUIGGLY;
-            arrow.label.alignment = CONSTANTS.LABEL_ALIGNMENT.OVER;
+            arrow.style.body_style = CONSTANTS.ARROW_BODY_STYLE.PROARROW;
+            arrow.label.alignment = CONSTANTS.LABEL_ALIGNMENT.CENTRE;
+            arrow.label.size = new Dimensions(100, 10);
             arrow.redraw();
             document.body.appendChild(arrow.element.element);
 

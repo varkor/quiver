@@ -174,7 +174,7 @@ class Arrow {
 
     /// Return an existing element, or create a new one if it does not exist.
     /// This is more efficient, and also preserves event listeners on the existing elements.
-    /// The `selector` may be of the form `element.class1.class2...`.
+    /// The `selector` may be of the form `element#optional-id.class1.class2...`.
     requisition_element(
         parent,
         selector,
@@ -185,13 +185,18 @@ class Arrow {
         const elements = parent.query_selector_all(selector);
         switch (elements.length) {
             case 0:
-                const [name, ...classes] = selector.split(".");
+                const [prefix, ...classes] = selector.split(".");
+                const [name, id = null] = prefix.split("#");
+                const extra_attrs = {};
+                if (id !== null) {
+                    extra_attrs.id = id;
+                }
+                if (classes.length > 0) {
+                    extra_attrs.class = classes.join(" ");
+                }
                 return new DOM.Element(
                     name,
-                    Object.assign(
-                        classes.length > 0 ? { class: classes.join(" ") } : {},
-                        attributes,
-                    ),
+                    Object.assign(extra_attrs, attributes),
                     style,
                     namespace,
                 ).add_to(parent);
@@ -442,18 +447,31 @@ class Arrow {
         // Create a clipping mask for the edge. We use this to cut out the gaps in an n-cell,
         // and also to cut out space for the label when the alignment is `CENTRE`.
         const defs = this.requisition_element(this.svg, "defs");
-        const clipping_mask = this.requisition_element(defs, "mask", {
-            id: `arrow${this.id}-clipping-mask`,
-            maskUnits: "userSpaceOnUse",
-        });
-        // For simplicity, we clear the clipping mask and recreate everything.
-        clipping_mask.clear();
-        // By default, we draw everything.
-        this.requisition_element(clipping_mask, "rect.base", {
-            width: svg_width,
-            height: svg_height,
-            fill: "white",
-        });
+        const clipping_mask = this.requisition_element(
+            defs,
+            `mask#arrow${this.id}-clipping-mask`,
+            { maskUnits: "userSpaceOnUse" },
+        );
+        // We use a separate clipping mask for the label. This is because we want
+        // to clip the head, tail and proarrow bar by the label mask, but *not* by
+        // the endpoint masks, which otherwise cut into the head and tail. Thus, the
+        // mask for the label is duplicated: once in `clipping_mask` and once in
+        // `label_clipping_mask`.
+        const label_clipping_mask = this.requisition_element(
+            defs,
+            `mask#arrow${this.id}-label-clipping-mask`,
+            { maskUnits: "userSpaceOnUse" },
+        );
+        for (const mask of [clipping_mask, label_clipping_mask]) {
+            // For simplicity, we clear the clipping masks and recreate everything.
+            mask.clear();
+            // By default, we draw everything.
+            this.requisition_element(mask, "rect.base", {
+                width: svg_width,
+                height: svg_height,
+                fill: "white",
+            });
+        }
 
         // Draw the edge itself.
         const edge = this.requisition_element(this.svg, "path.arrow-edge", {
@@ -516,6 +534,7 @@ class Arrow {
 
             this.requisition_element(this.svg, "path.arrow-bar", {
                 d: `${path}`,
+                mask: `url(#arrow${this.id}-label-clipping-mask)`,
                 fill: "none",
                 stroke: "black",
                 "stroke-width": CONSTANTS.STROKE_WIDTH,
@@ -601,7 +620,10 @@ class Arrow {
         if (this.label !== null) {
             // Clip the edge by the label mask.
             if (this.label.alignment === CONSTANTS.LABEL_ALIGNMENT.CENTRE) {
+                // We add the label mask to both the `clipping_mask` (for the arrow edge)
+                // and `label_clipping_mask` (for heads, tails and the proarrow bar).
                 this.redraw_label(constants, "rect").add_to(clipping_mask);
+                this.redraw_label(constants, "rect").add_to(label_clipping_mask);
             }
             // Release the existing label.
             const label_content = this.svg.query_selector(".arrow-label div");
@@ -1120,6 +1142,7 @@ class Arrow {
             path: new DOM.SVGElement("path", {
                 class: "arrow-head",
                 d: `${path}`,
+                mask: !is_mask ? `url(#arrow${this.id}-label-clipping-mask)` : null,
                 fill: is_mask ? "black" : "none",
                 stroke: !is_mask ? "black" : "none",
                 "stroke-width": CONSTANTS.STROKE_WIDTH,

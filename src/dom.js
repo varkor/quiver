@@ -87,7 +87,11 @@ DOM.Element = class {
 
     set_attributes(attributes = {}) {
         for (const [attribute, value] of Object.entries(attributes)) {
-            this.element.setAttribute(attribute, value);
+            if (value !== null) {
+                this.element.setAttribute(attribute, value);
+            } else {
+                this.element.removeAttribute(attribute);
+            }
         }
         return this;
     }
