@@ -328,8 +328,15 @@ class Arrow {
                     endpoint_shape,
                     bezier,
                 );
-                // Try to continue drawing *something*.
-                return new BezierPoint(Point.zero(), 0, 0);
+                // Bail out.
+                throw new Error("No intersections found.");
+            }
+            if (intersections.length > 1 && Bezier.point_inside_polygon(
+                    (prefer_min ? this.target : this.source).origin,
+                    new RoundedRectangle(endpoint_shape.origin, endpoint_shape.size, 0).points(),
+            )) {
+                // It's difficult to draw this case gracefully, so we bail out here too.
+                throw new Error("The Bézier re-enters an endpoint rectangle.");
             }
             return intersections[prefer_min ? 0 : intersections.length - 1];
         }

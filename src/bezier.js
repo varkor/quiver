@@ -99,7 +99,7 @@ class Bezier {
     /// number for the polygon with respect to the point. If the winding number is nonzero, then
     /// the point lies inside the polygon.
     /// This algorithm is based on the one at: http://geomalgorithms.com/a03-_inclusion.html.
-    point_inside_polygon(point, points) {
+    static point_inside_polygon(point, points) {
         // The displacement of a point from a line (calculated via the determinant of a 2x2 matrix).
         const displ = ([base, end], point) => {
             end = end.sub(base);
@@ -234,7 +234,7 @@ class Bezier {
         if (intersections.size === 0) {
             // We use a version of the rectangle without rounded corners to simplify checking.
             const sharp_rect = new RoundedRectangle(rect.centre, rect.size, 0);
-            if (this.point_inside_polygon(this.origin, sharp_rect.points())) {
+            if (Bezier.point_inside_polygon(this.origin, sharp_rect.points())) {
                 if (permit_containment) {
                     // If the rounded rectangle completely contains the Bézier curve, return the
                     // centre point, to indicate there is an overlap.
