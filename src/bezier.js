@@ -68,12 +68,13 @@ class Bezier {
         return length;
     }
 
-    /// Returns a function giving the parameter t of the point a given length along the arc of
-    /// the Bézier curve. (It returns a function, rather than the t for a length, to allow
-    /// the segments to be cached for efficiency).
-    /// The returned function does no error-checking, so the caller is responsible for ensuring it
-    /// is passed only lengths between 0 and the arc length of the curve.
-    t_after_length() {
+    /// Returns a function giving the parameter t of the point a given length along the arc of the
+    /// Bézier curve. (It returns a function, rather than the t for a length, to allow the segments
+    /// to be cached for efficiency). The returned function does little error-checking, so the
+    /// caller is responsible for ensuring it is passed only lengths between 0 and the arc length of
+    /// the curve.
+    /// If `clamp` is true, we clamp any `t`s greater than 1. Otherwise, we throw an error.
+    t_after_length(clamp = false) {
         const { points } = this.delineate(1);
         return (length) => {
             let distance = 0;
@@ -85,6 +86,11 @@ class Bezier {
                         + (points[i + 1][0] - points[i][0]) * (length - distance) / segment_length;
                 }
                 distance += segment_length;
+            }
+            if (clamp) {
+                return 1;
+            } else {
+                throw new Error("Length was greater than the arc length.");
             }
         };
     }

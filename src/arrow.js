@@ -277,7 +277,8 @@ class Arrow {
 
         // The path of the edge, with a normalised origin and angle.
         const bezier = new Bezier(Point.zero(), length, this.style.curve, 0);
-        const t_after_length = bezier.t_after_length();
+        // We clamp `t` to be at most 1, which handles edge cases more conveniently.
+        const t_after_length = bezier.t_after_length(true);
 
         // We centre vertically, so we usually have to offset things by half the height.
         const offset = new Point(padding, padding + height / 2);
@@ -409,7 +410,8 @@ class Arrow {
             fill: "none",
             stroke: "black",
             "stroke-width": edge_width + (CONSTANTS.BACKGROUND_PADDING + STROKE_PADDING) * 2,
-            "stroke-dasharray": `${arclen_to_start} ${arclen_to_end - arclen_to_start} ${arclen - arclen_to_end}`,
+            "stroke-dasharray": `${arclen_to_start} ${
+                arclen_to_end - arclen_to_start} ${arclen - arclen_to_end}`,
         });
 
         // The background usually has flat ends, but we want rounded ends. Unfortunately, the
@@ -448,14 +450,6 @@ class Arrow {
         }
         round_bg_mask_end(start, true);
         round_bg_mask_end(end, false);
-
-        // Check that the arrow length is actually nonnegative.
-        if (arclen_to_end - arclen_to_start - this.style.shorten * 2 < 0) {
-            // The arrow length is negative. Only the arrow edge is marked as invalid, rather than
-            // the entire element, because the background may still sensibly be drawn.
-            this.svg.class_list.add("invalid");
-            return;
-        }
 
         // Redraw the arrow itself.
 
@@ -586,6 +580,20 @@ class Arrow {
         // Draw the tails and heads.
         constants.total_width_of_tails = draw_heads(this.style.tails, start, true, false);
         constants.total_width_of_heads = draw_heads(this.style.heads, end, false, false);
+
+        // Check that the arrow length is actually nonnegative.
+        if (arclen_to_end - arclen_to_start
+            - this.style.shorten * 2
+            - shorten.start - shorten.end
+            - dash_padding.start - dash_padding.end
+            - constants.total_width_of_tails - constants.total_width_of_heads
+            < 0
+        ) {
+            // The arrow length is negative. Only the arrow edge is marked as invalid, rather than
+            // the entire element, because the background may still sensibly be drawn.
+            this.svg.class_list.add("invalid");
+            return;
+        }
 
         // Draw the edge shape and compute the dash array.
         const { path, dash_array } = this.edge_path(constants);
