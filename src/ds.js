@@ -103,8 +103,12 @@ class Point {
     }
 }
 
-/// Equivalent to `Point`, but used semantically to refer to a position on the canvas.
+/// Equivalent to `Point`, but used semantically to refer to a position (in cell indices)
+/// on the canvas.
 class Position extends Point {}
+
+/// Equivalent to `Point`, but used semantically to refer to a position (in pixels) on the canvas.
+class Offset extends Point {}
 
 /// An (width, height) pair. This is essentially functionally equivalent to `Point`,
 /// but has different semantic intent.
@@ -117,44 +121,6 @@ const Dimensions = class extends Position {
         return this.y;
     }
 };
-
-/// An HTML position. This is functionally equivalent to `Position`, but has different semantic
-/// intent.
-class Offset extends Point {
-    static from_point(point) {
-        return new Offset(point.x, point.y);
-    }
-
-    get left() {
-        return this.x;
-    }
-
-    get top() {
-        return this.y;
-    }
-
-    set left(left) {
-        this.x = left;
-    }
-
-    set top(top) {
-        this.y = top;
-    }
-
-    /// Return a [left, top] arrow of CSS length values.
-    to_CSS() {
-        return [`${this.left}px`, `${this.top}px`];
-    }
-
-    as_dim() {
-        return new Dimensions(this.left, this.top);
-    }
-
-    /// Moves an `element` to the offset.
-    reposition(element) {
-        [element.style.left, element.style.top] = this.to_CSS();
-    }
-}
 
 /// Convert radians to degrees.
 function rad_to_deg(rad) {

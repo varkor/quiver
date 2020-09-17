@@ -89,8 +89,6 @@ UIState.Connect = class extends UIState {
     }
 
     release(ui) {
-        this.overlay.remove();
-        this.arrow = null;
         this.source.element.classList.remove("source");
         if (this.target !== null) {
             this.target.element.classList.remove("target");
@@ -98,7 +96,10 @@ UIState.Connect = class extends UIState {
         }
         // If we're connecting from an insertion point, then we need to hide it again.
         ui.element.querySelector(".insertion-point").classList.remove("revealed");
-        if (this.reconnect !== null) {
+        if (this.reconnect === null) {
+            this.overlay.remove();
+            this.arrow = null;
+        } else {
             this.reconnect.edge.arrow.element.class_list.remove("reconnecting");
             this.reconnect.edge.render(ui);
             this.reconnect = null;
@@ -116,23 +117,14 @@ UIState.Connect = class extends UIState {
             // Lock on to the target if present, otherwise simply draw the edge
             // to the position of the cursor.
             const target = this.target !== null ? {
-                shape: new Shape.RoundedRect(
-                    // FIXME: maybe this can be stored in target.shape.offset?
-                    this.target.off(ui),
-                    this.target.shape.size,
-                    this.target.shape.radius,
-                ),
+                shape: this.target.shape,
                 level: this.target.level,
             } : {
                 shape: new Shape.Endpoint(offset),
                 level: 0,
             };
 
-            this.arrow.source = new Shape.RoundedRect(
-                this.source.off(ui),
-                this.source.shape.size,
-                this.source.shape.radius,
-            );
+            this.arrow.source = this.source.shape;
             this.arrow.target = target.shape;
             this.arrow.style.level = Math.max(this.source.level, target.level) + 1;
             this.arrow.redraw();
@@ -574,7 +566,8 @@ class UI {
         const reposition_insertion_point = (event) => {
             const position = this.position_from_event(event);
             const offset = this.offset_from_position(position);
-            offset.reposition(insertion_point);
+            insertion_point.style.left = `${offset.x}px`;
+            insertion_point.style.top = `${offset.y}px`;
             // Resize the insertion point appropriately for the grid cell.
             insertion_point.style.width
                 = `${this.cell_size(this.cell_width, position.x) - CONSTANTS.GRID_BORDER_WIDTH}px`;
@@ -885,8 +878,8 @@ class UI {
     /// the absolute positions of the column and row. See `cell_from_offset` for details.
     col_row_offset_from_offset(offset) {
         return [
-            this.cell_from_offset(this.cell_width, offset.left),
-            this.cell_from_offset(this.cell_height, offset.top),
+            this.cell_from_offset(this.cell_width, offset.x),
+            this.cell_from_offset(this.cell_height, offset.y),
         ];
     }
 
@@ -941,32 +934,28 @@ class UI {
 
         if (position.x > 0) {
             for (let col = 0; col < Math.floor(position.x); ++col) {
-                offset.left += this.cell_size(this.cell_width, col);
+                offset.x += this.cell_size(this.cell_width, col);
             }
-            offset.left
-                += this.cell_size(this.cell_width, Math.floor(position.x)) * (position.x % 1);
+            offset.x += this.cell_size(this.cell_width, Math.floor(position.x)) * (position.x % 1);
         }
         if (position.x < 0) {
             for (let col = -1; col >= position.x; --col) {
-                offset.left -= this.cell_size(this.cell_width, col);
+                offset.x -= this.cell_size(this.cell_width, col);
             }
-            offset.left
-                += this.cell_size(this.cell_width, Math.floor(position.x)) * (position.x % 1);
+            offset.x += this.cell_size(this.cell_width, Math.floor(position.x)) * (position.x % 1);
         }
 
         if (position.y > 0) {
             for (let row = 0; row < Math.floor(position.y); ++row) {
-                offset.top += this.cell_size(this.cell_height, row);
+                offset.y += this.cell_size(this.cell_height, row);
             }
-            offset.top
-                += this.cell_size(this.cell_height, Math.floor(position.y)) * (position.y % 1);
+            offset.y += this.cell_size(this.cell_height, Math.floor(position.y)) * (position.y % 1);
         }
         if (position.y < 0) {
             for (let row = -1; row >= position.y; --row) {
-                offset.top -= this.cell_size(this.cell_height, row);
+                offset.y -= this.cell_size(this.cell_height, row);
             }
-            offset.top
-                += this.cell_size(this.cell_height, Math.floor(position.y)) * (position.y % 1);
+            offset.y += this.cell_size(this.cell_height, Math.floor(position.y)) * (position.y % 1);
         }
 
         return offset;
@@ -1149,12 +1138,12 @@ class UI {
     /// If `offset` is positive, then everything will appear to move towards the top left.
     /// If `zoom` is positive, then everything will grow larger.
     pan_view(offset, zoom = 0) {
-        this.view.left += offset.left;
-        this.view.top += offset.top;
+        this.view.x += offset.x;
+        this.view.y += offset.y;
         this.scale += zoom;
         const view = this.view.mul(2 ** this.scale);
         this.canvas.element.style.transform
-            = `translate(${-view.left}px, ${-view.top}px) scale(${2 ** this.scale})`;
+            = `translate(${-view.x}px, ${-view.y}px) scale(${2 ** this.scale})`;
         this.update_grid();
     }
 
@@ -1352,22 +1341,22 @@ class UI {
 
         // Draw the vertical lines.
         context.beginPath();
-        for (let col = left_col, x = left_offset - offset.left;
+        for (let col = left_col, x = left_offset - offset.x;
                 col <= right_col; x += this.cell_size(this.cell_width, col++)) {
             context.moveTo(x * scale + width / 2, 0);
             context.lineTo(x * scale + width / 2, height);
         }
-        context.lineDashOffset = offset.top * scale - dash_offset - height % this.default_cell_size / 2;
+        context.lineDashOffset = offset.y * scale - dash_offset - height % this.default_cell_size / 2;
         context.stroke();
 
         // Draw the horizontal lines.
         context.beginPath();
-        for (let row = top_row, y = top_offset - offset.top;
+        for (let row = top_row, y = top_offset - offset.y;
                 row <= bottom_row; y += this.cell_size(this.cell_height, row++)) {
             context.moveTo(0, y * scale + height / 2);
             context.lineTo(width, y * scale + height / 2);
         }
-        context.lineDashOffset = offset.left * scale - dash_offset - width % this.default_cell_size / 2;
+        context.lineDashOffset = offset.x * scale - dash_offset - width % this.default_cell_size / 2;
         context.stroke();
     }
 
@@ -3316,31 +3305,6 @@ class Cell {
         return this.level > 0;
     }
 
-    /// Returns either the position on the grid (if a vertex) or the offset (if an edge). `Position`
-    /// and `Offset` have many of the same methods, so may be usually be used interchangeably in
-    /// appropriate situations. If it is known that a cell is either a vertex or an edge, or if
-    /// the two cases need to be handled differently, `.position` or `.offset` should be used
-    /// directly.
-    pos() {
-        if (this.is_vertex()) {
-            return this.position;
-        } else {
-            return this.offset;
-        }
-    }
-
-    /// Returns the offset of the cell. Both vertices and edges are stored in absolute rather than
-    /// view-relative co-ordinates, so both must be adjusted relative to the current view.
-    /// However, the positions of vertices are stored as `Position`s, whereas the positions of
-    /// edges are stored as `Offset`s, so these must be handled differently.
-    off(ui) {
-        if (this.is_vertex()) {
-            return ui.centre_offset_from_position(this.position);
-        } else {
-            return this.offset;
-        }
-    }
-
     select() {
         this.element.classList.add("selected");
         if (this.is_edge()) {
@@ -3391,6 +3355,7 @@ class Vertex extends Cell {
         ui.cell_width_constraints.get(this.position.x).delete(this);
         ui.cell_height_constraints.get(this.position.y).delete(this);
         this.position = position;
+        this.shape.origin = ui.centre_offset_from_position(this.position);
     }
 
     /// Create the HTML element associated with the vertex.
@@ -3404,7 +3369,7 @@ class Vertex extends Cell {
 
         // Position the vertex.
         const offset = ui.offset_from_position(this.position);
-        offset.reposition(this.element);
+        [this.element.style.left, this.element.style.top] = [`${offset.x}px`, `${offset.y}px`];
         const centre_offset = offset.add(ui.cell_centre_at_position(this.position));
         this.shape.origin = centre_offset;
         // Shape width is controlled elsewhere.
@@ -3551,7 +3516,7 @@ class Edge extends Cell {
         // to check what state we're currently in, and if we establish this edge is being
         // reconnected, we override the source/target position (as well as whether we offset
         // the edge endpoints).
-        let [source_offset, target_offset] = [this.source.off(ui), this.target.off(ui)];
+        let [source_offset, target_offset] = [this.source.shape.origin, this.target.shape.origin];
         let [source, target] = [this.source, this.target];
         const endpoint_offset = { source: true, target: true };
         const reconnecting = ui.in_mode(UIState.Connect)
@@ -3559,7 +3524,7 @@ class Edge extends Cell {
             && ui.state.reconnect.edge === this;
         if (reconnecting && pointer_offset !== null) {
             const connection_offset
-                = ui.state.target !== null ? ui.state.target.off(ui) : pointer_offset;
+                = ui.state.target !== null ? ui.state.target.shape.origin : pointer_offset;
             switch (ui.state.reconnect.end) {
                 case "source":
                     source_offset = connection_offset;
@@ -3602,14 +3567,12 @@ class Edge extends Cell {
 
         this.arrow.source = prev_source;
         this.arrow.target = prev_target;
-        // Offset is centre of the edge.
-        // FIXME: unify this.offset and this.shape position.
-        this.offset = Offset.from_point(
+        // The origin is the centre of the edge.
+        this.shape.origin =
             this.arrow.source.origin.add(this.arrow.target.origin).div(2)
                 .add(new Point(0, this.arrow.style.curve / 2).rotate(
                     this.arrow.target.origin.sub(this.arrow.source.origin).angle()
-                ))
-        );
+                ));
     }
 
     /// Draws an edge on an SVG. `length` must be nonnegative.
@@ -3953,7 +3916,7 @@ class Edge extends Cell {
 
     /// Returns the angle of this edge.
     angle(ui) {
-        return this.target.off(ui).sub(this.source.off(ui)).angle();
+        return this.target.shape.origin.sub(this.source.shape.origin).angle();
     }
 
     /// Changes the source and target.
