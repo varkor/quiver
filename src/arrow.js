@@ -373,22 +373,12 @@ class Arrow {
             opacity: CONSTANTS.BACKGROUND_OPACITY,
         });
 
-        // Create a clipping mask for the background.
-        const bg_defs = this.requisition_element(this.background, "defs");
-        const bg_mask = this.requisition_element(bg_defs, "mask", {
-            id: `arrow${this.id}-bg-mask`,
-            maskUnits: "userSpaceOnUse",
-        });
-        // By default, we draw everything.
-        this.requisition_element(bg_mask, "rect.base", {
-            width: svg_width,
-            height: svg_height,
-            fill: "white",
-        });
-
-        // Draw the actual background.
+        // Draw the actual background. We only want to draw the background from endpoint to
+        // endpoint, so we use `stroke-dasharray` to control where the background starts and ends.
+        const arclen_to_start = bezier.arc_length(start.t);
+        const arclen_to_end = bezier.arc_length(end.t);
+        const arclen = bezier.arc_length(1);
         this.requisition_element(this.background, "path.arrow-background", {
-            mask: `url(#arrow${this.id}-bg-mask)`,
             d: `${
                 new Path()
                     .move_to(offset)
@@ -397,34 +387,13 @@ class Arrow {
             fill: "none",
             stroke: "black",
             "stroke-width": edge_width + CONSTANTS.BACKGROUND_PADDING * 2,
-        });
-
-        // The background is drawn from source to target, but we actually want to draw from endpoint
-        // to endpoint. We could just use `stroke-dasharray` on the background, but then we won't
-        // get rounded endpoints. So, instead, we create a mask and cut out the appropriate ends
-        // from the background, using `stroke-dasharray`.
-        const arclen_to_start = bezier.arc_length(start.t);
-        const arclen_to_end = bezier.arc_length(end.t);
-        const arclen = bezier.arc_length(1);
-        // We need some padding to avoid aliasing issues.
-        const STROKE_PADDING = 1;
-        this.requisition_element(bg_mask, `path.arrow-background-mask`, {
-            d: `${
-                new Path()
-                    .move_to(offset)
-                    .curve_by(new Point(length / 2, this.style.curve), new Point(length, 0))
-            }`,
-            fill: "none",
-            stroke: "black",
-            "stroke-width": edge_width + (CONSTANTS.BACKGROUND_PADDING + STROKE_PADDING) * 2,
-            "stroke-dasharray": `${arclen_to_start} ${
-                arclen_to_end - arclen_to_start} ${arclen - arclen_to_end}`,
+            "stroke-dasharray": `0 ${arclen_to_start} ${arclen_to_end - arclen_to_start} ${Math.ceil(arclen - arclen_to_end)}`,
         });
 
         // The background usually has flat ends, but we want rounded ends. Unfortunately, the
         // `round` endpoint path option in SVG is not suitable, because it takes up too much space,
         // so we have to simulate this ourselves.
-        const round_bg_mask_end = (endpoint, is_start) => {
+        const round_bg_end = (endpoint, is_start) => {
             // We should always have endpoints, but if something's gone wrong, we don't want to
             // trigger another error.
             if (endpoint !== null) {
@@ -455,8 +424,8 @@ class Arrow {
                 }, null);
             }
         }
-        round_bg_mask_end(start, true);
-        round_bg_mask_end(end, false);
+        round_bg_end(start, true);
+        round_bg_end(end, false);
 
         // Redraw the arrow itself.
 
@@ -636,7 +605,8 @@ class Arrow {
         // Draw the tail and head masks. There are two components: a mask up until the
         // endpoints, which deals with general overflow (especially egregious for squiggly arrows);
         // and specific masks for each of the head styles.
-        // The general overflow mask is drawn in the same way as `.arrow-background-mask`.
+        // We need some padding to avoid aliasing issues.
+        const ENDPOINT_PADDING = 1;
         new DOM.SVGElement("path", {
             d: `${
                 new Path()
@@ -645,10 +615,10 @@ class Arrow {
             }`,
             fill: "none",
             stroke: "black",
-            "stroke-width": edge_width + (CONSTANTS.BACKGROUND_PADDING + STROKE_PADDING) * 2,
-            "stroke-dasharray": `${arclen_to_start + this.style.shorten} ${
-                arclen_to_end - arclen_to_start - this.style.shorten * 2
-            } ${arclen - arclen_to_end + this.style.shorten}`,
+            "stroke-width": edge_width + CONSTANTS.BACKGROUND_PADDING * 2,
+            "stroke-dasharray": `${arclen_to_start + this.style.shorten + ENDPOINT_PADDING} ${
+                arclen_to_end - arclen_to_start - (this.style.shorten + ENDPOINT_PADDING) * 2
+            } ${arclen - arclen_to_end + this.style.shorten + ENDPOINT_PADDING}`,
         }).add_to(clipping_mask);
         draw_heads(this.style.tails, start, true, true);
         draw_heads(this.style.heads, end, false, true);
