@@ -304,7 +304,7 @@ class Arrow {
                 endpoint_shape.origin,
                 endpoint_shape.size,
                 endpoint_shape.radius,
-            ));
+            ), false);
             if (intersections.length === 0) {
                 // We should always have at least one intersection, as the Bézier curve spans the
                 // endpoints, so this is an error.
@@ -1212,7 +1212,7 @@ class Arrow {
                     rect_centre,
                     this.label.size.add(Point.diag(edge_width)),
                     edge_width / 2,
-                ));
+                ), true);
 
             if (intersections.length === 0) {
                 // If we've determined the offset to a sufficiently-high precision, we can stop
