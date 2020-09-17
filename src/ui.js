@@ -76,13 +76,21 @@ UIState.Connect = class extends UIState {
         this.reconnect = reconnect;
 
         /// The overlay for drawing an edge between the source and the cursor.
-        this.overlay = new DOM.Element("div", { class: "edge overlay" })
-            .add(new DOM.SVGElement("svg"));
-        ui.canvas.add(this.overlay);
+        if (this.reconnect === null) {
+            this.overlay = new DOM.Element("div", { class: "overlay" });
+            this.arrow = new Arrow(
+                new Shape.Endpoint(Point.zero()),
+                new Shape.Endpoint(Point.zero()),
+                new ArrowStyle(),
+            );
+            this.overlay.add(this.arrow.element);
+            ui.canvas.add(this.overlay);
+        }
     }
 
     release(ui) {
         this.overlay.remove();
+        this.arrow = null;
         this.source.element.classList.remove("source");
         if (this.target !== null) {
             this.target.element.classList.remove("target");
@@ -90,12 +98,6 @@ UIState.Connect = class extends UIState {
         }
         // If we're connecting from an insertion point, then we need to hide it again.
         ui.element.querySelector(".insertion-point").classList.remove("revealed");
-        if (ui.arrow !== null) {
-            // FIXME: instead of arrow on ui, it would be better on UIState.Connect.
-            // E.g. this.overlay.
-            ui.arrow.element.remove();
-            ui.arrow = null;
-        }
         if (this.reconnect !== null) {
             this.reconnect.edge.arrow.element.class_list.remove("reconnecting");
             this.reconnect.edge.render(ui);
@@ -114,38 +116,26 @@ UIState.Connect = class extends UIState {
             // Lock on to the target if present, otherwise simply draw the edge
             // to the position of the cursor.
             const target = this.target !== null ? {
-                offset: this.target.off(ui),
-                size: this.target.shape.size,
-                is_offset: true,
+                shape: new Shape.RoundedRect(
+                    // FIXME: maybe this can be stored in target.shape.offset?
+                    this.target.off(ui),
+                    this.target.shape.size,
+                    this.target.shape.radius,
+                ),
                 level: this.target.level,
             } : {
-                offset,
-                // We don't use zero, because there are issues attempting to intersect a
-                // Bézier curve with a shape with zero area.
-                size: new Dimensions(1, 1),
-                is_offset: false,
+                shape: new Shape.Endpoint(offset),
                 level: 0,
             };
 
-            const source_offset = this.source.off(ui);
-            const source_shape = new Shape.RoundedRect(source_offset, this.source.shape.size, 16);
-            const target_shape = new Shape.RoundedRect(target.offset, new Dimensions(64, 64), 16);
-            if (ui.arrow === null) {
-                ui.arrow = new Arrow(source_shape, target_shape, new ArrowStyle());
-                ui.canvas.add(ui.arrow.element);
-                ui.arrow.element.set_style({ "pointer-events": "none" });
-                ui.arrow.svg.set_style({ "pointer-events": "none" });
-                ui.arrow.background.set_style({ display: "none", "pointer-events": "none" });
-            } else {
-                ui.arrow.source = source_shape;
-                ui.arrow.target = target_shape;
-            }
-            ui.arrow.target.size = target.size;
-            // FIXME: use `Shape.Point` here too
-            ui.arrow.target.radius = 0;
-            ui.arrow.style.level = Math.max(this.source.level, target.level) + 1;
-            // FIXME: radius should not be 16 if the size is 1
-            ui.arrow.redraw();
+            this.arrow.source = new Shape.RoundedRect(
+                this.source.off(ui),
+                this.source.shape.size,
+                this.source.shape.radius,
+            );
+            this.arrow.target = target.shape;
+            this.arrow.style.level = Math.max(this.source.level, target.level) + 1;
+            this.arrow.redraw();
         } else {
             // We're reconnecting an existing edge.
             this.reconnect.edge.render(ui, offset);
@@ -389,9 +379,6 @@ class UI {
 
         /// All currently selected cells;
         this.selection = new Set();
-
-        /// The arrow associated to the cursor.
-        this.arrow = null;
 
         /// The element in which to place the interface elements.
         this.element = element;
@@ -3605,7 +3592,6 @@ class Edge extends Cell {
         this.arrow.redraw();
 
         this.arrow.element.query_selector(".label").set_style({
-            // background: "hsla(0, 100%, 50%, 0.5)",
             width: "100%",
             height: "100%",
             "line-height": `${
@@ -3616,7 +3602,7 @@ class Edge extends Cell {
 
         this.arrow.source = prev_source;
         this.arrow.target = prev_target;
-        // Offset is centre of
+        // Offset is centre of the edge.
         // FIXME: unify this.offset and this.shape position.
         this.offset = Offset.from_point(
             this.arrow.source.origin.add(this.arrow.target.origin).div(2)

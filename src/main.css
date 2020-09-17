@@ -230,8 +230,8 @@ body:not(.modal) {
 }
 
 /* The overlay edge drawn while connecting cells. */
-.overlay {
-    pointer-events: none;
+.overlay, .overlay .arrow-background  {
+    pointer-events: none !important;
 }
 
 /* This is so explicit because of the CSS specificity rules. */
