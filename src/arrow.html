@@ -22,6 +22,10 @@
             pointer-events: none;
             /* background: hsla(0, 0%, 0%, 0.3); */
         }
+
+        .invalid {
+            display: none;
+        }
     </style>
     <script type="text/javascript" src="ds.js"></script>
     <script type="text/javascript" src="dom.js"></script>
@@ -74,7 +78,7 @@
             arrow.style.tails = CONSTANTS.ARROW_HEAD_STYLE.MAPS_TO;
             // arrow.style.heads = CONSTANTS.ARROW_HEAD_STYLE.HARPOON_TOP;
             arrow.style.level = 3;
-            arrow.style.shorten = 40;
+            arrow.style.shorten = 400;
             // arrow.style.dash_style = CONSTANTS.ARROW_DASH_STYLE.DOTTED;
             arrow.style.body_style = CONSTANTS.ARROW_BODY_STYLE.PROARROW;
             arrow.label.alignment = CONSTANTS.LABEL_ALIGNMENT.CENTRE;

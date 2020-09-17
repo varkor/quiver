@@ -760,6 +760,10 @@ body:not(.modal) {
     pointer-events: none;
 }
 
+.arrow.invalid, .arrow .invalid {
+    display: none;
+}
+
 .arrow > svg:first-child {
     z-index: 1;
 }

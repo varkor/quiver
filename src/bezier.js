@@ -116,9 +116,9 @@ class Bezier {
     /// Intersect the Bézier curve with the given rounded rectangle. Note that the general
     /// (analytic) problem of intersecting a Bézier curve with a circle (for the rounded corners) is
     /// very difficult, so we approximate circles with regular polygons. If the rounded rectangle
-    /// entirely contains the Bézier curve, and `check_containment` is true, a single intersection
-    /// point (the centre of the rectangle) is returned.
-    intersections_with_rounded_rectangle(rect, check_containment) {
+    /// entirely contains the Bézier curve, and `permit_containment` is true, a single intersection
+    /// point (the centre of the rectangle) is returned; otherwise, an error is thrown.
+    intersections_with_rounded_rectangle(rect, permit_containment) {
         // There is one edge case in the following computations, which occurs when the height of the
         // Bézier curve is zero (i.e. the curve is a straight line). We special-case this type of
         // curve, and do not normalise its height.
@@ -225,13 +225,19 @@ class Bezier {
         }
 
         // If there are no intersections, check whether the rectangle entirely contains the curve.
-        if (intersections.size === 0 && check_containment) {
+        if (intersections.size === 0) {
             // We use a version of the rectangle without rounded corners to simplify checking.
             const sharp_rect = new RoundedRectangle(rect.centre, rect.size, 0);
             if (this.point_inside_polygon(this.origin, sharp_rect.points())) {
-                // If the rounded rectangle completely contains the Bézier curve, return the centre
-                // point, to indicate there is an overlap.
-                return [new BezierPoint(Point.zero(), 0, this.tangent(0))];
+                if (permit_containment) {
+                    // If the rounded rectangle completely contains the Bézier curve, return the
+                    // centre point, to indicate there is an overlap.
+                    return [new BezierPoint(Point.zero(), 0, this.tangent(0))];
+                } else {
+                    // We expect an intersection, so the caller should be alerted if this is not the
+                    // case.
+                    throw new Error("Bézier curve was entirely contained by rounded rectangle.");
+                }
             }
         }
 

@@ -286,6 +286,11 @@ class Arrow {
         // issues with the z-indexes of the handles.
         const shift = new Point(0, this.style.shift).rotate(angle);
 
+        // Reset the validity of the arrow. This will be set in edge cases, e.g. the arrow has
+        // negative length, or is completely cropped. Invalid arrows will not be drawn.
+        this.element.class_list.remove("invalid");
+        this.svg.class_list.remove("invalid");
+
         /// Finds the intersection of the Bézier curve with either the source or target. There
         /// should be a unique intersection point, and this will be true in all but extraordinary
         /// circumstances: namely, when the source and target are overlapping. In this case, we
@@ -305,14 +310,18 @@ class Arrow {
             }
 
             // The case when the endpoint is a rounded rectangle.
-            const intersections = bezier.intersections_with_rounded_rectangle(new RoundedRectangle(
-                endpoint_shape.origin,
-                endpoint_shape.size,
-                endpoint_shape.radius,
-            ), false);
+            // The following function call may throw an error, which should be caught by the caller.
+            const intersections = bezier.intersections_with_rounded_rectangle(
+                new RoundedRectangle(
+                    endpoint_shape.origin,
+                    endpoint_shape.size,
+                    endpoint_shape.radius,
+                ),
+                false,
+            );
             if (intersections.length === 0) {
-                // We should always have at least one intersection, as the Bézier curve spans the
-                // endpoints, so this is an error.
+                // We should always have at least one intersection, as the Bézier curve spans
+                // the endpoints, so this is an error.
                 console.error(
                     "No intersection found for Bézier curve with endpoint.",
                     endpoint_shape,
@@ -324,8 +333,16 @@ class Arrow {
             return intersections[prefer_min ? 0 : intersections.length - 1];
         }
 
-        const start = find_endpoint(this.source, true);
-        const end = find_endpoint(this.target, false);
+        let start, end;
+        try {
+            start = find_endpoint(this.source, true);
+            end = find_endpoint(this.target, false);
+        } catch (_) {
+            // If we hit this block, the arrow as specified is invalid, because it would be entirely
+            // cropped by the source or target. In this case, we do not draw the arrow.
+            this.element.class_list.add("invalid");
+            return;
+        }
 
         // Clear the SVGs, resize them, and rotate them about the source, in the direction of the
         // target.
@@ -431,6 +448,14 @@ class Arrow {
         }
         round_bg_mask_end(start, true);
         round_bg_mask_end(end, false);
+
+        // Check that the arrow length is actually nonnegative.
+        if (arclen_to_end - arclen_to_start - this.style.shorten * 2 < 0) {
+            // The arrow length is negative. Only the arrow edge is marked as invalid, rather than
+            // the entire element, because the background may still sensibly be drawn.
+            this.svg.class_list.add("invalid");
+            return;
+        }
 
         // Redraw the arrow itself.
 
