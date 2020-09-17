@@ -229,11 +229,18 @@ class Arrow {
         // Calculate some constants that are relevant for all three components of the arrow: the
         // mask, background and the arrow itself.
 
+        // The width of the stroke used for the edge.
+        const stroke_width = this.style.level * CONSTANTS.STROKE_WIDTH
+            + (this.style.level - 1) * CONSTANTS.LINE_SPACING;
         // The total width of the edge line itself, not including the arrowhead, tail, label or /
-        // background. This does not take into account the extra height induced if the body style is
-        // squiggly (see the comment on `padding`).
-        const edge_width = this.style.level * CONSTANTS.STROKE_WIDTH
-                + (this.style.level - 1) * CONSTANTS.LINE_SPACING;
+        // background. This is usually just the `stroke_width`, but when the edge is squiggly, the
+        // lines must be spaced out more to leave enough room between the triangles, and so the
+        // total width will be greater.
+        const edge_width = this.style.body_style === CONSTANTS.ARROW_BODY_STYLE.SQUIGGLY ?
+            this.style.level * CONSTANTS.SQUIGGLY_TRIANGLE_HEIGHT * 2
+                + CONSTANTS.STROKE_WIDTH
+                + (this.style.level - 1) * CONSTANTS.LINE_SPACING
+            : stroke_width;
 
         // The width of an arrowhead, considered pointing left-to-right.
         // This was determined by experimenting with what looked nice.
@@ -246,11 +253,9 @@ class Arrow {
 
         // The horizontal and vertical padding. We have the same padding for both axes, because when
         // the curve is very high, the tangent near the source/target can become essentially
-        // vertical. We always pad enough for the arrowhead (plus its stroke width) and the
-        // squiggles in a squiggly line.
+        // vertical. We always pad enough for the arrowhead (plus its stroke width).
         const padding = CONSTANTS.BACKGROUND_PADDING +
-            + Math.max(head_height, (this.style.body_style === CONSTANTS.ARROW_BODY_STYLE.SQUIGGLY ?
-                CONSTANTS.SQUIGGLY_TRIANGLE_HEIGHT * 2 : 0) + CONSTANTS.STROKE_WIDTH) / 2;
+            + Math.max(head_height, CONSTANTS.STROKE_WIDTH) / 2;
 
         // The distance from the source to the target.
         const length = this.target.origin.sub(this.source.origin).length();
@@ -455,7 +460,7 @@ class Arrow {
             mask: `url(#arrow${this.id}-clipping-mask)`,
             fill: "none",
             stroke: "black",
-            "stroke-width": edge_width,
+            "stroke-width": stroke_width,
             // We'd prefer to use `round`, especially for dashed and dotted lines, but unfortunately
             // this doesn't work well with thicker edges. Ideally, we want a `round-butt` option,
             // specifying edges do not extend farther than the path.
@@ -582,7 +587,9 @@ class Arrow {
             fill: "none",
             stroke: "black",
             "stroke-width": edge_width + (CONSTANTS.BACKGROUND_PADDING + STROKE_PADDING) * 2,
-            "stroke-dasharray": `${arclen_to_start} ${arclen_to_end - arclen_to_start} ${arclen - arclen_to_end}`,
+            "stroke-dasharray": `${arclen_to_start + this.style.shorten} ${
+                arclen_to_end - arclen_to_start - this.style.shorten * 2
+            } ${arclen - arclen_to_end + this.style.shorten}`,
         }).add_to(clipping_mask);
         draw_heads(this.style.tails, start, true, true);
         draw_heads(this.style.heads, end, false, true);
