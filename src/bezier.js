@@ -89,9 +89,35 @@ class Bezier {
         };
     }
 
+    /// Returns whether a point lies inside a polygon. This does so by calculating the winding
+    /// number for the polygon with respect to the point. If the winding number is nonzero, then
+    /// the point lies inside the polygon.
+    /// This algorithm is based on the one at: http://geomalgorithms.com/a03-_inclusion.html.
+    point_inside_polygon(point, points) {
+        // The displacement of a point from a line (calculated via the determinant of a 2x2 matrix).
+        const displ = ([base, end], point) => {
+            end = end.sub(base);
+            point = point.sub(base);
+            return end.x * point.y - end.y * point.x;
+        };
+
+        const wn = [...Array(points.length).keys()].map((i) => {
+            if ((points[i].y <= point.y) !== (points[(i + 1) % 4].y <= point.y)) {
+                const d = displ([points[i], points[(i + 1) % 4]], point);
+                if (d > 0.0) return 1;
+                if (d < 0.0) return -1;
+            }
+            return 0;
+        }).reduce((a, b) => a + b, 0);
+
+        return wn !== 0;
+    }
+
     /// Intersect the Bézier curve with the given rounded rectangle. Note that the general
-    /// (analytic) problem of intersecting a Bézier curve with a circle is very difficult, so we
-    /// approximate circles with regular polygons.
+    /// (analytic) problem of intersecting a Bézier curve with a circle (for the rounded corners) is
+    /// very difficult, so we approximate circles with regular polygons.
+    /// If the rounded rectangle entirely contains the Bézier curve, a single intersection point
+    /// (the centre of the rectangle) is returned.
     intersections_with_rounded_rectangle(rect) {
         // There is one edge case in the following computations, which occurs when the height of the
         // Bézier curve is zero (i.e. the curve is a straight line). We special-case this type of
@@ -196,6 +222,12 @@ class Bezier {
                         .forEach((int) => add_intersection(int));
                 }
             }
+        }
+
+        if (intersections.size === 0 && this.point_inside_polygon(Point.zero(), points)) {
+            // If the rounded rectangle completely contains the Bézier curve, return the centre
+            // point, to indicate there is an overlap.
+            return [rect.centre];
         }
 
         return Array.from(intersections).map((p) => {

@@ -1183,8 +1183,8 @@ class Arrow {
         // location. We first normalise the Bézier curve (flat Bézier curves must be special-cased).
         // We then find all the intersections of the bounding rectangle with the curve: we want the
         // number of intersections to be zero. To find this distance, we do a binary search (between
-        // 0 and the height of the curve). We also add padding to the bounding rectangle to simulate
-        // the thickness of the curve.
+        // 0 and the height of the curve plus the label size). We also add padding to the bounding
+        // rectangle to simulate the thickness of the curve.
 
         // Unfortunately, floating-point calculations aren't precise, so we need to add some leeway
         // here, otherwise we sometimes encounter situations where `offset_max` isn't quite
