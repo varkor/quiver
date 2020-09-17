@@ -231,7 +231,7 @@ class Bezier {
             if (this.point_inside_polygon(this.origin, sharp_rect.points())) {
                 // If the rounded rectangle completely contains the Bézier curve, return the centre
                 // point, to indicate there is an overlap.
-                return [rect.centre];
+                return [new BezierPoint(Point.zero(), 0, this.tangent(0))];
             }
         }
 
