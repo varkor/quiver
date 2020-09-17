@@ -210,77 +210,9 @@ body:not(.modal) {
     transition: opacity 0.2s;
 }
 
-/* Edges */
-
-.edge {
-    position: absolute;
-    display: none;
-}
-
-.edge.reconnecting {
-    pointer-events: none;
-}
-
-.edge > svg {
-    position: absolute;
-    left: 50%; top: 50%;
-    transform: translate(-50%, -50%);
-
-    pointer-events: none;
-}
-
 /* The overlay edge drawn while connecting cells. */
 .overlay, .overlay .arrow-background  {
     pointer-events: none !important;
-}
-
-/* This is so explicit because of the CSS specificity rules. */
-.ui.default .edge:hover:not(.selected):not(.source):not(.target) svg.background {
-    stroke: var(--cell-hover);
-}
-
-.edge.source svg.background {
-    stroke: var(--cell-source);
-}
-
-.edge.target svg.background {
-    stroke: var(--cell-target);
-}
-
-.edge.selected svg.background {
-    stroke: var(--cell-selected);
-}
-
-.edge .label {
-    font-size: 20px;
-    text-align: right;
-}
-
-.edge .handle {
-    display: none;
-    position: absolute;
-    width: 24px; height: 24px;
-    top: 50%;
-    transform: translateY(-50%);
-
-    background: white;
-    border-radius: 100%;
-}
-
-.edge .handle.source {
-    left: 0;
-}
-
-.edge .handle.target {
-    right: 0;
-}
-
-.ui.default .edge:hover .handle, .ui.default .edge.selected .handle {
-    display: block;
-}
-
-.edge .handle:hover {
-    border: hsl(200, 100%, 40%) 2px solid;
 }
 
 /* The side panel */
@@ -776,7 +708,8 @@ body:not(.modal) {
     pointer-events: stroke;
 }
 
-.arrow:not(.selected) > svg:first-child:not(:hover) > .arrow-background {
+.arrow:not(.selected) > svg:first-child:not(:hover) > .arrow-background,
+.ui.connect .cell:not(.target):not(.selected) > svg:first-child:hover > .arrow-background {
     opacity: 0;
 }
 

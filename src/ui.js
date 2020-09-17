@@ -100,7 +100,6 @@ UIState.Connect = class extends UIState {
             this.overlay.remove();
             this.arrow = null;
         } else {
-            this.reconnect.edge.arrow.element.class_list.remove("reconnecting");
             this.reconnect.edge.render(ui);
             this.reconnect = null;
         }
@@ -3443,7 +3442,6 @@ class Edge extends Cell {
             ui.default_cell_size * 0.25,
         );
 
-        // FIXME: is this triggering too much rerendering?
         this.reconnect(ui, source, target);
 
         this.initialise(ui);
@@ -3478,7 +3476,6 @@ class Edge extends Cell {
             // it ourselves.
             ui.panel.element.querySelector('label input[type="text"]').blur();
 
-            this.arrow.element.class_list.add("reconnecting");
             const fixed = { source: this.target, target: this.source }[end];
             ui.switch_mode(new UIState.Connect(ui, fixed, false, {
                 end,
