@@ -2047,7 +2047,10 @@ class Panel {
         );
 
         // The level slider.
-        const level_slider = create_option_slider("Level", "level", { min: 1, value: 1, max: 5 });
+        // We limit to 4 for now because there are issues with pixel perfection (especially for
+        // squiggly arrows, e.g. with their interaction with hooked tails) after that. Besides, it's
+        // unlikely people will want to draw diagrams involving 5-cells.
+        const level_slider = create_option_slider("Level", "level", { min: 1, value: 1, max: 4 });
         level_slider.class_list.add("arrow-style");
 
         // The list of tail styles.

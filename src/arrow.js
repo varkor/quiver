@@ -507,8 +507,8 @@ class Arrow {
         // We use some of these variables frequently in other methods, so we package them up for
         // convenience in passing them around.
         const constants = {
-            bezier, start, end, length, height, angle, edge_width, head_width, head_height, shorten,
-            t_after_length, dash_padding, offset,
+            bezier, start, end, length, height, angle, stroke_width, edge_width, head_width,
+            head_height, shorten, t_after_length, dash_padding, offset,
         };
 
         // Draw the the proarrow bar.
@@ -614,9 +614,11 @@ class Arrow {
             fill: "none",
             stroke: "black",
             "stroke-width": edge_width + CONSTANTS.BACKGROUND_PADDING * 2,
-            "stroke-dasharray": `${arclen_to_start + this.style.shorten + ENDPOINT_PADDING} ${
-                arclen_to_end - arclen_to_start - (this.style.shorten + ENDPOINT_PADDING) * 2
-            } ${arclen - arclen_to_end + this.style.shorten + ENDPOINT_PADDING}`,
+            "stroke-dasharray": `${
+                arclen_to_start + this.style.shorten + shorten.start + ENDPOINT_PADDING} ${
+                arclen_to_end - (arclen_to_start + shorten.start
+                        + (this.style.shorten + ENDPOINT_PADDING) * 2 + shorten.end)
+            } ${arclen - arclen_to_end + this.style.shorten + shorten.end + ENDPOINT_PADDING}`,
         }).add_to(clipping_mask);
         draw_heads(this.style.tails, start, true, true);
         draw_heads(this.style.heads, end, false, true);
@@ -917,7 +919,7 @@ class Arrow {
         // the target). This is confusing. Sorry.
 
         const {
-            bezier, edge_width, head_width, head_height, t_after_length, shorten, dash_padding,
+            bezier, stroke_width, head_width, head_height, t_after_length, shorten, dash_padding,
             offset,
         } = constants;
 
@@ -946,7 +948,7 @@ class Arrow {
             // this consistently, because it starts to look odd for higher n-cells, as their centres
             // no longer line up, despite connecting two points in a straight line. Therefore, we
             // make do by keeping the centres aligned with the centre of the edge.
-            const edge_bottom = edge_width + CONSTANTS.LINE_SPACING;
+            const edge_bottom = stroke_width + CONSTANTS.LINE_SPACING;
             const side_sign
                 = heads.find((head) => head.startsWith("harpoon")).endsWith("top") ? 1 : -1;
             const t = t_after_length(arclen_to_endpoint);
@@ -955,7 +957,7 @@ class Arrow {
                 .add(offset)
                 .add(new Point(
                     0,
-                    side_sign * edge_width / 2 - side_sign * CONSTANTS.STROKE_WIDTH / 2,
+                    side_sign * stroke_width / 2 - side_sign * CONSTANTS.STROKE_WIDTH / 2,
                 ).rotate(angle));
             path.move_to(point);
             path.arc_by(
@@ -986,13 +988,16 @@ class Arrow {
             const angle = bezier.tangent(t);
             const side_sign
                 = heads.find((head) => head.startsWith("hook")).endsWith("top") ? -1 : 1;
+            // To avoid artefacts elsewhere, we mask a little overenthusiastically (see
+            // `ENDPOINT_PADDING`). To avoid a line of transparent pixels, we adjust the tail here.
+            const MASK_ADJUSTMENT = 0.5;
             // We draw a hook connecting to the ends of each of the n lines forming the n-cell.
             for (let i = 0; i < this.style.level; ++i) {
                 const point = base_point
                     .add(offset)
                     .add(new Point(
-                        0,
-                        side_sign * edge_width / 2
+                        MASK_ADJUSTMENT,
+                        side_sign * stroke_width / 2
                             - side_sign * CONSTANTS.STROKE_WIDTH / 2
                             - side_sign * (CONSTANTS.LINE_SPACING + CONSTANTS.STROKE_WIDTH) * i,
                     ).rotate(angle));
