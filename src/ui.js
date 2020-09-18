@@ -1113,9 +1113,6 @@ class UI {
             this.positions.set(`${cell.position}`, cell);
         }
         this.canvas.element.appendChild(cell.element);
-        if (cell.is_edge()) {
-            this.canvas.add(cell.arrow.element);
-        }
     }
 
     /// Removes a cell.
@@ -1127,9 +1124,6 @@ class UI {
             }
             this.deselect(removed);
             removed.element.remove();
-            if (removed.is_edge()) {
-                removed.arrow.element.remove();
-            }
         }
     }
 
@@ -1179,16 +1173,6 @@ class UI {
     /// actions (primarily keyboard shortcuts) will be disabled.)
     input_is_active() {
         return document.activeElement.matches('label input[type="text"]') && document.activeElement;
-    }
-
-    /// Gets the label element for a cell and clears it, or creates a new one if it does not exist.
-    static clear_label_for_cell(cell) {
-        const label = new DOM.Element(cell.element).query_selector(".label");
-        if (label !== null) {
-            return label.clear();
-        } else {
-            return new DOM.Element("div", { class: "label" });
-        }
     }
 
     /// Resizes a label to fit within a cell.
@@ -2413,6 +2397,7 @@ class Panel {
 
             const { shared, edge: { length, options, gap = null } } = properties(value, data);
 
+            // FIXME: stop using `draw_edge`.
             const { dimensions, alignment }
                 = Edge.draw_edge(svg, options, length, Math.PI / 4, gap);
             // Align the background according the alignment of the arrow
@@ -3309,16 +3294,10 @@ class Cell {
 
     select() {
         this.element.classList.add("selected");
-        if (this.is_edge()) {
-            this.arrow.element.class_list.add("selected");
-        }
     }
 
     deselect() {
         this.element.classList.remove("selected");
-        if (this.is_edge()) {
-            this.arrow.element.class_list.remove("selected");
-        }
     }
 
     size() {
@@ -3337,7 +3316,13 @@ class Vertex extends Cell {
         super(ui.quiver, 0, label);
 
         this.position = position;
-        this.shape = new Shape.RoundedRect(Point.zero(), new Dimensions(64, 64), 16);
+        // The shape data is going to be overwritten immediately, so really this information is
+        // unimportant.
+        this.shape = new Shape.RoundedRect(
+            Point.zero(),
+            new Dimensions(ui.default_cell_size, ui.default_cell_size),
+            ui.default_cell_size / 8,
+        );
 
         this.render(ui);
         super.initialise(ui);
@@ -3386,7 +3371,9 @@ class Vertex extends Cell {
             this.element.classList.add("vertex");
 
             // The cell content (containing the label).
-            this.element.appendChild(new DOM.Element("div", { class: "content" }).element);
+            const content = new DOM.Element("div", { class: "content" })
+                .add(new DOM.Element("div", { class: "label" }));
+            this.element.appendChild(content.element);
         }
 
         // Resize the content according to the grid cell. This is just the default size: it will be
@@ -3397,12 +3384,8 @@ class Vertex extends Cell {
         content.style.height = `${ui.default_cell_size / 2}px`;
         content.style.top = `${cell_height / 2}px`;
 
-        if (construct) {
-            // Create the label.
-            new DOM.Element(this.content_element).add(UI.clear_label_for_cell(this));
-        }
-        // Ensure we re-render the label when the cell is moved, in case the cell it's moved
-        // into is a different size.
+        // Ensure we re-render the label when the cell is moved, in case the cell that that label is
+        // moved into is a different size.
         ui.panel.render_tex(ui, this);
     }
 
@@ -3431,15 +3414,13 @@ class Edge extends Cell {
 
         this.options = Edge.default_options(options, null, this.level);
 
-        const shape_label = new Label("");
-        shape_label.size = Dimensions.zero();
-        shape_label.alignment = CONSTANTS.LABEL_ALIGNMENT.LEFT;
-        this.arrow = new Arrow(source.shape, target.shape, new ArrowStyle(), shape_label);
-        ui.canvas.add(this.arrow.element);
-
+        this.arrow = new Arrow(source.shape, target.shape, new ArrowStyle(), new Label(""));
         this.element = this.arrow.element.element;
 
+        // `this.shape` is used for the source/target from (higher) cells connected to this one.
+        // This is located at the centre of the arrow.
         this.shape = new Shape.RoundedRect(
+            // The position will be reset immediately.
             Point.zero(),
             new Dimensions(ui.default_cell_size * 0.5, ui.default_cell_size * 0.5),
             ui.default_cell_size * 0.25,
@@ -3542,6 +3523,7 @@ class Edge extends Cell {
             }
         }
 
+        // FIXME: refactor below.
         this.update_style();
 
         const prev_source = this.arrow.source;
