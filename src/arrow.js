@@ -121,12 +121,13 @@ class ArrowStyle {
         this.dash_style = CONSTANTS.ARROW_DASH_STYLE.SOLID;
         this.heads = CONSTANTS.ARROW_HEAD_STYLE.NORMAL;
         this.tails = CONSTANTS.ARROW_HEAD_STYLE.NONE;
+        // The colour of the arrow.
+        this.colour = "black";
     }
 }
 
 class Label {
-    constructor(text) {
-        this.text = text;
+    constructor() {
         this.size = Dimensions.zero();
         this.alignment = CONSTANTS.LABEL_ALIGNMENT.CENTRE;
         this.element = null;
@@ -154,7 +155,7 @@ Shape.Endpoint = class extends Shape {
 }
 
 class Arrow {
-    constructor(source, target, style, label = null) {
+    constructor(source, target, style = new ArrowStyle(), label = null) {
         this.source = source;
         this.target = target;
         this.style = style;
@@ -471,7 +472,7 @@ class Arrow {
         const edge = this.requisition_element(this.svg, "path.arrow-edge", {
             mask: `url(#arrow${this.id}-clipping-mask)`,
             fill: "none",
-            stroke: "black",
+            stroke: this.style.colour,
             "stroke-width": stroke_width,
             // We use the default `stroke-linecap` option of `butt`. We'd prefer to use `round`,
             // especially for dashed and dotted lines, but unfortunately this doesn't work well with
@@ -529,7 +530,7 @@ class Arrow {
                 d: `${path}`,
                 mask: `url(#arrow${this.id}-label-clipping-mask)`,
                 fill: "none",
-                stroke: "black",
+                stroke: this.style.colour,
                 "stroke-width": CONSTANTS.STROKE_WIDTH,
                 "stroke-linecap": "round",
             });
@@ -1157,7 +1158,7 @@ class Arrow {
                 d: `${path}`,
                 mask: !is_mask ? `url(#arrow${this.id}-label-clipping-mask)` : null,
                 fill: is_mask ? "black" : "none",
-                stroke: !is_mask ? "black" : "none",
+                stroke: !is_mask ? this.style.colour : "none",
                 "stroke-width": CONSTANTS.STROKE_WIDTH,
                 "stroke-linecap": "round",
             }),
