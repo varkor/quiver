@@ -3491,65 +3491,30 @@ class Edge extends Cell {
     }
 
     /// Create the HTML element associated with the edge.
+    /// Note that `render_tex` triggers redrawing the edge, rather than the other way around.
     render(ui, pointer_offset = null) {
         // If we're reconnecting an edge, then we vary its source/target (depending on
-        // which is being dragged) depending on the pointer position. Thus, we need
-        // to check what state we're currently in, and if we establish this edge is being
-        // reconnected, we override the source/target position (as well as whether we offset
-        // the edge endpoints).
-        let [source_offset, target_offset] = [this.source.shape.origin, this.target.shape.origin];
-        let [source, target] = [this.source, this.target];
-        const endpoint_offset = { source: true, target: true };
-        const reconnecting = ui.in_mode(UIState.Connect)
-            && ui.state.reconnect !== null
-            && ui.state.reconnect.edge === this;
-        if (reconnecting && pointer_offset !== null) {
-            const connection_offset
-                = ui.state.target !== null ? ui.state.target.shape.origin : pointer_offset;
-            switch (ui.state.reconnect.end) {
-                case "source":
-                    source_offset = connection_offset;
-                    source = ui.state.target || source;
-                    break;
-                case "target":
-                    target_offset = connection_offset;
-                    target = ui.state.target || target;
-                    break;
-            }
-            if (ui.state.target === null) {
+        // which is being dragged) depending on the pointer position.
+        if (pointer_offset !== null) {
+            if (ui.state.target !== null) {
+                // In this case, we're hovering over another cell.
+                this.arrow[ui.state.reconnect.end] = ui.state.target.shape;
+            } else {
+                // In this case, we're not hovering over another cell.
                 // Usually we offset edge endpoints from the cells to which they are connected,
                 // but when we are dragging an endpoint, we want to draw it right up to the pointer.
-                endpoint_offset[ui.state.reconnect.end] = false;
+                this.arrow[ui.state.reconnect.end] = new Shape.Endpoint(pointer_offset);
             }
         }
 
-        // FIXME: refactor below.
         this.update_style();
-
-        const prev_source = this.arrow.source;
-        const prev_target = this.arrow.target;
-        this.arrow.source = new Shape.RoundedRect(source_offset, prev_source.size, 16);
-        if (!endpoint_offset.source) {
-            this.arrow.source = new Shape.Endpoint(source_offset);
-        }
-        this.arrow.target = new Shape.RoundedRect(target_offset, prev_target.size, 16);
-        if (!endpoint_offset.target) {
-            this.arrow.target = new Shape.Endpoint(target_offset);
-        }
         this.arrow.redraw();
 
-        this.arrow.element.query_selector(".label").set_style({
-            width: "100%",
-            height: "100%",
-            "line-height": `${
-                this.arrow.element.query_selector(".arrow-label").element.getBBox().height}px`,
-            "text-align": "center",
-        });
-        // `render_tex` triggers redrawing the edge, rather than the other way around.
+        // We override the source and target whilst drawing, so we need to reset them.
+        this.arrow.source = this.source.shape;
+        this.arrow.target = this.target.shape;
 
-        this.arrow.source = prev_source;
-        this.arrow.target = prev_target;
-        // The origin is the centre of the edge.
+        // Update the origin, which is given by the centre of the edge.
         this.shape.origin =
             this.arrow.source.origin.add(this.arrow.target.origin).div(2)
                 .add(new Point(0, this.arrow.style.curve / 2).rotate(
@@ -3904,6 +3869,7 @@ class Edge extends Cell {
     /// Changes the source and target.
     reconnect(ui, source, target) {
         [this.source, this.target] = [source, target];
+        [this.arrow.source, this.arrow.target] = [source.shape, target.shape];
         ui.quiver.connect(source, target, this);
         for (const cell of ui.quiver.transitive_dependencies([this])) {
             cell.render(ui);
