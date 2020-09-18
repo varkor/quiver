@@ -2258,7 +2258,7 @@ class Panel {
                 ui.switch_mode(new UIState.Modal());
 
                 // Get the encoding of the diagram. The output may be modified by the caller.
-                const { data, metadata } = modify(ui.quiver.export(ui, format));
+                const { data, metadata } = modify(ui.quiver.export(format));
 
                 let export_pane, warning, list, content;
                 if (this.export === null) {
@@ -2535,7 +2535,7 @@ class Panel {
                     // The label alignment buttons are rotated to reflect the direction of the arrow
                     // when all arrows have the same direction (at least to the nearest multiple of
                     // 90°). Otherwise, rotation defaults to 0°.
-                    consider("{angle}", cell.angle(ui));
+                    consider("{angle}", cell.angle());
                     consider("{offset}", cell.options.offset);
                     consider("{curve}", cell.options.curve);
                     consider("{level}", cell.options.level);
@@ -3897,7 +3897,7 @@ class Edge extends Cell {
     }
 
     /// Returns the angle of this edge.
-    angle(ui) {
+    angle() {
         return this.target.shape.origin.sub(this.source.shape.origin).angle();
     }
 
