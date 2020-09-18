@@ -9,14 +9,22 @@ class Enum {
     }
 }
 
-/// A quintessential (x, y) position.
-class Position {
+/// A quintessential 2D (x, y) point.
+class Point {
     constructor(x, y) {
         [this.x, this.y] = [x, y];
     }
 
     static zero() {
-        return new Position(0, 0);
+        return new this(0, 0);
+    }
+
+    static lendir(length, direction) {
+        return new this(Math.cos(direction) * length, Math.sin(direction) * length);
+    }
+
+    static diag(x) {
+        return new this(x, x);
     }
 
     toString() {
@@ -25,6 +33,10 @@ class Position {
 
     toArray() {
         return [this.x, this.y];
+    }
+
+    px(comma = true) {
+        return `${this.x}px${comma ? "," : ""} ${this.y}px`;
     }
 
     eq(other) {
@@ -39,16 +51,39 @@ class Position {
         return new (this.constructor)(this.x - other.x, this.y - other.y);
     }
 
+    neg() {
+        return new (this.constructor)(-this.x, -this.y);
+    }
+
+    scale(w, h) {
+        return new (this.constructor)(this.x * w, this.y * h);
+    }
+
+    inv_scale(w, h) {
+        return new (this.constructor)(this.x / w, this.y / h);
+    }
+
+    mul(multiplier) {
+        return this.scale(multiplier, multiplier);
+    }
+
     div(divisor) {
-        return new (this.constructor)(this.x / divisor, this.y / divisor);
+        return this.inv_scale(divisor, divisor);
+    }
+
+    max(other) {
+        return new (this.constructor)(Math.max(this.x, other.x), Math.max(this.y, other.y));
     }
 
     min(other) {
         return new (this.constructor)(Math.min(this.x, other.x), Math.min(this.y, other.y));
     }
 
-    max(other) {
-        return new (this.constructor)(Math.max(this.x, other.x), Math.max(this.y, other.y));
+    rotate(theta) {
+        return new (this.constructor)(
+            this.x * Math.cos(theta) - this.y * Math.sin(theta),
+            this.y * Math.cos(theta) + this.x * Math.sin(theta),
+        );
     }
 
     length() {
@@ -59,24 +94,25 @@ class Position {
         return Math.atan2(this.y, this.x);
     }
 
+    lerp(other, t) {
+        return this.add(other.sub(this).mul(t));
+    }
+
     is_zero() {
         return this.x === 0 && this.y === 0;
     }
 }
 
-/// An (width, height) pair. This is functionally equivalent to `Position`, but has different
-/// semantic intent.
+/// Equivalent to `Point`, but used semantically to refer to a position (in cell indices)
+/// on the canvas.
+class Position extends Point {}
+
+/// Equivalent to `Point`, but used semantically to refer to a position (in pixels) on the canvas.
+class Offset extends Point {}
+
+/// An (width, height) pair. This is essentially functionally equivalent to `Point`,
+/// but has different semantic intent.
 const Dimensions = class extends Position {
-    /// Returns a `Dimensions` with `{ width: 0, height: 0}`.
-    static zero() {
-        return new Dimensions(0, 0);
-    }
-
-    /// Returns a `Dimensions` with the same width and height.
-    static diag(x) {
-        return new Dimensions(x, x);
-    }
-
     get width() {
         return this.x;
     }
@@ -86,71 +122,47 @@ const Dimensions = class extends Position {
     }
 };
 
-/// An HTML position. This is functionally equivalent to `Position`, but has different semantic
-/// intent.
-class Offset {
-    constructor(left, top) {
-        [this.left, this.top] = [left, top];
+/// Convert radians to degrees.
+function rad_to_deg(rad) {
+    return rad * 180 / Math.PI;
+}
+
+/// A class for conveniently generating and manipulating SVG paths.
+class Path {
+    constructor() {
+        this.commands = [];
     }
 
-    /// Returns an `Offset` with `{ left: 0, top: 0}`.
-    static zero() {
-        return new Offset(0, 0);
+    toString() {
+        return this.commands.join("\n");
     }
 
-    /// Return a [left, top] arrow of CSS length values.
-    to_CSS() {
-        return [`${this.left}px`, `${this.top}px`];
+    move_to(p) {
+        this.commands.push(`M ${p.x} ${p.y}`);
+        return this;
     }
 
-    as_dim() {
-        return new Dimensions(this.left, this.top);
+    line_to(p) {
+        this.commands.push(`L ${p.x} ${p.y}`);
+        return this;
     }
 
-    /// Moves an `element` to the offset.
-    reposition(element) {
-        [element.style.left, element.style.top] = this.to_CSS();
+    line_by(p) {
+        this.commands.push(`l ${p.x} ${p.y}`);
+        return this;
     }
 
-    add(other) {
-        return new (this.constructor)(this.left + other.left, this.top + other.top);
+    curve_by(c, d) {
+        this.commands.push(`q ${c.x} ${c.y} ${d.x} ${d.y}`);
+        return this;
     }
 
-    sub(other) {
-        return new (this.constructor)(this.left - other.left, this.top - other.top);
-    }
-
-    neg() {
-        return new (this.constructor)(-this.left, -this.top);
-    }
-
-    mul(multiplier) {
-        return new (this.constructor)(this.left * multiplier, this.top * multiplier);
-    }
-
-    div(divisor) {
-        return new (this.constructor)(this.left / divisor, this.top / divisor);
-    }
-
-    min(other) {
-        return new (this.constructor)(
-            Math.min(this.left, other.left),
-            Math.min(this.top, other.top)
+    arc_by(r, angle, large_arc, clockwise, next) {
+        this.commands.push(
+            `a ${r.x} ${r.y}
+            ${rad_to_deg(angle)} ${large_arc ? 1 : 0} ${clockwise ? 1 : 0}
+            ${next.x} ${next.y}`
         );
-    }
-
-    max(other) {
-        return new (this.constructor)(
-            Math.max(this.left, other.left),
-            Math.max(this.top, other.top)
-        );
-    }
-
-    length() {
-        return Math.hypot(this.left, this.top);
-    }
-
-    angle() {
-        return Math.atan2(this.top, this.left);
+        return this;
     }
 }

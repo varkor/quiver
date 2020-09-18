@@ -116,6 +116,7 @@ body:not(.modal) {
 .grid {
     position: fixed;
     pointer-events: none;
+    z-index: -100;
 }
 
 .grid.hidden {
@@ -164,8 +165,9 @@ body:not(.modal) {
 .vertex .content {
     position: absolute;
     transform: translate(-50%, -50%);
+    z-index: 2;
 
-    border-radius: 2px;
+    border-radius: 16px;
 
     text-align: center;
 }
@@ -208,85 +210,9 @@ body:not(.modal) {
     transition: opacity 0.2s;
 }
 
-.label.buffer {
-    visibility: hidden;
-}
-
-.label.error {
-    font: 22px monospace;
-    color: hsl(0, 100%, 40%);
-}
-
-/* Edges */
-
-.edge {
-    position: absolute;
-}
-
-.edge.reconnecting {
-    pointer-events: none;
-}
-
-.edge > svg {
-    position: absolute;
-    left: 50%; top: 50%;
-    transform: translate(-50%, -50%);
-
-    pointer-events: none;
-}
-
 /* The overlay edge drawn while connecting cells. */
-.overlay {
-    pointer-events: none;
-}
-
-/* This is so explicit because of the CSS specificity rules. */
-.ui.default .edge:hover:not(.selected):not(.source):not(.target) svg.background {
-    stroke: var(--cell-hover);
-}
-
-.edge.source svg.background {
-    stroke: var(--cell-source);
-}
-
-.edge.target svg.background {
-    stroke: var(--cell-target);
-}
-
-.edge.selected svg.background {
-    stroke: var(--cell-selected);
-}
-
-.edge .label {
-    font-size: 20px;
-    text-align: right;
-}
-
-.edge .handle {
-    display: none;
-    position: absolute;
-    width: 24px; height: 24px;
-    top: 50%;
-    transform: translateY(-50%);
-
-    background: white;
-    border-radius: 100%;
-}
-
-.edge .handle.source {
-    left: 0;
-}
-
-.edge .handle.target {
-    right: 0;
-}
-
-.ui.default .edge:hover .handle, .ui.default .edge.selected .handle {
-    display: block;
-}
-
-.edge .handle:hover {
-    border: hsl(200, 100%, 40%) 2px solid;
+.overlay, .overlay .arrow-background  {
+    pointer-events: none !important;
 }
 
 /* The side panel */
@@ -314,6 +240,11 @@ body:not(.modal) {
     overflow: auto;
 
     border-bottom: hsl(0, 0%, 36%) solid 1px;
+}
+
+.panel label {
+    display: block;
+    margin-bottom: 8px;
 }
 
 .panel input[type="text"] {
@@ -719,11 +650,95 @@ body:not(.modal) {
     padding: 20px 24px;
 
     background: hsla(0, 0%, 10%, 0.8);
+}
+
+.export .warning {
+    display: inline-block;
+    width: 100%;
+    background: hsla(50, 100%, 70%, 1);
+    padding: 8pt;
+    margin-bottom: 8pt;
+
+    border-radius: 2px;
+}
+
+.export .warning.hidden {
+    display: none;
+}
+
+.export .warning ul {
+    margin: 4pt 0;
+
+    list-style-type: circle;
+}
+
+.export .code {
+    font: 16px monospace;
+    color: white;
+
     white-space: pre-wrap;
     overflow-wrap: break-word;
     tab-size: 4;
     -moz-tab-size: 4;
+}
 
-    font: 16px monospace;
-    color: white;
+/* Arrows */
+
+.arrow > svg {
+    position: absolute;
+    left: 0;
+    top: 0;
+    overflow: visible;
+    pointer-events: none;
+}
+
+.arrow.invalid, .arrow .invalid {
+    display: none;
+}
+
+.arrow > svg:first-child {
+    z-index: 1;
+}
+
+.arrow > svg:nth-child(2) {
+    z-index: 4;
+}
+
+.arrow:not(.reconnecting) > svg:first-child > .arrow-background {
+    pointer-events: stroke;
+}
+
+.arrow:not(.selected) > svg:first-child:not(:hover) > .arrow-background,
+.ui.connect .cell:not(.target):not(.selected) > svg:first-child:hover > .arrow-background,
+.ui.move .cell:not(.selected) > svg:first-child:hover > .arrow-background {
+    opacity: 0;
+}
+
+.arrow:not(.selected) > svg:first-child:hover {
+    opacity: 0.1 !important;
+}
+
+.arrow-endpoint {
+    display: none;
+}
+
+.ui.default .arrow:hover .arrow-endpoint, .ui.default .arrow.selected .arrow-endpoint {
+    display: block;
+}
+
+.arrow-endpoint {
+    position: absolute;
+    z-index: 3;
+
+    background: white;
+}
+
+.arrow-endpoint:hover {
+    border: hsl(200, 100%, 40%) 2px solid;
+}
+
+/* Arrow labels */
+
+.arrow .katex, .arrow .katex-error {
+    font-size: 1em;
 }

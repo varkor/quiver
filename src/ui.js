@@ -1,7 +1,7 @@
 "use strict";
 
 /// Various parameters.
-const CONSTANTS = {
+Object.assign(CONSTANTS, {
     /// We currently only support 0-cells, 1-cells and 2-cells. This is solely
     /// due to a restriction with tikz-cd, which does not support 3-cells.
     /// This restriction is not technical: it can be lifted in the editor without issue.
@@ -15,7 +15,11 @@ const CONSTANTS = {
     SVG_PADDING: 6,
     // How much space (in pixels) to leave between adjacent parallel arrows.
     EDGE_OFFSET_DISTANCE: 8,
-};
+    // How many pixels each unit of curve height corresponds to.
+    CURVE_HEIGHT: 24,
+    // How many pixels of padding to place around labels on edges.
+    EDGE_LABEL_PADDING: 8,
+});
 
 /// Various states for the UI (e.g. whether cells are being rearranged, or connected, etc.).
 class UIState {
@@ -72,19 +76,29 @@ UIState.Connect = class extends UIState {
         this.reconnect = reconnect;
 
         /// The overlay for drawing an edge between the source and the cursor.
-        this.overlay = new DOM.Element("div", { class: "edge overlay" })
-            .add(new DOM.SVGElement("svg"));
-        ui.canvas.add(this.overlay);
+        if (this.reconnect === null) {
+            this.overlay = new DOM.Element("div", { class: "overlay" });
+            this.arrow = new Arrow(
+                new Shape.Endpoint(Point.zero()),
+                new Shape.Endpoint(Point.zero()),
+            );
+            this.overlay.add(this.arrow.element);
+            ui.canvas.add(this.overlay);
+        }
     }
 
     release(ui) {
-        this.overlay.remove();
         this.source.element.classList.remove("source");
         if (this.target !== null) {
             this.target.element.classList.remove("target");
+            this.target = null;
         }
-        if (this.reconnect !== null) {
-            this.reconnect.edge.element.classList.remove("reconnecting");
+        // If we're connecting from an insertion point, then we need to hide it again.
+        ui.element.querySelector(".insertion-point").classList.remove("revealed");
+        if (this.reconnect === null) {
+            this.overlay.remove();
+            this.arrow = null;
+        } else {
             this.reconnect.edge.render(ui);
             this.reconnect = null;
         }
@@ -97,39 +111,21 @@ UIState.Connect = class extends UIState {
             // We're drawing the edge again from scratch, so we need to remove all existing
             // elements.
             const svg = this.overlay.query_selector("svg");
-            new DOM.Element(svg).clear();
+            svg.clear();
             // Lock on to the target if present, otherwise simply draw the edge
             // to the position of the cursor.
             const target = this.target !== null ? {
-                offset: this.target.off(ui),
-                size: this.target.size(),
-                is_offset: true,
+                shape: this.target.shape,
                 level: this.target.level,
             } : {
-                offset,
-                size: Dimensions.zero(),
-                is_offset: false,
+                shape: new Shape.Endpoint(offset),
                 level: 0,
             };
-            Edge.draw_and_position_edge(
-                ui,
-                this.overlay.element,
-                svg,
-                {
-                    offset: this.source.off(ui),
-                    size: this.source.size(),
-                    is_offset: true,
-                    level: this.source.level,
-                },
-                target,
-                Edge.default_options(null, {
-                    body: {
-                        name: "cell",
-                        level: Math.max(this.source.level, target.level) + 1,
-                    },
-                }),
-                null,
-            );
+
+            this.arrow.source = this.source.shape;
+            this.arrow.target = target.shape;
+            this.arrow.style.level = Math.max(this.source.level, target.level) + 1;
+            this.arrow.redraw();
         } else {
             // We're reconnecting an existing edge.
             this.reconnect.edge.render(ui, offset);
@@ -144,7 +140,7 @@ UIState.Connect = class extends UIState {
     valid_connection(target) {
         return this.source.level < CONSTANTS.MAXIMUM_CELL_LEVEL &&
             // To allow `valid_connection` to be used to simply check whether the source is valid,
-            // we ignore source–target compatibility if `target` is null.
+            // we ignore source--target compatibility if `target` is null.
             // We allow cells to be connected even if they do not have the same level. This is
             // because it's often useful when drawing diagrams, even if it may not always be
             // semantically valid.
@@ -177,13 +173,15 @@ UIState.Connect = class extends UIState {
             // If *every* existing connection to source and target has a consistent label alignment,
             // then `align` will be a singleton, in which case we use that element as the alignment.
             // If it has `left` and `right` in equal measure (regardless of `centre`), then
-            // we will pick `centre`. Otherwise we keep the default. And similarly for `offset`.
+            // we will pick `centre`. Otherwise we keep the default. And similarly for `offset` and
+            // `curve`.
             const align = new Map();
             const offset = new Map();
+            const curve = new Map();
             // We only want to pick `centre` when the source and target are equally constraining
             // (otherwise we end up picking `centre` far too often). So we check that they're both
             // being considered equally. This means `centre` is chosen only rarely, but often in
-            // the situations you want it. (This has no analogue in `offset`.)
+            // the situations you want it. (This has no analogue in `offset` or `curve`.)
             let balance = 0;
 
             const swap = (options) => {
@@ -195,15 +193,17 @@ UIState.Connect = class extends UIState {
                         right: "left",
                     }[options.label_alignment],
                     offset: -options.offset,
+                    curve: -options.curve,
                 };
             };
 
             const conserve = (options, between) => {
                 return {
                     label_alignment: options.label_alignment,
-                    // We ignore the offsets of edges that aren't directly `between` the
+                    // We ignore the offsets and curves of edges that aren't directly `between` the
                     // source and target.
                     offset: between ? options.offset : null,
+                    curve: between ? options.curve : null,
                 };
             };
 
@@ -217,6 +217,12 @@ UIState.Connect = class extends UIState {
                         offset.set(options.offset, 0);
                     }
                     offset.set(options.offset, offset.get(options.offset) + 1);
+                }
+                if (options.curve !== null) {
+                    if (!curve.has(options.curve)) {
+                        curve.set(options.curve, 0);
+                    }
+                    curve.set(options.curve, curve.get(options.curve) + 1);
                 }
                 balance += tip;
             };
@@ -244,6 +250,9 @@ UIState.Connect = class extends UIState {
 
             if (offset.size === 1) {
                 options.offset = offset.keys().next().value;
+            }
+            if (curve.size === 1) {
+                options.curve = curve.keys().next().value;
             }
 
             if (!event.shiftKey && !event.metaKey && !event.ctrlKey) {
@@ -399,11 +408,6 @@ class UI {
         /// The toolbar.
         this.toolbar = new Toolbar();
 
-        /// What library to use for rendering labels.
-        /// `null` is a basic HTML fallback: it is used until the relevant library is loaded.
-        /// Options include MathJax and KaTeX.
-        this.render_method = null;
-
         /// LaTeX macro definitions.
         this.macros = new Map();
 
@@ -447,7 +451,7 @@ class UI {
             event.preventDefault();
 
             // Hide the insertion point if it is visible.
-            this.element.querySelector(".insertion-point").classList.remove("revealed");
+            insertion_point.classList.remove("revealed");
 
             this.pan_view(new Offset(
                 event.deltaX * 2 ** -this.scale,
@@ -531,7 +535,7 @@ class UI {
                 }
                 if (this.in_mode(UIState.Pan)) {
                     // Hide the insertion point if it is visible.
-                    this.element.querySelector(".insertion-point").classList.remove("revealed");
+                    insertion_point.classList.remove("revealed");
                     // Record the position the pointer was pressed at, so we can pan relative
                     // to that location by dragging.
                     this.state.origin = this.offset_from_event(event).sub(this.view);
@@ -560,7 +564,8 @@ class UI {
         const reposition_insertion_point = (event) => {
             const position = this.position_from_event(event);
             const offset = this.offset_from_position(position);
-            offset.reposition(insertion_point);
+            insertion_point.style.left = `${offset.x}px`;
+            insertion_point.style.top = `${offset.y}px`;
             // Resize the insertion point appropriately for the grid cell.
             insertion_point.style.width
                 = `${this.cell_size(this.cell_width, position.x) - CONSTANTS.GRID_BORDER_WIDTH}px`;
@@ -570,8 +575,7 @@ class UI {
             return position;
         };
 
-        // Clicking on the insertion point reveals it,
-        // after which another click adds a new node.
+        // Clicking on the insertion point reveals it, after which another click adds a new node.
         insertion_point.addEventListener("mousedown", (event) => {
             if (event.button === 0) {
                 if (this.in_mode(UIState.Default)) {
@@ -623,66 +627,79 @@ class UI {
             }
         });
 
-        // If we release the mouse while hovering over the insertion point,
-        // there are two possibilities. Either we haven't moved the mouse,
-        // in which case the insertion point loses its `"pending"` or
-        // `"active"` state, or we have, in which case we're mid-connection
-        // and we need to create a new vertex and connect it.
-        insertion_point.addEventListener("mouseup", (event) => {
+        // If we release the mouse while hovering over the insertion point, there are two
+        // possibilities. Either we haven't moved the mouse, in which case the insertion point loses
+        // its `"pending"` or `"active"` state; or we have, in which case we're mid-connection and
+        // we need to create a new vertex and connect it. We add the event listener to the canvas,
+        // rather than the insertion point, so that we don't have to worry about the insertion point
+        // being exactly the same size as a grid cell (there is some padding for aesthetic purposes)
+        // or the insertion point being covered by other elements (like edge endpoints).
+        this.canvas.listen("mouseup", (event) => {
             if (event.button === 0) {
+                // Handle mouse releases without having moved the cursor from the initial cell.
                 insertion_point.classList.remove("pending", "active");
 
-                // When releasing the mouse over an empty grid cell, we want to create a new
-                // cell and connect it to the source.
-                if (this.in_mode(UIState.Connect)) {
-                    event.stopImmediatePropagation();
-                    // We only want to forge vertices, not edges (and thus 1-cells).
-                    if (this.state.source.is_vertex()) {
-                        this.state.target
-                            = create_vertex(this.position_from_event(event));
-                        // Usually this vertex will be immediately deselected, except when Shift
-                        // is held, in which case we want to select the forged vertices *and* the
-                        // new edge.
-                        this.select(this.state.target);
-                        const created = new Set([this.state.target]);
-                        const actions = [{
-                            kind: "create",
-                            cells: created,
-                        }];
+                // We only want to create a connection if the insertion point is visible. E.g. not
+                // if we're hovering over a grid cell that contains a vertex, but not hovering over
+                // the vertex itself (i.e. the whitespace around the vertex).
+                if (insertion_point.classList.contains("revealed")) {
+                    // When releasing the mouse over an empty grid cell, we want to create a new
+                    // cell and connect it to the source.
+                    if (this.in_mode(UIState.Connect)) {
+                        event.stopImmediatePropagation();
+                        // We only want to forge vertices, not edges (and thus 1-cells).
+                        if (this.state.source.is_vertex()) {
+                            this.state.target
+                                = create_vertex(this.position_from_event(event));
+                            // Usually this vertex will be immediately deselected, except when Shift
+                            // is held, in which case we want to select the forged vertices *and*
+                            // the new edge.
+                            this.select(this.state.target);
+                            const created = new Set([this.state.target]);
+                            const actions = [{
+                                kind: "create",
+                                cells: created,
+                            }];
 
-                        if (this.state.forged_vertex) {
-                            created.add(this.state.source);
-                        }
-
-                        if (this.state.reconnect === null) {
-                            // If we're not reconnecting an existing edge, then we need
-                            // to create a new one.
-                            const edge = this.state.connect(this, event);
-                            created.add(edge);
-                        } else {
-                            // Unless we're holding Shift/Command/Control (in which case we just add
-                            // the new vertex to the selection) we want to focus and select the new
-                            // vertex.
-                            const { edge, end } = this.state.reconnect;
-                            if (!event.shiftKey && !event.metaKey && !event.ctrlKey) {
-                                this.deselect();
-                                this.select(this.state.target);
-                                this.panel.element.querySelector('label input[type="text"]')
-                                    .select();
+                            if (this.state.forged_vertex) {
+                                created.add(this.state.source);
                             }
-                            actions.push({
-                                kind: "connect",
-                                edge,
-                                end,
-                                from: edge[end],
-                                to: this.state.target,
-                            });
-                            this.state.connect(this, event);
-                        }
 
-                        this.history.add(this, actions, false, this.selection_excluding(created));
+                            if (this.state.reconnect === null) {
+                                // If we're not reconnecting an existing edge, then we need
+                                // to create a new one.
+                                const edge = this.state.connect(this, event);
+                                created.add(edge);
+                            } else {
+                                // Unless we're holding Shift/Command/Control (in which case we just
+                                // add the new vertex to the selection) we want to focus and select
+                                // the new vertex.
+                                const { edge, end } = this.state.reconnect;
+                                if (!event.shiftKey && !event.metaKey && !event.ctrlKey) {
+                                    this.deselect();
+                                    this.select(this.state.target);
+                                    this.panel.element.querySelector('label input[type="text"]')
+                                        .select();
+                                }
+                                actions.push({
+                                    kind: "connect",
+                                    edge,
+                                    end,
+                                    from: edge[end],
+                                    to: this.state.target,
+                                });
+                                this.state.connect(this, event);
+                            }
+
+                            this.history.add(
+                                this,
+                                actions,
+                                false,
+                                this.selection_excluding(created),
+                            );
+                        }
+                        this.switch_mode(UIState.default);
                     }
-                    this.switch_mode(UIState.default);
                 }
             }
         });
@@ -797,17 +814,6 @@ class UI {
         });
     }
 
-    /// Active MathJax or KaTeX when it becomes available,
-    /// updating all existing labels to make use of the library.
-    activate_render_method(method) {
-        this.render_method = method;
-
-        // Rerender all the existing labels now that MathJax is available.
-        for (const cell of this.quiver.all_cells()) {
-            cell.render_label(this);
-        }
-    }
-
     /// Returns whether the UI has a particular state.
     in_mode(state) {
         return this.state instanceof state;
@@ -870,8 +876,8 @@ class UI {
     /// the absolute positions of the column and row. See `cell_from_offset` for details.
     col_row_offset_from_offset(offset) {
         return [
-            this.cell_from_offset(this.cell_width, offset.left),
-            this.cell_from_offset(this.cell_height, offset.top),
+            this.cell_from_offset(this.cell_width, offset.x),
+            this.cell_from_offset(this.cell_height, offset.y),
         ];
     }
 
@@ -926,32 +932,28 @@ class UI {
 
         if (position.x > 0) {
             for (let col = 0; col < Math.floor(position.x); ++col) {
-                offset.left += this.cell_size(this.cell_width, col);
+                offset.x += this.cell_size(this.cell_width, col);
             }
-            offset.left
-                += this.cell_size(this.cell_width, Math.floor(position.x)) * (position.x % 1);
+            offset.x += this.cell_size(this.cell_width, Math.floor(position.x)) * (position.x % 1);
         }
         if (position.x < 0) {
             for (let col = -1; col >= position.x; --col) {
-                offset.left -= this.cell_size(this.cell_width, col);
+                offset.x -= this.cell_size(this.cell_width, col);
             }
-            offset.left
-                += this.cell_size(this.cell_width, Math.floor(position.x)) * (position.x % 1);
+            offset.x += this.cell_size(this.cell_width, Math.floor(position.x)) * (position.x % 1);
         }
 
         if (position.y > 0) {
             for (let row = 0; row < Math.floor(position.y); ++row) {
-                offset.top += this.cell_size(this.cell_height, row);
+                offset.y += this.cell_size(this.cell_height, row);
             }
-            offset.top
-                += this.cell_size(this.cell_height, Math.floor(position.y)) * (position.y % 1);
+            offset.y += this.cell_size(this.cell_height, Math.floor(position.y)) * (position.y % 1);
         }
         if (position.y < 0) {
             for (let row = -1; row >= position.y; --row) {
-                offset.top -= this.cell_size(this.cell_height, row);
+                offset.y -= this.cell_size(this.cell_height, row);
             }
-            offset.top
-                += this.cell_size(this.cell_height, Math.floor(position.y)) * (position.y % 1);
+            offset.y += this.cell_size(this.cell_height, Math.floor(position.y)) * (position.y % 1);
         }
 
         return offset;
@@ -1128,12 +1130,12 @@ class UI {
     /// If `offset` is positive, then everything will appear to move towards the top left.
     /// If `zoom` is positive, then everything will grow larger.
     pan_view(offset, zoom = 0) {
-        this.view.left += offset.left;
-        this.view.top += offset.top;
+        this.view.x += offset.x;
+        this.view.y += offset.y;
         this.scale += zoom;
         const view = this.view.mul(2 ** this.scale);
         this.canvas.element.style.transform
-            = `translate(${-view.left}px, ${-view.top}px) scale(${2 ** this.scale})`;
+            = `translate(${-view.x}px, ${-view.y}px) scale(${2 ** this.scale})`;
         this.update_grid();
     }
 
@@ -1170,22 +1172,6 @@ class UI {
     /// actions (primarily keyboard shortcuts) will be disabled.)
     input_is_active() {
         return document.activeElement.matches('label input[type="text"]') && document.activeElement;
-    }
-
-    /// Gets the label element for a cell and clears it, or creates a new one if it does not exist.
-    static clear_label_for_cell(cell, buffer = false) {
-        let label = cell.element.querySelector(`.label${!buffer ? ":not(.buffer)" : "buffer"}`);
-        if (label !== null) {
-            label = new DOM.Element(label);
-            label.clear();
-            return label;
-        } else {
-            label = new DOM.Element("div", { class: "label" });
-            if (buffer) {
-                label.class_list.add("buffer");
-            }
-            return label;
-        }
     }
 
     /// Resizes a label to fit within a cell.
@@ -1244,87 +1230,14 @@ class UI {
         return [label.offsetWidth, label.offsetHeight];
     }
 
-    /// Returns the declared macros in a format amenable to passing to the LaTeX renderer.
+    /// Returns the declared macros in a format amenable to passing to KaTeX.
     latex_macros() {
-        switch (this.render_method) {
-            case null:
-                return this.macros;
-
-            case "MathJax":
-                // This seems to be more effective than defining macros using `MathJax.Hub.Config`.
-                return Array.from(this.macros).map(([name, { definition, arity }]) => {
-                    return `\\newcommand{${name}}[${arity}]{${definition}}`;
-                }).join("");
-
-            case "KaTeX":
-                const macros = {};
-                for (const [name, { definition }] of this.macros) {
-                    // Arities are implicit in KaTeX.
-                    macros[name] = definition;
-                }
-                return macros;
+        const macros = {};
+        for (const [name, { definition }] of this.macros) {
+            // Arities are implicit in KaTeX.
+            macros[name] = definition;
         }
-    }
-
-    /// Renders TeX with MathJax or KaTeX and returns the corresponding element.
-    render_tex(cell, label, tex = "", callback = x => x) {
-        const after = (x) => {
-            const sizes = this.resize_label(cell, label.element);
-            if (cell.is_vertex()) {
-                // If the cell size has changed, we may need to resize the grid to fit.
-                cell.resize_content(this, sizes);
-            }
-
-            callback(x);
-        };
-
-        switch (this.render_method) {
-            case null:
-                label.add(tex);
-                // Simulate the usual queue delay.
-                UI.delay(() => after());
-                break;
-
-            case "MathJax":
-                label.add(`\\(${this.latex_macros()}${tex}\\)`);
-
-                // We're going to fade the label in once it's rendered, so it looks less janky.
-                label.element.style.display = "none";
-                label.element.style.opacity = 0;
-
-                MathJax.Hub.queue.Push(
-                    ["Typeset", MathJax.Hub, label.element],
-                    () => {
-                        label.element.style.display = "block";
-                        label.element.style.opacity = 1;
-                    },
-                    after,
-                );
-
-                break;
-
-            case "KaTeX":
-                try {
-                    katex.render(
-                        tex.replace(/\$/g, "\\$"),
-                        label.element,
-                        {
-                            throwOnError: false,
-                            errorColor: "hsl(0, 100%, 40%)",
-                            macros: this.latex_macros(),
-                        },
-                    );
-                } catch (_) {
-                    // Currently all errors are disabled, so we don't expect to encounter this case.
-                    label.class_list.add("error");
-                    label.add(tex);
-                }
-                // Simulate the usual queue delay.
-                UI.delay(() => after());
-                break;
-        }
-
-        return label;
+        return macros;
     }
 
     // A helper method for displaying error banners.
@@ -1410,23 +1323,130 @@ class UI {
 
         // Draw the vertical lines.
         context.beginPath();
-        for (let col = left_col, x = left_offset - offset.left;
+        for (let col = left_col, x = left_offset - offset.x;
                 col <= right_col; x += this.cell_size(this.cell_width, col++)) {
             context.moveTo(x * scale + width / 2, 0);
             context.lineTo(x * scale + width / 2, height);
         }
-        context.lineDashOffset = offset.top * scale - dash_offset - height % this.default_cell_size / 2;
+        context.lineDashOffset = offset.y * scale - dash_offset - height % this.default_cell_size / 2;
         context.stroke();
 
         // Draw the horizontal lines.
         context.beginPath();
-        for (let row = top_row, y = top_offset - offset.top;
+        for (let row = top_row, y = top_offset - offset.y;
                 row <= bottom_row; y += this.cell_size(this.cell_height, row++)) {
             context.moveTo(0, y * scale + height / 2);
             context.lineTo(width, y * scale + height / 2);
         }
-        context.lineDashOffset = offset.left * scale - dash_offset - width % this.default_cell_size / 2;
+        context.lineDashOffset = offset.x * scale - dash_offset - width % this.default_cell_size / 2;
         context.stroke();
+    }
+
+    /// Get an `ArrowStyle` from the `options` associated to an edge.
+    /// `ArrowStyle` is used simply for styling: we don't use it as an internal data representation
+    /// for quivers. This helps keep a separation between structure and drawing, which makes it
+    /// easiser to maintain backwards-compatibility.
+    static arrow_style_for_options(options) {
+        // By default, `ArrowStyle` have minimal styling.
+        const style = new ArrowStyle();
+
+        // All arrow styles support shifting.
+        style.shift = options.offset * CONSTANTS.EDGE_OFFSET_DISTANCE;
+
+        switch (options.style.name) {
+            case "arrow":
+                style.level = options.level;
+                style.curve = options.curve * CONSTANTS.CURVE_HEIGHT * 2;
+
+                // Body style.
+                switch (options.style.body.name) {
+                    case "squiggly":
+                        style.body_style = CONSTANTS.ARROW_BODY_STYLE.SQUIGGLY;
+                        break;
+                    case "barred":
+                        style.body_style = CONSTANTS.ARROW_BODY_STYLE.PROARROW;
+                        break;
+                    case "dashed":
+                        style.dash_style = CONSTANTS.ARROW_DASH_STYLE.DASHED;
+                        break;
+                    case "dotted":
+                        style.dash_style = CONSTANTS.ARROW_DASH_STYLE.DOTTED;
+                        break;
+                    case "none":
+                        style.body_style = CONSTANTS.ARROW_BODY_STYLE.NONE;
+                        break;
+                }
+
+                // Tail style.
+                switch (options.style.tail.name) {
+                    case "none":
+                        style.tails = CONSTANTS.ARROW_HEAD_STYLE.NONE;
+                        break;
+                    case "maps to":
+                        style.tails = CONSTANTS.ARROW_HEAD_STYLE.MAPS_TO;
+                        break;
+                    case "mono":
+                        style.tails = CONSTANTS.ARROW_HEAD_STYLE.MONO;
+                        break;
+                    case "hook":
+                        style.tails = CONSTANTS.ARROW_HEAD_STYLE[{
+                            "top": "HOOK_TOP",
+                            "bottom": "HOOK_BOTTOM",
+                        }[options.style.tail.side]];
+                        break;
+                }
+
+                // Head style.
+                switch (options.style.head.name) {
+                    case "arrowhead":
+                        style.heads = CONSTANTS.ARROW_HEAD_STYLE.NORMAL;
+                        break;
+                    case "none":
+                        style.heads = CONSTANTS.ARROW_HEAD_STYLE.NONE;
+                        break;
+                    case "epi":
+                        style.heads = CONSTANTS.ARROW_HEAD_STYLE.EPI;
+                        break;
+                    case "harpoon":
+                        style.heads = CONSTANTS.ARROW_HEAD_STYLE[{
+                            "top": "HARPOON_TOP",
+                            "bottom": "HARPOON_BOTTOM",
+                        }[options.style.head.side]];
+                        break;
+                }
+                break;
+
+            // Adjunction (⊣).
+            case "adjunction":
+                style.body_style = CONSTANTS.ARROW_BODY_STYLE.ADJUNCTION;
+                style.heads = CONSTANTS.ARROW_HEAD_STYLE.NONE;
+                break;
+
+            // Pullback/pushout corner.
+            case "corner":
+                style.body_style = CONSTANTS.ARROW_BODY_STYLE.NONE;
+                style.heads = CONSTANTS.ARROW_HEAD_STYLE.NONE;
+                style.tails = CONSTANTS.ARROW_HEAD_STYLE.CORNER;
+                break;
+        }
+
+        return style;
+    }
+
+    /// Update the `ArrowStyle` associated to an arrow, as well as label formatting, etc.
+    /// This is necessary before redrawing.
+    static update_style(arrow, options) {
+        // Update the arrow style.
+        arrow.style = UI.arrow_style_for_options(options);
+        // Update the label style.
+        if (arrow.label !== null) {
+            arrow.label.alignment = {
+                left: CONSTANTS.LABEL_ALIGNMENT.LEFT,
+                right: CONSTANTS.LABEL_ALIGNMENT.RIGHT,
+                centre: CONSTANTS.LABEL_ALIGNMENT.CENTRE,
+                over: CONSTANTS.LABEL_ALIGNMENT.OVER,
+            }[options.label_alignment];
+        }
     }
 
     /// Load macros from a string, which will be used in all LaTeX labels.
@@ -1456,7 +1476,7 @@ class UI {
 
         // Rerender all the existing labels with the new macro definitions.
         for (const cell of this.quiver.all_cells()) {
-            cell.render_label(this);
+            this.panel.render_tex(this, cell);
         }
     }
 
@@ -1666,6 +1686,13 @@ class History {
                     }
                     update_panel = true;
                     break;
+                case "curve":
+                    for (const curve of action.curves) {
+                        curve.edge.options.curve = curve[to];
+                        cells.add(curve.edge);
+                    }
+                    update_panel = true;
+                    break;
                 case "reverse":
                     for (const cell of action.cells) {
                         if (cell.is_edge()) {
@@ -1679,6 +1706,13 @@ class History {
                         if (cell.is_edge()) {
                             cell.flip(ui);
                         }
+                    }
+                    update_panel = true;
+                    break;
+                case "level":
+                    for (const level of action.levels) {
+                        level.edge.options.level = level[to];
+                        cells.add(level.edge);
                     }
                     update_panel = true;
                     break;
@@ -1841,22 +1875,14 @@ class Panel {
         });
 
         // The label alignment options.
-
-        // The radius of the box representing the text along the arrow.
-        const RADIUS = 4;
-        // The horizontal offset of the box representing the text from the arrowhead.
-        const X_OFFSET = 2;
-        // The vetical offset of the box representing the text from the arrow.
-        const Y_OFFSET = 8;
-
         this.create_option_list(
             ui,
             local,
             [
-                ["left", "Left align label", {}],
-                ["centre", "Centre align label (clear)", {}],
-                ["over", "Centre align label (over)", {}],
-                ["right", "Right align label", {}]
+                ["left", "Left align label", "left"],
+                ["centre", "Centre align label (clear)", "centre"],
+                ["over", "Centre align label (over)", "over"],
+                ["right", "Right align label", "right"]
             ],
             "label-alignment",
             [],
@@ -1874,100 +1900,84 @@ class Panel {
                 }]);
                 edges.forEach(edge => edge.options.label_alignment = value);
             },
-            (value) => {
+            (data) => {
                 // The length of the arrow.
                 const ARROW_LENGTH = 28;
-
-                let y_offset;
-                switch (value) {
-                    case "left":
-                        y_offset = -Y_OFFSET;
-                        break;
-                    case "centre":
-                    case "over":
-                        y_offset = 0;
-                        break;
-                    case "right":
-                        y_offset = Y_OFFSET;
-                        break;
-                }
-
-                const gap = value === "centre" ? { length: RADIUS * 4, offset: X_OFFSET } : null;
-
                 return {
-                    edge: {
-                        length: ARROW_LENGTH,
-                        options: Edge.default_options(),
-                        gap,
-                    },
-                    shared: { y_offset },
+                    length: ARROW_LENGTH,
+                    options: Edge.default_options({ label_alignment: data }),
+                    draw_label: true,
                 };
-            },
-            (svg, dimensions, shared) => {
-                const rect = new DOM.SVGElement("rect", {
-                    x: dimensions.width / 2 - X_OFFSET - RADIUS,
-                    y: dimensions.height / 2 + shared.y_offset - RADIUS,
-                    width: RADIUS * 2,
-                    height: RADIUS * 2,
-                }, {
-                    stroke: "none",
-                }).element;
-
-                svg.appendChild(rect);
-
-                return [{ element: rect, property: "fill" }];
             },
         );
 
-        // The offset slider.
-        local.add(
-            new DOM.Element("label").add("Offset: ").add(
+        const create_option_slider = (name, property, range) => {
+            const slider = new DOM.Element("label").add(`${name}: `).add(
                 new DOM.Element(
                     "input",
-                    { type: "range", min: -5, value: 0, max: 5, step: 1, disabled: true }
+                    {
+                        type: "range",
+                        name: property,
+                        min: range.min,
+                        value: range.value,
+                        max: range.max,
+                        step: 1,
+                        disabled: true,
+                    },
                 ).listen("input", (_, slider) => {
                     const value = parseInt(slider.value);
-                    const collapse = ["offset", ui.selection];
+                    const collapse = [property, ui.selection];
                     const actions = ui.history.get_collapsible_actions(collapse);
                     if (actions !== null) {
-                        // If the previous history event was to modify the offset, then
+                        // If the previous history event was to modify the property, then
                         // we're just going to modify that event rather than add a new
                         // one, as with the label input.
                         let unchanged = true;
                         for (const action of actions) {
                             // This ought always to be true.
-                            if (action.kind === "offset") {
-                                // Modify the `to` field of each offset.
-                                action.offsets.forEach((offset) => {
-                                    offset.to = value;
-                                    if (offset.to !== offset.from) {
+                            if (action.kind === property) {
+                                // Modify the `to` field of each property modification.
+                                action[`${property}s`].forEach((modification) => {
+                                    modification.to = value;
+                                    if (modification.to !== modification.from) {
                                         unchanged = false;
                                     }
                                 });
                             }
                         }
-                        // Invoke the new offset changes immediately.
+                        // Invoke the new property changes immediately.
                         ui.history.effect(ui, actions, false);
                         if (unchanged) {
                             ui.history.pop(ui);
                         }
                     } else {
-                        // If this is the start of our offset modification,
+                        // If this is the start of our property modification,
                         // we need to add a new history event.
                         ui.history.add_collapsible(ui, collapse, [{
-                            kind: "offset",
-                            offsets: Array.from(ui.selection)
+                            kind: property,
+                            [`${property}s`]: Array.from(ui.selection)
                                 .filter(cell => cell.is_edge())
                                 .map((edge) => ({
                                     edge,
-                                    from: edge.options.offset,
+                                    from: edge.options[property],
                                     to: value,
                                 })),
                         }], true);
                     }
                 })
-            )
-        );
+            );
+
+            local.add(slider);
+
+            return slider;
+        };
+
+        // The offset slider.
+        create_option_slider("Offset", "offset", { min: -5, value: 0, max: 5 });
+
+        // The curve slider.
+        create_option_slider("Curve", "curve", { min: -5, value: 0, max: 5 })
+            .class_list.add("arrow-style");
 
         // The button to reverse an edge.
         local.add(
@@ -1993,6 +2003,13 @@ class Panel {
                 })
         );
 
+        // The level slider.
+        // We limit to 4 for now because there are issues with pixel perfection (especially for
+        // squiggly arrows, e.g. with their interaction with hooked tails) after that. Besides, it's
+        // unlikely people will want to draw diagrams involving 5-cells.
+        const level_slider = create_option_slider("Level", "level", { min: 1, value: 1, max: 4 });
+        level_slider.class_list.add("arrow-style");
+
         // The list of tail styles.
         // The length of the arrow to draw in the centre style buttons.
         const ARROW_LENGTH = 72;
@@ -2003,6 +2020,9 @@ class Panel {
         // actions. To avoid this, we prevent `record_edge_style_change` from taking
         // effect when it's already in progress using the `recording` flag.
         let recording = false;
+
+        // Compute the difference in styling effected by `modify` and record the change in the
+        // history.
         const record_edge_style_change = (modify) => {
             if (recording) {
                 return;
@@ -2033,6 +2053,16 @@ class Panel {
             recording = false;
         };
 
+        // Trigger an efect that changes an edge style, optionally recording the change in the
+        // history.
+        const effect_edge_style_change = (record, modify) => {
+            if (record) {
+                record_edge_style_change(modify);
+            } else {
+                modify();
+            }
+        };
+
         this.create_option_list(
             ui,
             local,
@@ -2046,21 +2076,19 @@ class Panel {
             "tail-type",
             ["vertical", "short", "arrow-style"],
             true, // `disabled`
-            (edges, _, data) => record_edge_style_change(() => {
-                edges.forEach(edge => edge.options.style.tail = data);
-            }),
-            (_, data) => {
-                return {
-                    edge: {
-                        length: 0,
-                        options: Edge.default_options(null, {
-                            tail: data,
-                            body: { name: "none" },
-                            head: { name: "none" },
-                        }),
-                    },
-                };
+            (edges, _, data, user_triggered) => {
+                effect_edge_style_change(user_triggered, () => {
+                    edges.forEach(edge => edge.options.style.tail = data);
+                });
             },
+            (data) => ({
+                length: 0,
+                options: Edge.default_options(null, {
+                    tail: data,
+                    body: { name: "none" },
+                    head: { name: "none" },
+                }),
+            }),
         );
 
         // The list of body styles.
@@ -2068,31 +2096,28 @@ class Panel {
             ui,
             local,
             [
-                ["1-cell", "1-cell", { name: "cell", level: 1 }],
-                ["2-cell", "2-cell", { name: "cell", level: 2 }],
-                ["dashed", "Dashed", { name: "dashed" }],
-                ["dotted", "Dotted", { name: "dotted" }],
-                ["squiggly", "Squiggly", { name: "squiggly" }],
-                ["barred", "Barred", { name: "barred" }],
+                ["solid", "Solid", { name: "cell", level: 1 }],
+                ["dashed", "Dashed", { name: "dashed", level: 1 }],
+                ["dotted", "Dotted", { name: "dotted", level: 1 }],
+                ["squiggly", "Squiggly", { name: "squiggly", level: 1 }],
+                ["barred", "Barred", { name: "barred", level: 1 }],
                 ["none", "No body", { name: "none" }],
             ],
             "body-type",
             ["vertical", "arrow-style"],
             true, // `disabled`
-            (edges, _, data) => record_edge_style_change(() => {
-                edges.forEach(edge => edge.options.style.body = data);
-            }),
-            (_, data) => {
-                return {
-                    edge: {
-                        length: ARROW_LENGTH,
-                        options: Edge.default_options(null, {
-                            body: data,
-                            head: { name: "none" },
-                        }),
-                    },
-                };
+            (edges, _, data, user_triggered) => {
+                effect_edge_style_change(user_triggered, () => {
+                    edges.forEach(edge => edge.options.style.body = data);
+                });
             },
+            (data) => ({
+                length: ARROW_LENGTH,
+                options: Edge.default_options(null, {
+                    body: data,
+                    head: { name: "none" },
+                }),
+            }),
         );
 
         // The list of head styles.
@@ -2109,20 +2134,18 @@ class Panel {
             "head-type",
             ["vertical", "short", "arrow-style"],
             true, // `disabled`
-            (edges, _, data) => record_edge_style_change(() => {
-                edges.forEach(edge => edge.options.style.head = data);
-            }),
-            (_, data) => {
-                return {
-                    edge: {
-                        length: 0,
-                        options: Edge.default_options(null, {
-                            head: data,
-                            body: { name: "none" },
-                        }),
-                    },
-                };
+            (edges, _, data, user_triggered) => {
+                effect_edge_style_change(user_triggered, () => {
+                    edges.forEach(edge => edge.options.style.head = data);
+                });
             },
+            (data) => ({
+                length: 0,
+                options: Edge.default_options(null, {
+                    head: data,
+                    body: { name: "none" },
+                }),
+            }),
         );
 
         // The list of (non-arrow) edge styles.
@@ -2137,41 +2160,50 @@ class Panel {
             "edge-type",
             ["vertical", "centre"],
             true, // `disabled`
-            (edges, _, data) => record_edge_style_change(() => {
-                for (const edge of edges) {
-                    // Update the edge style.
-                    if (data.name !== "arrow" || edge.options.style.name !== "arrow") {
-                        // The arrow is a special case, because it contains suboptions that we
-                        // don't necessarily want to override. For example, if we have multiple
-                        // edges selected, one of which is a non-default arrow and another which
-                        // has a different style, clicking on the arrow option should not reset
-                        // the style of the existing arrow.
-                        edge.options.style = data;
+            (edges, _, data, user_triggered) => {
+                effect_edge_style_change(user_triggered, () => {
+                    for (const edge of edges) {
+                        // We reset `curve` and `level` for non-arrow edges, because that data isn't
+                        // relevant to them. Otherwise, we set them to whatever the sliders are
+                        // currently set to. This will preserve them under switching between arrow
+                        // styles, because we don't reset the sliders when switching.
+                        if (data.name !== "arrow") {
+                            edge.options.curve = 0;
+                            edge.options.level = 1;
+                        } else if (edge.options.style.name !== "arrow") {
+                            edge.options.curve
+                                = parseInt(ui.element.querySelector('input[name="curve"]').value);
+                            edge.options.level
+                                = parseInt(ui.element.querySelector('input[name="level"]').value);
+                        }
+                        // Update the edge style.
+                        if (data.name !== "arrow" || edge.options.style.name !== "arrow") {
+                            // The arrow is a special case, because it contains suboptions that we
+                            // don't necessarily want to override. For example, if we have multiple
+                            // edges selected, one of which is a non-default arrow and another which
+                            // has a different style, clicking on the arrow option should not reset
+                            // the style of the existing arrow.
+                            edge.options.style = data;
+                        }
                     }
-                }
 
-                // Enable/disable the arrow style buttons.
-                ui.element.querySelectorAll('.arrow-style input[type="radio"]')
-                    .forEach(element => element.disabled = data.name !== "arrow");
+                    // Enable/disable the arrow style buttons and curve slider.
+                    ui.element.querySelectorAll(".arrow-style input")
+                        .forEach(element => element.disabled = data.name !== "arrow");
 
-                // If we've selected the `"arrow"` style, then we need to
-                // trigger the currently-checked buttons so that we get
-                // the expected style, rather than the default style.
-                if (data.name === "arrow") {
-                    UI.delay(() => {
+                    // If we've selected the `"arrow"` style, then we need to trigger the
+                    // currently-checked buttons and the curve and level sliders so that we get the
+                    // expected style, rather than the default style.
+                    if (data.name === "arrow") {
                         ui.element.querySelectorAll('.arrow-style input[type="radio"]:checked')
-                            .forEach(element => element.dispatchEvent(new Event("change")));
-                    });
-                }
-            }),
-            (_, data) => {
-                return {
-                    edge: {
-                        length: ARROW_LENGTH,
-                        options: Edge.default_options(null, data),
-                    },
-                };
+                            .forEach(element => element.dispatchEvent(new Event("change")))
+                    }
+                });
             },
+            (data) => ({
+                length: ARROW_LENGTH,
+                options: Edge.default_options(null, data),
+            }),
         );
 
         const display_export_pane = (format, modify = (output) => output) => {
@@ -2182,27 +2214,48 @@ class Panel {
             if (this.export !== format) {
                 ui.switch_mode(new UIState.Modal());
 
-                // Get the encoding of the diagram.
-                const output = ui.quiver.export(ui, format);
+                // Get the encoding of the diagram. The output may be modified by the caller.
+                const { data, metadata } = modify(ui.quiver.export(format));
 
-                let export_pane;
+                let export_pane, warning, list, content;
                 if (this.export === null) {
                     // Create the export pane.
                     export_pane = new DOM.Element("div", { class: "export" });
+                    warning = new DOM.Element("span", { class: "warning hidden" })
+                        .add("The exported tikz-cd diagram may not match the quiver diagram " +
+                            "exactly, as tikz-cd does not support the following features that " +
+                            "appear in this diagram:")
+                        .add(list = new DOM.Element("ul"))
+                        .add_to(export_pane);
+                    content = new DOM.Element("div", { class: "code" }).add_to(export_pane);
                     ui.element.appendChild(export_pane.element);
                 } else {
                     // Find the existing export pane.
                     export_pane = new DOM.Element(ui.element.querySelector(".export"));
+                    warning = export_pane.query_selector(".warning");
+                    list = export_pane.query_selector("ul");
+                    content = export_pane.query_selector(".code");
                 }
-                // The output may be modifier by the caller.
-                export_pane.clear().add(modify(output));
+                // Display a warning if necessary.
+                list.clear();
+                const unsupported_items = format === "tikz-cd" ?
+                    Array.from(metadata.tikz_incompatibilities).sort() : [];
+                for (const [index, item] of unsupported_items.entries()) {
+                    list.add(new DOM.Element("li")
+                        .add(`${item}${index + 1 < unsupported_items.length ? ";" : "."}`)
+                    );
+                }
+                warning.class_list.toggle("hidden", unsupported_items.length === 0);
+
+                // At present, the data is always a string.
+                content.clear().add(data);
 
                 this.export = format;
 
                 // Select the code for easy copying.
                 const selection = window.getSelection();
                 const range = document.createRange();
-                range.selectNodeContents(export_pane.element);
+                range.selectNodeContents(content.element);
                 selection.removeAllRanges();
                 selection.addRange(range);
                 // Disable cell data editing while the export pane is visible.
@@ -2237,7 +2290,12 @@ class Panel {
                     .listen("click", () => {
                         display_export_pane("base64", (output) => {
                             if (ui.macro_url !== null) {
-                                return `${output}&macro_url=${encodeURIComponent(ui.macro_url)}`;
+                                return {
+                                    data: `${output.data}&macro_url=${
+                                        encodeURIComponent(ui.macro_url)
+                                    }`,
+                                    metadata,
+                                };
                             }
                             return output;
                         });
@@ -2262,7 +2320,6 @@ class Panel {
         disabled,
         on_check,
         properties,
-        augment_svg = () => [],
     ) {
         const options_list = new DOM.Element("div", { class: `options` });
         options_list.class_list.add(...classes);
@@ -2273,10 +2330,10 @@ class Panel {
                 name,
                 value,
                 title: tooltip,
-            }).listen("change", (_, button) => {
+            }).listen("change", (event, button) => {
                 if (button.checked) {
                     const selected_edges = Array.from(ui.selection).filter(cell => cell.is_edge());
-                    on_check(selected_edges, value, data);
+                    on_check(selected_edges, value, data, event.isTrusted);
                     for (const edge of selected_edges) {
                         edge.render(ui);
                     }
@@ -2292,33 +2349,43 @@ class Panel {
             // and one for the unchecked version.
             const backgrounds = [];
 
-            const svg = new DOM.SVGElement("svg", { xmlns: "http://www.w3.org/2000/svg" }).element;
+            const { length, options, draw_label } = properties(data);
 
-            const { shared, edge: { length, options, gap = null } } = properties(value, data);
+            const arrow = new Arrow(
+                new Shape.Endpoint(Point.zero()),
+                new Shape.Endpoint(new Point(length, 0)),
+            );
 
-            const { dimensions, alignment }
-                = Edge.draw_edge(svg, options, length, Math.PI / 4, gap);
-            // Align the background according the alignment of the arrow
-            // (`"centre"` is default).
-            if (alignment !== "centre") {
-                // What percentage of the button to offset `"left"` or `"right"` aligned arrows.
-                const BACKGROUND_PADDING = 20;
-
-                button.element.style.backgroundPosition
-                    = `${alignment} ${BACKGROUND_PADDING}% center`
+            // The size of the label.
+            const LABEL_SIZE = 12;
+            // How much smaller the placeholder box in the label position should be.
+            const LABEL_MARGIN = 2;
+            if (draw_label) {
+                arrow.label = new Label();
+                arrow.label.size = new Dimensions(LABEL_SIZE, LABEL_SIZE);
             }
 
-            // Trigger the callback to modify the SVG in some way after drawing the arrow.
-            // `colour_properties` is an array of `{ object, property }` pairs. Each will
-            // be set to the current `colour` in the loop below.
-            const colour_properties = augment_svg(svg, dimensions, shared);
+            UI.update_style(arrow, options);
+            const svg = arrow.svg;
+            svg.set_attributes({ xmlns: DOM.SVGElement.NAMESPACE });
 
             for (const colour of ["black", "grey"]) {
-                svg.style.stroke = colour;
-                for (const { element, property } of colour_properties) {
-                    element.style[property] = colour;
+                arrow.style.colour = colour;
+                arrow.redraw();
+                // The `style` transforms the position of the arrow, which we don't want here,
+                // where we're trying to automatically position the arrows in the centre of the
+                // buttons.
+                svg.remove_attributes("style");
+                if (draw_label) {
+                    arrow.label.element.set_style({
+                        width: `${LABEL_SIZE - LABEL_MARGIN * 2}px`,
+                        height: `${LABEL_SIZE - LABEL_MARGIN * 2}px`,
+                        margin: `${LABEL_MARGIN}px`,
+                        background: colour,
+                    });
                 }
-                backgrounds.push(`url(data:image/svg+xml;utf8,${encodeURI(svg.outerHTML)})`);
+                backgrounds.push(`url('data:image/svg+xml;utf8,${
+                    encodeURIComponent(svg.element.outerHTML)}')`);
             }
             button.element.style.backgroundImage = backgrounds.join(", ");
 
@@ -2334,78 +2401,48 @@ class Panel {
         local.add(options_list);
     }
 
-    /// We buffer the MathJax rendering to reduce flickering (KaTeX is fast enough not
-    /// to require buffering).
-    /// If the `.buffer` has no extra classes, then we are free to start a new MathJax
-    /// TeX render.
-    /// If the `.buffer` has a `.buffering` class, then we are rendering a label. This
-    /// may be out of date, in which case we add a `.pending` class (which means we're
-    /// going to rerender as soon as the current MathJax render has completed).
+    /// Render the TeX contained in the label of a cell.
     render_tex(ui, cell) {
-        const label = new DOM.Element(cell.element.querySelector(".label:not(.buffer)"));
-        label.class_list.remove("error");
+        const label = new DOM.Element(cell.element).query_selector(".label");
 
         const update_label_transformation = () => {
             if (cell.is_edge()) {
-                cell.update_label_transformation(ui);
+                // Resize the bounding box for the label.
+                const bounding_rect = label.query_selector(".katex, .katex-error").bounding_rect();
+                cell.arrow.label.size = new Dimensions(
+                    bounding_rect.width
+                        + (bounding_rect.width > 0 ? CONSTANTS.EDGE_LABEL_PADDING * 2 : 0),
+                    bounding_rect.height
+                        + (bounding_rect.height > 0 ? CONSTANTS.EDGE_LABEL_PADDING * 2 : 0),
+                );
+                // Rerender the edge with the new label.
+                cell.render(ui);
             } else {
-                // `update_label_transformation` performs label resizing itself.
                 cell.resize_content(ui, ui.resize_label(cell, label.element));
             }
         };
 
-        switch (ui.render_method) {
-            case null:
-                label.clear().add(cell.label);
-                update_label_transformation();
-                break;
-
-            case "MathJax":
-                const buffer = cell.element.querySelector(".buffer");
-                const jax = MathJax.Hub.getAllJax(buffer);
-                if (!buffer.classList.contains("buffering") && jax.length > 0) {
-                    buffer.classList.add("buffering");
-
-                    MathJax.Hub.Queue(
-                        ["Text", jax[0], `${ui.latex_macros()}${cell.label}`],
-                        () => {
-                            // Swap the label and the label buffer.
-                            label.class_list.add("buffer");
-                            buffer.classList.remove("buffer", "buffering");
-                        },
-                        update_label_transformation,
-                    );
-                } else if (!buffer.classList.contains("pending")) {
-                    MathJax.Hub.Queue(() => this.render_tex(ui, cell));
-                }
-                break;
-
-            case "KaTeX":
-                try {
-                    katex.render(
-                        cell.label.replace(/\$/g, "\\$"),
-                        label.element,
-                        {
-                            throwOnError: false,
-                            errorColor: "hsl(0, 100%, 40%)",
-                            macros: ui.latex_macros(),
-                        },
-                    );
-                } catch (_) {
-                    // Currently all errors are disabled, so we don't expect to encounter this case.
-                    label.add(cell.label);
-                    label.class_list.add("error");
-                }
-                update_label_transformation();
-                break;
-        }
+        // Render the label with KaTeX.
+        // Currently all errors are disabled, so we don't wrap this in a try-catch block.
+        KaTeX.then((katex) => {
+            katex.render(
+                cell.label.replace(/\$/g, "\\$"),
+                label.element,
+                {
+                    throwOnError: false,
+                    errorColor: "hsl(0, 100%, 40%)",
+                    macros: ui.latex_macros(),
+                },
+            );
+            update_label_transformation();
+        });
     };
 
     /// Update the panel state (i.e. enable/disable fields as relevant).
     update(ui) {
         const input = this.element.querySelector('label input[type="text"]');
         const label_alignments = this.element.querySelectorAll('input[name="label-alignment"]');
-        const slider = this.element.querySelector('input[type="range"]');
+        const sliders = this.element.querySelectorAll('input[type="range"]');
 
         // Modifying cells is not permitted when the export pane is visible.
         if (this.export === null) {
@@ -2413,7 +2450,7 @@ class Panel {
             // for inputs that display their state even when disabled.
             if (ui.selection.size === 0) {
                 input.value = "";
-                slider.value = 0;
+                sliders.forEach(slider => slider.value = 0);
             }
 
             // Multiple selection is always permitted, so the following code must provide sensible
@@ -2463,8 +2500,10 @@ class Panel {
                     // The label alignment buttons are rotated to reflect the direction of the arrow
                     // when all arrows have the same direction (at least to the nearest multiple of
                     // 90°). Otherwise, rotation defaults to 0°.
-                    consider("{angle}", cell.angle(ui));
+                    consider("{angle}", cell.angle());
                     consider("{offset}", cell.options.offset);
+                    consider("{curve}", cell.options.curve);
+                    consider("{level}", cell.options.level);
                     consider("edge-type", cell.options.style.name);
 
                     // Arrow-specific options.
@@ -2476,7 +2515,7 @@ class Panel {
                             // different components.
                             switch (cell.options.style[component].name) {
                                 case "cell":
-                                    value = `${cell.options.style[component].level}-cell`;
+                                    value = "solid";
                                     break;
                                 case "hook":
                                 case "harpoon":
@@ -2513,6 +2552,10 @@ class Panel {
                         }
                         break;
                     case "{offset}":
+                    case "{curve}":
+                    case "{level}":
+                        const property = name.slice(1, -1);
+                        const slider = this.element.querySelector(`input[name="${property}"]`);
                         slider.value = value !== null ? value : 0;
                         break;
                     default:
@@ -2532,13 +2575,12 @@ class Panel {
                 }
             }
 
-            // Update the actual `value` attribute for the offset slider so that we can
-            // reference it in the CSS.
-            slider.setAttribute("value", slider.value);
+            // Update the actual `value` attribute for the offset, curve and level sliders so that
+            // we can reference it in the CSS.
+            sliders.forEach(slider => slider.setAttribute("value", slider.value));
 
-            // Disable/enable the arrow style buttons.
-            for (const option of this.element
-                    .querySelectorAll('.arrow-style input[type="radio"]')) {
+            // Disable/enable the arrow style buttons and the curve and level sliders.
+            for (const option of this.element.querySelectorAll(".arrow-style input")) {
                 option.disabled = !all_edges_are_arrows;
             }
 
@@ -2806,9 +2848,6 @@ class Toolbar {
                     }], false, ui.selection_excluding(created));
                 }
                 ui.switch_mode(UIState.default);
-                // If we're connecting from an insertion point,
-                // then we need to hide it again.
-                ui.element.querySelector(".insertion-point").classList.remove("revealed");
             }
             // If we're waiting to start connecting a cell, then we stop waiting.
             const pending = ui.element.querySelector(".cell.pending");
@@ -3022,8 +3061,10 @@ class Cell {
 
         /// For cells with a separate `content_element`, we allow the cell to be moved
         /// by dragging its `element` (under the assumption it doesn't totally overlap
-        /// its `content_element`).
-        if (this.element !== content_element) {
+        /// its `content_element`). For now, these are precisely the vertices.
+        // We allow vertices to be moved by dragging its `element` (which contains its
+        // `content_element`, the element with the actual cell content).
+        if (this.is_vertex()) {
             this.element.addEventListener("mousedown", (event) => {
                 if (event.button === 0) {
                     if (ui.in_mode(UIState.Default)) {
@@ -3051,6 +3092,7 @@ class Cell {
         // or we wouldn't be able to immediately delete a cell with Backspace/Delete,
         // as the input field would capture it.
         let was_previously_selected = true;
+
         content_element.addEventListener("mousedown", (event) => {
             if (event.button === 0) {
                 if (ui.in_mode(UIState.Default)) {
@@ -3088,13 +3130,17 @@ class Cell {
 
         content_element.addEventListener("mouseenter", () => {
             if (ui.in_mode(UIState.Connect)) {
-                if (ui.state.source !== this) {
+                // The second part of the condition should not be necessary, because pointer events
+                // are disabled for reconnected edges, but this acts as a warranty in case this is
+                // not working.
+                if (ui.state.source !== this
+                    && (ui.state.reconnect === null || ui.state.reconnect.edge !== this)) {
                     if (ui.state.valid_connection(this)) {
                         ui.state.target = this;
                         this.element.classList.add("target");
                         // Hide the insertion point (e.g. if we're connecting a vertex to an edge).
                         const insertion_point = ui.canvas.query_selector(".insertion-point");
-                        insertion_point.classList.remove("revealed", "pending", "active");
+                        insertion_point.class_list.remove("revealed", "pending", "active");
                     }
                 }
             }
@@ -3140,6 +3186,7 @@ class Cell {
 
                 if (ui.in_mode(UIState.Connect)) {
                     event.stopImmediatePropagation();
+
                     // Connect two cells if the source is different to the target.
                     if (ui.state.target === this) {
                         const actions = [];
@@ -3210,31 +3257,6 @@ class Cell {
         return this.level > 0;
     }
 
-    /// Returns either the position on the grid (if a vertex) or the offset (if an edge). `Position`
-    /// and `Offset` have many of the same methods, so may be usually be used interchangeably in
-    /// appropriate situations. If it is known that a cell is either a vertex or an edge, or if
-    /// the two cases need to be handled differently, `.position` or `.offset` should be used
-    /// directly.
-    pos() {
-        if (this.is_vertex()) {
-            return this.position;
-        } else {
-            return this.offset;
-        }
-    }
-
-    /// Returns the offset of the cell. Both vertices and edges are stored in absolute rather than
-    /// view-relative co-ordinates, so both must be adjusted relative to the current view.
-    /// However, the positions of vertices are stored as `Position`s, whereas the positions of
-    /// edges are stored as `Offset`s, so these must be handled differently.
-    off(ui) {
-        if (this.is_vertex()) {
-            return ui.centre_offset_from_position(this.position);
-        } else {
-            return this.offset;
-        }
-    }
-
     select() {
         this.element.classList.add("selected");
     }
@@ -3245,7 +3267,7 @@ class Cell {
 
     size() {
         if (this.is_vertex()) {
-            const label = this.element.querySelector(".label:not(.buffer)");
+            const label = this.element.querySelector(".label");
             return new Dimensions(label.offsetWidth, label.offsetHeight);
         } else {
             return Dimensions.zero();
@@ -3259,6 +3281,14 @@ class Vertex extends Cell {
         super(ui.quiver, 0, label);
 
         this.position = position;
+        // The shape data is going to be overwritten immediately, so really this information is
+        // unimportant.
+        this.shape = new Shape.RoundedRect(
+            Point.zero(),
+            new Dimensions(ui.default_cell_size, ui.default_cell_size),
+            ui.default_cell_size / 8,
+        );
+
         this.render(ui);
         super.initialise(ui);
     }
@@ -3277,6 +3307,7 @@ class Vertex extends Cell {
         ui.cell_width_constraints.get(this.position.x).delete(this);
         ui.cell_height_constraints.get(this.position.y).delete(this);
         this.position = position;
+        this.shape.origin = ui.centre_offset_from_position(this.position);
     }
 
     /// Create the HTML element associated with the vertex.
@@ -3290,7 +3321,10 @@ class Vertex extends Cell {
 
         // Position the vertex.
         const offset = ui.offset_from_position(this.position);
-        offset.reposition(this.element);
+        [this.element.style.left, this.element.style.top] = [`${offset.x}px`, `${offset.y}px`];
+        const centre_offset = offset.add(ui.cell_centre_at_position(this.position));
+        this.shape.origin = centre_offset;
+        // Shape width is controlled elsewhere.
 
         // Resize according to the grid cell.
         const cell_width = ui.cell_size(ui.cell_width, this.position.x);
@@ -3302,45 +3336,39 @@ class Vertex extends Cell {
             this.element.classList.add("vertex");
 
             // The cell content (containing the label).
-            this.element.appendChild(new DOM.Element("div", { class: "content" }).element);
+            const content = new DOM.Element("div", { class: "content" })
+                .add(new DOM.Element("div", { class: "label" }));
+            this.element.appendChild(content.element);
         }
 
         // Resize the content according to the grid cell. This is just the default size: it will be
-        // updated by `render_label`.
+        // updated by `render_tex`.
         const content = this.content_element;
         content.style.width = `${ui.default_cell_size / 2}px`;
         content.style.left = `${cell_width / 2}px`;
         content.style.height = `${ui.default_cell_size / 2}px`;
         content.style.top = `${cell_height / 2}px`;
 
-        if (construct) {
-            this.render_label(ui);
-        } else {
-            // Ensure we re-render the label when the cell is moved, in case the cell it's moved
-            // into is a different size.
-            ui.panel.render_tex(ui, this);
-        }
+        // Ensure we re-render the label when the cell is moved, in case the cell that that label is
+        // moved into is a different size.
+        ui.panel.render_tex(ui, this);
     }
 
-    /// Create the HTML element associated with the label (and label buffer).
-    /// This abstraction is necessary to handle situations where MathJax cannot
-    /// be loaded gracefully.
-    render_label(ui) {
-        const content = new DOM.Element(this.content_element);
-        // Create the label.
-        content.add(ui.render_tex(this, UI.clear_label_for_cell(this), this.label));
-        // Create an empty label buffer for flicker-free rendering.
-        const buffer = ui.render_tex(this, UI.clear_label_for_cell(this, true), this.label);
-        content.add(buffer);
+    /// Get the size of the cell content.
+    content_size(ui, sizes) {
+        const [width, height] = sizes;
+        return new Dimensions(
+            Math.max(ui.default_cell_size / 2, width + CONSTANTS.CONTENT_PADDING * 2),
+            Math.max(ui.default_cell_size / 2, height + CONSTANTS.CONTENT_PADDING * 2),
+        );
     }
 
     /// Resize the cell content to match the label width.
     resize_content(ui, sizes) {
-        const [width, height] = sizes;
-        this.content_element.style.width
-            = `${Math.max(ui.default_cell_size / 2, width + CONSTANTS.CONTENT_PADDING * 2)}px`;
-        this.content_element.style.height
-            = `${Math.max(ui.default_cell_size / 2, height + CONSTANTS.CONTENT_PADDING * 2)}px`;
+        const size = this.content_size(ui, sizes);
+        this.content_element.style.width = `${size.width}px`;
+        this.content_element.style.height = `${size.height}px`;
+        this.shape.size = size;
     }
 }
 
@@ -3351,749 +3379,109 @@ class Edge extends Cell {
 
         this.options = Edge.default_options(options, null, this.level);
 
+        this.arrow = new Arrow(source.shape, target.shape, new ArrowStyle(), new Label());
+        this.element = this.arrow.element.element;
+
+        // `this.shape` is used for the source/target from (higher) cells connected to this one.
+        // This is located at the centre of the arrow.
+        this.shape = new Shape.RoundedRect(
+            // The position will be reset immediately.
+            Point.zero(),
+            new Dimensions(ui.default_cell_size * 0.5, ui.default_cell_size * 0.5),
+            ui.default_cell_size * 0.25,
+        );
+
         this.reconnect(ui, source, target);
 
-        super.initialise(ui);
+        this.initialise(ui);
     }
 
     /// A set of defaults for edge options: a basic arrow (→).
-    static default_options(override_properties, override_style, level = 1) {
+    static default_options(override_properties = null, override_style = null, level = 1) {
         let options = Object.assign({
             label_alignment: "left",
             offset: 0,
+            curve: 0,
+            level,
             style: Object.assign({
                 name: "arrow",
                 tail: { name: "none" },
-                body: { level },
+                body: { name: "cell" },
                 head: { name: "arrowhead" },
             }, override_style),
         }, override_properties);
 
-        if (typeof options.style.body.name === "undefined") {
-            // Options may simply specify a level for the body,
-            // in which case the default style is the cell.
-            options.style.body.name = "cell";
-        }
-
         return options;
     }
 
-    /// Create the HTML element associated with the edge.
-    render(ui, pointer_offset = null) {
-        let [svg, background] = [null, null];
+    initialise(ui) {
+        super.initialise(ui);
 
-        if (this.element !== null) {
-            // If an element already exists for the edge, then can mostly reuse it when
-            // re-rendering it.
-            svg = this.element.querySelector("svg:not(.background)");
-            background = this.element.querySelector("svg.background");
+        // We allow users to reconnect edges to different cells by dragging their endpoint handles.
+        const reconnect = (event, end) => {
+            event.stopPropagation();
+            event.preventDefault();
+            // We don't get the default blur behaviour here, as we've prevented it, so we have to do
+            // it ourselves.
+            ui.panel.element.querySelector('label input[type="text"]').blur();
 
-            // Clear the SVGs: we're going to be completely redrawing it. We're going to keep
-            // around any definitions, though, as we can effectively reuse them.
-            for (const element of [svg, background]) {
-                for (const child of Array.from(element.childNodes)) {
-                    if (child.tagName !== "defs") {
-                        child.remove();
-                    }
-                }
-            }
-        } else {
-            // The container for the edge.
-            this.element = new DOM.Element("div", { class: "edge" }, {
-                // We want to make sure edges always display over vertices (and so on).
-                // This means their handles are actually accessible.
-                zIndex: this.level,
-            }).element;
+            const fixed = { source: this.target, target: this.source }[end];
+            ui.switch_mode(new UIState.Connect(ui, fixed, false, {
+                end,
+                edge: this,
+            }));
+        };
 
-            // We allow users to reconnect edges to different cells by dragging their
-            // endpoint handles.
-            const reconnect = (event, end) => {
-                event.stopPropagation();
-                event.preventDefault();
-                // We don't get the default blur behaviour, as we've prevented it, here, so
-                // we have to do it ourselves.
-                ui.panel.element.querySelector('label input[type="text"]').blur();
-
-                this.element.classList.add("reconnecting");
-                const fixed = { source: this.target, target: this.source }[end];
-                ui.switch_mode(new UIState.Connect(ui, fixed, false, {
-                    end,
-                    edge: this,
-                }));
-            };
-
-            // Create the background. We use an SVG rather than colouring the background
-            // of the element so that we can curve it according to the edge shape.
-            background = new DOM.SVGElement("svg", { class: "background" }).element;
-            this.element.appendChild(background);
-
-            // Create the endpoint handles.
-            for (const end of ["source", "target"]) {
-                const handle = new DOM.Element("div", { class: `handle ${end}` });
-                handle.listen("mousedown", (event) => reconnect(event, end));
-                this.element.appendChild(handle.element);
-            }
-
-            // The arrow SVG itself.
-            svg = new DOM.SVGElement("svg").element;
-            this.element.appendChild(svg);
-
-            // The clear background for the label (for `centre` alignment).
-            const defs = new DOM.SVGElement("defs")
-            const mask = new DOM.SVGElement(
-                "mask",
-                {
-                    id: `mask-${ui.unique_id(this)}`,
-                    // Make sure the `mask` can affect `path`s.
-                    maskUnits: "userSpaceOnUse",
-                },
-            );
-            mask.add(new DOM.SVGElement(
-                "rect",
-                { width: "100%", height: "100%" },
-                { fill: "white" },
-            ));
-            mask.add(
-                new DOM.SVGElement("rect", {
-                    class: "clear",
-                    width: 0,
-                    height: 0,
-                }, {
-                    fill: "black",
-                    stroke: "none",
-                })
-            );
-            defs.add(mask);
-            svg.appendChild(defs.element);
-
-            this.render_label(ui);
+        // Set up the endpoint handle interaction events.
+        for (const end of ["source", "target"]) {
+            const handle = this.arrow.element.query_selector(`.arrow-endpoint.${end}`);
+            handle.listen("mousedown", (event) => reconnect(event, end));
         }
 
+        ui.panel.render_tex(ui, this);
+    }
+
+    /// Create the HTML element associated with the edge.
+    /// Note that `render_tex` triggers redrawing the edge, rather than the other way around.
+    render(ui, pointer_offset = null) {
         // If we're reconnecting an edge, then we vary its source/target (depending on
-        // which is being dragged) depending on the pointer position. Thus, we need
-        // to check what state we're currently in, and if we establish this edge is being
-        // reconnected, we override the source/target position (as well as whether we offset
-        // the edge endpoints).
-        let [source_offset, target_offset] = [this.source.off(ui), this.target.off(ui)];
-        let [source, target] = [this.source, this.target];
-        const endpoint_offset = { source: true, target: true };
-        const reconnecting = ui.in_mode(UIState.Connect)
-            && ui.state.reconnect !== null
-            && ui.state.reconnect.edge === this;
-        if (reconnecting && pointer_offset !== null) {
-            const connection_offset
-                = ui.state.target !== null ? ui.state.target.off(ui) : pointer_offset;
-            switch (ui.state.reconnect.end) {
-                case "source":
-                    source_offset = connection_offset;
-                    source = ui.state.target || source;
-                    break;
-                case "target":
-                    target_offset = connection_offset;
-                    target = ui.state.target || target;
-                    break;
-            }
-            if (ui.state.target === null) {
+        // which is being dragged) depending on the pointer position.
+        if (pointer_offset !== null) {
+            if (ui.state.target !== null) {
+                // In this case, we're hovering over another cell.
+                this.arrow[ui.state.reconnect.end] = ui.state.target.shape;
+            } else {
+                // In this case, we're not hovering over another cell.
                 // Usually we offset edge endpoints from the cells to which they are connected,
                 // but when we are dragging an endpoint, we want to draw it right up to the pointer.
-                endpoint_offset[ui.state.reconnect.end] = false;
+                this.arrow[ui.state.reconnect.end] = new Shape.Endpoint(pointer_offset);
             }
         }
 
-        // Draw the edge itself.
-        let [edge_offset, length, direction] = Edge.draw_and_position_edge(
-            ui,
-            this.element,
-            svg,
-            {
-                offset: source_offset,
-                size: source.size(),
-                is_offset: endpoint_offset.source,
-                level: source.level,
-            },
-            {
-                offset: target_offset,
-                size: target.size(),
-                is_offset: endpoint_offset.target,
-                level: target.level,
-            },
-            this.options,
-            null,
-            background,
-        );
+        UI.update_style(this.arrow, this.options);
+        this.arrow.redraw();
 
-        // Set the edge's offset. This is important only for the cells that depend on this one,
-        // so that they can be drawn between the correct positions.
-        this.offset = edge_offset.add(new Offset(
-            Math.cos(direction) * length / 2 + Math.cos(direction + Math.PI / 2)
-                * CONSTANTS.EDGE_OFFSET_DISTANCE * this.options.offset,
-            Math.sin(direction) * length / 2 + Math.sin(direction + Math.PI / 2)
-                * CONSTANTS.EDGE_OFFSET_DISTANCE * this.options.offset,
-        ));
+        // We override the source and target whilst drawing, so we need to reset them.
+        this.arrow.source = this.source.shape;
+        this.arrow.target = this.target.shape;
 
-        // Apply the mask to the edge.
-        for (const path of svg.querySelectorAll("path")) {
-            path.setAttribute("mask", `url(#mask-${ui.unique_id(this)})`);
-        }
-        // We only want to actually clear part of the edge if the alignment is `centre`.
-        svg.querySelector(".clear").style.display
-            = this.options.label_alignment === "centre" ? "inline" : "none";
-
-        // If the label has already been rendered, then clear the edge for it.
-        // If it has not already been rendered, this is a no-op: it will be called
-        // again when the label is rendered.
-        this.update_label_transformation(ui, target_offset.sub(source_offset).angle());
-    }
-
-    /// Create the HTML element associated with the label (and label buffer).
-    /// This abstraction is necessary to handle situations where MathJax cannot
-    /// be loaded gracefully.
-    render_label(ui) {
-        // Create the edge label.
-        const label = ui.render_tex(
-            this,
-            UI.clear_label_for_cell(this),
-            this.label,
-            () => this.update_label_transformation(ui),
-        );
-        this.element.appendChild(label.element);
-        // Create an empty label buffer for flicker-free rendering.
-        const buffer = ui.render_tex(this, UI.clear_label_for_cell(this, true));
-        this.element.appendChild(buffer.element);
-    }
-
-    /// Draw an edge on an existing SVG and positions it with respect to a parent `element`.
-    /// Note that this does not clear the SVG beforehand.
-    /// Returns the direction of the arrow.
-    static draw_and_position_edge(
-        ui,
-        element,
-        svg,
-        source,
-        target,
-        options,
-        gap,
-        background = null,
-    ) {
-        // Constants for parameters of the arrow shapes.
-        const SVG_PADDING = CONSTANTS.SVG_PADDING;
-        const OFFSET_DISTANCE = CONSTANTS.EDGE_OFFSET_DISTANCE;
-        // How much (vertical) space to give around the SVG.
-        const EDGE_PADDING = 4;
-        // The minimum length of the `element`. This is defined so that very small edges (e.g.
-        // adjunctions or pullbacks) are still large enough to manipulate by clicking on them or
-        // their handles.
-        const MIN_LENGTH = 72;
-
-        // The SVG for the arrow itself.
-
-        const offset_delta = target.offset.sub(source.offset);
-        const direction = Math.atan2(offset_delta.top, offset_delta.left);
-
-        // Returns the distance from midpoint of the rectangle with the given `size` to any edge,
-        // at the given `angle`.
-        const edge_distance = (size, angle) => {
-            const [h, v] = [size.width / Math.cos(angle), size.height / Math.sin(angle)]
-                .map(Math.abs);
-            return Number.isNaN(h) ? v : Number.isNaN(v) ? h : Math.min(h, v) / 2;
-        };
-
-        const padding = Dimensions.diag(CONSTANTS.CONTENT_PADDING * 2);
-
-        const min_margin = (cell) => {
-            if (cell.level === 0) {
-                // The content area of a vertex is reserved for vertices: edges will not encroach
-                // upon that space.
-                return Dimensions.diag(ui.default_cell_size / 2);
-            } else {
-                // We don't currently add any margin for edges. This allows us to draw edges between
-                // arrows that are very close to one another.
-                return Dimensions.zero();
-            }
-        };
-        const margin = {
-            source: source.is_offset ?
-                edge_distance(source.size.add(padding).max(min_margin(source)), direction) : 0,
-            target: target.is_offset ?
-                edge_distance(target.size.add(padding).max(min_margin(target)), direction + Math.PI)
-                : 0,
-        };
-
-        const length = Math.max(0, Math.hypot(offset_delta.top, offset_delta.left)
-            - (margin.source + margin.target));
-
-        // If the arrow has zero length, then we skip trying to draw it, as it's
-        // obviously unnecessary, and can cause SVG errors from drawing invalid shapes.
-        const { dimensions, alignment }
-            = length > 0 ? Edge.draw_edge(svg, options, length, direction, gap, true)
-                : { dimensions: Dimensions.zero(), alignment: "centre" };
-
-        const clamped_width = Math.min(Math.max(dimensions.width, MIN_LENGTH), length);
-
-        if (background !== null) {
-            background.setAttribute("width", clamped_width);
-            background.setAttribute("height", dimensions.height + EDGE_PADDING * 2);
-            background.appendChild(new DOM.SVGElement("path", {
-                d: `M 0 ${EDGE_PADDING + dimensions.height / 2} l ${clamped_width} 0`,
-            }, {
-                strokeWidth: `${dimensions.height + EDGE_PADDING * 2}px`,
-            }).element);
-        }
-
-        // If the arrow is shorter than expected (for example, because we are using a
-        // fixed-width arrow style), then we need to make sure that it's still centred
-        // if the `alignment` is `"centre"`.
-        const width_shortfall = length + SVG_PADDING * 2 - clamped_width;
-        let margin_adjustment;
-        switch (alignment) {
-            case "left":
-                margin_adjustment = 0;
-                break;
-            case "centre":
-            case "over":
-                margin_adjustment = 0.5;
-                break;
-            case "right":
-                margin_adjustment = 1;
-                break;
-        }
-
-        const margin_offset = margin.source + width_shortfall * margin_adjustment;
-
-        // Transform the `element` so that the arrow points in the correct direction.
-        element.style.left = `${source.offset.left + Math.cos(direction) * margin_offset}px`;
-        element.style.top = `${source.offset.top + Math.sin(direction) * margin_offset}px`;
-        [element.style.width, element.style.height]
-            = new Offset(clamped_width, dimensions.height + EDGE_PADDING * 2).to_CSS();
-        element.style.transformOrigin
-            = `${SVG_PADDING}px ${dimensions.height / 2 + EDGE_PADDING}px`;
-        element.style.transform = `
-            translate(-${SVG_PADDING}px, -${dimensions.height / 2 + EDGE_PADDING}px)
-            rotate(${direction}rad)
-            translateY(${(options.offset || 0) * OFFSET_DISTANCE}px)
-        `;
-
-        return [new Offset(
-            source.offset.left + Math.cos(direction) * margin.source,
-            source.offset.top + Math.sin(direction) * margin.source,
-        ), clamped_width, direction];
-    }
-
-    /// Draws an edge on an SVG. `length` must be nonnegative.
-    /// Note that this does not clear the SVG beforehand.
-    /// Returns the (new) dimensions of the SVG and the intended alignment of the edge.
-    /// `{ dimensions, alignment }`
-    static draw_edge(svg, options, length, direction, gap, scale = false) {
-        // Constants for parameters of the arrow shapes.
-        const SVG_PADDING = CONSTANTS.SVG_PADDING;
-        // The width of each stroke (for the tail, body and head).
-        const STROKE_WIDTH = 1.5;
-
-        // Set up the standard styles used for arrows.
-        Object.assign(svg.style, {
-            fill: svg.style.fill || "none",
-            stroke: svg.style.stroke || "black",
-            strokeWidth: svg.style.strokeWidth || `${STROKE_WIDTH}px`,
-            strokeLinecap: svg.style.strokeLinecap || "round",
-            strokeLinejoin: svg.style.strokeLinejoin || "round",
-        });
-
-        // Default to 1-cells if no `level` is present (as for dashed and dotted lines.)
-        const level = options.style.name === "arrow" && options.style.body.level || 1;
-        // How much spacing to leave between lines for k-cells where k > 1.
-        const SPACING = 6;
-        // How wide each arrowhead should be (for a horizontal arrow).
-        const HEAD_WIDTH = SPACING + (level - 1) * 2;
-        // How tall each arrowhead should be (for a horizontal arrow).
-        const HEAD_HEIGHT = (level + 1) * SPACING;
-        // The space between each head.
-        const HEAD_SPACING = 6;
-        // The height of the vertical bar in the maps to tail.
-        const TAIL_HEIGHT = SPACING * 2;
-
-        // We scale the arrow head so that it transitions smoothly from nothing.
-        const head_width = scale ? Math.min(length, HEAD_WIDTH) : HEAD_WIDTH;
-        const head_height = HEAD_HEIGHT * (head_width / HEAD_WIDTH);
-
-        // Adjust the arrow height for k-cells.
-        const tail_height = TAIL_HEIGHT * (0.5 + level * 0.5);
-
-        // Set up the SVG dimensions to fit the edge.
-        let [width, height] = [0, 0];
-        let alignment = "centre";
-
-        // We do two passes over the tail/body/head styles.
-        // First to calculate the dimensions and then to actually draw the edge.
-        // This is necessary because we need to know the dimensions to centre things properly.
-        const fit = (w, h) => [width, height] = [Math.max(width, w), Math.max(height, h)];
-
-        // The number of arrowheads.
-        let heads = 1;
-        // How much to shorten the edge by, to make room for the tail.
-        let shorten = 0;
-
-        switch (options.style.name) {
-            case "arrow":
-                fit(length, Math.ceil(STROKE_WIDTH));
-
-                switch (options.style.tail.name) {
-                    case "maps to":
-                        // The height of the vertical bar in the maps to tail.
-                        const TAIL_HEIGHT = SPACING * 2;
-                        // Adjust the arrow height for k-cells.
-                        const tail_height = TAIL_HEIGHT * (0.5 + level * 0.5);
-                        fit(Math.ceil(STROKE_WIDTH), tail_height);
-                        break;
-                    case "mono":
-                        // The `"mono"` style simply draws an arrowhead for the tail.
-                        fit(head_width, head_height);
-                        shorten = head_width;
-                        break;
-                    case "hook":
-                        // The hook width is the same as the arrowhead.
-                        // We only need `head_width * 2` height (for
-                        // 1-cells), but we need to double that to keep
-                        // the arrow aligned conveniently in the middle.
-                        fit(head_width, head_width * 4 + SPACING * (level - 1) / 2);
-                        shorten = head_width;
-                }
-
-                switch (options.style.head.name) {
-                    case "none":
-                        heads = 0;
-                        break;
-                    case "epi":
-                        heads = 2;
-                    case "arrowhead":
-                        fit(head_width * heads + HEAD_SPACING * (heads - 1), head_height);
-                        break;
-                    case "harpoon":
-                        fit(head_width, head_height / 2);
-                        break;
-                }
-
-                break;
-
-            case "adjunction":
-                // The dimensions of the bounding box of the ⊣ symbol.
-                const [WIDTH, HEIGHT] = [16, 16];
-                [width, height] = [WIDTH, HEIGHT];
-                break;
-
-            // Pullbacks/pushouts.
-            case "corner":
-                // The dimensions of the bounding box of the ⌟ symbol.
-                const SIZE = 12;
-                [width, height] = [SIZE, SIZE * 2];
-                // We want to draw the symbol next to the vertex from which it is drawn.
-                alignment = "left";
-                break;
-        }
-
-        // Now actually draw the edge.
-
-        switch (options.style.name) {
-            case "arrow":
-                // When drawing asymmetric arrowheads (such as harpoons), we need to
-                // draw the arrowhead at the lowermost line, so we need to adjust the
-                // y position.
-                const asymmetry_offset
-                    = options.style.head.name === "harpoon" ? (level - 1) * SPACING / 2 : 0;
-
-                // A function for finding the width of an arrowhead at a certain y position,
-                // so that we can draw multiple lines to a curved arrow head perfectly.
-                const head_x = (y, tail = false) => {
-                    if (head_height === 0 || !tail && options.style.head.name === "none") {
-                        return 0;
-                    }
-
-                    // Currently only arrowheads drawn for heads may be asymmetric.
-                    const asymmetry_adjustment = !tail ? asymmetry_offset : 0;
-                    // We have to be careful to adjust for asymmetry, which affects the dimensions
-                    // of the arrowheads.
-                    const asymmetry_sign
-                        = asymmetry_adjustment !== 0
-                            ? { top: 1, bottom: -1 }[options.style.head.side]
-                            : 0;
-
-                    return (head_width + asymmetry_adjustment)
-                        * (1 - (1 - 2 * Math.abs(y - asymmetry_offset * asymmetry_sign)
-                            / (head_height + asymmetry_adjustment)) ** 2)
-                        ** 0.5;
-                };
-
-                if (options.style.body.name !== "none") {
-                    // Draw all the lines.
-                    for (let i = 0; i < level; ++i) {
-                        let y = (i + (1 - level) / 2) * SPACING;
-                        // This guard condition is necessary simply for very short edges.
-                        if (Math.abs(y) <= head_height / 2) {
-                            // If the tail is drawn as a head, as is the case with `"mono"`,
-                            // then we need to shift the lines instead of simply shortening
-                            // them.
-                            const tail_head_adjustment
-                                = options.style.tail.name === "mono" ? head_x(y, true) : 0;
-                            const path
-                                = [`M ${SVG_PADDING + shorten - tail_head_adjustment} ${
-                                    SVG_PADDING + height / 2 + y
-                                }`];
-                            // When drawing multiple heads and multiple lines, it looks messy
-                            // if the heads intersect the lines, so in this case we draw the
-                            // lines to the leftmost head. For 1-cells, it looks better if
-                            // heads do intersect the lines.
-                            const level_heads_adjustment
-                                = level > 1 ? (heads - 1) * HEAD_SPACING : 0;
-                            const line_length = length - shorten - head_x(y)
-                                - level_heads_adjustment + tail_head_adjustment;
-
-                            if (options.style.body.name === "squiggly") {
-                                // The height of each triangle from the edge.
-                                const AMPLITUDE = 2;
-                                // Flat padding at the start of the edge (measured in
-                                // triangles).
-                                const PADDING = 1;
-                                // Twice as much padding is given at the end, plus extra
-                                // if there are multiple heads.
-                                const head_padding = PADDING + PADDING * heads;
-
-                                path.push(`l ${AMPLITUDE * 2 * PADDING} 0`);
-                                for (
-                                    let l = AMPLITUDE * 2 * PADDING, flip = 1;
-                                    l < line_length - AMPLITUDE * 2 * head_padding;
-                                    l += AMPLITUDE * 2, flip = -flip
-                                ) {
-                                    path.push(`l ${AMPLITUDE} ${AMPLITUDE * flip}`);
-                                    path.push(`l ${AMPLITUDE} ${AMPLITUDE * -flip}`);
-                                }
-                                path.push(`L ${SVG_PADDING + line_length + shorten} ${
-                                    SVG_PADDING + height / 2 + y
-                                }`);
-                            } else {
-                                path.push(`l ${line_length} 0`);
-                            }
-
-                            if (options.style.body.name === "barred") {
-                                const bar_height = Math.max(0, HEAD_WIDTH * 2);
-                                path.push(`M ${SVG_PADDING + line_length / 2} ${
-                                    SVG_PADDING + height / 2 + y - bar_height / 2
-                                }`);
-                                path.push(`l 0 ${bar_height}`);
-                            }
-
-                            const line = new DOM.SVGElement("path", { d: path.join(" ") }).element;
-
-                            // Dashed and dotted lines.
-                            switch (options.style.body.name) {
-                                case "dashed":
-                                    line.style.strokeDasharray = "6";
-                                    break;
-                                case "dotted":
-                                    line.style.strokeDasharray = "1 4";
-                                    break;
-                            }
-
-                            // Explicit gaps.
-                            if (gap !== null) {
-                                line.style.strokeDasharray
-                                    = `${(length - gap.length) / 2}, ${gap.length}`;
-                                line.style.strokeDashoffset = gap.offset;
-                            }
-
-                            svg.appendChild(line);
-                        }
-                    }
-                }
-
-                // This function has been extracted because it is actually used to draw
-                // both arrowheads (in the usual case) and tails (for `"mono"`).
-                const draw_arrowhead = (x, tail = false, top = true, bottom = true) => {
-                    // Currently only arrowheads drawn for heads may be asymmetric.
-                    const asymmetry_adjustment = !tail ? asymmetry_offset : 0;
-
-                    svg.appendChild(new DOM.SVGElement("path", {
-                        d: (top ? `
-                            M ${SVG_PADDING + x} ${SVG_PADDING + height / 2 + asymmetry_adjustment}
-                            a ${head_width + asymmetry_adjustment}
-                                ${head_height / 2 + asymmetry_adjustment} 0 0 1
-                                -${head_width + asymmetry_adjustment}
-                                -${head_height / 2 + asymmetry_adjustment}
-                        ` : "") + (bottom ? `
-                            M ${SVG_PADDING + x} ${SVG_PADDING + height / 2 - asymmetry_adjustment}
-                            a ${head_width + asymmetry_adjustment}
-                                ${head_height / 2 + asymmetry_adjustment} 0 0 0
-                                -${head_width + asymmetry_adjustment}
-                                ${head_height / 2 + asymmetry_adjustment}
-                        ` : "").trim().replace(/\s+/g, " ")
-                    }).element);
-                };
-
-                // Draw the arrow tail.
-                switch (options.style.tail.name) {
-                    case "maps to":
-                        svg.appendChild(new DOM.SVGElement("path", {
-                            d: `
-                                M ${SVG_PADDING} ${SVG_PADDING + (height - tail_height) / 2}
-                                l 0 ${tail_height}
-                            `.trim().replace(/\s+/g, " ")
-                        }).element);
-                        break;
-
-                    case "mono":
-                        draw_arrowhead(head_width, true);
-                        break;
-
-                    case "hook":
-                        for (let i = 0; i < level; ++i) {
-                            let y = (i + (1 - level) / 2) * SPACING;
-                            const flip = options.style.tail.side === "top" ? 1 : -1;
-                            svg.appendChild(new DOM.SVGElement("path", {
-                                d: `
-                                    M ${SVG_PADDING + head_width}
-                                        ${SVG_PADDING + height / 2 + y}
-                                    a ${head_width} ${head_width} 0 0 ${flip === 1 ? 1 : 0} 0
-                                        ${-head_width * 2 * flip}
-                                `.trim().replace(/\s+/g, " ")
-                            }).element);
-                        }
-                        break;
-                }
-
-                // Draw the arrow head.
-                switch (options.style.head.name) {
-                    case "arrowhead":
-                    case "epi":
-                        for (let i = 0; i < heads; ++i) {
-                            draw_arrowhead(width - i * HEAD_SPACING);
-                        }
-                        break;
-
-                    case "harpoon":
-                        const top = options.style.head.side === "top";
-                        draw_arrowhead(width, false, top, !top);
-                        break;
-                }
-
-                break;
-
-            case "adjunction":
-                // Draw the ⊣ symbol. The dimensions have already been set up for us
-                // in the previous step.
-                svg.appendChild(new DOM.SVGElement("path", {
-                    d: `
-                        M ${SVG_PADDING} ${SVG_PADDING + height / 2}
-                        l ${width} 0
-                        m 0 ${-height / 2}
-                        l 0 ${height}
-                    `.trim().replace(/\s+/g, " ")
-                }).element);
-
-                break;
-
-            case "corner":
-                // Draw the ⌟ symbol. The dimensions have already been set up for us
-                // in the previous step.
-                const side = width / 2 ** 0.5;
-                // Round the angle to the nearest 45º and adjust with respect to the
-                // current direction.
-                const PI_4 = Math.PI / 4;
-                const angle = Math.PI + PI_4 * Math.round(4 * direction / Math.PI) - direction;
-                svg.appendChild(new DOM.SVGElement("path", {
-                    d: `
-                        M ${SVG_PADDING + width} ${SVG_PADDING + width}
-                        l ${Math.cos(angle - PI_4) * side} ${Math.sin(angle - PI_4) * side}
-                        M ${SVG_PADDING + width} ${SVG_PADDING + width}
-                        l ${Math.cos(angle + PI_4) * side} ${Math.sin(angle + PI_4) * side}
-                    `.trim().replace(/\s+/g, " ")
-                }).element);
-
-                break;
-        }
-
-        svg.setAttribute("width", width + SVG_PADDING * 2);
-        svg.setAttribute("height", height + SVG_PADDING * 2);
-
-        return {
-            dimensions: new Dimensions(width + SVG_PADDING * 2, height + SVG_PADDING * 2),
-            alignment,
-        };
+        // Update the origin, which is given by the centre of the edge.
+        this.shape.origin =
+            this.arrow.source.origin.add(this.arrow.target.origin).div(2)
+                .add(new Point(0, this.arrow.style.curve / 2).rotate(
+                    this.arrow.target.origin.sub(this.arrow.source.origin).angle()
+                ));
     }
 
     /// Returns the angle of this edge.
-    angle(ui) {
-        return this.target.off(ui).sub(this.source.off(ui)).angle();
-    }
-
-    /// Update the `label` transformation (translation and rotation) as well as
-    /// the edge clearing size for `centre` alignment in accordance with the
-    /// dimensions of the label.
-    update_label_transformation(ui, angle = this.angle(ui)) {
-        const label = this.element.querySelector(".label:not(.buffer)");
-
-        // Bound an `angle` to [0, π/2).
-        const bound_angle = (angle) => {
-            return Math.PI / 2 - Math.abs(Math.PI / 2 - ((angle % Math.PI) + Math.PI) % Math.PI);
-        };
-
-        // How much to offset the label from the edge.
-        const LABEL_OFFSET = 16;
-        let label_offset;
-        switch (this.options.label_alignment) {
-            case "left":
-                label_offset = -1;
-                break;
-            case "centre":
-            case "over":
-                label_offset = 0;
-                break;
-            case "right":
-                label_offset = 1;
-                break;
-        }
-
-        // Expand or shrink the label to fit the available space.
-        ui.resize_label(this, label);
-
-        // Reverse the rotation for the label, so that it always displays upright and offset it
-        // so that it is aligned correctly.
-        label.style.transform = `
-            translate(-50%, -50%)
-            translateY(${
-                (Math.sin(bound_angle(angle)) * label.offsetWidth / 2 + LABEL_OFFSET) * label_offset
-            }px)
-            rotate(${-angle}rad)
-        `;
-
-        // Make sure the buffer is formatted identically to the label.
-        this.element.querySelector(".label.buffer").style.transform = label.style.transform;
-
-        // Get the length of a line through the centre of the bounds rectangle at an `angle`.
-        const angle_length = (angle) => {
-            // Cut a rectangle out of the edge to leave room for the label text.
-            // How much padding around the label to give (cut out of the edge).
-            const CLEAR_PADDING = 4;
-
-            return (Math.min(
-                label.offsetWidth / (2 * Math.cos(bound_angle(angle))),
-                label.offsetHeight / (2 * Math.sin(bound_angle(angle))),
-            ) + CLEAR_PADDING) * 2;
-        };
-
-        const [width, height]
-            = label.offsetWidth > 0 && label.offsetHeight > 0 ?
-                [angle_length(angle), angle_length(angle + Math.PI / 2)]
-            : [0, 0];
-
-        new DOM.SVGElement(this.element.querySelector("svg mask .clear"), {
-            x: label.offsetLeft - width / 2,
-            y: label.offsetTop - height / 2,
-            width,
-            height,
-        });
+    angle() {
+        return this.target.shape.origin.sub(this.source.shape.origin).angle();
     }
 
     /// Changes the source and target.
     reconnect(ui, source, target) {
         [this.source, this.target] = [source, target];
+        [this.arrow.source, this.arrow.target] = [source.shape, target.shape];
         ui.quiver.connect(source, target, this);
         for (const cell of ui.quiver.transitive_dependencies([this])) {
             cell.render(ui);
@@ -4109,6 +3497,7 @@ class Edge extends Cell {
             right: "left",
         }[this.options.label_alignment];
         this.options.offset = -this.options.offset;
+        this.options.curve = -this.options.curve;
         if (this.options.style.name === "arrow") {
             const swap_sides = { top: "bottom", bottom: "top" };
             if (this.options.style.tail.name === "hook") {
@@ -4141,6 +3530,7 @@ class Edge extends Cell {
 
         // Swap the `source` and `target`.
         [this.source, this.target] = [this.target, this.source];
+        [this.arrow.source, this.arrow.target] = [this.source.shape, this.target.shape];
 
         // Reverse the label alignment and edge offset as well as any oriented styles.
         // Flipping the label will also cause a rerender.
@@ -4150,8 +3540,8 @@ class Edge extends Cell {
     }
 }
 
-// Which library to use for rendering labels.
-const RENDER_METHOD = "KaTeX";
+// A `Promise` that returns the `katex` global object when it's loaded.
+let KaTeX = null;
 
 // We want until the (minimal) DOM content has loaded, so we have access to `document.body`.
 document.addEventListener("DOMContentLoaded", () => {
@@ -4201,88 +3591,45 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
-    // Immediately load the rendering library.
-    if (RENDER_METHOD !== null) {
-        // All non-`null` rendering libraries add some script.
-        const rendering_library = new DOM.Element("script", {
-            type: "text/javascript",
-            src: {
-                MathJax: "MathJax/MathJax.js",
-                KaTeX: "KaTeX/dist/katex.js",
-            }[RENDER_METHOD],
-        }).listen("load", () => {
-            ui.activate_render_method(RENDER_METHOD);
+    // Immediately load the KaTeX library.
+   const rendering_library = new DOM.Element("script", {
+        type: "text/javascript",
+        src: "KaTeX/dist/katex.js",
+    }).listen("error", () => {
+        // Handle KaTeX not loading (somewhat) gracefully.
+        UI.display_error(`KaTeX failed to load.`)
+    });
 
-            // We delay loading the quiver when using KaTeX (see comment below),
-            // so as soon as the library is loaded, we want to load the quiver.
-            if (RENDER_METHOD === "KaTeX") {
-                load_quiver_from_query_string();
-            }
-        }).listen("error", () => {
-            // Handle MathJax or KaTeX not loading (somewhat) gracefully.
-            UI.display_error(`${RENDER_METHOD} failed to load.`)
-        });
+    KaTeX = new Promise((accept) => {
+        rendering_library.listen("load", () => {
+            accept(katex);
+            // KaTeX is fast enough to be worth waiting for, but not
+            // immediately available. In this case, we delay loading
+            // the quiver until the library has loaded.
+            load_quiver_from_query_string();
+        })
+    });
 
-        // Specific, per-library behaviour.
-        switch (RENDER_METHOD) {
-            case "MathJax":
-                window.MathJax = {
-                    jax: ["input/TeX", "output/SVG"],
-                    extensions: ["tex2jax.js", "TeX/noErrors.js", "TeX/noUndefined.js"],
-                    messageStyle: "none",
-                    skipStartupTypeset: true,
-                    positionToHash: false,
-                    showMathMenu: false,
-                    showMathMenuMSIE: false,
-                    TeX: {
-                        noErrors: {
-                            multiLine: false,
-                            style: {
-                                border: "none",
-                                font: "20px monospace",
-                                color: "hsl(0, 100%, 40%)",
-                            },
-                        },
-                        noUndefined: {
-                            attributes: {
-                                mathcolor: "hsl(0, 100%, 40%)",
-                                mathsize: "90%",
-                                mathfont: "monospace",
-                            }
-                        },
-                    },
-                };
-                break;
-            case "KaTeX":
-                document.head.appendChild(new DOM.Element("link", {
-                    rel: "stylesheet",
-                    href: "KaTeX/dist/katex.css",
-                }).element);
-                // Preload various fonts to avoid flashes of unformatted text.
-                const preload_fonts = ["Main-Regular", "Math-Italic"];
-                for (const font of preload_fonts) {
-                    const attributes = {
-                        rel: "preload",
-                        href: `KaTeX/dist/fonts/KaTeX_${font}.woff2`,
-                        as: "font"
-                    };
-                    if (window.location.hostname !== "") {
-                        // Fonts always need to be fetched using `crossorigin`.
-                        attributes.crossorigin = "";
-                    }
-                    document.head.appendChild(new DOM.Element("link", attributes).element);
-                }
-                break;
+    // Load the style sheet needed for KaTeX.
+    document.head.appendChild(new DOM.Element("link", {
+        rel: "stylesheet",
+        href: "KaTeX/dist/katex.css",
+    }).element);
+    // Preload various fonts to avoid flashes of unformatted text.
+    const preload_fonts = ["Main-Regular", "Math-Italic"];
+    for (const font of preload_fonts) {
+        const attributes = {
+            rel: "preload",
+            href: `KaTeX/dist/fonts/KaTeX_${font}.woff2`,
+            as: "font"
+        };
+        if (window.location.hostname !== "") {
+            // Fonts always need to be fetched using `crossorigin`.
+            attributes.crossorigin = "";
         }
-
-        // Trigger the script load.
-        document.head.appendChild(rendering_library.element);
+        document.head.appendChild(new DOM.Element("link", attributes).element);
     }
 
-    // KaTeX is special in that it's fast enough to be worth waiting for, but not
-    // immediately available. In this case, we delay loading the quiver until the
-    // library has loaded.
-    if (RENDER_METHOD !== "KaTeX") {
-        load_quiver_from_query_string();
-    }
+    // Trigger the script load.
+    document.head.appendChild(rendering_library.element);
 });

@@ -16,10 +16,8 @@ DOM.Element = class {
         } else {
             this.element = document.createElement(from);
         }
-        for (const [attribute, value] of Object.entries(attributes)) {
-            this.element.setAttribute(attribute, value);
-        }
-        Object.assign(this.element.style, style);
+        this.set_attributes(attributes);
+        this.set_style(style);
     }
 
     get id() {
@@ -31,13 +29,25 @@ DOM.Element = class {
     }
 
     /// Appends an element.
-    /// `value` has two forms: a plain string, in which case it is added as a text node, or a
-    /// `DOM.Element`, in which case the corresponding element is appended.
+    /// `value` has three forms: a plain string, in which case it is added as a text node; a
+    /// `DOM.Element`, in which case the corresponding element is appended; or a plain element.
     add(value) {
-        if (typeof value !== "string") {
+        if (value instanceof DOM.Element) {
             this.element.appendChild(value.element);
+        } else if (typeof value !== "string") {
+            this.element.appendChild(value);
         } else {
             this.element.appendChild(document.createTextNode(value));
+        }
+        return this;
+    }
+
+    /// Appends this element to the given one.
+    add_to(value) {
+        if (value instanceof DOM.Element) {
+            value.element.appendChild(this.element);
+        } else {
+            value.appendChild(this.element);
         }
         return this;
     }
@@ -62,16 +72,57 @@ DOM.Element = class {
     }
 
     query_selector(selector) {
-        return this.element.querySelector(selector);
+        const element = this.element.querySelector(selector);
+        if (element !== null) {
+            return new DOM.Element(element);
+        } else {
+            return null;
+        }
+    }
+
+    query_selector_all(selector) {
+        const elements = Array.from(this.element.querySelectorAll(selector));
+        return elements.map((element) => new DOM.Element(element));
+    }
+
+    set_attributes(attributes = {}) {
+        for (const [attribute, value] of Object.entries(attributes)) {
+            if (value !== null) {
+                this.element.setAttribute(attribute, value);
+            } else {
+                this.element.removeAttribute(attribute);
+            }
+        }
+        return this;
+    }
+
+    remove_attributes(...attributes) {
+        for (const attribute of attributes) {
+            this.element.removeAttribute(attribute);
+        }
+        return this;
+    }
+
+    set_style(style = {}) {
+        Object.assign(this.element.style, style);
+    }
+
+    clone() {
+        return new DOM.Element(this.element.cloneNode());
+    }
+
+    bounding_rect() {
+        return this.element.getBoundingClientRect();
     }
 };
 
 /// A class for conveniently dealing with SVGs.
 DOM.SVGElement = class extends DOM.Element {
     constructor(tag_name, attributes = {}, style = {}) {
-        super(tag_name, attributes, style, "http://www.w3.org/2000/svg");
+        super(tag_name, attributes, style, DOM.SVGElement.NAMESPACE);
     }
 };
+DOM.SVGElement.NAMESPACE = "http://www.w3.org/2000/svg";
 
 /// A class for conveniently dealing with canvases.
 DOM.Canvas = class extends DOM.Element {

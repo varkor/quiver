@@ -10,6 +10,7 @@ Try quiver out here: https://varkor.github.io/quiver
 - tikz-cd (LaTeX) export.
 - Shareable links.
 - Smart label alignment and edge offset.
+- Curved arrows.
 - Parallel (shifted) arrows.
 - Arrow styles, including:
     - Dashed and dotted edges.
@@ -21,6 +22,7 @@ Try quiver out here: https://varkor.github.io/quiver
     - Equality.
     - Harpoons.
     - Squiggly arrows.
+    - Proarrows.
 - Multiple selection.
 - A history system with undo and redo.
 - Panning.
@@ -55,3 +57,7 @@ Natural transformations:
 Adjunctions:
 
 ![image](https://user-images.githubusercontent.com/3943692/50531538-7c50fa80-0b03-11e9-9d94-f859395e340f.png)
+
+## Thanks
+- [@cartesiancat](https://github.com/cartesiancat) for discussions about rendering aesthetic arrows.
+- [AndréC](https://tex.stackexchange.com/users/138900/andr%c3%a9c) for the custom TikZ `curve` style.

@@ -161,14 +161,14 @@ class Quiver {
         return closure;
     }
 
-    /// Return a string containing the graph in a specific format.
+    /// Return a `{ data, metadata }` object containing the graph in a specific format.
     /// Currently, the supported formats are:
     /// - "tikz-cd"
     /// - "base64"
-    export(ui, format) {
+    export(format) {
         switch (format) {
             case "tikz-cd":
-                return QuiverExport.tikz_cd.export(this, ui);
+                return QuiverExport.tikz_cd.export(this);
             case "base64":
                 return QuiverImportExport.base64.export(this);
             default:
@@ -190,21 +190,38 @@ class QuiverImportExport extends QuiverExport {
 }
 
 QuiverExport.tikz_cd = new class extends QuiverExport {
-    export(quiver, ui) {
+    export(quiver) {
         let output = "";
 
         // Wrap tikz-cd code with `\begin{tikzcd} ... \end{tikzcd}`.
-        const wrap_boilerplate = (output) => {
-            return `% ${QuiverImportExport.base64.export(quiver)}\n\\[\\begin{tikzcd}\n${
+        // We also add custom TikZ styles if required, e.g. for drawing fixed-height curves, which
+        // improve upon the build-in `bend` option.
+        const wrap_boilerplate = (output, include_style) => {
+            // This custom TikZ style for fixed-height curves was designed by @AndréC:
+            // https://tex.stackexchange.com/a/556902/
+            const bend_style =
+`\\tikzset{curve/.style={settings={#1},to path={(\\tikztostart)
+    .. controls ($(\\tikztostart)!\\pv{pos}!(\\tikztotarget)!\\pv{height}!270:(\\tikztotarget)$)
+    and ($(\\tikztostart)!1-\\pv{pos}!(\\tikztotarget)!\\pv{height}!270:(\\tikztotarget)$$)
+    .. (\\tikztotarget)\\tikztonodes}},
+    settings/.code={\\tikzset{quiver/.cd,#1}
+        \\def\\pv##1{\\pgfkeysvalueof{/tikz/quiver/##1}}},
+    quiver/.cd,pos/.initial=0.35,height/.initial=0}`;
+            const tikzcd = `\\[\\begin{tikzcd}\n${
                 output.length > 0 ? `${
                     output.split("\n").map(line => `\t${line}`).join("\n")
                 }\n` : ""
             }\\end{tikzcd}\\]`;
+            return `% ${QuiverImportExport.base64.export(quiver).data}\n${
+                include_style ? `{${bend_style}\n` : ""
+            }${tikzcd}${
+                include_style ? "}" : ""
+            }`;
         };
 
         // Early exit for empty quivers.
         if (quiver.is_empty()) {
-            return wrap_boilerplate(output);
+            return wrap_boilerplate(output, false);
         }
 
         // We handle the export in two stages: vertices and edges. These are fundamentally handled
@@ -269,6 +286,14 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
             }
         };
 
+        // quiver can draw more complex arrows than tikz-cd, and in some cases we are currently
+        // unable to export faithfully to tikz-cd. In this case, we issue a warning to alert the
+        // user that their diagram is not expected to match the quiver representation.
+        const tikz_incompatibilities = new Set();
+        // We keep track of whether there are any curves in the diagram, because if so we need to
+        // output a custom style to draw fixed-height curves in TikZ.
+        let has_curves = false;
+
         // Output the edges.
         for (let level = 1; level < quiver.cells.length; ++level) {
             if (quiver.cells[level].size > 0) {
@@ -326,26 +351,42 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                     const side = edge.options.offset > 0 ? "right" : "left";
                     parameters.push(`shift ${side}=${Math.abs(edge.options.offset)}`);
                 }
+                if (edge.options.curve !== 0) {
+                    has_curves = true;
+                    // Scale the tikz-cd curve to better match the curve in quiver.
+                    const CURVE_MULTIPLIER = 1/3;
+                    parameters.push(
+                        `curve={height=${
+                            edge.options.curve * CONSTANTS.CURVE_HEIGHT * CURVE_MULTIPLIER
+                        }pt}`
+                    );
+                }
 
                 let style = "";
                 let label = nonempty_label !== "" ? `"{${edge.label}}"${align}` : "";
                 // If we eventually support multiple labels natively, we can use an array of labels,
-                // but for now it is simpler to special-cased barred arrow.s
+                // but for now it is simpler to special-cased barred arrows.
                 let barred = false;
 
                 // Edge styles.
                 switch (edge.options.style.name) {
                     case "arrow":
+                        // tikz-cd only has supported for 1-cells and 2-cells.
+                        // Anything else requires custom support, so for now
+                        // we only special-case 2-cells. Everything else is
+                        // drawn as if it is a 1-cell.
+                        if (edge.options.level === 2) {
+                            style = "Rightarrow, ";
+                        } else if (edge.options.level > 2) {
+                            // TikZ has no built-in support for n-ary arrows, and I have not
+                            // been able to find any custom styles that are suitable yet.
+                            tikz_incompatibilities.add("triple arrows or higher");
+                        }
+
                         // Body styles.
                         switch (edge.options.style.body.name) {
                             case "cell":
-                                // tikz-cd only has supported for 1-cells and 2-cells.
-                                // Anything else requires custom support, so for now
-                                // we only special-case 2-cells. Everything else is
-                                // drawn as if it is a 1-cell.
-                                if (edge.options.style.body.level === 2) {
-                                    style = "Rightarrow, ";
-                                }
+                                // This is the default in tikz-cd.
                                 break;
 
                             case "dashed":
@@ -377,12 +418,25 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
 
                             case "mono":
                                 parameters.push("tail");
+                                // We could potentially also support this for 2-cells, by using a
+                                // hack: `\arrow[equal, {Implies[reversed]}-Implies]`, but we leave
+                                // this for now.
+                                if (edge.options.level > 1) {
+                                    tikz_incompatibilities.add(
+                                        "double arrows or higher with mono tails"
+                                    );
+                                }
                                 break;
 
                             case "hook":
                                 parameters.push(`hook${
                                     edge.options.style.tail.side === "top" ? "" : "'"
                                 }`);
+                                if (edge.options.level > 1) {
+                                    tikz_incompatibilities.add(
+                                        "double arrows or higher with hook tails"
+                                    );
+                                }
                                 break;
                         }
 
@@ -394,12 +448,22 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
 
                             case "epi":
                                 parameters.push("two heads");
+                                if (edge.options.level > 1) {
+                                    tikz_incompatibilities.add(
+                                        "double arrows or higher with multiple heads"
+                                    );
+                                }
                                 break;
 
                             case "harpoon":
                                 parameters.push(`harpoon${
                                     edge.options.style.head.side === "top" ? "" : "'"
                                 }`);
+                                if (edge.options.level > 1) {
+                                    tikz_incompatibilities.add(
+                                        "double arrows or higher with harpoon heads"
+                                    );
+                                }
                                 break;
                         }
 
@@ -415,14 +479,14 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                             case "adjunction":
                                 label = "\"\\dashv\"";
                                 // Adjunction symbols should point in the direction of the arrow.
-                                angle = -edge.angle(ui) * 180 / Math.PI;
+                                angle = -edge.angle() * 180 / Math.PI;
                                 break;
                             case "corner":
                                 label = "\"\\lrcorner\"";
                                 label_parameters.push("very near start");
                                 // Round the angle to the nearest 45º, so that the corner always
                                 // appears aligned with horizontal, vertical or diagonal lines.
-                                angle = 45 - 45 * Math.round(4 * edge.angle(ui) / Math.PI);
+                                angle = 45 - 45 * Math.round(4 * edge.angle() / Math.PI);
                                 break;
                         }
 
@@ -452,8 +516,8 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                         break;
                 }
 
-                // tikz-cd tends to place arrows between arrows directly contiguously
-                // without adding some spacing manually.
+                // tikz-cd tends to place arrows between arrows without any spacing, so we add
+                // some manually ourselves.
                 if (level > 1) {
                     parameters.push("shorten <=2mm");
                     parameters.push("shorten >=2mm");
@@ -473,7 +537,10 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
             output = output.trim();
         }
 
-        return wrap_boilerplate(output);
+        return {
+            data: wrap_boilerplate(output, has_curves),
+            metadata: { tikz_incompatibilities },
+        };
     }
 };
 
@@ -604,8 +671,11 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
         const VERSION = 0;
         const output = [VERSION, quiver.cells[0].size, ...cells];
 
-        // We use this `unescape`-`encodeURIComponent` trick to encode non-ASCII characters.
-        return `${URL_prefix}?q=${btoa(unescape(encodeURIComponent(JSON.stringify(output))))}`;
+        return {
+            // We use this `unescape`-`encodeURIComponent` trick to encode non-ASCII characters.
+            data: `${URL_prefix}?q=${btoa(unescape(encodeURIComponent(JSON.stringify(output))))}`,
+            metadata: {},
+        };
     }
 
     import(ui, string) {
@@ -710,9 +780,19 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
                     // and this permits a limited form of backwards compatibility. We never access
                     // prototype properties on `options`, so this should not be amenable to
                     // injection.
-                    const level = Math.max(indices[source].level, indices[target].level) + 1;
+                    let level = Math.max(indices[source].level, indices[target].level) + 1;
                     const { style = {} } = options;
                     delete options.style;
+
+                    // In previous versions of quiver, `level` was only valid for some arrows, and
+                    // was recorded in the body style, rather than as a property of the edge itself.
+                    // For backwards-compatibility, we check for this case manually here.
+                    if (style.hasOwnProperty("body") && style.body.hasOwnProperty("level")) {
+                        assert_kind(style.body.level, "natural");
+                        assert(style.body.level >= 1, "invalid level");
+                        level = style.body.level;
+                        delete style.body.level;
+                    }
 
                     const edge = new Edge(
                         ui,
