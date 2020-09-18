@@ -2406,7 +2406,7 @@ class Panel {
             // and one for the unchecked version.
             const backgrounds = [];
 
-            const svg = new DOM.SVGElement("svg", { xmlns: "http://www.w3.org/2000/svg" }).element;
+            const svg = new DOM.SVGElement("svg", { xmlns: DOM.SVGElement.NAMESPACE }).element;
 
             const { shared, edge: { length, options, gap = null } } = properties(value, data);
 

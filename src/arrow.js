@@ -10,8 +10,7 @@ class QuiverSVG {
         // Create a top-level SVG. This will include all the edges and labels as children.
         // Note that we need to explicitly set the namespace attribute so that the SVG can be
         // treated as a standalone file, when we want to export it.
-        const xmlns = "http://www.w3.org/2000/svg";
-        this.element = new DOM.SVGElement("svg", { xmlns });
+        this.element = new DOM.SVGElement("svg", { xmlns: DOM.SVGElement.NAMESPACE });
     }
 }
 
@@ -474,12 +473,11 @@ class Arrow {
             fill: "none",
             stroke: "black",
             "stroke-width": stroke_width,
-            // We'd prefer to use `round`, especially for dashed and dotted lines, but unfortunately
-            // this doesn't work well with thicker edges. Ideally, we want a `round-butt` option,
-            // specifying edges do not extend farther than the path.
-            // We manually draw rounded ends for the overall path, but we avoid doing this for every
-            // dash, as this would be very expensive.
-            "stroke-linecap": "butt",
+            // We use the default `stroke-linecap` option of `butt`. We'd prefer to use `round`,
+            // especially for dashed and dotted lines, but unfortunately this doesn't work well with
+            // thicker edges. Ideally, we want a `round-butt` option, specifying edges do not extend
+            // farther than the path. We manually draw rounded ends for the overall path, but we
+            // avoid doing this for every dash, as this would be very expensive.
         });
 
         // When we draw squiggly arrows, we have straight line padding near the tail and head, which

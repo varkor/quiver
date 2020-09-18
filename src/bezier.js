@@ -99,6 +99,8 @@ class Bezier {
     /// number for the polygon with respect to the point. If the winding number is nonzero, then
     /// the point lies inside the polygon.
     /// This algorithm is based on the one at: http://geomalgorithms.com/a03-_inclusion.html.
+    /// Technically, this shouldn't really be a method on `Bezier`, but it is currently always used
+    /// for algorithms related to Bézier curves, so it's placed here for convenience.
     static point_inside_polygon(point, points) {
         // The displacement of a point from a line (calculated via the determinant of a 2x2 matrix).
         const displ = ([base, end], point) => {
@@ -254,7 +256,8 @@ class Bezier {
     }
 }
 
-/// A point on a quadratic Bézier curve, which also records the angle of the curve at the point.
+/// A point on a quadratic Bézier curve, which also records the parameter `t` and the `angle` of the
+/// curve at the point.
 class BezierPoint extends Point {
     constructor(point, t, angle) {
         super(point.x, point.y);

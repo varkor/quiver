@@ -60,4 +60,4 @@ Adjunctions:
 
 ## Thanks
 - [@cartesiancat](https://github.com/cartesiancat) for discussions about rendering aesthetic arrows.
-- [AndréC](https://tex.stackexchange.com/users/138900/andr%c3%a9c) for the custom TikZ `curve` setting.
+- [AndréC](https://tex.stackexchange.com/users/138900/andr%c3%a9c) for the custom TikZ `curve` style.
