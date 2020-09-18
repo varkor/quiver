@@ -77,6 +77,17 @@ class Bezier {
     t_after_length(clamp = false) {
         const { points } = this.delineate(1);
         return (length) => {
+            // Special-case 0, to avoid NaN below.
+            if (length === 0) {
+                return 0;
+            }
+            if (length < 0) {
+                if (clamp) {
+                    return 0;
+                } else {
+                    throw new Error("Length was greater than 0");
+                }
+            }
             let distance = 0;
             for (let i = 0; i < points.length - 1; ++ i) {
                 const segment_length = points[i + 1][1].sub(points[i][1]).length();
