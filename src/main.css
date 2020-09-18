@@ -709,7 +709,8 @@ body:not(.modal) {
 }
 
 .arrow:not(.selected) > svg:first-child:not(:hover) > .arrow-background,
-.ui.connect .cell:not(.target):not(.selected) > svg:first-child:hover > .arrow-background {
+.ui.connect .cell:not(.target):not(.selected) > svg:first-child:hover > .arrow-background,
+.ui.move .cell:not(.selected) > svg:first-child:hover > .arrow-background {
     opacity: 0;
 }
 
