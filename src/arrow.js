@@ -355,6 +355,12 @@ class Arrow {
         // Clear the SVGs, resize them, and rotate them about the source, in the direction of the
         // target.
         for (const svg of [this.background, this.svg]) {
+            // We need to set `width` and `height` explicitly so we can embed the SVGs properly
+            // in CSS backgrounds.
+            svg.set_attributes({
+                width: svg_width,
+                height: svg_height,
+            });
             svg.set_style({
                 width: `${svg_width}px`,
                 height: `${svg_height}px`,
@@ -644,12 +650,11 @@ class Arrow {
             label.set_attributes({ class: "arrow-label" });
             // Add a generic content container, which makes it more convenient to manipulate.
             // If we previously had content, we reuse that.
-            label.add(label_content || new DOM.Element("div", {
+            this.label.element = (label_content || new DOM.Element("div", {
                 xmlns: "http://www.w3.org/1999/xhtml",
                 class: "label",
-            }));
+            })).add_to(label);
             this.svg.add(label);
-            this.label.element = label;
         }
     }
 

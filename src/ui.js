@@ -81,7 +81,6 @@ UIState.Connect = class extends UIState {
             this.arrow = new Arrow(
                 new Shape.Endpoint(Point.zero()),
                 new Shape.Endpoint(Point.zero()),
-                new ArrowStyle(),
             );
             this.overlay.add(this.arrow.element);
             ui.canvas.add(this.overlay);
@@ -1434,6 +1433,22 @@ class UI {
         return style;
     }
 
+    /// Update the `ArrowStyle` associated to an arrow, as well as label formatting, etc.
+    /// This is necessary before redrawing.
+    static update_style(arrow, options) {
+        // Update the arrow style.
+        arrow.style = UI.arrow_style_for_options(options);
+        // Update the label style.
+        if (arrow.label !== null) {
+            arrow.label.alignment = {
+                left: CONSTANTS.LABEL_ALIGNMENT.LEFT,
+                right: CONSTANTS.LABEL_ALIGNMENT.RIGHT,
+                centre: CONSTANTS.LABEL_ALIGNMENT.CENTRE,
+                over: CONSTANTS.LABEL_ALIGNMENT.OVER,
+            }[options.label_alignment];
+        }
+    }
+
     /// Load macros from a string, which will be used in all LaTeX labels.
     load_macros(definitions) {
         // Currently, only macros without arguments are supported.
@@ -1860,22 +1875,14 @@ class Panel {
         });
 
         // The label alignment options.
-
-        // The radius of the box representing the text along the arrow.
-        const RADIUS = 4;
-        // The horizontal offset of the box representing the text from the arrowhead.
-        const X_OFFSET = 2;
-        // The vetical offset of the box representing the text from the arrow.
-        const Y_OFFSET = 8;
-
         this.create_option_list(
             ui,
             local,
             [
-                ["left", "Left align label", {}],
-                ["centre", "Centre align label (clear)", {}],
-                ["over", "Centre align label (over)", {}],
-                ["right", "Right align label", {}]
+                ["left", "Left align label", "left"],
+                ["centre", "Centre align label (clear)", "centre"],
+                ["over", "Centre align label (over)", "over"],
+                ["right", "Right align label", "right"]
             ],
             "label-alignment",
             [],
@@ -1893,48 +1900,14 @@ class Panel {
                 }]);
                 edges.forEach(edge => edge.options.label_alignment = value);
             },
-            (value) => {
+            (data) => {
                 // The length of the arrow.
                 const ARROW_LENGTH = 28;
-
-                let y_offset;
-                switch (value) {
-                    case "left":
-                        y_offset = -Y_OFFSET;
-                        break;
-                    case "centre":
-                    case "over":
-                        y_offset = 0;
-                        break;
-                    case "right":
-                        y_offset = Y_OFFSET;
-                        break;
-                }
-
-                const gap = value === "centre" ? { length: RADIUS * 4, offset: X_OFFSET } : null;
-
                 return {
-                    edge: {
-                        length: ARROW_LENGTH,
-                        options: Edge.default_options(),
-                        gap,
-                    },
-                    shared: { y_offset },
+                    length: ARROW_LENGTH,
+                    options: Edge.default_options({ label_alignment: data }),
+                    draw_label: true,
                 };
-            },
-            (svg, dimensions, shared) => {
-                const rect = new DOM.SVGElement("rect", {
-                    x: dimensions.width / 2 - X_OFFSET - RADIUS,
-                    y: dimensions.height / 2 + shared.y_offset - RADIUS,
-                    width: RADIUS * 2,
-                    height: RADIUS * 2,
-                }, {
-                    stroke: "none",
-                }).element;
-
-                svg.appendChild(rect);
-
-                return [{ element: rect, property: "fill" }];
             },
         );
 
@@ -2108,18 +2081,14 @@ class Panel {
                     edges.forEach(edge => edge.options.style.tail = data);
                 });
             },
-            (_, data) => {
-                return {
-                    edge: {
-                        length: 0,
-                        options: Edge.default_options(null, {
-                            tail: data,
-                            body: { name: "none" },
-                            head: { name: "none" },
-                        }),
-                    },
-                };
-            },
+            (data) => ({
+                length: 0,
+                options: Edge.default_options(null, {
+                    tail: data,
+                    body: { name: "none" },
+                    head: { name: "none" },
+                }),
+            }),
         );
 
         // The list of body styles.
@@ -2142,17 +2111,13 @@ class Panel {
                     edges.forEach(edge => edge.options.style.body = data);
                 });
             },
-            (_, data) => {
-                return {
-                    edge: {
-                        length: ARROW_LENGTH,
-                        options: Edge.default_options(null, {
-                            body: data,
-                            head: { name: "none" },
-                        }),
-                    },
-                };
-            },
+            (data) => ({
+                length: ARROW_LENGTH,
+                options: Edge.default_options(null, {
+                    body: data,
+                    head: { name: "none" },
+                }),
+            }),
         );
 
         // The list of head styles.
@@ -2174,17 +2139,13 @@ class Panel {
                     edges.forEach(edge => edge.options.style.head = data);
                 });
             },
-            (_, data) => {
-                return {
-                    edge: {
-                        length: 0,
-                        options: Edge.default_options(null, {
-                            head: data,
-                            body: { name: "none" },
-                        }),
-                    },
-                };
-            },
+            (data) => ({
+                length: 0,
+                options: Edge.default_options(null, {
+                    head: data,
+                    body: { name: "none" },
+                }),
+            }),
         );
 
         // The list of (non-arrow) edge styles.
@@ -2239,14 +2200,10 @@ class Panel {
                     }
                 });
             },
-            (_, data) => {
-                return {
-                    edge: {
-                        length: ARROW_LENGTH,
-                        options: Edge.default_options(null, data),
-                    },
-                };
-            },
+            (data) => ({
+                length: ARROW_LENGTH,
+                options: Edge.default_options(null, data),
+            }),
         );
 
         const display_export_pane = (format, modify = (output) => output) => {
@@ -2363,7 +2320,6 @@ class Panel {
         disabled,
         on_check,
         properties,
-        augment_svg = () => [],
     ) {
         const options_list = new DOM.Element("div", { class: `options` });
         options_list.class_list.add(...classes);
@@ -2393,34 +2349,43 @@ class Panel {
             // and one for the unchecked version.
             const backgrounds = [];
 
-            const svg = new DOM.SVGElement("svg", { xmlns: DOM.SVGElement.NAMESPACE }).element;
+            const { length, options, draw_label } = properties(data);
 
-            const { shared, edge: { length, options, gap = null } } = properties(value, data);
+            const arrow = new Arrow(
+                new Shape.Endpoint(Point.zero()),
+                new Shape.Endpoint(new Point(length, 0)),
+            );
 
-            // FIXME: stop using `draw_edge`.
-            const { dimensions, alignment }
-                = Edge.draw_edge(svg, options, length, Math.PI / 4, gap);
-            // Align the background according the alignment of the arrow
-            // (`"centre"` is default).
-            if (alignment !== "centre") {
-                // What percentage of the button to offset `"left"` or `"right"` aligned arrows.
-                const BACKGROUND_PADDING = 20;
-
-                button.element.style.backgroundPosition
-                    = `${alignment} ${BACKGROUND_PADDING}% center`
+            // The size of the label.
+            const LABEL_SIZE = 12;
+            // How much smaller the placeholder box in the label position should be.
+            const LABEL_MARGIN = 2;
+            if (draw_label) {
+                arrow.label = new Label();
+                arrow.label.size = new Dimensions(LABEL_SIZE, LABEL_SIZE);
             }
 
-            // Trigger the callback to modify the SVG in some way after drawing the arrow.
-            // `colour_properties` is an array of `{ object, property }` pairs. Each will
-            // be set to the current `colour` in the loop below.
-            const colour_properties = augment_svg(svg, dimensions, shared);
+            UI.update_style(arrow, options);
+            const svg = arrow.svg;
+            svg.set_attributes({ xmlns: DOM.SVGElement.NAMESPACE });
 
             for (const colour of ["black", "grey"]) {
-                svg.style.stroke = colour;
-                for (const { element, property } of colour_properties) {
-                    element.style[property] = colour;
+                arrow.style.colour = colour;
+                arrow.redraw();
+                // The `style` transforms the position of the arrow, which we don't want here,
+                // where we're trying to automatically position the arrows in the centre of the
+                // buttons.
+                svg.remove_attributes("style");
+                if (draw_label) {
+                    arrow.label.element.set_style({
+                        width: `${LABEL_SIZE - LABEL_MARGIN * 2}px`,
+                        height: `${LABEL_SIZE - LABEL_MARGIN * 2}px`,
+                        margin: `${LABEL_MARGIN}px`,
+                        background: colour,
+                    });
                 }
-                backgrounds.push(`url(data:image/svg+xml;utf8,${encodeURI(svg.outerHTML)})`);
+                backgrounds.push(`url('data:image/svg+xml;utf8,${
+                    encodeURIComponent(svg.element.outerHTML)}')`);
             }
             button.element.style.backgroundImage = backgrounds.join(", ");
 
@@ -3414,7 +3379,7 @@ class Edge extends Cell {
 
         this.options = Edge.default_options(options, null, this.level);
 
-        this.arrow = new Arrow(source.shape, target.shape, new ArrowStyle(), new Label(""));
+        this.arrow = new Arrow(source.shape, target.shape, new ArrowStyle(), new Label());
         this.element = this.arrow.element.element;
 
         // `this.shape` is used for the source/target from (higher) cells connected to this one.
@@ -3476,20 +3441,6 @@ class Edge extends Cell {
         ui.panel.render_tex(ui, this);
     }
 
-    /// Update the `ArrowStyle` associated to the edge, as well as label formatting, etc.
-    /// This is necessary before redrawing.
-    update_style() {
-        // Update the arrow style.
-        this.arrow.style = UI.arrow_style_for_options(this.options);
-        // Update the label style.
-        this.arrow.label.alignment = {
-            left: CONSTANTS.LABEL_ALIGNMENT.LEFT,
-            right: CONSTANTS.LABEL_ALIGNMENT.RIGHT,
-            centre: CONSTANTS.LABEL_ALIGNMENT.CENTRE,
-            over: CONSTANTS.LABEL_ALIGNMENT.OVER,
-        }[this.options.label_alignment];
-    }
-
     /// Create the HTML element associated with the edge.
     /// Note that `render_tex` triggers redrawing the edge, rather than the other way around.
     render(ui, pointer_offset = null) {
@@ -3507,7 +3458,7 @@ class Edge extends Cell {
             }
         }
 
-        this.update_style();
+        UI.update_style(this.arrow, this.options);
         this.arrow.redraw();
 
         // We override the source and target whilst drawing, so we need to reset them.
@@ -3520,345 +3471,6 @@ class Edge extends Cell {
                 .add(new Point(0, this.arrow.style.curve / 2).rotate(
                     this.arrow.target.origin.sub(this.arrow.source.origin).angle()
                 ));
-    }
-
-    /// Draws an edge on an SVG. `length` must be nonnegative.
-    /// Note that this does not clear the SVG beforehand.
-    /// Returns the (new) dimensions of the SVG and the intended alignment of the edge.
-    /// `{ dimensions, alignment }`
-    static draw_edge(svg, options, length, direction, gap, scale = false) {
-        // Constants for parameters of the arrow shapes.
-        const SVG_PADDING = CONSTANTS.SVG_PADDING;
-        // The width of each stroke (for the tail, body and head).
-        const STROKE_WIDTH = 1.5;
-
-        // Set up the standard styles used for arrows.
-        Object.assign(svg.style, {
-            fill: svg.style.fill || "none",
-            stroke: svg.style.stroke || "black",
-            strokeWidth: svg.style.strokeWidth || `${STROKE_WIDTH}px`,
-            strokeLinecap: svg.style.strokeLinecap || "round",
-            strokeLinejoin: svg.style.strokeLinejoin || "round",
-        });
-
-        // Default to 1-cells if no `level` is present (as for dashed and dotted lines.)
-        const level = options.style.name === "arrow" && options.style.body.level || 1;
-        // How much spacing to leave between lines for k-cells where k > 1.
-        const SPACING = 6;
-        // How wide each arrowhead should be (for a horizontal arrow).
-        const HEAD_WIDTH = SPACING + (level - 1) * 2;
-        // How tall each arrowhead should be (for a horizontal arrow).
-        const HEAD_HEIGHT = (level + 1) * SPACING;
-        // The space between each head.
-        const HEAD_SPACING = 6;
-        // The height of the vertical bar in the maps to tail.
-        const TAIL_HEIGHT = SPACING * 2;
-
-        // We scale the arrow head so that it transitions smoothly from nothing.
-        const head_width = scale ? Math.min(length, HEAD_WIDTH) : HEAD_WIDTH;
-        const head_height = HEAD_HEIGHT * (head_width / HEAD_WIDTH);
-
-        // Adjust the arrow height for k-cells.
-        const tail_height = TAIL_HEIGHT * (0.5 + level * 0.5);
-
-        // Set up the SVG dimensions to fit the edge.
-        let [width, height] = [0, 0];
-        let alignment = "centre";
-
-        // We do two passes over the tail/body/head styles.
-        // First to calculate the dimensions and then to actually draw the edge.
-        // This is necessary because we need to know the dimensions to centre things properly.
-        const fit = (w, h) => [width, height] = [Math.max(width, w), Math.max(height, h)];
-
-        // The number of arrowheads.
-        let heads = 1;
-        // How much to shorten the edge by, to make room for the tail.
-        let shorten = 0;
-
-        switch (options.style.name) {
-            case "arrow":
-                fit(length, Math.ceil(STROKE_WIDTH));
-
-                switch (options.style.tail.name) {
-                    case "maps to":
-                        // The height of the vertical bar in the maps to tail.
-                        const TAIL_HEIGHT = SPACING * 2;
-                        // Adjust the arrow height for k-cells.
-                        const tail_height = TAIL_HEIGHT * (0.5 + level * 0.5);
-                        fit(Math.ceil(STROKE_WIDTH), tail_height);
-                        break;
-                    case "mono":
-                        // The `"mono"` style simply draws an arrowhead for the tail.
-                        fit(head_width, head_height);
-                        shorten = head_width;
-                        break;
-                    case "hook":
-                        // The hook width is the same as the arrowhead.
-                        // We only need `head_width * 2` height (for
-                        // 1-cells), but we need to double that to keep
-                        // the arrow aligned conveniently in the middle.
-                        fit(head_width, head_width * 4 + SPACING * (level - 1) / 2);
-                        shorten = head_width;
-                }
-
-                switch (options.style.head.name) {
-                    case "none":
-                        heads = 0;
-                        break;
-                    case "epi":
-                        heads = 2;
-                    case "arrowhead":
-                        fit(head_width * heads + HEAD_SPACING * (heads - 1), head_height);
-                        break;
-                    case "harpoon":
-                        fit(head_width, head_height / 2);
-                        break;
-                }
-
-                break;
-
-            case "adjunction":
-                // The dimensions of the bounding box of the ⊣ symbol.
-                const [WIDTH, HEIGHT] = [16, 16];
-                [width, height] = [WIDTH, HEIGHT];
-                break;
-
-            // Pullbacks/pushouts.
-            case "corner":
-                // The dimensions of the bounding box of the ⌟ symbol.
-                const SIZE = 12;
-                [width, height] = [SIZE, SIZE * 2];
-                // We want to draw the symbol next to the vertex from which it is drawn.
-                alignment = "left";
-                break;
-        }
-
-        // Now actually draw the edge.
-
-        switch (options.style.name) {
-            case "arrow":
-                // When drawing asymmetric arrowheads (such as harpoons), we need to
-                // draw the arrowhead at the lowermost line, so we need to adjust the
-                // y position.
-                const asymmetry_offset
-                    = options.style.head.name === "harpoon" ? (level - 1) * SPACING / 2 : 0;
-
-                // A function for finding the width of an arrowhead at a certain y position,
-                // so that we can draw multiple lines to a curved arrow head perfectly.
-                const head_x = (y, tail = false) => {
-                    if (head_height === 0 || !tail && options.style.head.name === "none") {
-                        return 0;
-                    }
-
-                    // Currently only arrowheads drawn for heads may be asymmetric.
-                    const asymmetry_adjustment = !tail ? asymmetry_offset : 0;
-                    // We have to be careful to adjust for asymmetry, which affects the dimensions
-                    // of the arrowheads.
-                    const asymmetry_sign
-                        = asymmetry_adjustment !== 0
-                            ? { top: 1, bottom: -1 }[options.style.head.side]
-                            : 0;
-
-                    return (head_width + asymmetry_adjustment)
-                        * (1 - (1 - 2 * Math.abs(y - asymmetry_offset * asymmetry_sign)
-                            / (head_height + asymmetry_adjustment)) ** 2)
-                        ** 0.5;
-                };
-
-                if (options.style.body.name !== "none") {
-                    // Draw all the lines.
-                    for (let i = 0; i < level; ++i) {
-                        let y = (i + (1 - level) / 2) * SPACING;
-                        // This guard condition is necessary simply for very short edges.
-                        if (Math.abs(y) <= head_height / 2) {
-                            // If the tail is drawn as a head, as is the case with `"mono"`,
-                            // then we need to shift the lines instead of simply shortening
-                            // them.
-                            const tail_head_adjustment
-                                = options.style.tail.name === "mono" ? head_x(y, true) : 0;
-                            const path
-                                = [`M ${SVG_PADDING + shorten - tail_head_adjustment} ${
-                                    SVG_PADDING + height / 2 + y
-                                }`];
-                            // When drawing multiple heads and multiple lines, it looks messy
-                            // if the heads intersect the lines, so in this case we draw the
-                            // lines to the leftmost head. For 1-cells, it looks better if
-                            // heads do intersect the lines.
-                            const level_heads_adjustment
-                                = level > 1 ? (heads - 1) * HEAD_SPACING : 0;
-                            const line_length = length - shorten - head_x(y)
-                                - level_heads_adjustment + tail_head_adjustment;
-
-                            if (options.style.body.name === "squiggly") {
-                                // The height of each triangle from the edge.
-                                const AMPLITUDE = 2;
-                                // Flat padding at the start of the edge (measured in
-                                // triangles).
-                                const PADDING = 1;
-                                // Twice as much padding is given at the end, plus extra
-                                // if there are multiple heads.
-                                const head_padding = PADDING + PADDING * heads;
-
-                                path.push(`l ${AMPLITUDE * 2 * PADDING} 0`);
-                                for (
-                                    let l = AMPLITUDE * 2 * PADDING, flip = 1;
-                                    l < line_length - AMPLITUDE * 2 * head_padding;
-                                    l += AMPLITUDE * 2, flip = -flip
-                                ) {
-                                    path.push(`l ${AMPLITUDE} ${AMPLITUDE * flip}`);
-                                    path.push(`l ${AMPLITUDE} ${AMPLITUDE * -flip}`);
-                                }
-                                path.push(`L ${SVG_PADDING + line_length + shorten} ${
-                                    SVG_PADDING + height / 2 + y
-                                }`);
-                            } else {
-                                path.push(`l ${line_length} 0`);
-                            }
-
-                            if (options.style.body.name === "barred") {
-                                const bar_height = Math.max(0, HEAD_WIDTH * 2);
-                                path.push(`M ${SVG_PADDING + line_length / 2} ${
-                                    SVG_PADDING + height / 2 + y - bar_height / 2
-                                }`);
-                                path.push(`l 0 ${bar_height}`);
-                            }
-
-                            const line = new DOM.SVGElement("path", { d: path.join(" ") }).element;
-
-                            // Dashed and dotted lines.
-                            switch (options.style.body.name) {
-                                case "dashed":
-                                    line.style.strokeDasharray = "6";
-                                    break;
-                                case "dotted":
-                                    line.style.strokeDasharray = "1 4";
-                                    break;
-                            }
-
-                            // Explicit gaps.
-                            if (gap !== null) {
-                                line.style.strokeDasharray
-                                    = `${(length - gap.length) / 2}, ${gap.length}`;
-                                line.style.strokeDashoffset = gap.offset;
-                            }
-
-                            svg.appendChild(line);
-                        }
-                    }
-                }
-
-                // This function has been extracted because it is actually used to draw
-                // both arrowheads (in the usual case) and tails (for `"mono"`).
-                const draw_arrowhead = (x, tail = false, top = true, bottom = true) => {
-                    // Currently only arrowheads drawn for heads may be asymmetric.
-                    const asymmetry_adjustment = !tail ? asymmetry_offset : 0;
-
-                    svg.appendChild(new DOM.SVGElement("path", {
-                        d: (top ? `
-                            M ${SVG_PADDING + x} ${SVG_PADDING + height / 2 + asymmetry_adjustment}
-                            a ${head_width + asymmetry_adjustment}
-                                ${head_height / 2 + asymmetry_adjustment} 0 0 1
-                                -${head_width + asymmetry_adjustment}
-                                -${head_height / 2 + asymmetry_adjustment}
-                        ` : "") + (bottom ? `
-                            M ${SVG_PADDING + x} ${SVG_PADDING + height / 2 - asymmetry_adjustment}
-                            a ${head_width + asymmetry_adjustment}
-                                ${head_height / 2 + asymmetry_adjustment} 0 0 0
-                                -${head_width + asymmetry_adjustment}
-                                ${head_height / 2 + asymmetry_adjustment}
-                        ` : "").trim().replace(/\s+/g, " ")
-                    }).element);
-                };
-
-                // Draw the arrow tail.
-                switch (options.style.tail.name) {
-                    case "maps to":
-                        svg.appendChild(new DOM.SVGElement("path", {
-                            d: `
-                                M ${SVG_PADDING} ${SVG_PADDING + (height - tail_height) / 2}
-                                l 0 ${tail_height}
-                            `.trim().replace(/\s+/g, " ")
-                        }).element);
-                        break;
-
-                    case "mono":
-                        draw_arrowhead(head_width, true);
-                        break;
-
-                    case "hook":
-                        for (let i = 0; i < level; ++i) {
-                            let y = (i + (1 - level) / 2) * SPACING;
-                            const flip = options.style.tail.side === "top" ? 1 : -1;
-                            svg.appendChild(new DOM.SVGElement("path", {
-                                d: `
-                                    M ${SVG_PADDING + head_width}
-                                        ${SVG_PADDING + height / 2 + y}
-                                    a ${head_width} ${head_width} 0 0 ${flip === 1 ? 1 : 0} 0
-                                        ${-head_width * 2 * flip}
-                                `.trim().replace(/\s+/g, " ")
-                            }).element);
-                        }
-                        break;
-                }
-
-                // Draw the arrow head.
-                switch (options.style.head.name) {
-                    case "arrowhead":
-                    case "epi":
-                        for (let i = 0; i < heads; ++i) {
-                            draw_arrowhead(width - i * HEAD_SPACING);
-                        }
-                        break;
-
-                    case "harpoon":
-                        const top = options.style.head.side === "top";
-                        draw_arrowhead(width, false, top, !top);
-                        break;
-                }
-
-                break;
-
-            case "adjunction":
-                // Draw the ⊣ symbol. The dimensions have already been set up for us
-                // in the previous step.
-                svg.appendChild(new DOM.SVGElement("path", {
-                    d: `
-                        M ${SVG_PADDING} ${SVG_PADDING + height / 2}
-                        l ${width} 0
-                        m 0 ${-height / 2}
-                        l 0 ${height}
-                    `.trim().replace(/\s+/g, " ")
-                }).element);
-
-                break;
-
-            case "corner":
-                // Draw the ⌟ symbol. The dimensions have already been set up for us
-                // in the previous step.
-                const side = width / 2 ** 0.5;
-                // Round the angle to the nearest 45º and adjust with respect to the
-                // current direction.
-                const PI_4 = Math.PI / 4;
-                const angle = Math.PI + PI_4 * Math.round(4 * direction / Math.PI) - direction;
-                svg.appendChild(new DOM.SVGElement("path", {
-                    d: `
-                        M ${SVG_PADDING + width} ${SVG_PADDING + width}
-                        l ${Math.cos(angle - PI_4) * side} ${Math.sin(angle - PI_4) * side}
-                        M ${SVG_PADDING + width} ${SVG_PADDING + width}
-                        l ${Math.cos(angle + PI_4) * side} ${Math.sin(angle + PI_4) * side}
-                    `.trim().replace(/\s+/g, " ")
-                }).element);
-
-                break;
-        }
-
-        svg.setAttribute("width", width + SVG_PADDING * 2);
-        svg.setAttribute("height", height + SVG_PADDING * 2);
-
-        return {
-            dimensions: new Dimensions(width + SVG_PADDING * 2, height + SVG_PADDING * 2),
-            alignment,
-        };
     }
 
     /// Returns the angle of this edge.

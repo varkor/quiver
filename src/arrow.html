@@ -71,16 +71,16 @@
             target.redraw();
             // const arrow2 = new Arrow2(source, target);
 
-            const arrow = new Arrow(source, target, new ArrowStyle(), new Label("Hello"));
+            const arrow = new Arrow(source, target, new ArrowStyle(), new Label());
             // arrow.style.heads = ["hook-top"];
-            // arrow.style.tails = ["hook-bottom"];
+            arrow.style.tails = ["hook-bottom"];
             // arrow.style.heads = CONSTANTS.ARROW_HEAD_STYLE.CORNER;
-            arrow.style.tails = CONSTANTS.ARROW_HEAD_STYLE.MAPS_TO;
+            // arrow.style.tails = CONSTANTS.ARROW_HEAD_STYLE.MAPS_TO;
             // arrow.style.heads = CONSTANTS.ARROW_HEAD_STYLE.HARPOON_TOP;
             arrow.style.level = 3;
-            arrow.style.shorten = 400;
+            // arrow.style.shorten = 400;
             // arrow.style.dash_style = CONSTANTS.ARROW_DASH_STYLE.DOTTED;
-            arrow.style.body_style = CONSTANTS.ARROW_BODY_STYLE.PROARROW;
+            arrow.style.body_style = CONSTANTS.ARROW_BODY_STYLE.SQUIGGLY;
             arrow.label.alignment = CONSTANTS.LABEL_ALIGNMENT.CENTRE;
             arrow.label.size = new Dimensions(100, 10);
             arrow.redraw();
