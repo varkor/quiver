@@ -92,22 +92,26 @@ body:not(.modal) {
     opacity: 1;
 }
 
-/* The grid of cells */
+/* The canvas of cells */
+
+.container {
+    position: fixed;
+    width: 100%;
+    height: 100%;
+}
 
 .canvas {
     position: absolute;
-    width: 100%;
-    height: 100%;
     left: 50%;
     top: 50%;
     transform-origin: top left;
 }
 
-.pan .canvas {
+.ui.pan .canvas {
     cursor: grab;
 }
 
-.pan .canvas:active {
+.ui.pan .canvas:active {
     cursor: grabbing;
 }
 

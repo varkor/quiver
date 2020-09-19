@@ -424,8 +424,9 @@ class UI {
         this.initialise_grid(new DOM.Element(this.element));
 
         // Set up the element containing all the cells.
-        this.canvas = new DOM.Element("div", { class: "canvas" });
-        this.element.appendChild(this.canvas.element);
+        this.container = new DOM.Element("div", { class: "container" });
+        this.canvas = new DOM.Element("div", { class: "canvas" }).add_to(this.container);
+        this.element.appendChild(this.container.element);
 
         // Set up the panel for viewing and editing cell data.
         this.panel.initialise(this);
@@ -631,11 +632,12 @@ class UI {
         // If we release the mouse while hovering over the insertion point, there are two
         // possibilities. Either we haven't moved the mouse, in which case the insertion point loses
         // its `"pending"` or `"active"` state; or we have, in which case we're mid-connection and
-        // we need to create a new vertex and connect it. We add the event listener to the canvas,
-        // rather than the insertion point, so that we don't have to worry about the insertion point
-        // being exactly the same size as a grid cell (there is some padding for aesthetic purposes)
-        // or the insertion point being covered by other elements (like edge endpoints).
-        this.canvas.listen("mouseup", (event) => {
+        // we need to create a new vertex and connect it. We add the event listener to the
+        // container, rather than the insertion point, so that we don't have to worry about the
+        // insertion point being exactly the same size as a grid cell (there is some padding for
+        // aesthetic purposes) or the insertion point being covered by other elements (like edge
+        // endpoints).
+        this.container.listen("mouseup", (event) => {
             if (event.button === 0) {
                 // Handle mouse releases without having moved the cursor from the initial cell.
                 insertion_point.classList.remove("pending", "active");
