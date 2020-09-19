@@ -2014,11 +2014,11 @@ class Panel {
                 })
         );
 
-        // The level slider.
-        // We limit to 4 for now because there are issues with pixel perfection (especially for
-        // squiggly arrows, e.g. with their interaction with hooked tails) after that. Besides, it's
-        // unlikely people will want to draw diagrams involving 5-cells.
-        const level_slider = create_option_slider("Level", "level", { min: 1, value: 1, max: 4 });
+        // The level slider. We limit to 3 for now because there are issues with pixel perfection
+        // (especially for squiggly arrows, e.g. with their interaction with hooked tails) after 4,
+        // and 3 seems a more consistent setting number with the other settings.. Besides, it's
+        // unlikely people will want to draw diagrams involving 4- or 5-cells.
+        const level_slider = create_option_slider("Level", "level", { min: 1, value: 1, max: 3 });
         level_slider.class_list.add("arrow-style");
 
         // The list of tail styles.
