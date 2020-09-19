@@ -86,23 +86,23 @@ UIState.Connect = class extends UIState {
             this.overlay.add(this.arrow.element);
             ui.canvas.add(this.overlay);
         } else {
-            this.reconnect.edge.element.classList.add("reconnecting");
+            this.reconnect.edge.element.class_list.add("reconnecting");
         }
     }
 
     release(ui) {
-        this.source.element.classList.remove("source");
+        this.source.element.class_list.remove("source");
         if (this.target !== null) {
-            this.target.element.classList.remove("target");
+            this.target.element.class_list.remove("target");
             this.target = null;
         }
         // If we're connecting from an insertion point, then we need to hide it again.
-        ui.element.querySelector(".insertion-point").classList.remove("revealed");
+        ui.element.query_selector(".insertion-point").class_list.remove("revealed");
         if (this.reconnect === null) {
             this.overlay.remove();
             this.arrow = null;
         } else {
-            this.reconnect.edge.element.classList.remove("reconnecting");
+            this.reconnect.edge.element.class_list.remove("reconnecting");
             this.reconnect.edge.render(ui);
             this.reconnect = null;
         }
@@ -168,11 +168,11 @@ UIState.Connect = class extends UIState {
                 // The default settings for the other options are fine.
             };
             const selected_alignment
-                = ui.panel.element.querySelector('input[name="label-alignment"]:checked');
+                = ui.panel.element.query_selector('input[name="label-alignment"]:checked');
             if (selected_alignment !== null) {
                 // If multiple edges are selected and not all selected edges have the same label
                 // alignment, there will be no checked input.
-                options.label_alignment = selected_alignment.value;
+                options.label_alignment = selected_alignment.element.value;
             }
             // If *every* existing connection to source and target has a consistent label alignment,
             // then `align` will be a singleton, in which case we use that element as the alignment.
@@ -267,7 +267,8 @@ UIState.Connect = class extends UIState {
             const edge = new Edge(ui, label, this.source, this.target, options);
             ui.select(edge);
             if (!event.shiftKey && !event.metaKey && !event.ctrlKey) {
-                ui.panel.element.querySelector('label input[type="text"]').focus();
+                ui.panel.element.query_selector('label input[type="text"]')
+                    .element.focus();
             }
 
             return edge;
@@ -322,7 +323,6 @@ UIState.Move = class extends UIState {
                     "new cell position already contains a cell:",
                     ui.positions.get(`${cell.position}`),
                 );
-                return;
             }
         }
         // Now we know the positions are free, we can set them with impunity.
@@ -420,35 +420,33 @@ class UI {
     }
 
     initialise() {
-        this.element.classList.add("ui");
+        this.element.class_list.add("ui");
         this.switch_mode(UIState.default);
 
         // Set the grid background.
-        this.initialise_grid(new DOM.Element(this.element));
+        this.initialise_grid(this.element);
 
         // Set up the element containing all the cells.
-        this.container = new DOM.Element("div", { class: "container" });
+        this.container = new DOM.Element("div", { class: "container" }).add_to(this.element);
         this.canvas = new DOM.Element("div", { class: "canvas" }).add_to(this.container);
-        this.element.appendChild(this.container.element);
 
         // Set up the panel for viewing and editing cell data.
         this.panel.initialise(this);
-        this.element.appendChild(this.panel.element);
+        this.element.add(this.panel.element);
 
         // Set up the toolbar.
         this.toolbar.initialise(this);
-        this.element.appendChild(this.toolbar.element);
+        this.element.add(this.toolbar.element);
 
         // Add the logo.
-        this.element.appendChild(
+        this.element.add(
             new DOM.Element("a", { href: "https://github.com/varkor/quiver", target: "_blank" })
                 .add(new DOM.Element("img", { src: "quiver.svg", class: "logo" }))
-                .element
         );
 
         // Add the insertion point for new nodes.
-        const insertion_point = new DOM.Element("div", { class: "insertion-point" }).element;
-        this.canvas.element.appendChild(insertion_point);
+        const insertion_point = new DOM.Element("div", { class: "insertion-point" })
+            .add_to(this.canvas);
 
         // Handle panning via scrolling.
         window.addEventListener("wheel", (event) => {
@@ -456,7 +454,7 @@ class UI {
             event.preventDefault();
 
             // Hide the insertion point if it is visible.
-            insertion_point.classList.remove("revealed");
+            insertion_point.class_list.remove("revealed");
 
             this.pan_view(new Offset(
                 event.deltaX * 2 ** -this.scale,
@@ -519,14 +517,14 @@ class UI {
         });
 
         // Stop dragging cells when the mouse leaves the window.
-        this.element.addEventListener("mouseleave", () => {
+        this.element.listen("mouseleave", () => {
             if (this.in_mode(UIState.Move)) {
                 commit_move_event();
                 this.switch_mode(UIState.default);
             }
         });
 
-        this.element.addEventListener("mousedown", (event) => {
+        this.element.listen("mousedown", (event) => {
             if (event.button === 0) {
                 // Usually, if `Alt` or `Control` have been held we will have already switched to
                 // the Pan mode. However, if the window is not in focus, they will not have been
@@ -540,7 +538,7 @@ class UI {
                 }
                 if (this.in_mode(UIState.Pan)) {
                     // Hide the insertion point if it is visible.
-                    insertion_point.classList.remove("revealed");
+                    insertion_point.class_list.remove("revealed");
                     // Record the position the pointer was pressed at, so we can pan relative
                     // to that location by dragging.
                     this.state.origin = this.offset_from_event(event).sub(this.view);
@@ -552,7 +550,8 @@ class UI {
                     } else {
                         // Otherwise, simply deselect the label input (it's unlikely the user
                         // wants to modify all the cell labels at once).
-                        this.panel.element.querySelector('label input[type="text"]').blur();
+                        this.panel.element.query_selector('label input[type="text"]')
+                            .element.blur();
                     }
                 }
             }
@@ -569,26 +568,29 @@ class UI {
         const reposition_insertion_point = (event) => {
             const position = this.position_from_event(event);
             const offset = this.offset_from_position(position);
-            insertion_point.style.left = `${offset.x}px`;
-            insertion_point.style.top = `${offset.y}px`;
-            // Resize the insertion point appropriately for the grid cell.
-            insertion_point.style.width
-                = `${this.cell_size(this.cell_width, position.x) - CONSTANTS.GRID_BORDER_WIDTH}px`;
-            insertion_point.style.height
-                = insertion_point.style.lineHeight
-                = `${this.cell_size(this.cell_height, position.y) - CONSTANTS.GRID_BORDER_WIDTH}px`;
+            const height =
+                this.cell_size(this.cell_height, position.y) - CONSTANTS.GRID_BORDER_WIDTH;
+            insertion_point.set_style({
+                left: `${offset.x}px`,
+                top: `${offset.y}px`,
+                // Resize the insertion point appropriately for the grid cell.
+                width: `${
+                    this.cell_size(this.cell_width, position.x) - CONSTANTS.GRID_BORDER_WIDTH}px`,
+                height: `${height}px`,
+                lineHeight: `${height}px`,
+            });
             return position;
         };
 
         // Clicking on the insertion point reveals it, after which another click adds a new node.
-        insertion_point.addEventListener("mousedown", (event) => {
+        insertion_point.listen("mousedown", (event) => {
             if (event.button === 0) {
                 if (this.in_mode(UIState.Default)) {
                     event.preventDefault();
-                    if (!insertion_point.classList.contains("revealed")) {
+                    if (!insertion_point.class_list.contains("revealed")) {
                         // Reveal the insertion point upon a click.
                         reposition_insertion_point(event);
-                        insertion_point.classList.add("revealed", "pending");
+                        insertion_point.class_list.add("revealed", "pending");
                     } else {
                         // We only stop propagation in this branch, so that clicking once in an
                         // empty grid cell will deselect any selected cells, but clicking a second
@@ -597,7 +599,7 @@ class UI {
                         // the first and second click, because leaving the grid cell with the cursor
                         // (to select other cells) hides the insertion point again.
                         event.stopPropagation();
-                        insertion_point.classList.remove("revealed");
+                        insertion_point.class_list.remove("revealed");
                         // We want the new vertex to be the only selected cell, unless we've held
                         // Shift/Command/Control when creating it.
                         if (!event.shiftKey && !event.metaKey && !event.ctrlKey) {
@@ -613,7 +615,8 @@ class UI {
                         // it is unlikely they expect to edit all the labels simultaneously,
                         // so in this case we do not focus the input.
                         if (!event.shiftKey && !event.metaKey && !event.ctrlKey) {
-                            this.panel.element.querySelector('label input[type="text"]').select();
+                            this.panel.element.query_selector('label input[type="text"]')
+                                .element.select();
                         }
                     }
                 }
@@ -625,10 +628,10 @@ class UI {
         // to an `"active"` state. Moving the mouse off the insertion
         // point in this state will create a new vertex and trigger the
         // connection mode.
-        insertion_point.addEventListener("mousemove", () => {
-            if (insertion_point.classList.contains("pending")) {
-                insertion_point.classList.remove("pending");
-                insertion_point.classList.add("active");
+        insertion_point.listen("mousemove", () => {
+            if (insertion_point.class_list.contains("pending")) {
+                insertion_point.class_list.remove("pending");
+                insertion_point.class_list.add("active");
             }
         });
 
@@ -643,20 +646,19 @@ class UI {
         this.container.listen("mouseup", (event) => {
             if (event.button === 0) {
                 // Handle mouse releases without having moved the cursor from the initial cell.
-                insertion_point.classList.remove("pending", "active");
+                insertion_point.class_list.remove("pending", "active");
 
                 // We only want to create a connection if the insertion point is visible. E.g. not
                 // if we're hovering over a grid cell that contains a vertex, but not hovering over
                 // the vertex itself (i.e. the whitespace around the vertex).
-                if (insertion_point.classList.contains("revealed")) {
+                if (insertion_point.class_list.contains("revealed")) {
                     // When releasing the mouse over an empty grid cell, we want to create a new
                     // cell and connect it to the source.
                     if (this.in_mode(UIState.Connect)) {
                         event.stopImmediatePropagation();
                         // We only want to forge vertices, not edges (and thus 1-cells).
                         if (this.state.source.is_vertex()) {
-                            this.state.target
-                                = create_vertex(this.position_from_event(event));
+                            this.state.target = create_vertex(this.position_from_event(event));
                             // Usually this vertex will be immediately deselected, except when Shift
                             // is held, in which case we want to select the forged vertices *and*
                             // the new edge.
@@ -684,8 +686,8 @@ class UI {
                                 if (!event.shiftKey && !event.metaKey && !event.ctrlKey) {
                                     this.deselect();
                                     this.select(this.state.target);
-                                    this.panel.element.querySelector('label input[type="text"]')
-                                        .select();
+                                    this.panel.element.query_selector('label input[type="text"]')
+                                        .element.select();
                                 }
                                 actions.push({
                                     kind: "connect",
@@ -716,34 +718,34 @@ class UI {
         // be `"active"` and we create a new vertex and immediately start
         // connecting it to something (possibly an empty grid cell, which will
         // create a new vertex and connect them both).
-        insertion_point.addEventListener("mouseleave", () => {
-            insertion_point.classList.remove("pending");
+        insertion_point.listen("mouseleave", () => {
+            insertion_point.class_list.remove("pending");
 
-            if (insertion_point.classList.contains("active")) {
+            if (insertion_point.class_list.contains("active")) {
                 // If the insertion point is `"active"`, we're going to create
                 // a vertex and start connecting it.
-                insertion_point.classList.remove("active");
+                insertion_point.class_list.remove("active");
                 const vertex = create_vertex(this.position_from_offset(new Offset(
-                    insertion_point.offsetLeft,
-                    insertion_point.offsetTop,
+                    insertion_point.element.offsetLeft,
+                    insertion_point.element.offsetTop,
                 )));
                 this.select(vertex);
                 this.switch_mode(new UIState.Connect(this, vertex, true));
-                vertex.element.classList.add("source");
+                vertex.element.class_list.add("source");
             } else if (!this.in_mode(UIState.Connect)) {
                 // If the cursor leaves the insertion point and we're *not*
                 // connecting anything, then hide it.
-                insertion_point.classList.remove("revealed");
+                insertion_point.class_list.remove("revealed");
             }
         });
 
         // Moving the insertion point, panning, and rearranging cells.
-        this.element.addEventListener("mousemove", (event) => {
+        this.element.listen("mousemove", (event) => {
             // If the user has currently clicked to place a vertex, then don't reposition the
             // insertion point until the new vertex has been created: otherwise we might move the
             // insertion point before the vertex has been created and accidentally place the vertex
             // in the new position of the insertion point, rather than the old one.
-            if (this.in_mode(UIState.Default) && insertion_point.classList.contains("revealed")) {
+            if (this.in_mode(UIState.Default) && insertion_point.class_list.contains("revealed")) {
                 return;
             }
 
@@ -761,7 +763,7 @@ class UI {
             if (this.in_mode(UIState.Connect)) {
                 // We only permit the forgery of vertices, not edges.
                 if (this.state.source.is_vertex() && this.state.target === null) {
-                    insertion_point.classList
+                    insertion_point.class_list
                         .toggle("revealed", !this.positions.has(`${position}`));
                 }
             }
@@ -840,12 +842,12 @@ class UI {
                 // Clean up any state for which this state is responsible.
                 this.state.release(this);
                 if (this.state.name !== null) {
-                    this.element.classList.remove(this.state.name);
+                    this.element.class_list.remove(this.state.name);
                 }
             }
             this.state = state;
             if (this.state.name !== null) {
-                this.element.classList.add(this.state.name);
+                this.element.class_list.add(this.state.name);
             }
         }
     }
@@ -1125,7 +1127,7 @@ class UI {
         if (cell.is_vertex()) {
             this.positions.set(`${cell.position}`, cell);
         }
-        this.canvas.element.appendChild(cell.element);
+        this.canvas.add(cell.element);
     }
 
     /// Removes a cell.
@@ -1148,8 +1150,9 @@ class UI {
         this.view.y += offset.y;
         this.scale += zoom;
         const view = this.view.mul(2 ** this.scale);
-        this.canvas.element.style.transform
-            = `translate(${-view.x}px, ${-view.y}px) scale(${2 ** this.scale})`;
+        this.canvas.set_style({
+            transform: `translate(${-view.x}px, ${-view.y}px) scale(${2 ** this.scale})`,
+        });
         this.update_grid();
     }
 
@@ -1169,7 +1172,7 @@ class UI {
                 max_offset = max_offset.max(offset.add(centre));
             }
 
-            const panel_offset = new Offset(this.panel.element.offsetWidth, 0).div(2);
+            const panel_offset = new Offset(this.panel.element.element.offsetWidth, 0).div(2);
             this.pan_view(min_offset.add(max_offset).div(2).add(panel_offset));
         }
     }
@@ -1258,21 +1261,22 @@ class UI {
     // `type` can be used to selectively dismiss such errors (using the `type` argument on
     // `dismiss_error`).
     static display_error(message, type = null) {
+        const body = new DOM.Element(document.body);
         // If there's already an error, it's not unlikely that subsequent errors will be triggered.
         // Thus, we don't display an error banner if one is already displayed.
-        if (document.body.querySelector(".error-banner:not(.hidden)") === null) {
+        if (body.query_selector(".error-banner:not(.hidden)") === null) {
             const error = new DOM.Element("div", { class: "error-banner hidden" })
                 .add(message)
                 .add(
                     new DOM.Element("button", { class: "close" })
                         .listen("click", () => UI.dismiss_error())
-                ).element;
+                );
             if (type !== null) {
-                error.setAttribute("data-type", type);
+                error.set_attributes({ "data-type": type });
             }
-            document.body.appendChild(error);
+            body.add(error);
             // Animate the banner's entry.
-            UI.delay(() => error.classList.remove("hidden"));
+            UI.delay(() => error.class_list.remove("hidden"));
         }
     }
 
@@ -1280,14 +1284,13 @@ class UI {
     /// Returns whether there was any banner to dismiss.
     /// If `type` is non-null, `dismiss_error` will only dismiss errors whose type matches.
     static dismiss_error(type = null) {
-        const error = document.body.querySelector(`.error-banner${
+        const error = new DOM.Element(document.body).query_selector(`.error-banner${
             type !== null ? `[data-type="${type}"]` : ""
         }`);
         if (error) {
             const SECOND = 1000;
-            error.classList.add("hidden");
+            error.class_list.add("hidden");
             setTimeout(() => error.remove(), 0.2 * SECOND);
-
             return true;
         } else {
             return false;
@@ -1342,7 +1345,8 @@ class UI {
             context.moveTo(x * scale + width / 2, 0);
             context.lineTo(x * scale + width / 2, height);
         }
-        context.lineDashOffset = offset.y * scale - dash_offset - height % this.default_cell_size / 2;
+        context.lineDashOffset
+            = offset.y * scale - dash_offset - height % this.default_cell_size / 2;
         context.stroke();
 
         // Draw the horizontal lines.
@@ -1352,7 +1356,8 @@ class UI {
             context.moveTo(0, y * scale + height / 2);
             context.lineTo(width, y * scale + height / 2);
         }
-        context.lineDashOffset = offset.x * scale - dash_offset - width % this.default_cell_size / 2;
+        context.lineDashOffset
+            = offset.x * scale - dash_offset - width % this.default_cell_size / 2;
         context.stroke();
     }
 
@@ -1501,13 +1506,13 @@ class UI {
         // definitions.
         this.macro_url = null;
 
-        const macro_input = this.panel.element.querySelector(".bottom input");
+        const macro_input = this.panel.element.query_selector(".bottom input");
         url = url.trim();
-        macro_input.value = url;
+        macro_input.element.value = url;
 
-        const success_indicator = macro_input.parentElement.querySelector(".success-indicator");
-        success_indicator.classList.remove("success", "failure");
-        success_indicator.classList.add("unknown");
+        const success_indicator = macro_input.parent.query_selector(".success-indicator");
+        success_indicator.class_list.remove("success", "failure");
+        success_indicator.class_list.add("unknown");
 
         // Clear the error banner if it's an error caused by a previous failure of
         // `load_macros`.
@@ -1518,18 +1523,19 @@ class UI {
             .then((text) => {
                 this.load_macros(text);
                 this.macro_url = url;
-                success_indicator.classList.remove("unknown");
-                success_indicator.classList.add("success");
-                macro_input.blur();
+                success_indicator.class_list.remove("unknown");
+                success_indicator.class_list.add("success");
+                macro_input.element.blur();
             })
             .catch(() => {
+                console.log(e);
                 UI.display_error(
                     "Macro definitions could not be loaded " +
                     "from the given URL.",
                     "macro-load",
                 );
-                success_indicator.classList.remove("unknown");
-                success_indicator.classList.add("failure");
+                success_indicator.class_list.remove("unknown");
+                success_indicator.class_list.add("failure");
             })
     }
 }
@@ -1819,22 +1825,21 @@ class Panel {
 
     /// Set up the panel interface elements.
     initialise(ui) {
-        this.element = new DOM.Element("div", { class: "panel" }).element;
+        this.element = new DOM.Element("div", { class: "panel" });
 
         // Prevent propagation of mouse events when interacting with the panel.
-        this.element.addEventListener("mousedown", (event) => {
+        this.element.listen("mousedown", (event) => {
             event.stopImmediatePropagation();
         });
 
         // Prevent propagation of scrolling when the cursor is over the panel.
         // This allows the user to scroll the panel when all the elements don't fit on it.
-        this.element.addEventListener("wheel", (event) => {
+        this.element.listen("wheel", (event) => {
             event.stopImmediatePropagation();
         }, { passive: true });
 
         // Local options, such as vertex and edge actions.
-        const local = new DOM.Element("div", { class: "local" });
-        this.element.appendChild(local.element);
+        const local = new DOM.Element("div", { class: "local" }).add_to(this.element);
 
         // The label.
         const label_input = new DOM.Element("input", { type: "text", disabled: true });
@@ -2043,7 +2048,7 @@ class Panel {
             }
             recording = true;
 
-            const clone = x => JSON.parse(JSON.stringify(x));
+            const clone = (x) => JSON.parse(JSON.stringify(x));
             const styles = new Map();
             for (const cell of ui.selection) {
                 if (cell.is_edge()) {
@@ -2056,7 +2061,7 @@ class Panel {
             ui.history.add(ui, [{
                 kind: "style",
                 styles: Array.from(ui.selection)
-                    .filter(cell => cell.is_edge())
+                    .filter((cell) => cell.is_edge())
                     .map((edge) => ({
                         edge,
                         from: styles.get(edge),
@@ -2092,7 +2097,7 @@ class Panel {
             true, // `disabled`
             (edges, _, data, user_triggered) => {
                 effect_edge_style_change(user_triggered, () => {
-                    edges.forEach(edge => edge.options.style.tail = data);
+                    edges.forEach((edge) => edge.options.style.tail = data);
                 });
             },
             (data) => ({
@@ -2122,7 +2127,7 @@ class Panel {
             true, // `disabled`
             (edges, _, data, user_triggered) => {
                 effect_edge_style_change(user_triggered, () => {
-                    edges.forEach(edge => edge.options.style.body = data);
+                    edges.forEach((edge) => edge.options.style.body = data);
                 });
             },
             (data) => ({
@@ -2150,7 +2155,7 @@ class Panel {
             true, // `disabled`
             (edges, _, data, user_triggered) => {
                 effect_edge_style_change(user_triggered, () => {
-                    edges.forEach(edge => edge.options.style.head = data);
+                    edges.forEach((edge) => edge.options.style.head = data);
                 });
             },
             (data) => ({
@@ -2185,10 +2190,12 @@ class Panel {
                             edge.options.curve = 0;
                             edge.options.level = 1;
                         } else if (edge.options.style.name !== "arrow") {
-                            edge.options.curve
-                                = parseInt(ui.element.querySelector('input[name="curve"]').value);
-                            edge.options.level
-                                = parseInt(ui.element.querySelector('input[name="level"]').value);
+                            edge.options.curve = parseInt(
+                                ui.element.query_selector('input[name="curve"]').element.value
+                            );
+                            edge.options.level = parseInt(
+                                ui.element.query_selector('input[name="level"]').element.value
+                            );
                         }
                         // Update the edge style.
                         if (data.name !== "arrow" || edge.options.style.name !== "arrow") {
@@ -2202,15 +2209,15 @@ class Panel {
                     }
 
                     // Enable/disable the arrow style buttons and curve slider.
-                    ui.element.querySelectorAll(".arrow-style input")
-                        .forEach(element => element.disabled = data.name !== "arrow");
+                    ui.element.query_selector_all(".arrow-style input")
+                        .forEach((input) => input.element.disabled = data.name !== "arrow");
 
                     // If we've selected the `"arrow"` style, then we need to trigger the
                     // currently-checked buttons and the curve and level sliders so that we get the
                     // expected style, rather than the default style.
                     if (data.name === "arrow") {
-                        ui.element.querySelectorAll('.arrow-style input[type="radio"]:checked')
-                            .forEach(element => element.dispatchEvent(new Event("change")))
+                        ui.element.query_selector_all('.arrow-style input[type="radio"]:checked')
+                            .forEach((input) => input.element.dispatchEvent(new Event("change")))
                     }
                 });
             },
@@ -2242,10 +2249,10 @@ class Panel {
                         .add(list = new DOM.Element("ul"))
                         .add_to(export_pane);
                     content = new DOM.Element("div", { class: "code" }).add_to(export_pane);
-                    ui.element.appendChild(export_pane.element);
+                    ui.element.add(export_pane);
                 } else {
                     // Find the existing export pane.
-                    export_pane = new DOM.Element(ui.element.querySelector(".export"));
+                    export_pane = ui.element.query_selector(".export");
                     warning = export_pane.query_selector(".warning");
                     list = export_pane.query_selector("ul");
                     content = export_pane.query_selector(".code");
@@ -2279,7 +2286,7 @@ class Panel {
             }
         };
 
-        this.element.appendChild(
+        this.element.add(
             new DOM.Element("div", { class: "bottom" }).add(
                 new DOM.Element("div").add(
                     new DOM.Element("label").add("Macros: ")
@@ -2318,7 +2325,7 @@ class Panel {
                 // The export button.
                 new DOM.Element("button", { class: "global" }).add("Export to LaTeX")
                     .listen("click", () => display_export_pane("tikz-cd"))
-            ).element
+            )
         );
     }
 
@@ -2401,7 +2408,7 @@ class Panel {
                 backgrounds.push(`url('data:image/svg+xml;utf8,${
                     encodeURIComponent(svg.element.outerHTML)}')`);
             }
-            button.element.style.backgroundImage = backgrounds.join(", ");
+            button.set_style({ "background-image": backgrounds.join(", ") });
 
             return button;
         };
@@ -2410,14 +2417,14 @@ class Panel {
             create_option(value, tooltip, data).class_list.add(...classes);
         }
 
-        options_list.element.querySelector(`input[name="${name}"]`).checked = true;
+        options_list.query_selector(`input[name="${name}"]`).element.checked = true;
 
         local.add(options_list);
     }
 
     /// Render the TeX contained in the label of a cell.
     render_tex(ui, cell) {
-        const label = new DOM.Element(cell.element).query_selector(".label");
+        const label = cell.element.query_selector(".label");
 
         const update_label_transformation = () => {
             if (cell.is_edge()) {
@@ -2454,38 +2461,38 @@ class Panel {
 
     /// Update the panel state (i.e. enable/disable fields as relevant).
     update(ui) {
-        const input = this.element.querySelector('label input[type="text"]');
-        const label_alignments = this.element.querySelectorAll('input[name="label-alignment"]');
-        const sliders = this.element.querySelectorAll('input[type="range"]');
+        const input = this.element.query_selector('label input[type="text"]');
+        const label_alignments = this.element.query_selector_all('input[name="label-alignment"]');
+        const sliders = this.element.query_selector_all('input[type="range"]');
 
         // Modifying cells is not permitted when the export pane is visible.
         if (this.export === null) {
             // Default options (for when no cells are selected). We only need to provide defaults
             // for inputs that display their state even when disabled.
             if (ui.selection.size === 0) {
-                input.value = "";
-                sliders.forEach(slider => slider.value = 0);
+                input.element.value = "";
+                sliders.forEach((slider) => slider.element.value = 0);
             }
 
             // Multiple selection is always permitted, so the following code must provide sensible
             // behaviour for both single and multiple selections (including empty selections).
-            const selection_includes_edge = Array.from(ui.selection).some(cell => cell.is_edge());
+            const selection_includes_edge = Array.from(ui.selection).some((cell) => cell.is_edge());
 
             // Enable all the inputs iff we've selected at least one edge.
-            this.element.querySelectorAll('input:not([type="text"]), button:not(.global)')
-                .forEach(element => element.disabled = !selection_includes_edge);
+            this.element.query_selector_all('input:not([type="text"]), button:not(.global)')
+                .forEach((input) => input.element.disabled = !selection_includes_edge);
 
             // Enable the label input if at least one cell has been selected.
-            input.disabled = ui.selection.size === 0;
-            if (input.disabled && document.activeElement === input) {
+            input.element.disabled = ui.selection.size === 0;
+            if (input.element.disabled && document.activeElement === input.element) {
                 // In Firefox, if the active element is disabled, then key
                 // presses aren't registered, so we need to blur it manually.
-                input.blur();
+                input.element.blur();
             }
 
             // Label alignment options are always enabled.
             for (const option of label_alignments) {
-                option.disabled = false;
+                option.element.disabled = false;
             }
 
             // A map from option names to values. If a value is `null`, that means that
@@ -2555,35 +2562,35 @@ class Panel {
             for (const [name, value] of values) {
                 switch (name) {
                     case "{label}":
-                        input.value = value !== null ? value : "";
+                        input.element.value = value !== null ? value : "";
                         break;
                     case "{angle}":
                         const angle = value !== null ? value : 0;
                         for (const option of label_alignments) {
-                            option.style.transform = `rotate(${
-                                Math.round(2 * angle / Math.PI) * 90
-                            }deg)`;
+                            option.set_style({
+                                transform: `rotate(${Math.round(2 * angle / Math.PI) * 90}deg)`
+                            });
                         }
                         break;
                     case "{offset}":
                     case "{curve}":
                     case "{level}":
                         const property = name.slice(1, -1);
-                        const slider = this.element.querySelector(`input[name="${property}"]`);
-                        slider.value = value !== null ? value : 0;
+                        const slider = this.element.query_selector(`input[name="${property}"]`);
+                        slider.element.value = value !== null ? value : 0;
                         break;
                     default:
                         if (value === null) {
                             // Uncheck any checked input for which there are
                             // multiple selected values.
-                            this.element.querySelectorAll(
+                            this.element.query_selector_all(
                                 `input[name="${name}"]:checked`
-                            ).forEach(element => element.checked = false);
+                            ).forEach((input) => input.element.checked = false);
                         } else {
                             // Check any input for which there is a canonical choice of value.
-                            this.element.querySelector(
+                            this.element.query_selector(
                                 `input[name="${name}"][value="${value}"]`
-                            ).checked = true;
+                            ).element.checked = true;
                         }
                         break;
                 }
@@ -2591,28 +2598,28 @@ class Panel {
 
             // Update the actual `value` attribute for the offset, curve and level sliders so that
             // we can reference it in the CSS.
-            sliders.forEach(slider => slider.setAttribute("value", slider.value));
+            sliders.forEach((slider) => slider.set_attributes({ "value": slider.element.value }));
 
             // Disable/enable the arrow style buttons and the curve and level sliders.
-            for (const option of this.element.querySelectorAll(".arrow-style input")) {
-                option.disabled = !all_edges_are_arrows;
+            for (const option of this.element.query_selector_all(".arrow-style input")) {
+                option.element.disabled = !all_edges_are_arrows;
             }
 
             // Enable all inputs in the bottom section of the panel.
-            this.element.querySelectorAll(`.bottom input[type="text"]`).forEach((input) => {
-                input.disabled = false;
+            this.element.query_selector_all(`.bottom input[type="text"]`).forEach((input) => {
+                input.element.disabled = false;
             });
         } else {
             // Disable all the inputs.
-            this.element.querySelectorAll("input:not(.global), button:not(.global)")
-                .forEach(element => element.disabled = true);
+            this.element.query_selector_all("input:not(.global), button:not(.global)")
+                .forEach((input) => input.element.disabled = true);
         }
     }
 
     /// Dismiss the export pane, if it is shown.
     dismiss_export_pane(ui) {
         if (this.export !== null) {
-            ui.element.querySelector(".export").remove();
+            ui.element.query_selector(".export").remove();
             this.export = null;
             ui.switch_mode(UIState.default);
             this.update(ui);
@@ -2630,8 +2637,7 @@ class Toolbar {
 
     initialise(ui) {
         this.element = new DOM.Element("div", { class: "toolbar" })
-            .listen("mousedown", (event) => event.stopImmediatePropagation())
-            .element;
+            .listen("mousedown", (event) => event.stopImmediatePropagation());
 
         // By default, we display "Ctrl" and "Shift" as modifier keys, as most
         // operating systems use this to initiate keyboard shortcuts. For Mac
@@ -2718,7 +2724,7 @@ class Toolbar {
 
             add_shortcut(combinations, trigger_action_and_update_toolbar, button);
 
-            this.element.appendChild(button.element);
+            this.element.add(button);
             return button;
         };
 
@@ -2745,7 +2751,7 @@ class Toolbar {
         );
         // There's no "Redo" symbol in Unicode, so we make do by flipping the "Undo"
         // symbol horizontally.
-        redo.element.querySelector(".symbol").classList.add("flip");
+        redo.query_selector(".symbol").class_list.add("flip");
 
         add_action(
             "■",
@@ -2839,7 +2845,7 @@ class Toolbar {
 
         add_shortcut([{ key: "Enter" }], () => {
             // Focus the label input.
-            const input = ui.panel.element.querySelector('label input[type="text"]');
+            const input = ui.panel.element.query_selector('label input[type="text"]').element;
             input.focus();
             input.selectionStart = input.selectionEnd = input.value.length;
         });
@@ -2864,9 +2870,9 @@ class Toolbar {
                 ui.switch_mode(UIState.default);
             }
             // If we're waiting to start connecting a cell, then we stop waiting.
-            const pending = ui.element.querySelector(".cell.pending");
+            const pending = ui.element.query_selector(".cell.pending");
             if (pending !== null) {
-                pending.classList.remove("pending");
+                pending.class_list.remove("pending");
             }
             // Defocus the label input.
             const input = ui.input_is_active();
@@ -2939,13 +2945,13 @@ class Toolbar {
             const editing_input = ui.input_is_active();
 
             // Trigger a "flash" animation on an element.
-            const flash = (element) => {
-                element.classList.remove("flash");
+            const flash = (button) => {
+                button.class_list.remove("flash");
                 // Removing a class and instantly adding it again is going to be ignored by
                 // the browser, so we need to trigger a reflow to get the animation to
                 // retrigger.
-                void element.offsetWidth;
-                element.classList.add("flash");
+                void button.element.offsetWidth;
+                button.class_list.add("flash");
             };
 
             let key = event.key;
@@ -2980,7 +2986,7 @@ class Toolbar {
                                     if (!shortcut.button.element.disabled) {
                                         // Give some visual indication that the action has
                                         // been triggered.
-                                        flash(shortcut.button.element);
+                                        flash(shortcut.button);
                                     }
                                 }
                             }
@@ -3013,7 +3019,7 @@ class Toolbar {
                                     } else {
                                         // Give some visual indication that the input stole the
                                         // keyboard focus.
-                                        flash(input);
+                                        flash(new DOM.Element(input));
                                     }
                                 }
                             }, 8);
@@ -3034,7 +3040,7 @@ class Toolbar {
     /// Update the toolbar (e.g. enabling or disabling buttons based on UI state).
     update(ui) {
         const enable_if = (name, condition) => {
-            const element = this.element.querySelector(`.action[data-name="${name}"]`);
+            const element = this.element.query_selector(`.action[data-name="${name}"]`).element;
             element.disabled = !condition;
         };
 
@@ -3069,7 +3075,7 @@ class Cell {
 
     /// Set up the cell's element with interaction events.
     initialise(ui) {
-        this.element.classList.add("cell");
+        this.element.class_list.add("cell");
 
         const content_element = this.content_element;
 
@@ -3079,7 +3085,7 @@ class Cell {
         // We allow vertices to be moved by dragging its `element` (which contains its
         // `content_element`, the element with the actual cell content).
         if (this.is_vertex()) {
-            this.element.addEventListener("mousedown", (event) => {
+            this.element.listen("mousedown", (event) => {
                 if (event.button === 0) {
                     if (ui.in_mode(UIState.Default)) {
                         event.stopPropagation();
@@ -3107,7 +3113,7 @@ class Cell {
         // as the input field would capture it.
         let was_previously_selected = true;
 
-        content_element.addEventListener("mousedown", (event) => {
+        content_element.listen("mousedown", (event) => {
             if (event.button === 0) {
                 if (ui.in_mode(UIState.Default)) {
                     event.stopPropagation();
@@ -3137,12 +3143,12 @@ class Cell {
                     // the toolbar prematurely. Instead, we'll add a `.pending` class, which
                     // will then convert to a connection if the mouse leaves the element
                     // while remaining held.
-                    this.element.classList.add("pending");
+                    this.element.class_list.add("pending");
                 }
             }
         });
 
-        content_element.addEventListener("mouseenter", () => {
+        content_element.listen("mouseenter", () => {
             if (ui.in_mode(UIState.Connect)) {
                 // The second part of the condition should not be necessary, because pointer events
                 // are disabled for reconnected edges, but this acts as a warranty in case this is
@@ -3151,7 +3157,7 @@ class Cell {
                     && (ui.state.reconnect === null || ui.state.reconnect.edge !== this)) {
                     if (ui.state.valid_connection(this)) {
                         ui.state.target = this;
-                        this.element.classList.add("target");
+                        this.element.class_list.add("target");
                         // Hide the insertion point (e.g. if we're connecting a vertex to an edge).
                         const insertion_point = ui.canvas.query_selector(".insertion-point");
                         insertion_point.class_list.remove("revealed", "pending", "active");
@@ -3160,15 +3166,15 @@ class Cell {
             }
         });
 
-        content_element.addEventListener("mouseleave", () => {
-            if (this.element.classList.contains("pending")) {
-                this.element.classList.remove("pending");
+        content_element.listen("mouseleave", () => {
+            if (this.element.class_list.contains("pending")) {
+                this.element.class_list.remove("pending");
 
                 // Start connecting the node.
                 const state = new UIState.Connect(ui, this, false);
                 if (state.valid_connection(null)) {
                     ui.switch_mode(state);
-                    this.element.classList.add("source");
+                    this.element.class_list.add("source");
                 }
             }
 
@@ -3180,21 +3186,21 @@ class Cell {
                 // regardless. We might still have the "target" class even if this cell
                 // is not the target, if we've immediately transitioned from targeting
                 // one cell to targeting another.
-                this.element.classList.remove("target");
+                this.element.class_list.remove("target");
             }
         });
 
-        content_element.addEventListener("mouseup", (event) => {
+        content_element.listen("mouseup", (event) => {
             if (event.button === 0) {
                 // If we release the pointer without ever dragging, then
                 // we never begin connecting the cell.
-                this.element.classList.remove("pending");
+                this.element.class_list.remove("pending");
 
                 if (ui.in_mode(UIState.Default)) {
                     // Focus the label input for a cell if we've just ended releasing
                     // the mouse on top of the source.
                     if (was_previously_selected) {
-                        ui.panel.element.querySelector('label input[type="text"]').focus();
+                        ui.panel.element.query_selector('label input[type="text"]').element.focus();
                     }
                 }
 
@@ -3272,17 +3278,17 @@ class Cell {
     }
 
     select() {
-        this.element.classList.add("selected");
+        this.element.class_list.add("selected");
     }
 
     deselect() {
-        this.element.classList.remove("selected");
+        this.element.class_list.remove("selected");
     }
 
     size() {
         if (this.is_vertex()) {
-            const label = this.element.querySelector(".label");
-            return new Dimensions(label.offsetWidth, label.offsetHeight);
+            const label = this.element.query_selector(".label");
+            return new Dimensions(label.element.offsetWidth, label.element.offsetHeight);
         } else {
             return Dimensions.zero();
         }
@@ -3309,7 +3315,7 @@ class Vertex extends Cell {
 
     get content_element() {
         if (this.element !== null) {
-            return this.element.querySelector(".content");
+            return this.element.query_selector(".content");
         } else {
             return null;
         }
@@ -3330,12 +3336,15 @@ class Vertex extends Cell {
 
         // The container for the cell.
         if (construct) {
-            this.element = new DOM.Element("div").element;
+            this.element = new DOM.Element("div");
         }
 
         // Position the vertex.
         const offset = ui.offset_from_position(this.position);
-        [this.element.style.left, this.element.style.top] = [`${offset.x}px`, `${offset.y}px`];
+        this.element.set_style({
+            left: `${offset.x}px`,
+            top: `${offset.y}px`,
+        });
         const centre_offset = offset.add(ui.cell_centre_at_position(this.position));
         this.shape.origin = centre_offset;
         // Shape width is controlled elsewhere.
@@ -3343,25 +3352,28 @@ class Vertex extends Cell {
         // Resize according to the grid cell.
         const cell_width = ui.cell_size(ui.cell_width, this.position.x);
         const cell_height = ui.cell_size(ui.cell_height, this.position.y);
-        this.element.style.width = `${cell_width}px`;
-        this.element.style.height = `${cell_height}px`;
+        this.element.set_style({
+            width: `${cell_width}px`,
+            height: `${cell_height}px`,
+        });
 
         if (construct) {
-            this.element.classList.add("vertex");
+            this.element.class_list.add("vertex");
 
             // The cell content (containing the label).
-            const content = new DOM.Element("div", { class: "content" })
-                .add(new DOM.Element("div", { class: "label" }));
-            this.element.appendChild(content.element);
+            new DOM.Element("div", { class: "content" })
+                .add(new DOM.Element("div", { class: "label" }))
+                .add_to(this.element);
         }
 
         // Resize the content according to the grid cell. This is just the default size: it will be
         // updated by `render_tex`.
-        const content = this.content_element;
-        content.style.width = `${ui.default_cell_size / 2}px`;
-        content.style.left = `${cell_width / 2}px`;
-        content.style.height = `${ui.default_cell_size / 2}px`;
-        content.style.top = `${cell_height / 2}px`;
+        this.content_element.set_style({
+            width: `${ui.default_cell_size / 2}px`,
+            height: `${ui.default_cell_size / 2}px`,
+            left: `${cell_width / 2}px`,
+            top: `${cell_height / 2}px`,
+        });
 
         // Ensure we re-render the label when the cell is moved, in case the cell that that label is
         // moved into is a different size.
@@ -3380,8 +3392,10 @@ class Vertex extends Cell {
     /// Resize the cell content to match the label width.
     resize_content(ui, sizes) {
         const size = this.content_size(ui, sizes);
-        this.content_element.style.width = `${size.width}px`;
-        this.content_element.style.height = `${size.height}px`;
+        this.content_element.set_attributes({
+            width: `${size.width}px`,
+            height: `${size.height}px`,
+        });
         this.shape.size = size;
     }
 }
@@ -3394,7 +3408,7 @@ class Edge extends Cell {
         this.options = Edge.default_options(options, null, this.level);
 
         this.arrow = new Arrow(source.shape, target.shape, new ArrowStyle(), new Label());
-        this.element = this.arrow.element.element;
+        this.element = this.arrow.element;
 
         // `this.shape` is used for the source/target from (higher) cells connected to this one.
         // This is located at the centre of the arrow.
@@ -3437,7 +3451,7 @@ class Edge extends Cell {
             event.preventDefault();
             // We don't get the default blur behaviour here, as we've prevented it, so we have to do
             // it ourselves.
-            ui.panel.element.querySelector('label input[type="text"]').blur();
+            ui.panel.element.query_selector('label input[type="text"]').element.blur();
 
             const fixed = { source: this.target, target: this.source }[end];
             ui.switch_mode(new UIState.Connect(ui, fixed, false, {
@@ -3566,7 +3580,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // The global UI.
-    let ui = new UI(document.body);
+    const ui = new UI(new DOM.Element(document.body));
     ui.initialise();
 
     const load_quiver_from_query_string = () => {

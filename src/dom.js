@@ -28,6 +28,10 @@ DOM.Element = class {
         return this.element.classList;
     }
 
+    get parent() {
+        return new DOM.Element(this.element.parentElement);
+    }
+
     /// Appends an element.
     /// `value` has three forms: a plain string, in which case it is added as a text node; a
     /// `DOM.Element`, in which case the corresponding element is appended; or a plain element.
