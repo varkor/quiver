@@ -736,6 +736,14 @@ class UI {
 
         // Moving the insertion point, panning, and rearranging cells.
         this.element.addEventListener("mousemove", (event) => {
+            // If the user has currently clicked to place a vertex, then don't reposition the
+            // insertion point until the new vertex has been created: otherwise we might move the
+            // insertion point before the vertex has been created and accidentally place the vertex
+            // in the new position of the insertion point, rather than the old one.
+            if (this.in_mode(UIState.Default) && insertion_point.classList.contains("revealed")) {
+                return;
+            }
+
             const position = reposition_insertion_point(event);
 
             if (this.in_mode(UIState.Pan) && this.state.origin !== null) {
