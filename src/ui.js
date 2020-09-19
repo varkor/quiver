@@ -2,10 +2,11 @@
 
 /// Various parameters.
 Object.assign(CONSTANTS, {
-    /// We currently only support 0-cells, 1-cells and 2-cells. This is solely
-    /// due to a restriction with tikz-cd, which does not support 3-cells.
+    /// We currently only support 0-cells, 1-cells, 2-cells, and 3-cells. This is due to
+    /// a restriction with tikz-cd, which does not support n-cells greater than n = 2 (though it has
+    /// issues even then), and also for usability: a user is unlikely to want to draw a higher cell.
     /// This restriction is not technical: it can be lifted in the editor without issue.
-    MAXIMUM_CELL_LEVEL: 2,
+    MAXIMUM_CELL_LEVEL: 3,
     /// The width of the dashed grid lines.
     GRID_BORDER_WIDTH: 2,
     /// The padding of the content area of a vertex.
