@@ -3479,7 +3479,7 @@ class Edge extends Cell {
         // Update the origin, which is given by the centre of the edge.
         this.shape.origin =
             this.arrow.source.origin.add(this.arrow.target.origin).div(2)
-                .add(new Point(0, this.arrow.style.curve / 2).rotate(
+                .add(new Point(0, this.arrow.style.shift + this.arrow.style.curve / 2).rotate(
                     this.arrow.target.origin.sub(this.arrow.source.origin).angle()
                 ));
     }
