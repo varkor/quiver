@@ -229,6 +229,10 @@ body:not(.modal) {
     color: hsl(0, 0%, 80%);
 }
 
+.ui.connect .panel {
+    pointer-events: none;
+}
+
 .panel label, .panel button {
     user-select: none;
 }
