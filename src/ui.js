@@ -58,26 +58,26 @@ UIState.Connect = class extends UIState {
 
         this.name = "connect";
 
-        /// The source of a connection between two cells.
+        // The source of a connection between two cells.
         this.source = source;
 
-        /// The target of a connection between two cells.
+        // The target of a connection between two cells.
         this.target = null;
 
-        /// Whether the source of this connection was created with the start
-        /// of the connection itself (i.e. a vertex was created after dragging
-        /// from an empty grid cell).
+        // Whether the source of this connection was created with the start
+        // of the connection itself (i.e. a vertex was created after dragging
+        // from an empty grid cell).
         this.forged_vertex = forged_vertex;
 
-        /// If `reconnect` is not null, then we're reconnecting an existing edge.
-        /// In that case, rather than drawing a phantom arrow, we'll actually
-        /// reposition the existing edge.
-        /// `reconnect` is of the form `{ edge, end }` where `end` is either
-        /// `"source"` or `"target"`.
+        // If `reconnect` is not null, then we're reconnecting an existing edge.
+        // In that case, rather than drawing a phantom arrow, we'll actually
+        // reposition the existing edge.
+        // `reconnect` is of the form `{ edge, end }` where `end` is either
+        // `"source"` or `"target"`.
         this.reconnect = reconnect;
 
-        /// The overlay for drawing an edge between the source and the cursor.
         if (this.reconnect === null) {
+            // The overlay for drawing an edge between the source and the cursor.
             this.overlay = new DOM.Element("div", { class: "overlay" });
             this.arrow = new Arrow(
                 new Shape.Endpoint(Point.zero()),
@@ -85,6 +85,8 @@ UIState.Connect = class extends UIState {
             );
             this.overlay.add(this.arrow.element);
             ui.canvas.add(this.overlay);
+        } else {
+            this.reconnect.edge.element.classList.add("reconnecting");
         }
     }
 
@@ -100,6 +102,7 @@ UIState.Connect = class extends UIState {
             this.overlay.remove();
             this.arrow = null;
         } else {
+            this.reconnect.edge.element.classList.remove("reconnecting");
             this.reconnect.edge.render(ui);
             this.reconnect = null;
         }
@@ -3296,7 +3299,7 @@ class Vertex extends Cell {
         // unimportant.
         this.shape = new Shape.RoundedRect(
             Point.zero(),
-            new Dimensions(ui.default_cell_size, ui.default_cell_size),
+            new Dimensions(ui.default_cell_size / 2, ui.default_cell_size / 2),
             ui.default_cell_size / 8,
         );
 
