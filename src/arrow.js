@@ -227,6 +227,68 @@ class Arrow {
         }
     }
 
+    /// Returns the points along the Bézier curve associated to the arrow that intersect with the
+    /// source and target.
+    /// Returns either an array `[start, end]` or throws an error if the curve is invalid and has no
+    /// nontrivial endpoints.
+    find_endpoints() {
+        const diff = this.target.origin.sub(this.source.origin);
+        const [length, angle] = [diff.length(), diff.angle()];
+
+        /// Finds the intersection of the Bézier curve with either the source or target. There
+        /// should be a unique intersection point, and this will be true in all but extraordinary
+        /// circumstances: namely, when the source and target are overlapping. In this case, we
+        /// pick either the earliest (if `prefer_min`) or latest intersection point (otherwise).
+        const find_endpoint = (endpoint_shape, prefer_min) => {
+            const bezier = new Bezier(this.source.origin, length, this.style.curve, angle);
+
+            // The case when the endpoint is simply a point.
+            if (endpoint_shape instanceof Shape.Endpoint || endpoint_shape.size.is_zero()) {
+                // In this case, there is a trivial intersection with either the source or target.
+                const t = prefer_min ? 0 : 1;
+                return new BezierPoint(
+                    endpoint_shape.origin.sub(this.source.origin).rotate(-angle),
+                    t,
+                    bezier.tangent(t),
+                );
+            }
+
+            // The case when the endpoint is a rounded rectangle.
+            // The following function call may throw an error, which should be caught by the caller.
+            const intersections = bezier.intersections_with_rounded_rectangle(
+                new RoundedRectangle(
+                    endpoint_shape.origin,
+                    endpoint_shape.size,
+                    endpoint_shape.radius,
+                ),
+                false,
+            );
+            if (intersections.length === 0) {
+                // We should always have at least one intersection, as the Bézier curve spans
+                // the endpoints, so this is an error.
+                console.error(
+                    "No intersection found for Bézier curve with endpoint.",
+                    endpoint_shape,
+                    bezier,
+                );
+                // Bail out.
+                throw new Error("No intersections found.");
+            }
+            if (intersections.length > 1 && Bezier.point_inside_polygon(
+                    (prefer_min ? this.target : this.source).origin,
+                    new RoundedRectangle(endpoint_shape.origin, endpoint_shape.size, 0).points(),
+            )) {
+                // It's difficult to draw this case gracefully, so we bail out here too.
+                throw new Error("The Bézier re-enters an endpoint rectangle.");
+            }
+            return intersections[prefer_min ? 0 : intersections.length - 1];
+        }
+
+        const start = find_endpoint(this.source, true);
+        const end = find_endpoint(this.target, false);
+        return [start, end];
+    }
+
     /// Redraw the arrow, its mask, and its background. We should minimise calls to `redraw`: it
     /// should only be called if something has actually changed: for instance, its position or
     /// properties.
@@ -292,59 +354,10 @@ class Arrow {
         this.element.class_list.remove("invalid");
         this.svg.class_list.remove("invalid");
 
-        /// Finds the intersection of the Bézier curve with either the source or target. There
-        /// should be a unique intersection point, and this will be true in all but extraordinary
-        /// circumstances: namely, when the source and target are overlapping. In this case, we
-        /// pick either the earliest (if `prefer_min`) or latest intersection point (otherwise).
-        const find_endpoint = (endpoint_shape, prefer_min) => {
-            const bezier = new Bezier(this.source.origin, length, this.style.curve, angle);
-
-            // The case when the endpoint is simply a point.
-            if (endpoint_shape instanceof Shape.Endpoint) {
-                // In this case, there is a trivial intersection with either the source or target.
-                const t = prefer_min ? 0 : 1;
-                return new BezierPoint(
-                    endpoint_shape.origin.sub(this.source.origin).rotate(-angle),
-                    t,
-                    bezier.tangent(t),
-                );
-            }
-
-            // The case when the endpoint is a rounded rectangle.
-            // The following function call may throw an error, which should be caught by the caller.
-            const intersections = bezier.intersections_with_rounded_rectangle(
-                new RoundedRectangle(
-                    endpoint_shape.origin,
-                    endpoint_shape.size,
-                    endpoint_shape.radius,
-                ),
-                false,
-            );
-            if (intersections.length === 0) {
-                // We should always have at least one intersection, as the Bézier curve spans
-                // the endpoints, so this is an error.
-                console.error(
-                    "No intersection found for Bézier curve with endpoint.",
-                    endpoint_shape,
-                    bezier,
-                );
-                // Bail out.
-                throw new Error("No intersections found.");
-            }
-            if (intersections.length > 1 && Bezier.point_inside_polygon(
-                    (prefer_min ? this.target : this.source).origin,
-                    new RoundedRectangle(endpoint_shape.origin, endpoint_shape.size, 0).points(),
-            )) {
-                // It's difficult to draw this case gracefully, so we bail out here too.
-                throw new Error("The Bézier re-enters an endpoint rectangle.");
-            }
-            return intersections[prefer_min ? 0 : intersections.length - 1];
-        }
 
         let start, end;
         try {
-            start = find_endpoint(this.source, true);
-            end = find_endpoint(this.target, false);
+            [start, end] = this.find_endpoints();
         } catch (_) {
             // If we hit this block, the arrow as specified is invalid, because it would be entirely
             // cropped by the source or target. In this case, we do not draw the arrow.

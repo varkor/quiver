@@ -399,7 +399,7 @@ body:not(.modal) {
 .panel input[type="range"] {
     -webkit-appearance: none;
     vertical-align: middle;
-    width: 60%;
+    width: 75%;
 
     background: transparent;
     outline: none;
@@ -421,9 +421,13 @@ body:not(.modal) {
 .panel input[type="range"]::after {
     content: attr(value);
     display: inline-block;
-    width: 20px;
+    width: 48px;
 
     text-align: right;
+}
+
+.panel .percentage input[type="range"]::after {
+    content: attr(value) "%";
 }
 
 .panel input[type="range"]::-moz-range-thumb {

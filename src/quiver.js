@@ -327,6 +327,10 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                                 label_parameters.push("swap");
                                 break;
                         }
+                    } else {
+                        // If the label is empty, we remove the padding so that it doesn't take up
+                        // extra space.
+                        label_parameters.push("inner sep=0");
                     }
                 } else {
                     if (nonempty_label) {
@@ -347,19 +351,36 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                         }
                     }
                 }
+
                 if (edge.options.offset !== 0) {
                     const side = edge.options.offset > 0 ? "right" : "left";
                     parameters.push(`shift ${side}=${Math.abs(edge.options.offset)}`);
                 }
+
+                // For now, to convert quiver dimensions into TikZ dimensions, we convert to `pt`
+                // and multiply by a constant that, heuristically, gave reasonable results. It would
+                // be nice to eventually correct this by using proportional lengths everywhere.
+                const TIKZ_MULTIPLIER = 1/3;
+
                 if (edge.options.curve !== 0) {
                     has_curves = true;
-                    // Scale the tikz-cd curve to better match the curve in quiver.
-                    const CURVE_MULTIPLIER = 1/3;
                     parameters.push(
                         `curve={height=${
-                            edge.options.curve * CONSTANTS.CURVE_HEIGHT * CURVE_MULTIPLIER
+                            edge.options.curve * CONSTANTS.CURVE_HEIGHT * TIKZ_MULTIPLIER
                         }pt}`
                     );
+                }
+
+                if (edge.options.length !== 100) {
+                    const shorten = Math.round(edge.arrow.style.shorten * TIKZ_MULTIPLIER);
+                    parameters.push(`shorten <=${shorten}pt`);
+                    parameters.push(`shorten >=${shorten}pt`);
+                    if (edge.options.curve !== 0) {
+                        // It should be possible to do this using a custom style, but for now we
+                        // simply warn the user that the result will not look quite as good as it
+                        // does in quiver.
+                        tikz_incompatibilities.add("shortened curved arrows");
+                    }
                 }
 
                 let style = "";
@@ -516,13 +537,6 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                         break;
                 }
 
-                // tikz-cd tends to place arrows between arrows without any spacing, so we add
-                // some manually ourselves.
-                if (level > 1) {
-                    parameters.push("shorten <=2mm");
-                    parameters.push("shorten >=2mm");
-                }
-
                 output += `\\arrow[${style}` +
                     (label !== "" || label_parameters.length > 0 ? `${label || "\"\""}${
                         label_parameters.length > 0 ? `{${label_parameters.join(", ")}}` : ""
@@ -627,7 +641,7 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
 
                 // We compute a delta of the edge options compared
                 // to the default, so we encode a minimum of data.
-                const default_options = Edge.default_options({}, {}, level);
+                const default_options = Edge.default_options({ level });
 
                 // Recursively compute a delta between an `object` and `base`.
                 const probe = (object, base) => {
@@ -800,9 +814,10 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
                         indices[source],
                         indices[target],
                         Edge.default_options({
+                            level,
                             label_alignment: ["left", "centre", "right", "over"][alignment],
                             ...options,
-                        }, style, level),
+                        }, style),
                     );
                     indices.push(edge);
                 }

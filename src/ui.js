@@ -128,7 +128,14 @@ UIState.Connect = class extends UIState {
 
             this.arrow.source = this.source.shape;
             this.arrow.target = target.shape;
-            this.arrow.style.level = Math.max(this.source.level, target.level) + 1;
+            const level = Math.max(this.source.level, target.level) + 1;
+            this.arrow.style = UI.arrow_style_for_options(
+                this.arrow,
+                Edge.default_options({
+                    level,
+                    length: level === 1 ? 100 : 70,
+                }),
+            );
             this.arrow.redraw();
         } else {
             // We're reconnecting an existing edge.
@@ -162,6 +169,8 @@ UIState.Connect = class extends UIState {
             // Otherwise we revert to the currently-selected label alignment in the panel and the
             // default offset (0).
             const options = {
+                // By default, 2-cells and above have a little padding for aesthetic purposes.
+                length: Math.max(this.source.level, this.target.level) === 0 ? 100 : 70,
                 // We will guess the label alignment below, but in case there's no selected label
                 // alignment, we default to "left".
                 label_alignment: "left",
@@ -1365,7 +1374,7 @@ class UI {
     /// `ArrowStyle` is used simply for styling: we don't use it as an internal data representation
     /// for quivers. This helps keep a separation between structure and drawing, which makes it
     /// easiser to maintain backwards-compatibility.
-    static arrow_style_for_options(options) {
+    static arrow_style_for_options(arrow, options) {
         // By default, `ArrowStyle` have minimal styling.
         const style = new ArrowStyle();
 
@@ -1376,7 +1385,23 @@ class UI {
             case "arrow":
                 style.level = options.level;
                 style.curve = options.curve * CONSTANTS.CURVE_HEIGHT * 2;
-
+                // `shorten` is interpreted with respect to the arc length of the arrow.
+                const bezier = new Bezier(
+                    Point.zero(),
+                    arrow.target.origin.sub(arrow.source.origin).length(),
+                    style.curve,
+                    0,
+                );
+                try {
+                    const [start, end] = arrow.find_endpoints();
+                    const arc_length = bezier.arc_length(end.t) - bezier.arc_length(start.t);
+                    // We halve `shorten` (`100 - options.length`), because it takes effect at both
+                    // ends.
+                    style.shorten = arc_length * (100 - options.length) / 200;
+                } catch (_) {
+                    // If we can't find the endpoints, the arrow isn't being drawn, so we don't
+                    // need to bother trying to shorten it.
+                }
                 // Body style.
                 switch (options.style.body.name) {
                     case "squiggly":
@@ -1456,7 +1481,7 @@ class UI {
     /// This is necessary before redrawing.
     static update_style(arrow, options) {
         // Update the arrow style.
-        arrow.style = UI.arrow_style_for_options(options);
+        arrow.style = UI.arrow_style_for_options(arrow, options);
         // Update the label style.
         if (arrow.label !== null) {
             arrow.label.alignment = {
@@ -1713,6 +1738,13 @@ class History {
                     }
                     update_panel = true;
                     break;
+                case "length":
+                    for (const length of action.lengths) {
+                        length.edge.options.length = length[to];
+                        cells.add(length.edge);
+                    }
+                    update_panel = true;
+                    break;
                 case "reverse":
                     for (const cell of action.cells) {
                         if (cell.is_edge()) {
@@ -1940,7 +1972,7 @@ class Panel {
                         min: range.min,
                         value: range.value,
                         max: range.max,
-                        step: 1,
+                        step: range.step || 1,
                         disabled: true,
                     },
                 ).listen("input", (_, slider) => {
@@ -1997,6 +2029,10 @@ class Panel {
         // The curve slider.
         create_option_slider("Curve", "curve", { min: -5, value: 0, max: 5 })
             .class_list.add("arrow-style");
+
+        // The length slider, which affects `shorten`.
+        create_option_slider("Length", "length", { min: 20, value: 100, max: 100, step: 10 })
+            .class_list.add("arrow-style", "percentage");
 
         // The button to reverse an edge.
         local.add(
@@ -2182,19 +2218,23 @@ class Panel {
             (edges, _, data, user_triggered) => {
                 effect_edge_style_change(user_triggered, () => {
                     for (const edge of edges) {
-                        // We reset `curve` and `level` for non-arrow edges, because that data isn't
-                        // relevant to them. Otherwise, we set them to whatever the sliders are
-                        // currently set to. This will preserve them under switching between arrow
-                        // styles, because we don't reset the sliders when switching.
+                        // We reset `curve`, `level` and `length` for non-arrow edges, because that
+                        // data isn't relevant to them. Otherwise, we set them to whatever the
+                        // sliders are currently set to. This will preserve them under switching
+                        // between arrow styles, because we don't reset the sliders when switching.
                         if (data.name !== "arrow") {
                             edge.options.curve = 0;
                             edge.options.level = 1;
+                            edge.options.length = 100;
                         } else if (edge.options.style.name !== "arrow") {
                             edge.options.curve = parseInt(
                                 ui.element.query_selector('input[name="curve"]').element.value
                             );
                             edge.options.level = parseInt(
                                 ui.element.query_selector('input[name="level"]').element.value
+                            );
+                            edge.options.length = parseInt(
+                                ui.element.query_selector('input[name="length"]').element.value
                             );
                         }
                         // Update the edge style.
@@ -2208,13 +2248,13 @@ class Panel {
                         }
                     }
 
-                    // Enable/disable the arrow style buttons and curve slider.
+                    // Enable/disable the arrow style buttons and curve, length, and level sliders.
                     ui.element.query_selector_all(".arrow-style input")
                         .forEach((input) => input.element.disabled = data.name !== "arrow");
 
                     // If we've selected the `"arrow"` style, then we need to trigger the
-                    // currently-checked buttons and the curve and level sliders so that we get the
-                    // expected style, rather than the default style.
+                    // currently-checked buttons and the curve, length, and level sliders so that
+                    // we get the expected style, rather than the default style.
                     if (data.name === "arrow") {
                         ui.element.query_selector_all('.arrow-style input[type="radio"]:checked')
                             .forEach((input) => input.element.dispatchEvent(new Event("change")))
@@ -2471,7 +2511,9 @@ class Panel {
             // for inputs that display their state even when disabled.
             if (ui.selection.size === 0) {
                 input.element.value = "";
-                sliders.forEach((slider) => slider.element.value = 0);
+                sliders.forEach((slider) => {
+                    return slider.element.value = slider.element.name !== "length" ? 0 : 100;
+                });
             }
 
             // Multiple selection is always permitted, so the following code must provide sensible
@@ -2524,6 +2566,7 @@ class Panel {
                     consider("{angle}", cell.angle());
                     consider("{offset}", cell.options.offset);
                     consider("{curve}", cell.options.curve);
+                    consider("{length}", cell.options.length);
                     consider("{level}", cell.options.level);
                     consider("edge-type", cell.options.style.name);
 
@@ -2574,6 +2617,7 @@ class Panel {
                         break;
                     case "{offset}":
                     case "{curve}":
+                    case "{length}":
                     case "{level}":
                         const property = name.slice(1, -1);
                         const slider = this.element.query_selector(`input[name="${property}"]`);
@@ -2596,11 +2640,11 @@ class Panel {
                 }
             }
 
-            // Update the actual `value` attribute for the offset, curve and level sliders so that
-            // we can reference it in the CSS.
+            // Update the actual `value` attribute for the offset, curve, length, and level sliders
+            // so that we can reference it in the CSS.
             sliders.forEach((slider) => slider.set_attributes({ "value": slider.element.value }));
 
-            // Disable/enable the arrow style buttons and the curve and level sliders.
+            // Disable/enable the arrow style buttons and the curve, length, and level sliders.
             for (const option of this.element.query_selector_all(".arrow-style input")) {
                 option.element.disabled = !all_edges_are_arrows;
             }
@@ -3405,19 +3449,14 @@ class Edge extends Cell {
     constructor(ui, label = "", source, target, options) {
         super(ui.quiver, Math.max(source.level, target.level) + 1, label);
 
-        this.options = Edge.default_options(options, null, this.level);
+        this.options = Edge.default_options(Object.assign({ level: this.level }, options));
 
         this.arrow = new Arrow(source.shape, target.shape, new ArrowStyle(), new Label());
         this.element = this.arrow.element;
 
         // `this.shape` is used for the source/target from (higher) cells connected to this one.
         // This is located at the centre of the arrow.
-        this.shape = new Shape.RoundedRect(
-            // The position will be reset immediately.
-            Point.zero(),
-            new Dimensions(ui.default_cell_size * 0.5, ui.default_cell_size * 0.5),
-            ui.default_cell_size * 0.25,
-        );
+        this.shape = new Shape.Endpoint(Point.zero());
 
         this.reconnect(ui, source, target);
 
@@ -3425,12 +3464,13 @@ class Edge extends Cell {
     }
 
     /// A set of defaults for edge options: a basic arrow (→).
-    static default_options(override_properties = null, override_style = null, level = 1) {
+    static default_options(override_properties = null, override_style = null) {
         let options = Object.assign({
             label_alignment: "left",
             offset: 0,
             curve: 0,
-            level,
+            length: 100,
+            level: 1,
             style: Object.assign({
                 name: "arrow",
                 tail: { name: "none" },
