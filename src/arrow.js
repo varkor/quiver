@@ -172,59 +172,24 @@ class Arrow {
         this.mask = new DOM.SVGElement("svg");
     }
 
-    /// Return an existing element, or create a new one if it does not exist.
-    /// This is more efficient, and also preserves event listeners on the existing elements.
-    /// The `selector` may be of the form `element#optional-id.class1.class2...`.
-    requisition_element(
-        parent,
-        selector,
-        attributes = {},
-        style = {},
-        namespace = DOM.SVGElement.NAMESPACE,
-    ) {
-        const elements = parent.query_selector_all(selector);
-        switch (elements.length) {
-            case 0:
-                const [prefix, ...classes] = selector.split(".");
-                const [name, id = null] = prefix.split("#");
-                const extra_attrs = {};
-                if (id !== null) {
-                    extra_attrs.id = id;
-                }
-                if (classes.length > 0) {
-                    extra_attrs.class = classes.join(" ");
-                }
-                return new DOM.Element(
-                    name,
-                    Object.assign(extra_attrs, attributes),
-                    style,
-                    namespace,
-                ).add_to(parent);
-            case 1:
-                // Overwrite existing attributes and styling.
-                elements[0].set_attributes(attributes);
-                elements[0].set_style(style);
-                return elements[0];
-            default:
-                console.error("Found multiple candidates for requisitioning.");
-                break;
-        }
+    /// Returns the vector from source to target.
+    vector() {
+        return this.target.origin.sub(this.source.origin);
     }
 
-    /// Remove an existing element, or do nothing if it does not exist.
-    release_element(parent, selector) {
-        const elements = parent.query_selector_all(selector);
-        switch (elements.length) {
-            case 0:
-                // It's already released, so we can ignore.
-                break;
-            case 1:
-                elements[0].remove();
-                break;
-            default:
-                console.error("Found multiple candidates for releasing.");
-                break;
-        }
+    /// Returns the angle of the vector from source to target.
+    angle() {
+        return this.vector().angle();
+    }
+
+    /// Returns the underlying Bézier curve associated to the arrow.
+    bezier() {
+        return new Bezier(
+            Point.zero(),
+            this.vector().length(),
+            this.style.curve,
+            0,
+        );
     }
 
     /// Returns the points along the Bézier curve associated to the arrow that intersect with the
@@ -232,7 +197,7 @@ class Arrow {
     /// Returns either an array `[start, end]` or throws an error if the curve is invalid and has no
     /// nontrivial endpoints.
     find_endpoints() {
-        const diff = this.target.origin.sub(this.source.origin);
+        const diff = this.vector();
         const [length, angle] = [diff.length(), diff.angle()];
 
         /// Finds the intersection of the Bézier curve with either the source or target. There
@@ -287,6 +252,61 @@ class Arrow {
         const start = find_endpoint(this.source, true);
         const end = find_endpoint(this.target, false);
         return [start, end];
+    }
+
+    /// Return an existing element, or create a new one if it does not exist.
+    /// This is more efficient, and also preserves event listeners on the existing elements.
+    /// The `selector` may be of the form `element#optional-id.class1.class2...`.
+    requisition_element(
+        parent,
+        selector,
+        attributes = {},
+        style = {},
+        namespace = DOM.SVGElement.NAMESPACE,
+    ) {
+        const elements = parent.query_selector_all(selector);
+        switch (elements.length) {
+            case 0:
+                const [prefix, ...classes] = selector.split(".");
+                const [name, id = null] = prefix.split("#");
+                const extra_attrs = {};
+                if (id !== null) {
+                    extra_attrs.id = id;
+                }
+                if (classes.length > 0) {
+                    extra_attrs.class = classes.join(" ");
+                }
+                return new DOM.Element(
+                    name,
+                    Object.assign(extra_attrs, attributes),
+                    style,
+                    namespace,
+                ).add_to(parent);
+            case 1:
+                // Overwrite existing attributes and styling.
+                elements[0].set_attributes(attributes);
+                elements[0].set_style(style);
+                return elements[0];
+            default:
+                console.error("Found multiple candidates for requisitioning.");
+                break;
+        }
+    }
+
+    /// Remove an existing element, or do nothing if it does not exist.
+    release_element(parent, selector) {
+        const elements = parent.query_selector_all(selector);
+        switch (elements.length) {
+            case 0:
+                // It's already released, so we can ignore.
+                break;
+            case 1:
+                elements[0].remove();
+                break;
+            default:
+                console.error("Found multiple candidates for releasing.");
+                break;
+        }
     }
 
     /// Redraw the arrow, its mask, and its background. We should minimise calls to `redraw`: it
@@ -1186,11 +1206,11 @@ class Arrow {
 
     /// Redraw the label attached to the edge. Returns the mask associated to the label.
     redraw_label(constants, tag_name) {
-        const { length, angle, offset } = constants;
+        const { angle, offset } = constants;
 
-        const origin = this.determine_label_position(constants).add(offset).add(new Point(
-            (length - this.label.size.width) / 2,
-            (this.style.curve - this.label.size.height) / 2,
+        const origin = this.determine_label_position(constants).add(offset).sub(new Point(
+            this.label.size.width / 2,
+            this.label.size.height / 2,
         ));
 
         // Draw the mask.
@@ -1214,7 +1234,10 @@ class Arrow {
     /// it is offset to either side, we want to find the minimum offset from the centre of the edge
     /// such that the label no longer overlaps the edge.
     determine_label_position(constants) {
-        const { length, angle, edge_width } = constants;
+        const { length, angle, edge_width, start, end } = constants;
+
+        const bezier = new Bezier(Point.zero(), length, this.style.curve, angle);
+        const centre = bezier.point((start.t + end.t) / 2);
 
         // The angle we will try to push the label so that it no longer intersects the curve. This
         // will be set by the following switch block if we do not return by the end of the block.
@@ -1223,7 +1246,7 @@ class Arrow {
         switch (this.label.alignment) {
             case CONSTANTS.LABEL_ALIGNMENT.CENTRE:
             case CONSTANTS.LABEL_ALIGNMENT.OVER:
-                return Point.zero();
+                return centre;
 
             case CONSTANTS.LABEL_ALIGNMENT.LEFT:
                 offset_angle = -Math.PI / 2;
@@ -1257,12 +1280,11 @@ class Arrow {
         while (true) {
             // We will try offseting at distance `label_offset` pixels next.
             label_offset = (offset_min + offset_max) / 2;
-            const rect_centre =
-                new Point(length / 2, this.style.curve / 2)
-                    .rotate(angle)
-                    .add(Point.lendir(label_offset, angle + offset_angle));
+            const rect_centre = centre
+                .rotate(angle)
+                .add(Point.lendir(label_offset, angle + offset_angle));
             // Compute the intersections between the offset bounding rectangle and the edge.
-            const intersections = new Bezier(Point.zero(), length, this.style.curve, angle)
+            const intersections = bezier
                 .intersections_with_rounded_rectangle(new RoundedRectangle(
                     rect_centre,
                     this.label.size.add(Point.diag(edge_width)),
@@ -1290,7 +1312,7 @@ class Arrow {
             }
         }
 
-        return Point.lendir(label_offset, offset_angle);
+        return centre.add(Point.lendir(label_offset, offset_angle));
     }
 }
 

@@ -1386,12 +1386,7 @@ class UI {
                 style.level = options.level;
                 style.curve = options.curve * CONSTANTS.CURVE_HEIGHT * 2;
                 // `shorten` is interpreted with respect to the arc length of the arrow.
-                const bezier = new Bezier(
-                    Point.zero(),
-                    arrow.target.origin.sub(arrow.source.origin).length(),
-                    style.curve,
-                    0,
-                );
+                const bezier = arrow.bezier();
                 try {
                     const [start, end] = arrow.find_endpoints();
                     const arc_length = bezier.arc_length(end.t) - bezier.arc_length(start.t);
@@ -3531,16 +3526,26 @@ class Edge extends Cell {
         UI.update_style(this.arrow, this.options);
         this.arrow.redraw();
 
+        // Update the origin, which is given by the centre of the edge.
+        const bezier = this.arrow.bezier();
+        let centre = null;
+        try {
+            // Preferably, we take the centre relative to the endpoints, rather than the
+            // source and target.
+            const [start, end] = arrow.find_endpoints();
+            centre = bezier.point((start.t + end.t) / 2);
+        } catch (_) {
+            // If we can't find the endpoints, we just take the centre relative to the
+            // source and target.
+            centre = bezier.point(0.5);
+        }
+        this.shape.origin = this.arrow.source.origin.add(
+            centre.add(new Point(0, this.arrow.style.shift)).rotate(this.arrow.angle()),
+        );
+
         // We override the source and target whilst drawing, so we need to reset them.
         this.arrow.source = this.source.shape;
         this.arrow.target = this.target.shape;
-
-        // Update the origin, which is given by the centre of the edge.
-        this.shape.origin =
-            this.arrow.source.origin.add(this.arrow.target.origin).div(2)
-                .add(new Point(0, this.arrow.style.shift + this.arrow.style.curve / 2).rotate(
-                    this.arrow.target.origin.sub(this.arrow.source.origin).angle()
-                ));
     }
 
     /// Returns the angle of this edge.
