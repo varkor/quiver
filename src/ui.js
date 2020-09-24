@@ -197,7 +197,7 @@ UIState.Connect = class extends UIState {
             this.reconnect.edge.level = edge_level;
             // Reset the levels of its dependencies.
             update_levels();
-            
+
             return !exceeded_max_level;
         }
     }
@@ -3555,6 +3555,7 @@ class Edge extends Cell {
     render(ui, pointer_offset = null) {
         // If we're reconnecting an edge, then we vary its source/target (depending on
         // which is being dragged) depending on the pointer position.
+        let fixed_endpoints = true;
         if (pointer_offset !== null) {
             if (ui.state.target !== null) {
                 // In this case, we're hovering over another cell.
@@ -3564,6 +3565,7 @@ class Edge extends Cell {
                 // Usually we offset edge endpoints from the cells to which they are connected,
                 // but when we are dragging an endpoint, we want to draw it right up to the pointer.
                 this.arrow[ui.state.reconnect.end] = new Shape.Endpoint(pointer_offset);
+                fixed_endpoints = false;
             }
         }
 
@@ -3576,16 +3578,30 @@ class Edge extends Cell {
         try {
             // Preferably, we take the centre relative to the endpoints, rather than the
             // source and target.
-            const [start, end] = arrow.find_endpoints();
+            const [start, end] = this.arrow.find_endpoints();
             centre = bezier.point((start.t + end.t) / 2);
         } catch (_) {
-            // If we can't find the endpoints, we just take the centre relative to the
-            // source and target.
-            centre = bezier.point(0.5);
+            if (fixed_endpoints) {
+                // If we're not reconnecting the edge, and we can't find the endpoints, we just take
+                // the centre relative to the source and target.
+                centre = bezier.point(0.5);
+            } else {
+                // If we are reconnecting the edge, then we just want to fix the centre at the
+                // source or target (whichever is not being changed right now), so the edges
+                // connected to this one don't move around, despite not looking like they're
+                // attached to anything, when this edge is not displayed.
+                const end = { source: "target", target: "source" }[ui.state.reconnect.end];
+                this.shape.origin = this.arrow[end].origin.add(
+                    new Point(0, this.arrow.style.shift).rotate(this.arrow.angle()),
+                );
+            }
         }
-        this.shape.origin = this.arrow.source.origin.add(
-            centre.add(new Point(0, this.arrow.style.shift)).rotate(this.arrow.angle()),
-        );
+        if (centre !== null) {
+            // `centre` will be `null` only if we've already updated the origin.
+            this.shape.origin = this.arrow.source.origin.add(
+                centre.add(new Point(0, this.arrow.style.shift)).rotate(this.arrow.angle()),
+            );
+        }
 
         // We override the source and target whilst drawing, so we need to reset them.
         this.arrow.source = this.source.shape;
