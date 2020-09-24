@@ -221,7 +221,10 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
 
         // Early exit for empty quivers.
         if (quiver.is_empty()) {
-            return wrap_boilerplate(output, false);
+            return {
+                data: wrap_boilerplate(output, false),
+                metadata: { tikz_incompatibilities: new Set() },
+            };
         }
 
         // We handle the export in two stages: vertices and edges. These are fundamentally handled
@@ -599,7 +602,10 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
         if (quiver.is_empty()) {
             // No need to have an encoding of an empty quiver;
             // we'll just use the URL directly.
-            return URL_prefix;
+            return {
+                data: URL_prefix,
+                metadata: {},
+            };
         }
 
         const cells = [];

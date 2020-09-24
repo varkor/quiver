@@ -1553,7 +1553,6 @@ class UI {
                 macro_input.element.blur();
             })
             .catch(() => {
-                console.log(e);
                 UI.display_error(
                     "Macro definitions could not be loaded " +
                     "from the given URL.",
@@ -2355,7 +2354,7 @@ class Panel {
                                     data: `${output.data}&macro_url=${
                                         encodeURIComponent(ui.macro_url)
                                     }`,
-                                    metadata,
+                                    metadata: output.metadata,
                                 };
                             }
                             return output;
