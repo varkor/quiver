@@ -103,7 +103,9 @@ UIState.Connect = class extends UIState {
             this.arrow = null;
         } else {
             this.reconnect.edge.element.class_list.remove("reconnecting");
-            this.reconnect.edge.render(ui);
+            for (const cell of ui.quiver.transitive_dependencies([this.reconnect.edge])) {
+                cell.render(ui);
+            }
             this.reconnect = null;
         }
     }
@@ -148,14 +150,56 @@ UIState.Connect = class extends UIState {
 
     /// Returns whether the `source` is compatible with the specified `target`.
     /// This first checks that the source is valid at all.
-    valid_connection(target) {
-        return this.source.level < CONSTANTS.MAXIMUM_CELL_LEVEL &&
-            // To allow `valid_connection` to be used to simply check whether the source is valid,
-            // we ignore source--target compatibility if `target` is null.
-            // We allow cells to be connected even if they do not have the same level. This is
-            // because it's often useful when drawing diagrams, even if it may not always be
-            // semantically valid.
-            (target === null || target.level < CONSTANTS.MAXIMUM_CELL_LEVEL);
+    valid_connection(ui, target) {
+        // To allow `valid_connection` to be used to simply check whether the source is valid,
+        // we ignore source--target compatibility if `target` is null.
+        // We allow cells to be connected even if they do not have the same level. This is
+        // because it's often useful when drawing diagrams, even if it may not always be
+        // semantically valid.
+        const source_target_level = Math.max(this.source.level, target === null ? 0 : target.level);
+        if (source_target_level + 1 > CONSTANTS.MAXIMUM_CELL_LEVEL) {
+            return false;
+        }
+
+        if (this.reconnect === null) {
+            // If there are no edges depending on this one, then there are no other obstructions to
+            // being connectable.
+            return true;
+        } else {
+            // We need to check that the dependencies also don't have too great a level after
+            // reconnecting.
+            // We're going to temporarily increase the level of the edge to what it would be,
+            // and check for any edges that then exceed the `MAXIMUM_CELL_LEVEL`. This is
+            // conceptually the simplest version of the check.
+            const edge_level = this.reconnect.edge.level;
+            this.reconnect.edge.level = source_target_level + 1;
+
+            let exceeded_max_level = false;
+
+            const update_levels = () => {
+                for (const cell of ui.quiver.transitive_dependencies([this.reconnect.edge], true)) {
+                    if (target === cell) {
+                        // We shouldn't be able to connect to an edge that's connected to this one.
+                        exceeded_max_level = true;
+                        break;
+                    }
+                    cell.level = Math.max(cell.source.level, cell.target.level) + 1;
+                    if (cell.level > CONSTANTS.MAXIMUM_CELL_LEVEL) {
+                        exceeded_max_level = true;
+                        break;
+                    }
+                }
+            };
+
+            // Check for violations of `MAXIMUM_CELL_LEVEL`.
+            update_levels();
+            // Reset the edge level.
+            this.reconnect.edge.level = edge_level;
+            // Reset the levels of its dependencies.
+            update_levels();
+            
+            return !exceeded_max_level;
+        }
     }
 
     /// Connects the source and target. Note that this does *not* check whether the source and
@@ -3196,7 +3240,7 @@ class Cell {
                 // not working.
                 if (ui.state.source !== this
                     && (ui.state.reconnect === null || ui.state.reconnect.edge !== this)) {
-                    if (ui.state.valid_connection(this)) {
+                    if (ui.state.valid_connection(ui, this)) {
                         ui.state.target = this;
                         this.element.class_list.add("target");
                         // Hide the insertion point (e.g. if we're connecting a vertex to an edge).
@@ -3213,7 +3257,7 @@ class Cell {
 
                 // Start connecting the node.
                 const state = new UIState.Connect(ui, this, false);
-                if (state.valid_connection(null)) {
+                if (state.valid_connection(ui, null)) {
                     ui.switch_mode(state);
                     this.element.class_list.add("source");
                 }
@@ -3555,7 +3599,6 @@ class Edge extends Cell {
 
     /// Changes the source and target.
     reconnect(ui, source, target) {
-        [this.source, this.target] = [source, target];
         [this.arrow.source, this.arrow.target] = [source.shape, target.shape];
         ui.quiver.connect(source, target, this);
         for (const cell of ui.quiver.transitive_dependencies([this])) {

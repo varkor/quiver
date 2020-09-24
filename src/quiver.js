@@ -98,15 +98,19 @@ class Quiver {
         reverse_dependencies.add(source);
         reverse_dependencies.add(target);
 
-        // Reset the cell's level to ensure correct spacing when changing the level of the
-        // source/target cells.
-        const level = Math.max(source.level, target.level) + 1;
-        if (this.cells.length < level + 1) {
-            this.cells.push(new Set());
+        [edge.source, edge.target] = [source, target];
+
+        // Reset the cell's (and its dependencies') level to ensure correct spacing when changing
+        // the level of the source/target cells.
+        for (const cell of this.transitive_dependencies([edge])) {
+            const level = Math.max(cell.source.level, cell.target.level) + 1;
+            if (this.cells.length < level + 1) {
+                this.cells.push(new Set());
+            }
+            this.cells[cell.level].delete(cell);
+            cell.level = level;
+            this.cells[level].add(cell);
         }
-        this.cells[edge.level].delete(edge);
-        edge.level = level;
-        this.cells[level].add(edge);
     }
 
     /// Returns a collection of all the cells in the quiver.
