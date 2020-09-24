@@ -2469,6 +2469,9 @@ class Panel {
         const update_label_transformation = () => {
             if (cell.is_edge()) {
                 // Resize the bounding box for the label.
+                // In Firefox, the bounding rectangle for the KaTeX element seems to be sporadically
+                // available, unless we render the arrow *beforehand*.
+                cell.render(ui);
                 const bounding_rect = label.query_selector(".katex, .katex-error").bounding_rect();
                 cell.arrow.label.size = new Dimensions(
                     bounding_rect.width
