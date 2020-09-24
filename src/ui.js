@@ -3436,7 +3436,7 @@ class Vertex extends Cell {
     /// Resize the cell content to match the label width.
     resize_content(ui, sizes) {
         const size = this.content_size(ui, sizes);
-        this.content_element.set_attributes({
+        this.content_element.set_style({
             width: `${size.width}px`,
             height: `${size.height}px`,
         });
