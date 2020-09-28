@@ -3460,9 +3460,16 @@ class Vertex extends Cell {
             top: `${cell_height / 2}px`,
         });
 
-        // Ensure we re-render the label when the cell is moved, in case the cell that that label is
-        // moved into is a different size.
-        ui.panel.render_tex(ui, this);
+        if (construct) {
+            ui.panel.render_tex(ui, this);
+        } else {
+            // The vertex may have moved, in which case we need to update the size of the grid cell
+            // in which the vertex now lives, as the grid cell may now need to be resized.
+            const label = this.element.query_selector(".label");
+            const { offsetWidth, offsetHeight } = label.element;
+            ui.update_cell_size(this, offsetWidth, offsetHeight);
+            this.resize_content(ui, [offsetWidth, offsetHeight]);
+        }
     }
 
     /// Get the size of the cell content.
