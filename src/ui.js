@@ -2646,7 +2646,12 @@ class Panel {
             for (const [name, value] of values) {
                 switch (name) {
                     case "{label}":
-                        input.element.value = value !== null ? value : "";
+                        if (value === null || input.element.value !== value) {
+                            // Most browsers handle resetting an input value with the same value
+                            // nicely. However, Safari will reset the caret to the end of the input,
+                            // so we need to guard on the value actually changing.
+                            input.element.value = value !== null ? value : "";
+                        }
                         break;
                     case "{angle}":
                         const angle = value !== null ? value : 0;
