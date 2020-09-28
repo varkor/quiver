@@ -3584,6 +3584,22 @@ class Edge extends Cell {
         UI.update_style(this.arrow, this.options);
         this.arrow.redraw();
 
+        // Safari has a longstanding bug (https://bugs.webkit.org/show_bug.cgi?id=23113),
+        // which means we need to correct the position of the label. We could do this
+        // consistently and cleanly across browsers, but Safari is _wrong_ and deserves to
+        // be treated like the subpar implementation that it is.
+        if (/^((?!chrome|android).)*safari/i.test(navigator.userAgent)) {
+            const [x, y, angle, rx, ry] = this.arrow.label.element.parent.get_attribute("transform")
+                .replace(/\s+/g, " ").match(/-?\d+(\.\d+)?/g);
+            const katex_element = this.arrow.label.element.query_selector(".katex, .katex-error");
+            if (katex_element !== null) {
+                katex_element.set_style({
+                    display: "inline-block",
+                    transform: `translate(${x}px, ${y}px) rotate(${angle}deg)`,
+                });
+            }
+        }
+
         // Update the origin, which is given by the centre of the edge.
         const bezier = this.arrow.bezier();
         let centre = null;

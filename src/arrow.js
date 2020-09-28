@@ -1224,8 +1224,8 @@ class Arrow {
                 // The label should be horizontal for most alignments, but in the direction of the
                 // arrow for `OVER`.
                 this.label.alignment === CONSTANTS.LABEL_ALIGNMENT.OVER ? "" :
-                    `rotate(${-rad_to_deg(angle)}
-                        ${this.label.size.width / 2} ${this.label.size.height / 2})`
+                    `rotate(${-rad_to_deg(angle)} ${
+                        this.label.size.width / 2} ${this.label.size.height / 2})`
             }`,
         });
     }

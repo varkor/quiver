@@ -89,6 +89,10 @@ DOM.Element = class {
         return elements.map((element) => new DOM.Element(element));
     }
 
+    get_attribute(attribute) {
+        return this.element.getAttribute(attribute);
+    }
+
     set_attributes(attributes = {}) {
         for (const [attribute, value] of Object.entries(attributes)) {
             if (value !== null) {
