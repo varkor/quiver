@@ -206,7 +206,7 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
             const bend_style =
 `\\tikzset{curve/.style={settings={#1},to path={(\\tikztostart)
     .. controls ($(\\tikztostart)!\\pv{pos}!(\\tikztotarget)!\\pv{height}!270:(\\tikztotarget)$)
-    and ($(\\tikztostart)!1-\\pv{pos}!(\\tikztotarget)!\\pv{height}!270:(\\tikztotarget)$$)
+    and ($(\\tikztostart)!1-\\pv{pos}!(\\tikztotarget)!\\pv{height}!270:(\\tikztotarget)$)
     .. (\\tikztotarget)\\tikztonodes}},
     settings/.code={\\tikzset{quiver/.cd,#1}
         \\def\\pv##1{\\pgfkeysvalueof{/tikz/quiver/##1}}},
