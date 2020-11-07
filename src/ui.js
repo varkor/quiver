@@ -472,6 +472,35 @@ class UI {
         this.macro_url = null;
     }
 
+    /// Reset most of the UI. We don't bother resetting current zoom, etc.: just enough to make
+    /// changing the URL history work properly.
+    reset() {
+        // Reset the mode.
+        this.switch_mode(UIState.default)
+
+        // Clear the existing quiver.
+        for (const cell of this.quiver.all_cells()) {
+            cell.element.remove();
+        }
+        this.quiver = new Quiver();
+
+        // Reset data regarding existing vertices.
+        this.cell_width = new Map();
+        this.cell_height = new Map();
+        this.cell_width_constraints = new Map();
+        this.cell_height_constraints = new Map();
+        this.selection = new Set();
+        this.positions = new Map();
+        this.update_grid();
+
+        // Clear the undo/redo history.
+        this.history = new History();
+
+        // Update UI elements.
+        this.panel.update(this);
+        this.toolbar.update(this);
+    }
+
     initialise() {
         this.element.class_list.add("ui");
         this.switch_mode(UIState.default);
@@ -3738,7 +3767,7 @@ document.addEventListener("DOMContentLoaded", () => {
             // If there is a query string, try to decode it as a diagram.
             try {
                 const query_segs = query_string[1].split("&");
-                const query_data = new Map( query_segs.map(segment => segment.split("=")));
+                const query_data = new Map(query_segs.map(segment => segment.split("=")));
                 // Decode the diagram.
                 if (query_data.has("q")) {
                     QuiverImportExport.base64.import(ui, query_data.get("q"));
@@ -3808,4 +3837,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Trigger the script load.
     document.head.appendChild(rendering_library.element);
+
+    // Listen for history change events, and update the diagram accordingly.
+    window.addEventListener("popstate", () => {
+        ui.reset();
+        load_quiver_from_query_string();
+    });
 });
