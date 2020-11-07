@@ -532,7 +532,7 @@ class UI {
 
         // Handle panning via scrolling.
         window.addEventListener("wheel", (event) => {
-            // We don't want to scroll while using the mouse wheel.
+            // We don't want to scroll the page while using the mouse wheel.
             event.preventDefault();
 
             // Hide the insertion point if it is visible.
@@ -2349,6 +2349,13 @@ class Panel {
                 if (this.export === null) {
                     // Create the export pane.
                     export_pane = new DOM.Element("div", { class: "export" });
+
+                    // Prevent propagation of scrolling when the cursor is over the export pane.
+                    // This allows the user to scroll the pane when not all the text fits on it.
+                    export_pane.listen("wheel", (event) => {
+                        event.stopImmediatePropagation();
+                    }, { passive: true });
+
                     warning = new DOM.Element("span", { class: "warning hidden" })
                         .add("The exported tikz-cd diagram may not match the quiver diagram " +
                             "exactly, as tikz-cd does not support the following features that " +

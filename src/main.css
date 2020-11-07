@@ -660,6 +660,7 @@ body:not(.modal) {
     left: 0;
     z-index: 100;
     padding: 20px 24px;
+    overflow-y: auto;
 
     background: hsla(0, 0%, 10%, 0.8);
 }
