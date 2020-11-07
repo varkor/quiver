@@ -2910,8 +2910,8 @@ class Toolbar {
             "⨉",
             "Delete",
             [
-                { key: "Backspace", context: SHORTCUT_PRIORITY.Defer },
-                { key: "Delete", context: SHORTCUT_PRIORITY.Defer },
+                { key: "Backspace" },
+                { key: "Delete" },
             ],
             () => {
                 ui.history.add(ui, [{
