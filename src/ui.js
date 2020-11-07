@@ -2983,11 +2983,16 @@ class Toolbar {
 
         // Add the other, "invisible", shortcuts.
 
-        add_shortcut([{ key: "Enter" }], () => {
-            // Focus the label input.
+        add_shortcut([{ key: "Enter", context: SHORTCUT_PRIORITY.Always }], () => {
+            // Toggle the focus of the label input.
             const input = ui.panel.element.query_selector('label input[type="text"]').element;
-            input.focus();
-            input.selectionStart = input.selectionEnd = input.value.length;
+            if (document.activeElement !== input) {
+                input.focus();
+                // Select all existing text.
+                input.select();
+            } else {
+                input.blur();
+            }
         });
 
         add_shortcut([{ key: "Escape", shift: null, context: SHORTCUT_PRIORITY.Always }], () => {
@@ -3337,10 +3342,16 @@ class Cell {
                 this.element.class_list.remove("pending");
 
                 if (ui.in_mode(UIState.Default)) {
-                    // Focus the label input for a cell if we've just ended releasing
-                    // the mouse on top of the source.
+                    // Focus the input if we click on a cell that was already selected. It will
+                    // automatically blur when we click on the cell again, so this allows us to
+                    // toggle the focus of the input when we click on any cell.
                     if (was_previously_selected) {
-                        ui.panel.element.query_selector('label input[type="text"]').element.focus();
+                        const input
+                            = ui.panel.element.query_selector('label input[type="text"]').element;
+                        input.focus();
+                        // Select all the text.
+                        input.selectionStart = 0;
+                        input.selectionEnd = input.value.length;
                     }
                 }
 
