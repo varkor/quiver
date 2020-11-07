@@ -2820,6 +2820,20 @@ class Toolbar {
 
         // Add all of the toolbar buttons.
 
+        // "Saving" updates the URL to reflect the current diagram.
+        add_action(
+            "▴",
+            "Save",
+            [{ key: "s", modifier: true, context: SHORTCUT_PRIORITY.Always }],
+            () => {
+                // For now, we do not include macro information in the URL.
+                const { data } = ui.quiver.export("base64");
+                // `data` is the new URL.
+                history.pushState({}, "", data);
+            },
+            false,
+        );
+
         add_action(
             "⎌",
             "Undo",
