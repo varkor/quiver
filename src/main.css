@@ -223,7 +223,7 @@ body:not(.modal) {
 
 .panel {
     position: fixed;
-    width: 20%; height: 100%;
+    width: calc(16px * 18); height: 100%;
     right: 0;
     z-index: 100;
 
