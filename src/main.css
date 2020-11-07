@@ -6,7 +6,18 @@
 
 :root {
     /* Selection blue. */
-    --blue: hsl(200, 100%, 40%);
+    --blue: hsl(200, 100%, 50%);
+    /* Almost white. */
+    --white: hsl(0, 0%, 96%);
+
+    /* UI colours. */
+    --ui-black: hsla(0, 0%, 0%, 0.9);
+    --ui-background: transparent;
+    --ui-border: hsla(0, 0%, 100%, 0.2);
+    --ui-hover: hsla(0, 0%, 100%, 0.1);
+    --ui-active: hsla(0, 0%, 100%, 0.2);
+    --ui-focus: var(--blue);
+    --ui-text: hsla(0, 0%, 100%, 0.6);
 
     /* Cell states. */
     --cell-hover: hsla(0, 0%, 0%, 0.1);
@@ -88,7 +99,7 @@ body:not(.modal) {
     left: 16px; top: 16px;
     width: 100px;
 
-    opacity: 0.5;
+    opacity: 0.8;
 }
 
 .logo:hover {
@@ -226,14 +237,23 @@ body:not(.modal) {
 
 .panel {
     position: fixed;
-    width: calc(16px * 18); height: 100%;
-    right: 0;
+    width: calc(16px * 18);
+    top: 16px;
+    bottom: 16px;
+    right: 16px;
     z-index: 100;
+    overflow-y: auto;
 
-    background: hsl(0, 0%, 20%);
+    border-radius: 16px;
 
     font: 14px sans-serif;
-    color: hsl(0, 0%, 80%);
+    color: var(--ui-text);
+
+    transition: right 0.1s;
+}
+
+.panel.hidden {
+    right: calc(16px * -18);
 }
 
 .ui.connect .panel {
@@ -244,13 +264,25 @@ body:not(.modal) {
     user-select: none;
 }
 
-.panel .local {
-    position: absolute;
-    width: 100%; height: calc(100% - 114px);
-    padding: 24px 16px;
-    overflow: auto;
+.global {
+    top: auto; right: auto;
+    left: 16px;
+    padding: 8px 16px;
+    /* Display above the export pane. */
+    z-index: 101;
 
-    border-bottom: hsl(0, 0%, 36%) solid 1px;
+    background: var(--ui-black);
+    border-radius: 16px;
+}
+
+.panel .wrapper {
+    position: absolute;
+    left: 0;
+    width: 100%;
+    padding: 8px 16px;
+
+    background: var(--ui-black);
+    border-radius: 16px;
 }
 
 .panel label {
@@ -258,11 +290,50 @@ body:not(.modal) {
     margin-bottom: 8px;
 }
 
+.label-input {
+    position: fixed;
+    left: 50%;
+    bottom: 16px;
+    width: 40%; min-width: 280px;
+    transform: translateX(-50%);
+    padding: 4px 6px;
+
+    background: var(--ui-black);
+    border: none;
+    border-radius: 8px;
+    outline: none;
+
+    color: var(--white);
+    font-size: 16pt;
+    font-family: monospace;
+    text-align: center;
+
+    transition: bottom 0.1s;
+}
+
+.label-input.hidden {
+    bottom: calc(-16pt - 4px * 2 - 16px);
+}
+
+.label-input:hover {
+    background: hsla(0, 0%, 15%, 0.9);
+}
+
+.label-input:focus {
+    background: var(--ui-focus);
+
+    color: black;
+}
+
+.label-input::selection {
+    background-color: white;
+}
+
 .panel input[type="text"] {
     padding: 2px 4px;
 
-    background: hsl(0, 0%, 16%);
-    border: hsl(0, 0%, 28%) solid 1px;
+    background: var(--ui-background);
+    border: var(--ui-border) solid 1px;
     border-radius: 2px;
     outline: none;
 
@@ -271,23 +342,26 @@ body:not(.modal) {
     color: hsl(0, 0%, 96%);
 }
 
+.panel input[type="text"]::placeholder {
+    color: hsla(0, 0%, 100%, 0.4);
+}
+
 .panel input[type="text"]:hover {
-    background: hsl(0, 0%, 18%);
+    background: var(--ui-hover);
 }
 
 .panel input[type="text"]:focus {
-    background: hsl(0, 0%, 96%);
-    border-color: var(--blue);
+    background: var(--ui-focus);
+    border-color: var(--ui-focus);
 
     color: hsl(0, 0%, 16%);
 }
 
-.panel input[type="text"]:disabled {
-    background: hsl(0, 0%, 20%);
-    border-color: hsl(0, 0%, 28%);
+.panel input[type="text"]:focus::placeholder {
+    color: hsla(0, 0%, 0%, 0.4);
 }
 
-.panel input[type="text"].flash {
+input[type="text"].flash {
     animation: shadow-flash 0.2s;
 }
 
@@ -312,13 +386,13 @@ body:not(.modal) {
     display: inline-block;
     width: 48px; height: 48px;
 
-    background-color: hsl(0, 0%, 16%);
+    background-color: transparent;
     background-repeat: no-repeat;
     background-position: center;
     /* We use stacked backgrounds for the background image, */
     /* to allow us to change the image directly via CSS. */
     background-size: 0%, auto;
-    border: hsl(0, 0%, 28%) solid 1px;
+    border: var(--ui-border) solid 1px;
     border-radius: 2px;
     outline: none;
 }
@@ -384,19 +458,17 @@ body:not(.modal) {
 }
 
 .panel input[type="radio"]:hover {
-    background-color: hsl(0, 0%, 18%);
+    background-color: var(--ui-hover);
+}
+
+.panel input[type="radio"]:active {
+    background-color: var(--ui-active);
 }
 
 .panel input[type="radio"]:checked {
-    background-color: hsl(0, 0%, 96%);
+    background-color: var(--ui-focus);
     background-size: auto, 0%;
     border-color: var(--blue);
-}
-
-.panel input[type="radio"]:disabled {
-    background-size: 0%, auto;
-    background-color: hsl(0, 0%, 20%);
-    border-color: hsl(0, 0%, 28%);
 }
 
 .panel input[type="range"] {
@@ -428,8 +500,8 @@ body:not(.modal) {
     width: 20px; height: 20px;
     margin-top: calc(-4px);
 
-    background: hsl(0, 0%, 16%);
-    border: hsl(0, 0%, 28%) solid 1px;
+    background: hsl(0, 0%, 10%);
+    border: var(--ui-border) solid 1px;
     border-radius: 20px;
 }
 
@@ -442,8 +514,8 @@ body:not(.modal) {
     width: 20px; height: 20px;
     margin-top: calc(-4px);
 
-    background: hsl(0, 0%, 16%);
-    border: hsl(0, 0%, 28%) solid 1px;
+    background: hsl(0, 0%, 10%);
+    border: var(--ui-border) solid 1px;
     border-radius: 20px;
 }
 
@@ -453,18 +525,18 @@ body:not(.modal) {
 }
 
 .panel input[type="range"]:hover:not(.focused)::-webkit-slider-thumb {
-    background: hsl(0, 0%, 18%);
+    background: hsl(0, 0%, 20%);
 }
 
 .panel input[type="range"]:hover:not(.focused)::-moz-range-thumb {
-    background: hsl(0, 0%, 18%);
+    background: hsl(0, 0%, 20%);
 }
 
 .panel input[type="range"]::-webkit-slider-runnable-track {
     width: 100%; height: 14px;
 
-    background: hsl(0, 0%, 16%);
-    border: hsl(0, 0%, 28%) solid 1px;
+    background: var(--ui-background);
+    border: var(--ui-border) solid 1px;
     border-radius: 14px;
 }
 
@@ -476,8 +548,8 @@ body:not(.modal) {
 .panel input[type="range"]::-moz-range-track {
     width: 100%; height: 14px;
 
-    background: hsl(0, 0%, 16%);
-    border: hsl(0, 0%, 28%) solid 1px;
+    background: var(--ui-background);
+    border: var(--ui-border) solid 1px;
     border-radius: 14px;
 }
 
@@ -487,36 +559,11 @@ body:not(.modal) {
 }
 
 .panel input[type="range"]:active:not(.focused)::-webkit-slider-thumb {
-    background: hsl(0, 0%, 14%);
+    background: hsl(0, 0%, 30%);
 }
 
 .panel input[type="range"]:active:not(.focused)::-moz-range-thumb {
-    background: hsl(0, 0%, 14%);
-}
-
-.panel input[type="range"]:disabled::after {
-    visibility: hidden;
-}
-
-.panel input[type="range"]:disabled::-webkit-slider-thumb,
-.panel input[type="range"]:disabled::-webkit-slider-runnable-track {
-    background: hsl(0, 0%, 20%);
-    border-color: hsl(0, 0%, 28%);
-}
-
-.panel input[type="range"]:disabled::-moz-range-thumb,
-.panel input[type="range"]:disabled::-moz-range-track {
-    background: hsl(0, 0%, 20%);
-    border-color: hsl(0, 0%, 28%);
-}
-
-.panel .bottom {
-    position: absolute;
-    width: 100%;
-    left: 0; bottom: 0;
-    height: calc(114px - 8px);
-    padding: 0 8px;
-    overflow: auto;
+    background: hsl(0, 0%, 30%);
 }
 
 .panel button {
@@ -525,28 +572,21 @@ body:not(.modal) {
     width: 100%; height: 30px;
     margin: 8px 0;
 
-    background: hsl(0, 0%, 20%);
-    border: hsl(0, 0%, 36%) solid 1px;
+    background: transparent;
+    border: var(--ui-border) solid 1px;
     border-radius: 2px;
     outline: none;
 
     font: inherit;
-    color: hsl(0, 0%, 96%);
+    color: var(--white);
 }
 
 .panel button:hover {
-    background: hsl(0, 0%, 24%);
+    background: var(--ui-hover);
 }
 
 .panel button:active {
-    background: hsl(0, 0%, 16%);
-}
-
-.panel button:disabled {
-    background: transparent;
-    border-color: hsl(0, 0%, 28%);
-
-    color: hsl(0, 0%, 28%);
+    background: var(--ui-active);
 }
 
 .panel .success-indicator {
@@ -586,20 +626,20 @@ body:not(.modal) {
 .toolbar {
     position: fixed;
     height: 48px;
-    left: 40%; bottom: 16px;
+    left: 50%; top: 16px;
     transform: translateX(-50%);
     z-index: 100;
 
-    background: hsl(0, 0%, 16%);
-    border-radius: 2px;
+    background: var(--ui-black);
+    border-radius: 8px;
     overflow: hidden;
 
-    color: hsl(0, 0%, 96%);
+    color: var(--white);
 
     transition: opacity 0.1s;
 }
 
-.ui:not(.default) .toolbar {
+.ui:not(.default):not(.modal) .toolbar {
     opacity: 0.2;
 
     pointer-events: none;
@@ -679,13 +719,16 @@ body:not(.modal) {
 
 .export {
     position: fixed;
-    width: 80%; height: 100%;
-    left: 0;
+    width: 100%; height: 100%;
+    left: 0; top: 0;
     z-index: 100;
     padding: 20px 24px;
     overflow-y: auto;
 
     background: hsla(0, 0%, 10%, 0.8);
+
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
 }
 
 .export .warning {

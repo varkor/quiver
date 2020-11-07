@@ -320,8 +320,7 @@ UIState.Connect = class extends UIState {
             const edge = new Edge(ui, label, this.source, this.target, options);
             ui.select(edge);
             if (!event.shiftKey && !event.metaKey && !event.ctrlKey) {
-                ui.panel.element.query_selector('label input[type="text"]')
-                    .element.focus();
+                ui.panel.label_input.element.focus();
             }
 
             return edge;
@@ -515,6 +514,9 @@ class UI {
         // Set up the panel for viewing and editing cell data.
         this.panel.initialise(this);
         this.element.add(this.panel.element);
+        this.panel.update_position();
+        this.element.add(this.panel.label_input);
+        this.element.add(this.panel.global);
 
         // Set up the toolbar.
         this.toolbar.initialise(this);
@@ -548,6 +550,9 @@ class UI {
         window.addEventListener("resize", () => {
             // Adjust the grid so that it aligns with the content.
             this.update_grid();
+
+            // Centre the panel.
+            this.panel.update_position();
         });
 
         // Add a move to the history.
@@ -595,6 +600,12 @@ class UI {
                     }
                     this.switch_mode(UIState.default);
                 }
+                if (!Array.from(this.selection).find((cell) => cell.is_edge())) {
+                    this.panel.hide();
+                }
+                if (this.selection.size === 0) {
+                    this.panel.label_input.class_list.add("hidden");
+                }
             }
         });
 
@@ -632,8 +643,7 @@ class UI {
                     } else {
                         // Otherwise, simply deselect the label input (it's unlikely the user
                         // wants to modify all the cell labels at once).
-                        this.panel.element.query_selector('label input[type="text"]')
-                            .element.blur();
+                        this.panel.label_input.element.blur();
                     }
                 }
             }
@@ -669,6 +679,12 @@ class UI {
             if (event.button === 0) {
                 if (this.in_mode(UIState.Default)) {
                     event.preventDefault();
+                    // If we prevent the default behaviour, then the global inputs won't be blurred,
+                    // so we need to do that manually.
+                    const global = this.panel.global;
+                    for (const input of global.query_selector_all('input[type="text"]')) {
+                        input.element.blur();
+                    }
                     if (!insertion_point.class_list.contains("revealed")) {
                         // Reveal the insertion point upon a click.
                         reposition_insertion_point(event);
@@ -697,8 +713,7 @@ class UI {
                         // it is unlikely they expect to edit all the labels simultaneously,
                         // so in this case we do not focus the input.
                         if (!event.shiftKey && !event.metaKey && !event.ctrlKey) {
-                            this.panel.element.query_selector('label input[type="text"]')
-                                .element.select();
+                            this.panel.label_input.element.select();
                         }
                     }
                 }
@@ -768,8 +783,7 @@ class UI {
                                 if (!event.shiftKey && !event.metaKey && !event.ctrlKey) {
                                     this.deselect();
                                     this.select(this.state.target);
-                                    this.panel.element.query_selector('label input[type="text"]')
-                                        .element.select();
+                                    this.panel.label_input.element.select();
                                 }
                                 actions.push({
                                     kind: "connect",
@@ -1184,6 +1198,12 @@ class UI {
         if (selection_changed) {
             this.panel.update(this);
             this.toolbar.update(this);
+            if (Array.from(this.selection).find((cell) => cell.is_edge())) {
+                this.panel.element.class_list.remove("hidden");
+            }
+            if (this.selection.size > 0) {
+                this.panel.label_input.class_list.remove("hidden");
+            }
         }
     }
 
@@ -1263,8 +1283,7 @@ class UI {
                 max_offset = max_offset.max(offset.add(centre));
             }
 
-            const panel_offset = new Offset(this.panel.element.element.offsetWidth, 0).div(2);
-            this.pan_view(min_offset.add(max_offset).div(2).add(panel_offset));
+            this.pan_view(min_offset.add(max_offset).div(2));
         }
     }
 
@@ -1279,7 +1298,8 @@ class UI {
     /// Returns the active element if it is a text input field. (If it is, certain
     /// actions (primarily keyboard shortcuts) will be disabled.)
     input_is_active() {
-        return document.activeElement.matches('label input[type="text"]') && document.activeElement;
+        // This may not be the label input, e.g. it may be the macros input.
+        return document.activeElement.matches('input[type="text"]') && document.activeElement;
     }
 
     /// Resizes a label to fit within a cell.
@@ -1608,7 +1628,7 @@ class UI {
         // definitions.
         this.macro_url = null;
 
-        const macro_input = this.panel.element.query_selector(".bottom input");
+        const macro_input = this.panel.global.query_selector("input");
         url = url.trim();
         macro_input.element.value = url;
 
@@ -1927,13 +1947,19 @@ class Panel {
         /// The panel element.
         this.element = null;
 
+        /// The label input element.
+        this.label_input = null;
+
+        /// Buttons and options affecting the entire diagram (e.g. export, macros).
+        this.global = null;
+
         /// The displayed export format (`null` if not currently shown).
         this.export = null;
     }
 
     /// Set up the panel interface elements.
     initialise(ui) {
-        this.element = new DOM.Element("div", { class: "panel" });
+        this.element = new DOM.Element("div", { class: "panel hidden" });
 
         // Prevent propagation of mouse events when interacting with the panel.
         this.element.listen("mousedown", (event) => {
@@ -1947,16 +1973,23 @@ class Panel {
         }, { passive: true });
 
         // Local options, such as vertex and edge actions.
-        const local = new DOM.Element("div", { class: "local" }).add_to(this.element);
+        const wrapper = new DOM.Element("div", { class: "wrapper" }).add_to(this.element);
 
         // The label.
-        const label_input = new DOM.Element("input", { type: "text", disabled: true });
-        const label = new DOM.Element("label").add("Label: ").add(label_input);
-        local.add(label);
+        this.label_input = new DOM.Element("input", {
+            class: "label-input hidden",
+            type: "text",
+            disabled: true,
+        });
+
+        // Prevent propagation of mouse events when interacting with the label input.
+        this.label_input.listen("mousedown", (event) => {
+            event.stopImmediatePropagation();
+        });
 
         // Handle label interaction: update the labels of the selected cells when
         // the input field is modified.
-        label_input.listen("input", () => {
+        this.label_input.listen("input", () => {
             const collapse = ["label", ui.selection];
             const actions = ui.history.get_collapsible_actions(collapse);
             if (actions !== null) {
@@ -1970,7 +2003,7 @@ class Panel {
                     if (action.kind === "label") {
                         // Modify the `to` field of each label.
                         action.labels.forEach(label => {
-                            label.to = label_input.element.value;
+                            label.to = this.label_input.element.value;
                             if (label.to !== label.from) {
                                 unchanged = false;
                             }
@@ -1990,7 +2023,7 @@ class Panel {
                     labels: Array.from(ui.selection).map((cell) => ({
                         cell,
                         from: cell.label,
-                        to: label_input.element.value,
+                        to: this.label_input.element.value,
                     })),
                 }], true);
             }
@@ -2001,10 +2034,34 @@ class Panel {
             ui.history.permanentise();
         });
 
+        // The button to reverse an edge.
+        wrapper.add(
+            new DOM.Element("button", { title: "Reverse arrows", disabled: true })
+                .add("⇌ Reverse")
+                .listen("click", () => {
+                    ui.history.add(ui, [{
+                        kind: "reverse",
+                        cells: ui.selection,
+                    }], true);
+                })
+        );
+
+        // The button to flip an edge.
+        wrapper.add(
+            new DOM.Element("button", { title: "Flip arrows", disabled: true })
+                .add("⥮ Flip")
+                .listen("click", () => {
+                    ui.history.add(ui, [{
+                        kind: "flip",
+                        cells: ui.selection,
+                    }], true);
+                })
+        );
+
         // The label alignment options.
         this.create_option_list(
             ui,
-            local,
+            wrapper,
             [
                 ["left", "Left align label", "left"],
                 ["centre", "Centre align label (clear)", "centre"],
@@ -2094,7 +2151,7 @@ class Panel {
                 })
             );
 
-            local.add(slider);
+            wrapper.add(slider);
 
             return slider;
         };
@@ -2109,30 +2166,6 @@ class Panel {
         // The length slider, which affects `shorten`.
         create_option_slider("Length", "length", { min: 20, value: 100, max: 100, step: 10 })
             .class_list.add("arrow-style", "percentage");
-
-        // The button to reverse an edge.
-        local.add(
-            new DOM.Element("button", { title: "Reverse arrows", disabled: true })
-                .add("⇌ Reverse")
-                .listen("click", () => {
-                    ui.history.add(ui, [{
-                        kind: "reverse",
-                        cells: ui.selection,
-                    }], true);
-                })
-        );
-
-        // The button to flip an edge.
-        local.add(
-            new DOM.Element("button", { title: "Flip arrows", disabled: true })
-                .add("⥮ Flip")
-                .listen("click", () => {
-                    ui.history.add(ui, [{
-                        kind: "flip",
-                        cells: ui.selection,
-                    }], true);
-                })
-        );
 
         // The level slider. We limit to 3 for now because there are issues with pixel perfection
         // (especially for squiggly arrows, e.g. with their interaction with hooked tails) after 4,
@@ -2196,7 +2229,7 @@ class Panel {
 
         this.create_option_list(
             ui,
-            local,
+            wrapper,
             [
                 ["none", "No tail", { name: "none" }],
                 ["maps to", "Maps to", { name: "maps to" }],
@@ -2225,7 +2258,7 @@ class Panel {
         // The list of body styles.
         this.create_option_list(
             ui,
-            local,
+            wrapper,
             [
                 ["solid", "Solid", { name: "cell", level: 1 }],
                 ["dashed", "Dashed", { name: "dashed", level: 1 }],
@@ -2254,7 +2287,7 @@ class Panel {
         // The list of head styles.
         this.create_option_list(
             ui,
-            local,
+            wrapper,
             [
                 ["arrowhead", "Arrowhead", { name: "arrowhead" }],
                 ["none", "No arrowhead", { name: "none" }],
@@ -2282,7 +2315,7 @@ class Panel {
         // The list of (non-arrow) edge styles.
         this.create_option_list(
             ui,
-            local,
+            wrapper,
             [
                 ["arrow", "Arrow", Edge.default_options().style],
                 ["adjunction", "Adjunction", { name: "adjunction" }],
@@ -2409,47 +2442,51 @@ class Panel {
             }
         };
 
-        this.element.add(
-            new DOM.Element("div", { class: "bottom" }).add(
-                new DOM.Element("div").add(
-                    new DOM.Element("label").add("Macros: ")
-                        .add(
-                            new DOM.Element("input", {
-                                type: "text",
-                            }).listen("keydown", (event, input) => {
-                                if (event.key === "Enter") {
-                                    ui.load_macros_from_url(input.value);
-                                    input.blur();
-                                }
-                            }).listen("paste", (_, input) => {
-                                UI.delay(() => ui.load_macros_from_url(input.value));
-                            })
-                        ).add(
-                            new DOM.Element("div", { class: "success-indicator" })
-                        )
-                )
-            ).add(
-                // The shareable link button.
-                new DOM.Element("button", { class: "global" }).add("Get shareable link")
-                    .listen("click", () => {
-                        display_export_pane("base64", (output) => {
-                            if (ui.macro_url !== null) {
-                                return {
-                                    data: `${output.data}&macro_url=${
-                                        encodeURIComponent(ui.macro_url)
-                                    }`,
-                                    metadata: output.metadata,
-                                };
+        this.global = new DOM.Element("div", { class: "panel global" }).add(
+            new DOM.Element("div").add(
+                new DOM.Element("label").add("Macros: ")
+                    .add(
+                        new DOM.Element("input", {
+                            type: "text",
+                            placeholder: "Paste URL here",
+                        }).listen("keydown", (event, input) => {
+                            if (event.key === "Enter") {
+                                ui.load_macros_from_url(input.value);
+                                input.blur();
                             }
-                            return output;
-                        });
-                    })
-            ).add(
-                // The export button.
-                new DOM.Element("button", { class: "global" }).add("Export to LaTeX")
-                    .listen("click", () => display_export_pane("tikz-cd"))
+                        }).listen("paste", (_, input) => {
+                            UI.delay(() => ui.load_macros_from_url(input.value));
+                        })
+                    ).add(
+                        new DOM.Element("div", { class: "success-indicator" })
+                    )
             )
+        ).add(
+            // The shareable link button.
+            new DOM.Element("button").add("Get shareable link")
+                .listen("click", () => {
+                    display_export_pane("base64", (output) => {
+                        if (ui.macro_url !== null) {
+                            return {
+                                data: `${output.data}&macro_url=${
+                                    encodeURIComponent(ui.macro_url)
+                                }`,
+                                metadata: output.metadata,
+                            };
+                        }
+                        return output;
+                    });
+                })
+        ).add(
+            // The export button.
+            new DOM.Element("button").add("Export to LaTeX")
+                .listen("click", () => display_export_pane("tikz-cd"))
         );
+
+        // Prevent propagation of mouse events when interacting with the global options.
+        this.global.listen("mousedown", (event) => {
+            event.stopImmediatePropagation();
+        });
     }
 
     // A helper function for creating a list of radio inputs with backgrounds drawn based
@@ -2457,7 +2494,7 @@ class Panel {
     // with visual feedback.
     create_option_list(
         ui,
-        local,
+        wrapper,
         entries,
         name,
         classes,
@@ -2542,7 +2579,7 @@ class Panel {
 
         options_list.query_selector(`input[name="${name}"]`).element.checked = true;
 
-        local.add(options_list);
+        wrapper.add(options_list);
     }
 
     /// Render the TeX contained in the label of a cell.
@@ -2587,7 +2624,6 @@ class Panel {
 
     /// Update the panel state (i.e. enable/disable fields as relevant).
     update(ui) {
-        const input = this.element.query_selector('label input[type="text"]');
         const label_alignments = this.element.query_selector_all('input[name="label-alignment"]');
         const sliders = this.element.query_selector_all('input[type="range"]');
 
@@ -2596,7 +2632,7 @@ class Panel {
             // Default options (for when no cells are selected). We only need to provide defaults
             // for inputs that display their state even when disabled.
             if (ui.selection.size === 0) {
-                input.element.value = "";
+                this.label_input.element.value = "";
                 sliders.forEach((slider) => {
                     return slider.element.value = slider.element.name !== "length" ? 0 : 100;
                 });
@@ -2607,15 +2643,15 @@ class Panel {
             const selection_includes_edge = Array.from(ui.selection).some((cell) => cell.is_edge());
 
             // Enable all the inputs iff we've selected at least one edge.
-            this.element.query_selector_all('input:not([type="text"]), button:not(.global)')
+            this.element.query_selector_all('input:not([type="text"]), button')
                 .forEach((input) => input.element.disabled = !selection_includes_edge);
 
             // Enable the label input if at least one cell has been selected.
-            input.element.disabled = ui.selection.size === 0;
-            if (input.element.disabled && document.activeElement === input.element) {
+            this.label_input.element.disabled = ui.selection.size === 0;
+            if (this.label_input.element.disabled && document.activeElement === this.label_input.element) {
                 // In Firefox, if the active element is disabled, then key
                 // presses aren't registered, so we need to blur it manually.
-                input.element.blur();
+                this.label_input.element.blur();
             }
 
             // Label alignment options are always enabled.
@@ -2691,11 +2727,11 @@ class Panel {
             for (const [name, value] of values) {
                 switch (name) {
                     case "{label}":
-                        if (value === null || input.element.value !== value) {
+                        if (value === null || this.label_input.element.value !== value) {
                             // Most browsers handle resetting an input value with the same value
                             // nicely. However, Safari will reset the caret to the end of the input,
                             // so we need to guard on the value actually changing.
-                            input.element.value = value !== null ? value : "";
+                            this.label_input.element.value = value !== null ? value : "";
                         }
                         break;
                     case "{angle}":
@@ -2740,15 +2776,33 @@ class Panel {
                 option.element.disabled = !all_edges_are_arrows;
             }
 
-            // Enable all inputs in the bottom section of the panel.
-            this.element.query_selector_all(`.bottom input[type="text"]`).forEach((input) => {
+            // Enable all inputs in the global section of the panel.
+            this.global.query_selector_all(`input[type="text"]`).forEach((input) => {
                 input.element.disabled = false;
             });
         } else {
             // Disable all the inputs.
-            this.element.query_selector_all("input:not(.global), button:not(.global)")
+            this.element.query_selector_all("input, button")
                 .forEach((input) => input.element.disabled = true);
         }
+    }
+
+    /// Hide the panel off-screen.
+    hide() {
+        this.element.class_list.add("hidden");
+        const focused_sliders = this.element.query_selector_all('input[type="range"].focused');
+        for (const slider of focused_sliders) {
+            slider.class_list.remove("focused");
+        }
+    }
+
+    /// Centre the panel vertically.
+    update_position() {
+        const panel_height
+            = this.element.query_selector(".wrapper").bounding_rect().height;
+        const document_height = document.body.offsetHeight;
+        const top_offset = Math.max(document_height - panel_height - 16 * 2, 0) / 2;
+        this.element.set_style({ "margin-top": `${top_offset}px`});
     }
 
     /// Dismiss the export pane, if it is shown.
@@ -2930,6 +2984,8 @@ class Toolbar {
             [{ key: "A", modifier: true, shift: true, context: SHORTCUT_PRIORITY.Defer }],
             () => {
                 ui.deselect();
+                ui.panel.hide();
+                ui.panel.label_input.class_list.add("hidden");
             },
             true,
         );
@@ -3006,7 +3062,7 @@ class Toolbar {
 
         add_shortcut([{ key: "Enter", context: SHORTCUT_PRIORITY.Always }], () => {
             // Toggle the focus of the label input.
-            const input = ui.panel.element.query_selector('label input[type="text"]').element;
+            const input = ui.panel.label_input.element;
             if (document.activeElement !== input) {
                 input.focus();
                 // Select all existing text.
@@ -3126,14 +3182,18 @@ class Toolbar {
         // the actual buttons, so they're not desynchronised, and can animate appropriately.
 
         const toggle_slider_focus = (name) => {
-            const slider = ui.element.query_selector(`input[name="${name}"]`);
-            if (slider.class_list.contains("focused")) {
-                slider.class_list.remove("focused");
-            } else {
-                for (const slider of ui.element.query_selector_all('input[type="range"].focused')) {
+            if (!ui.panel.element.class_list.contains("hidden")) {
+                const slider = ui.element.query_selector(`input[name="${name}"]`);
+                if (slider.class_list.contains("focused")) {
                     slider.class_list.remove("focused");
+                } else {
+                    const focused_sliders
+                        = ui.element.query_selector_all('input[type="range"].focused');
+                    for (const slider of focused_sliders) {
+                        slider.class_list.remove("focused");
+                    }
+                    slider.class_list.add("focused");
                 }
-                slider.class_list.add("focused");
             }
         };
 
@@ -3354,6 +3414,12 @@ class Cell {
                     event.stopPropagation();
                     event.preventDefault();
 
+                    // If we prevent the default behaviour, then the global inputs won't be blurred,
+                    // so we need to do that manually.
+                    for (const input of ui.panel.global.query_selector_all('input[type="text"]')) {
+                        input.element.blur();
+                    }
+
                     was_previously_selected = !event.shiftKey && !event.metaKey && !event.ctrlKey
                         && ui.selection.has(this) &&
                         // If the label input is already focused, then we defocus it.
@@ -3436,8 +3502,7 @@ class Cell {
                     // automatically blur when we click on the cell again, so this allows us to
                     // toggle the focus of the input when we click on any cell.
                     if (was_previously_selected) {
-                        const input
-                            = ui.panel.element.query_selector('label input[type="text"]').element;
+                        const input = ui.panel.label_input.element;
                         input.focus();
                         // Select all the text.
                         input.selectionStart = 0;
@@ -3701,7 +3766,7 @@ class Edge extends Cell {
             event.preventDefault();
             // We don't get the default blur behaviour here, as we've prevented it, so we have to do
             // it ourselves.
-            ui.panel.element.query_selector('label input[type="text"]').element.blur();
+            ui.panel.label_input.element.blur();
 
             const fixed = { source: this.target, target: this.source }[end];
             ui.switch_mode(new UIState.Connect(ui, fixed, false, {
