@@ -2770,6 +2770,18 @@ class Toolbar {
         this.element = null;
     }
 
+    /// Adjust the value of any selected sliders.
+    static modify_sliders(ui, delta) {
+        const focused_sliders = ui.element.query_selector_all('input[type="range"].focused');
+        for (const slider of focused_sliders) {
+            const value = parseInt(slider.element.value);
+            const step = parseInt(slider.element.step);
+            slider.element.value = value + step * delta;
+            slider.element.dispatchEvent(new Event("input"));
+        }
+        return focused_sliders.length > 0;
+    }
+
     initialise(ui) {
         this.element = new DOM.Element("div", { class: "toolbar" })
             .listen("mousedown", (event) => event.stopImmediatePropagation());
@@ -3033,6 +3045,10 @@ class Toolbar {
             if (input) {
                 input.blur();
             }
+            // Defocus any sliders.
+            for (const slider of ui.element.query_selector_all('input[type="range"].focused')) {
+                slider.class_list.remove("focused");
+            }
             // Close any open panes.
             ui.panel.dismiss_export_pane(ui);
         });
@@ -3051,10 +3067,24 @@ class Toolbar {
             }
         });
 
-        // Use the arrow keys for moving vertices around.
+        // Use the arrow keys for moving vertices around, as well as changing slider values via the
+        // keyboard.
         add_shortcut([
             { key: "ArrowLeft" }, { key: "ArrowDown" }, { key: "ArrowRight" }, { key: "ArrowUp" },
         ], (event) => {
+            let delta = 0;
+            if (event.key === "ArrowLeft") {
+                --delta;
+            }
+            if (event.key === "ArrowRight") {
+                ++delta;
+            }
+            if (Toolbar.modify_sliders(ui, delta)) {
+                // If there were any focused sliders, don't move selected vertices.
+                return;
+            }
+
+            // Move vertices around.
             let offset;
             switch (event.key) {
                 case "ArrowLeft":
@@ -3090,6 +3120,57 @@ class Toolbar {
                     })),
                 }], true);
             }
+        });
+
+        // Shortcuts associated with buttons or sliders. Eventually, we'll want to link these with
+        // the actual buttons, so they're not desynchronised, and can animate appropriately.
+
+        const toggle_slider_focus = (name) => {
+            const slider = ui.element.query_selector(`input[name="${name}"]`);
+            if (slider.class_list.contains("focused")) {
+                slider.class_list.remove("focused");
+            } else {
+                for (const slider of ui.element.query_selector_all('input[type="range"].focused')) {
+                    slider.class_list.remove("focused");
+                }
+                slider.class_list.add("focused");
+            }
+        };
+
+        // Offset.
+        add_shortcut([{ key: "o" }], () => {
+            toggle_slider_focus("offset");
+        });
+
+        // Curve.
+        add_shortcut([{ key: "c" }], () => {
+            toggle_slider_focus("curve");
+        });
+
+        // Length.
+        add_shortcut([{ key: "l" }], () => {
+            toggle_slider_focus("length");
+        });
+
+        // Flip.
+        add_shortcut([{ key: "f" }], () => {
+            ui.history.add(ui, [{
+                kind: "flip",
+                cells: ui.selection,
+            }], true);
+        });
+
+        // Reverse.
+        add_shortcut([{ key: "r" }], () => {
+            ui.history.add(ui, [{
+                kind: "reverse",
+                cells: ui.selection,
+            }], true);
+        });
+
+        // Level.
+        add_shortcut([{ key: "v" }], () => {
+            toggle_slider_focus("level");
         });
 
         // Handle global key presses (such as, but not exclusively limited to, keyboard shortcuts).
