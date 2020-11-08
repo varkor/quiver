@@ -715,7 +715,7 @@ input[type="text"].flash {
     transform: scaleX(-1);
 }
 
-.toolbar .action.flash {
+button.flash {
     animation: background-flash 0.6s ease-in;
 }
 

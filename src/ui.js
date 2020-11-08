@@ -458,6 +458,9 @@ class UI {
         /// Undo/redo for actions.
         this.history = new History();
 
+        /// Keyboard shortcuts.
+        this.shortcuts = new Shortcuts(this);
+
         /// The panel for viewing and editing cell data.
         this.panel = new Panel();
 
@@ -928,6 +931,126 @@ class UI {
                 // Update the position of the cursor.
                 const offset = this.offset_from_event(event);
                 this.state.update(this, offset);
+            }
+        });
+
+        // Add various keyboard shortcuts.
+
+        this.shortcuts.add([{ key: "Enter", context: Shortcuts.SHORTCUT_PRIORITY.Always }], () => {
+            // Toggle the focus of the label input.
+            const input = this.panel.label_input.element;
+            if (document.activeElement !== input) {
+                input.focus();
+                // Select all existing text.
+                input.select();
+            } else {
+                input.blur();
+            }
+        });
+
+        this.shortcuts.add([{ key: "Escape", shift: null, context: Shortcuts.SHORTCUT_PRIORITY.Always }], () => {
+            // If an error banner is visible, the first thing Escape will do is dismiss the banner.
+            if (UI.dismiss_error()) {
+                return;
+            }
+
+            // Stop trying to connect cells.
+            if (this.in_mode(UIState.Connect)) {
+                if (this.state.forged_vertex) {
+                    // If we created a vertex as part of the connection, we need to record
+                    // that as an action.
+                    const created = new Set([this.state.source]);
+                    this.history.add(this, [{
+                        kind: "create",
+                        cells: created,
+                    }], false, this.selection_excluding(created));
+                }
+                this.switch_mode(UIState.default);
+            }
+            // If we're waiting to start connecting a cell, then we stop waiting.
+            const pending = this.element.query_selector(".cell.pending");
+            if (pending !== null) {
+                pending.class_list.remove("pending");
+            }
+            // Defocus the label input.
+            const input = this.input_is_active();
+            if (input) {
+                input.blur();
+            }
+            // Defocus any sliders.
+            for (const slider of this.element.query_selector_all('input[type="range"].focused')) {
+                slider.class_list.remove("focused");
+            }
+            // Close any open panes.
+            this.panel.dismiss_export_pane(this);
+        });
+
+        // Holding Option or Control triggers panning mode (and releasing ends panning mode).
+        this.shortcuts.add([
+            { key: "Alt", context: Shortcuts.SHORTCUT_PRIORITY.Always },
+            { key: "Control", context: Shortcuts.SHORTCUT_PRIORITY.Always },
+        ], (event) => {
+            if (this.in_mode(UIState.Default)) {
+                this.switch_mode(new UIState.Pan(event.key));
+            }
+        }, null, (event) => {
+            if (this.in_mode(UIState.Pan) && this.state.key === event.key) {
+                this.switch_mode(UIState.default);
+            }
+        });
+
+        // Use the arrow keys for moving vertices around, as well as changing slider values via the
+        // keyboard.
+        this.shortcuts.add([
+            { key: "ArrowLeft" }, { key: "ArrowDown" }, { key: "ArrowRight" }, { key: "ArrowUp" },
+        ], (event) => {
+            let delta = 0;
+            if (event.key === "ArrowLeft") {
+                --delta;
+            }
+            if (event.key === "ArrowRight") {
+                ++delta;
+            }
+            if (UI.modify_sliders(this, delta)) {
+                // If there were any focused sliders, don't move selected vertices.
+                return;
+            }
+
+            // Move vertices around.
+            let offset;
+            switch (event.key) {
+                case "ArrowLeft":
+                    offset = new Position(-1, 0);
+                    break;
+                case "ArrowDown":
+                    offset = new Position(0, 1);
+                    break;
+                case "ArrowRight":
+                    offset = new Position(1, 0);
+                    break;
+                case "ArrowUp":
+                    offset = new Position(0, -1);
+                    break;
+            }
+            const vertices = Array.from(this.selection).filter((cell) => cell.is_vertex());
+            for (const vertex of vertices) {
+                this.positions.delete(`${vertex.position}`);
+            }
+            const all_new_positions_free = vertices.every((vertex) => {
+                return !this.positions.has(`${vertex.position.add(offset)}`);
+            });
+            for (const vertex of vertices) {
+                this.positions.set(`${vertex.position}`, vertex);
+            }
+            if (all_new_positions_free) {
+                this.history.add(this, [{
+                    kind: "move",
+                    displacements: vertices.map((vertex) => ({
+                        vertex,
+                        from: vertex.position,
+                        to: vertex.position.add(offset),
+                    })),
+                }], true);
             }
         });
     }
@@ -1596,6 +1719,18 @@ class UI {
         }
     }
 
+    /// Adjust the value of any selected sliders.
+    static modify_sliders(ui, delta) {
+        const focused_sliders = ui.element.query_selector_all('input[type="range"].focused');
+        for (const slider of focused_sliders) {
+            const value = parseInt(slider.element.value);
+            const step = parseInt(slider.element.step);
+            slider.element.value = value + step * delta;
+            slider.element.dispatchEvent(new Event("input"));
+        }
+        return focused_sliders.length > 0;
+    }
+
     /// Load macros from a string, which will be used in all LaTeX labels.
     load_macros(definitions) {
         // Currently, only macros without arguments are supported.
@@ -2048,41 +2183,40 @@ class Panel {
             ui.history.permanentise();
         });
 
+        const add_button = (title, label, key, action) => {
+            const button = new DOM.Element("button", { title, disabled: true })
+                .add(label)
+                .listen("click", action)
+            wrapper.add(button);
+            ui.shortcuts.add([{ key }], (event) => {
+                action(event);
+                Shortcuts.flash(button);
+            });
+        };
+
         // The button to reverse an edge.
-        wrapper.add(
-            new DOM.Element("button", { title: "Reverse arrows", disabled: true })
-                .add("⇌ Reverse")
-                .listen("click", () => {
-                    ui.history.add(ui, [{
-                        kind: "reverse",
-                        cells: ui.selection,
-                    }], true);
-                })
-        );
+        add_button("Reverse arrows", "⇌ Reverse", "r", () => {
+            ui.history.add(ui, [{
+                kind: "reverse",
+                cells: ui.selection,
+            }], true);
+        });
 
         // The button to flip an edge.
-        wrapper.add(
-            new DOM.Element("button", { title: "Flip arrows", disabled: true })
-                .add("⥮ Flip")
-                .listen("click", () => {
-                    ui.history.add(ui, [{
-                        kind: "flip",
-                        cells: ui.selection,
-                    }], true);
-                })
-        );
+        add_button("Flip arrows", "⥮ Flip", "f", () => {
+            ui.history.add(ui, [{
+                kind: "flip",
+                cells: ui.selection,
+            }], true);
+        });
 
         // The button to flip a label.
-        wrapper.add(
-            new DOM.Element("button", { title: "Flip labels", disabled: true })
-                .add("⥮ Flip labels")
-                .listen("click", () => {
-                    ui.history.add(ui, [{
-                        kind: "flip labels",
-                        cells: ui.selection,
-                    }], true);
-                })
-        );
+        add_button("Flip labels", "⥮ Flip labels", "v", () => {
+            ui.history.add(ui, [{
+                kind: "flip labels",
+                cells: ui.selection,
+            }], true);
+        });
 
         // The label alignment options.
         this.create_option_list(
@@ -2199,6 +2333,45 @@ class Panel {
         // unlikely people will want to draw diagrams involving 4- or 5-cells.
         const level_slider = create_option_slider("Level", "level", { min: 1, value: 1, max: 3 });
         level_slider.class_list.add("arrow-style");
+
+        // Shortcuts associated with buttons or sliders. Eventually, we'll want to link these with
+        // the actual buttons, so they're not desynchronised, and can animate appropriately.
+
+        const toggle_slider_focus = (name) => {
+            if (!this.element.class_list.contains("hidden")) {
+                const slider = ui.element.query_selector(`input[name="${name}"]`);
+                if (slider.class_list.contains("focused")) {
+                    slider.class_list.remove("focused");
+                } else {
+                    const focused_sliders
+                        = ui.element.query_selector_all('input[type="range"].focused');
+                    for (const slider of focused_sliders) {
+                        slider.class_list.remove("focused");
+                    }
+                    slider.class_list.add("focused");
+                }
+            }
+        };
+
+        // Offset.
+        ui.shortcuts.add([{ key: "o" }], () => {
+            toggle_slider_focus("offset");
+        });
+
+        // Curve.
+        ui.shortcuts.add([{ key: "k" }], () => {
+            toggle_slider_focus("curve");
+        });
+
+        // Length.
+        ui.shortcuts.add([{ key: "l" }], () => {
+            toggle_slider_focus("length");
+        });
+
+        // Level.
+        ui.shortcuts.add([{ key: "," }], () => {
+            toggle_slider_focus("level");
+        });
 
         // The list of tail styles.
         // The length of the arrow to draw in the centre style buttons.
@@ -2845,24 +3018,154 @@ class Panel {
     }
 }
 
+/// The handler for keyboard shortcuts. This handles just the control flow, and not the physical
+/// buttons triggering any shortcuts.
+class Shortcuts {
+    constructor(ui) {
+        // A map from keys to the shortcuts to which they correspond.
+        this.shortcuts = new Map();
+
+        // Handle global key presses (such as, but not exclusively limited to, keyboard shortcuts).
+        const handle_shortcut = (type, event) => {
+            // Many keyboard shortcuts are only relevant when we're not midway
+            // through typing in an input, which should capture key presses.
+            const editing_input = ui.input_is_active();
+
+            let key = event.key;
+            // On Mac OS X, holding the Command key seems to override the usual capitalisation
+            // modifier that holding Shift does. This is inconsistent with other operating systems,
+            // so we override it manually here.
+            if (event.shiftKey && /[a-z]/.test(key)) {
+                key = key.toUpperCase();
+            }
+
+            if (this.shortcuts.has(key)) {
+                for (const shortcut of this.shortcuts.get(key)) {
+                    if (
+                        (shortcut.shift === null || event.shiftKey === shortcut.shift)
+                            && (shortcut.modifier === null
+                                || (event.metaKey || event.ctrlKey) === shortcut.modifier
+                                || ["Control", "Meta"].includes(key))
+                    ) {
+                        const effect = () => {
+                            // Trigger the shortcut effect.
+                            const action = shortcut[{ keydown: "action", keyup: "unaction" }[type]];
+                            if (action !== null) {
+                                if (shortcut.button === null || !shortcut.button.element.disabled) {
+                                    // Only trigger the action if the associated button is not
+                                    // disabled.
+                                    action(event);
+                                }
+                                if (shortcut.button !== null) {
+                                    // The button might be disabled by `action`, but we still want
+                                    // to trigger the visual indication if it was enabled when
+                                    // activated.
+                                    if (!shortcut.button.element.disabled) {
+                                        // Give some visual indication that the action has
+                                        // been triggered.
+                                        Shortcuts.flash(shortcut.button);
+                                    }
+                                }
+                            }
+                        };
+
+                        if (!editing_input && !ui.in_mode(UIState.Modal)
+                            || shortcut.context === Shortcuts.SHORTCUT_PRIORITY.Always)
+                        {
+                            event.preventDefault();
+                            effect();
+                        } else if (!ui.in_mode(UIState.Modal) && type === "keydown") {
+                            // If we were editing an input, and the keyboard shortcut doesn't
+                            // trigger in that case, then if the keyboard shortcut is deemed
+                            // to have had no effect on the input, we either:
+                            // (a) Trigger the keyboard shortcut effect (if the `context` is
+                            //     `Defer`).
+                            // (b) Trigger an animation on the input, to signal to the
+                            //     user that the input is the one receiving the keyboard
+                            //     shortcut.
+                            const input = document.activeElement;
+                            const [value, selectionStart, selectionEnd]
+                                = [input.value, input.selectionStart,  input.selectionEnd];
+                            setTimeout(() => {
+                                if (input.value === value
+                                    && input.selectionStart === selectionStart
+                                    && input.selectionEnd === selectionEnd)
+                                {
+                                    if (shortcut.context === Shortcuts.SHORTCUT_PRIORITY.Defer) {
+                                        effect();
+                                    } else {
+                                        // Give some visual indication that the input stole the
+                                        // keyboard focus.
+                                        Shortcuts.flash(new DOM.Element(input));
+                                    }
+                                }
+                            }, 8);
+                        }
+                    }
+                }
+            }
+        };
+
+        // Handle global key presses and releases.
+        for (const type of ["keydown", "keyup"]) {
+            document.addEventListener(type, (event) => {
+                handle_shortcut(type, event);
+            });
+        }
+    }
+
+    // Associate an action to a keyboard shortcut. Multiple shortcuts can be associated to a single
+    // action, making it easier to facilitate different keyboard layouts.
+    add(combinations, action, button = null, unaction = null) {
+        for (const shortcut of combinations) {
+            if (!this.shortcuts.has(shortcut.key)) {
+                this.shortcuts.set(shortcut.key, []);
+            }
+            this.shortcuts.get(shortcut.key).push({
+                // `null` means we don't care about whether the modifier key
+                // is pressed or not, so we need to special case it.
+                modifier: shortcut.modifier !== null ? (shortcut.modifier || false) : null,
+                shift: shortcut.shift !== null ? (shortcut.shift || false) : null,
+                // The function to call when the shortcut is triggered.
+                action,
+                // The function to call (if any) when the shortcut is released.
+                unaction,
+                context: shortcut.context || Shortcuts.SHORTCUT_PRIORITY.Conservative,
+                button,
+            });
+        }
+    }
+
+    /// Trigger a "flash" animation on an element, typically in response to its corresponding
+    /// keyboard shortcut being triggered.
+    static flash(button) {
+        button.class_list.remove("flash");
+        // Removing a class and instantly adding it again is going to be ignored by
+        // the browser, so we need to trigger a reflow to get the animation to
+        // retrigger.
+        void button.element.offsetWidth;
+        button.class_list.add("flash");
+    }
+}
+
+/// Defines the contexts in which a keyboard shortcut may trigger.
+Shortcuts.SHORTCUT_PRIORITY = new Enum(
+    "SHORTCUT_PRIORITY",
+    // Triggers whenever the keyboard shortcut is held.
+    "Always",
+    // Triggers when an input is not focused, or if the shortcut
+    // has no effect on the input.
+    "Defer",
+    // Triggers when an input is not focused.
+    "Conservative",
+);
+
 /// The toolbar, providing shortcuts to useful actions. This handles both the physical
 /// toolbar buttons and the keyboard shortcuts.
 class Toolbar {
     constructor() {
         /// The toolbar element.
         this.element = null;
-    }
-
-    /// Adjust the value of any selected sliders.
-    static modify_sliders(ui, delta) {
-        const focused_sliders = ui.element.query_selector_all('input[type="range"].focused');
-        for (const slider of focused_sliders) {
-            const value = parseInt(slider.element.value);
-            const step = parseInt(slider.element.step);
-            slider.element.value = value + step * delta;
-            slider.element.dispatchEvent(new Event("input"));
-        }
-        return focused_sliders.length > 0;
     }
 
     initialise(ui) {
@@ -2875,44 +3178,6 @@ class Toolbar {
         // (on any operating system) work with the shortcuts: this is simply
         // used to work out what to display.
         const apple_platform = /^(Mac|iPhone|iPod|iPad)/.test(navigator.platform);
-
-        // A map from keys to the shortcuts to which they correspond.
-        const shortcuts = new Map();
-
-        // Defines the contexts in which a keyboard shortcut may trigger.
-        const SHORTCUT_PRIORITY = new Enum(
-            "SHORTCUT_PRIORITY",
-            // Triggers whenever the keyboard shortcut is held.
-            "Always",
-            // Triggers when an input is not focused, or if the shortcut
-            // has no effect on the input.
-            "Defer",
-            // Triggers when an input is not focused.
-            "Conservative",
-        );
-
-        // Associate an action to a keyboard shortcut. Multiple shortcuts can be
-        // associated to a single action, making it easier to facilitate different
-        // keyboard layouts.
-        const add_shortcut = (combinations, action, button = null, unaction = null) => {
-            for (const shortcut of combinations) {
-                if (!shortcuts.has(shortcut.key)) {
-                    shortcuts.set(shortcut.key, []);
-                }
-                shortcuts.get(shortcut.key).push({
-                    // `null` means we don't care about whether the modifier key
-                    // is pressed or not, so we need to special case it.
-                    modifier: shortcut.modifier !== null ? (shortcut.modifier || false) : null,
-                    shift: shortcut.shift !== null ? (shortcut.shift || false) : null,
-                    // The function to call when the shortcut is triggered.
-                    action,
-                    // The function to call (if any) when the shortcut is released.
-                    unaction,
-                    context: shortcut.context || SHORTCUT_PRIORITY.Conservative,
-                    button,
-                });
-            }
-        };
 
         const add_action = (symbol, name, combinations, action, disabled) => {
             const shortcuts_keys = [];
@@ -2952,7 +3217,7 @@ class Toolbar {
                 button.element.disabled = true;
             }
 
-            add_shortcut(combinations, trigger_action_and_update_toolbar, button);
+            ui.shortcuts.add(combinations, trigger_action_and_update_toolbar, button);
 
             this.element.add(button);
             return button;
@@ -2964,7 +3229,7 @@ class Toolbar {
         add_action(
             "▴",
             "Save",
-            [{ key: "s", modifier: true, context: SHORTCUT_PRIORITY.Always }],
+            [{ key: "s", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always }],
             () => {
                 // For now, we do not include macro information in the URL.
                 const { data } = ui.quiver.export("base64");
@@ -2977,7 +3242,7 @@ class Toolbar {
         add_action(
             "⎌",
             "Undo",
-            [{ key: "z", modifier: true, context: SHORTCUT_PRIORITY.Defer }],
+            [{ key: "z", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Defer }],
             () => {
                 ui.history.undo(ui);
             },
@@ -2987,7 +3252,7 @@ class Toolbar {
         const redo = add_action(
             "⎌",
             "Redo",
-            [{ key: "Z", modifier: true, shift: true, context: SHORTCUT_PRIORITY.Defer }],
+            [{ key: "Z", modifier: true, shift: true, context: Shortcuts.SHORTCUT_PRIORITY.Defer }],
             () => {
                 ui.history.redo(ui);
             },
@@ -3000,7 +3265,7 @@ class Toolbar {
         add_action(
             "■",
             "Select all",
-            [{ key: "a", modifier: true, context: SHORTCUT_PRIORITY.Defer }],
+            [{ key: "a", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Defer }],
             () => {
                 ui.select(...ui.quiver.all_cells());
             },
@@ -3010,7 +3275,7 @@ class Toolbar {
         add_action(
             "□",
             "Deselect all",
-            [{ key: "A", modifier: true, shift: true, context: SHORTCUT_PRIORITY.Defer }],
+            [{ key: "A", modifier: true, shift: true, context: Shortcuts.SHORTCUT_PRIORITY.Defer }],
             () => {
                 ui.deselect();
                 ui.panel.hide();
@@ -3049,7 +3314,7 @@ class Toolbar {
         add_action(
             "-",
             "Zoom out",
-            [{ key: "-", modifier: true, context: SHORTCUT_PRIORITY.Always }],
+            [{ key: "-", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always }],
             () => {
                 ui.pan_view(Offset.zero(), -0.25);
             },
@@ -3059,7 +3324,7 @@ class Toolbar {
         add_action(
             "+",
             "Zoom in",
-            [{ key: "=", modifier: true, context: SHORTCUT_PRIORITY.Always }],
+            [{ key: "=", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always }],
             () => {
                 ui.pan_view(Offset.zero(), 0.25);
             },
@@ -3084,293 +3349,12 @@ class Toolbar {
         add_action(
             "⌗",
             "Toggle grid",
-            [{ key: "h", modifier: false, context: SHORTCUT_PRIORITY.Defer }],
+            [{ key: "h", modifier: false, context: Shortcuts.SHORTCUT_PRIORITY.Defer }],
             () => {
                 ui.grid.class_list.toggle("hidden");
             },
             false,
         );
-
-        // Add the other, "invisible", shortcuts.
-
-        add_shortcut([{ key: "Enter", context: SHORTCUT_PRIORITY.Always }], () => {
-            // Toggle the focus of the label input.
-            const input = ui.panel.label_input.element;
-            if (document.activeElement !== input) {
-                input.focus();
-                // Select all existing text.
-                input.select();
-            } else {
-                input.blur();
-            }
-        });
-
-        add_shortcut([{ key: "Escape", shift: null, context: SHORTCUT_PRIORITY.Always }], () => {
-            // If an error banner is visible, the first thing Escape will do is dismiss the banner.
-            if (UI.dismiss_error()) {
-                return;
-            }
-
-            // Stop trying to connect cells.
-            if (ui.in_mode(UIState.Connect)) {
-                if (ui.state.forged_vertex) {
-                    // If we created a vertex as part of the connection, we need to record
-                    // that as an action.
-                    const created = new Set([ui.state.source]);
-                    ui.history.add(ui, [{
-                        kind: "create",
-                        cells: created,
-                    }], false, ui.selection_excluding(created));
-                }
-                ui.switch_mode(UIState.default);
-            }
-            // If we're waiting to start connecting a cell, then we stop waiting.
-            const pending = ui.element.query_selector(".cell.pending");
-            if (pending !== null) {
-                pending.class_list.remove("pending");
-            }
-            // Defocus the label input.
-            const input = ui.input_is_active();
-            if (input) {
-                input.blur();
-            }
-            // Defocus any sliders.
-            for (const slider of ui.element.query_selector_all('input[type="range"].focused')) {
-                slider.class_list.remove("focused");
-            }
-            // Close any open panes.
-            ui.panel.dismiss_export_pane(ui);
-        });
-
-        // Holding Option or Control triggers panning mode (and releasing ends panning mode).
-        add_shortcut([
-            { key: "Alt", context: SHORTCUT_PRIORITY.Always },
-            { key: "Control", context: SHORTCUT_PRIORITY.Always },
-        ], (event) => {
-            if (ui.in_mode(UIState.Default)) {
-                ui.switch_mode(new UIState.Pan(event.key));
-            }
-        }, null, (event) => {
-            if (ui.in_mode(UIState.Pan) && ui.state.key === event.key) {
-                ui.switch_mode(UIState.default);
-            }
-        });
-
-        // Use the arrow keys for moving vertices around, as well as changing slider values via the
-        // keyboard.
-        add_shortcut([
-            { key: "ArrowLeft" }, { key: "ArrowDown" }, { key: "ArrowRight" }, { key: "ArrowUp" },
-        ], (event) => {
-            let delta = 0;
-            if (event.key === "ArrowLeft") {
-                --delta;
-            }
-            if (event.key === "ArrowRight") {
-                ++delta;
-            }
-            if (Toolbar.modify_sliders(ui, delta)) {
-                // If there were any focused sliders, don't move selected vertices.
-                return;
-            }
-
-            // Move vertices around.
-            let offset;
-            switch (event.key) {
-                case "ArrowLeft":
-                    offset = new Position(-1, 0);
-                    break;
-                case "ArrowDown":
-                    offset = new Position(0, 1);
-                    break;
-                case "ArrowRight":
-                    offset = new Position(1, 0);
-                    break;
-                case "ArrowUp":
-                    offset = new Position(0, -1);
-                    break;
-            }
-            const vertices = Array.from(ui.selection).filter((cell) => cell.is_vertex());
-            for (const vertex of vertices) {
-                ui.positions.delete(`${vertex.position}`);
-            }
-            const all_new_positions_free = vertices.every((vertex) => {
-                return !ui.positions.has(`${vertex.position.add(offset)}`);
-            });
-            for (const vertex of vertices) {
-                ui.positions.set(`${vertex.position}`, vertex);
-            }
-            if (all_new_positions_free) {
-                ui.history.add(ui, [{
-                    kind: "move",
-                    displacements: vertices.map((vertex) => ({
-                        vertex,
-                        from: vertex.position,
-                        to: vertex.position.add(offset),
-                    })),
-                }], true);
-            }
-        });
-
-        // Reverse.
-        add_shortcut([{ key: "r" }], () => {
-            ui.history.add(ui, [{
-                kind: "reverse",
-                cells: ui.selection,
-            }], true);
-        });
-
-        // Flip.
-        add_shortcut([{ key: "f" }], () => {
-            ui.history.add(ui, [{
-                kind: "flip",
-                cells: ui.selection,
-            }], true);
-        });
-
-        // Flip labels.
-        add_shortcut([{ key: "v" }], () => {
-            ui.history.add(ui, [{
-                kind: "flip labels",
-                cells: ui.selection,
-            }], true);
-        });
-
-        // Shortcuts associated with buttons or sliders. Eventually, we'll want to link these with
-        // the actual buttons, so they're not desynchronised, and can animate appropriately.
-
-        const toggle_slider_focus = (name) => {
-            if (!ui.panel.element.class_list.contains("hidden")) {
-                const slider = ui.element.query_selector(`input[name="${name}"]`);
-                if (slider.class_list.contains("focused")) {
-                    slider.class_list.remove("focused");
-                } else {
-                    const focused_sliders
-                        = ui.element.query_selector_all('input[type="range"].focused');
-                    for (const slider of focused_sliders) {
-                        slider.class_list.remove("focused");
-                    }
-                    slider.class_list.add("focused");
-                }
-            }
-        };
-
-        // Offset.
-        add_shortcut([{ key: "o" }], () => {
-            toggle_slider_focus("offset");
-        });
-
-        // Curve.
-        add_shortcut([{ key: "k" }], () => {
-            toggle_slider_focus("curve");
-        });
-
-        // Length.
-        add_shortcut([{ key: "l" }], () => {
-            toggle_slider_focus("length");
-        });
-
-        // Level.
-        add_shortcut([{ key: "," }], () => {
-            toggle_slider_focus("level");
-        });
-
-        // Handle global key presses (such as, but not exclusively limited to, keyboard shortcuts).
-        const handle_shortcut = (type, event) => {
-            // Many keyboard shortcuts are only relevant when we're not midway
-            // through typing in an input, which should capture key presses.
-            const editing_input = ui.input_is_active();
-
-            // Trigger a "flash" animation on an element.
-            const flash = (button) => {
-                button.class_list.remove("flash");
-                // Removing a class and instantly adding it again is going to be ignored by
-                // the browser, so we need to trigger a reflow to get the animation to
-                // retrigger.
-                void button.element.offsetWidth;
-                button.class_list.add("flash");
-            };
-
-            let key = event.key;
-            // On Mac OS X, holding the Command key seems to override the usual capitalisation
-            // modifier that holding Shift does. This is inconsistent with other operating systems,
-            // so we override it manually here.
-            if (event.shiftKey && /[a-z]/.test(key)) {
-                key = key.toUpperCase();
-            }
-
-            if (shortcuts.has(key)) {
-                for (const shortcut of shortcuts.get(key)) {
-                    if (
-                        (shortcut.shift === null || event.shiftKey === shortcut.shift)
-                            && (shortcut.modifier === null
-                                || (event.metaKey || event.ctrlKey) === shortcut.modifier
-                                || ["Control", "Meta"].includes(key))
-                    ) {
-                        const effect = () => {
-                            // Trigger the shortcut effect.
-                            const action = shortcut[{ keydown: "action", keyup: "unaction" }[type]];
-                            if (action !== null) {
-                                if (shortcut.button === null || !shortcut.button.element.disabled) {
-                                    // Only trigger the action if the associated button is not
-                                    // disabled.
-                                    action(event);
-                                }
-                                if (shortcut.button !== null) {
-                                    // The button might be disabled by `action`, but we still want
-                                    // to trigger the visual indication if it was enabled when
-                                    // activated.
-                                    if (!shortcut.button.element.disabled) {
-                                        // Give some visual indication that the action has
-                                        // been triggered.
-                                        flash(shortcut.button);
-                                    }
-                                }
-                            }
-                        };
-
-                        if (!editing_input && !ui.in_mode(UIState.Modal)
-                            || shortcut.context === SHORTCUT_PRIORITY.Always)
-                        {
-                            event.preventDefault();
-                            effect();
-                        } else if (!ui.in_mode(UIState.Modal) && type === "keydown") {
-                            // If we were editing an input, and the keyboard shortcut doesn't
-                            // trigger in that case, then if the keyboard shortcut is deemed
-                            // to have had no effect on the input, we either:
-                            // (a) Trigger the keyboard shortcut effect (if the `context` is
-                            //     `Defer`).
-                            // (b) Trigger an animation on the input, to signal to the
-                            //     user that the input is the one receiving the keyboard
-                            //     shortcut.
-                            const input = document.activeElement;
-                            const [value, selectionStart, selectionEnd]
-                                = [input.value, input.selectionStart,  input.selectionEnd];
-                            setTimeout(() => {
-                                if (input.value === value
-                                    && input.selectionStart === selectionStart
-                                    && input.selectionEnd === selectionEnd)
-                                {
-                                    if (shortcut.context === SHORTCUT_PRIORITY.Defer) {
-                                        effect();
-                                    } else {
-                                        // Give some visual indication that the input stole the
-                                        // keyboard focus.
-                                        flash(new DOM.Element(input));
-                                    }
-                                }
-                            }, 8);
-                        }
-                    }
-                }
-            }
-        };
-
-        // Handle global key presses and releases.
-        for (const type of ["keydown", "keyup"]) {
-            document.addEventListener(type, (event) => {
-                handle_shortcut(type, event);
-            });
-        }
     }
 
     /// Update the toolbar (e.g. enabling or disabling buttons based on UI state).
