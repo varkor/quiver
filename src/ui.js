@@ -3040,7 +3040,11 @@ class Toolbar {
         add_action(
             "=",
             "Reset zoom",
-            [],
+            // We'd like to display the current zoom level, so we use a slight hack: we set the
+            // "key" to be the zoom level: this will never be triggered by a shortcut, because there
+            // is no key called "100%" or similar. However, the text will then display underneath
+            // the button as desired.
+            [{ key: "100%" }],
             () => {
                 ui.scale = 0;
                 ui.pan_view(Offset.zero());
@@ -3348,6 +3352,10 @@ class Toolbar {
         enable_if("Zoom in", ui.scale < 1);
         enable_if("Zoom out", ui.scale > -2.5);
         enable_if("Reset zoom", ui.scale !== 0);
+
+        // Update the current zoom level underneath the "Reset zoom" button.
+        this.element.query_selector('.action[data-name="Reset zoom"] .shortcut').element.innerText
+            = `${Math.round(2 ** ui.scale * 100)}%`;
     }
 }
 
