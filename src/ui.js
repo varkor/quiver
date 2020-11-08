@@ -3260,7 +3260,7 @@ class Toolbar {
         });
 
         // Curve.
-        add_shortcut([{ key: "c" }], () => {
+        add_shortcut([{ key: "k" }], () => {
             toggle_slider_focus("curve");
         });
 
@@ -3270,7 +3270,7 @@ class Toolbar {
         });
 
         // Level.
-        add_shortcut([{ key: "b" }], () => {
+        add_shortcut([{ key: "," }], () => {
             toggle_slider_focus("level");
         });
 
