@@ -475,7 +475,7 @@ class UI {
     /// changing the URL history work properly.
     reset() {
         // Reset the mode.
-        this.switch_mode(UIState.default)
+        this.switch_mode(UIState.default);
 
         // Clear the existing quiver.
         for (const cell of this.quiver.all_cells()) {
@@ -498,6 +498,12 @@ class UI {
         // Update UI elements.
         this.panel.update(this);
         this.toolbar.update(this);
+        // While the following does work without a delay, it currently experiences some stutters.
+        // Using a delay makes the transition much smoother.
+        UI.delay(() => {
+            this.panel.hide();
+            this.panel.label_input.class_list.add("hidden");
+        });
     }
 
     initialise() {
@@ -1959,7 +1965,7 @@ class Panel {
 
     /// Set up the panel interface elements.
     initialise(ui) {
-        this.element = new DOM.Element("div", { class: "panel hidden" });
+        this.element = new DOM.Element("div", { class: "side panel hidden" });
 
         // Prevent propagation of mouse events when interacting with the panel.
         this.element.listen("mousedown", (event) => {
@@ -2443,25 +2449,6 @@ class Panel {
         };
 
         this.global = new DOM.Element("div", { class: "panel global" }).add(
-            new DOM.Element("div").add(
-                new DOM.Element("label").add("Macros: ")
-                    .add(
-                        new DOM.Element("input", {
-                            type: "text",
-                            placeholder: "Paste URL here",
-                        }).listen("keydown", (event, input) => {
-                            if (event.key === "Enter") {
-                                ui.load_macros_from_url(input.value);
-                                input.blur();
-                            }
-                        }).listen("paste", (_, input) => {
-                            UI.delay(() => ui.load_macros_from_url(input.value));
-                        })
-                    ).add(
-                        new DOM.Element("div", { class: "success-indicator" })
-                    )
-            )
-        ).add(
             // The shareable link button.
             new DOM.Element("button").add("Get shareable link")
                 .listen("click", () => {
@@ -2481,6 +2468,25 @@ class Panel {
             // The export button.
             new DOM.Element("button").add("Export to LaTeX")
                 .listen("click", () => display_export_pane("tikz-cd"))
+        ).add(
+            new DOM.Element("div", { class: "indicator-container" }).add(
+                new DOM.Element("label").add("Macros: ")
+                    .add(
+                        new DOM.Element("input", {
+                            type: "text",
+                            placeholder: "Paste URL here",
+                        }).listen("keydown", (event, input) => {
+                            if (event.key === "Enter") {
+                                ui.load_macros_from_url(input.value);
+                                input.blur();
+                            }
+                        }).listen("paste", (_, input) => {
+                            UI.delay(() => ui.load_macros_from_url(input.value));
+                        })
+                    ).add(
+                        new DOM.Element("div", { class: "success-indicator" })
+                    )
+            )
         );
 
         // Prevent propagation of mouse events when interacting with the global options.
@@ -2783,6 +2789,9 @@ class Panel {
         } else {
             // Disable all the inputs.
             this.element.query_selector_all("input, button")
+                .forEach((input) => input.element.disabled = true);
+            // Disable the macro input.
+            this.global.query_selector_all('input[type="text"]')
                 .forEach((input) => input.element.disabled = true);
         }
     }
