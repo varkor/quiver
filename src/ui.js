@@ -2762,7 +2762,14 @@ class Panel {
             // and one for the unchecked version.
             const backgrounds = [];
 
-            const { length, options, draw_label } = properties(data);
+            let { length, options, draw_label } = properties(data);
+
+            // Usually heads are drawn with zero length, but for epimorphisms, we need to have some
+            // length so that the two arrowheads are spaced out appropriately. Thus, in this case,
+            // we add an extra `head_width` to make sure they display properly.
+            if (options.style.head.name === "epi") {
+                length += CONSTANTS.LINE_SPACING + CONSTANTS.STROKE_WIDTH;
+            }
 
             const arrow = new Arrow(
                 new Shape.Endpoint(Point.zero()),
