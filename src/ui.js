@@ -1858,7 +1858,15 @@ class History {
                 case "flip":
                     for (const cell of action.cells) {
                         if (cell.is_edge()) {
-                            cell.flip(ui);
+                            cell.flip(ui, true);
+                        }
+                    }
+                    update_panel = true;
+                    break;
+                case "flip labels":
+                    for (const cell of action.cells) {
+                        if (cell.is_edge()) {
+                            cell.flip(ui, false);
                         }
                     }
                     update_panel = true;
@@ -2059,6 +2067,18 @@ class Panel {
                 .listen("click", () => {
                     ui.history.add(ui, [{
                         kind: "flip",
+                        cells: ui.selection,
+                    }], true);
+                })
+        );
+
+        // The button to flip a label.
+        wrapper.add(
+            new DOM.Element("button", { title: "Flip labels", disabled: true })
+                .add("⥮ Flip labels")
+                .listen("click", () => {
+                    ui.history.add(ui, [{
+                        kind: "flip labels",
                         cells: ui.selection,
                     }], true);
                 })
@@ -3191,6 +3211,30 @@ class Toolbar {
             }
         });
 
+        // Reverse.
+        add_shortcut([{ key: "r" }], () => {
+            ui.history.add(ui, [{
+                kind: "reverse",
+                cells: ui.selection,
+            }], true);
+        });
+
+        // Flip.
+        add_shortcut([{ key: "f" }], () => {
+            ui.history.add(ui, [{
+                kind: "flip",
+                cells: ui.selection,
+            }], true);
+        });
+
+        // Flip labels.
+        add_shortcut([{ key: "v" }], () => {
+            ui.history.add(ui, [{
+                kind: "flip labels",
+                cells: ui.selection,
+            }], true);
+        });
+
         // Shortcuts associated with buttons or sliders. Eventually, we'll want to link these with
         // the actual buttons, so they're not desynchronised, and can animate appropriately.
 
@@ -3225,24 +3269,8 @@ class Toolbar {
             toggle_slider_focus("length");
         });
 
-        // Flip.
-        add_shortcut([{ key: "f" }], () => {
-            ui.history.add(ui, [{
-                kind: "flip",
-                cells: ui.selection,
-            }], true);
-        });
-
-        // Reverse.
-        add_shortcut([{ key: "r" }], () => {
-            ui.history.add(ui, [{
-                kind: "reverse",
-                cells: ui.selection,
-            }], true);
-        });
-
         // Level.
-        add_shortcut([{ key: "v" }], () => {
+        add_shortcut([{ key: "b" }], () => {
             toggle_slider_focus("level");
         });
 
@@ -3889,29 +3917,32 @@ class Edge extends Cell {
         }
     }
 
-    /// Flips the edge, including label alignment, offset and head/tail style.
-    flip(ui, skip_dependencies = false) {
+    /// Flips the edge. If `flip_arrow` is true, this includes offset and head/tail style. Otherwise
+    /// it only flips the label alignment.
+    flip(ui, flip_arrow, skip_dependencies = false) {
         this.options.label_alignment = {
             left: "right",
             centre: "centre",
             over: "over",
             right: "left",
         }[this.options.label_alignment];
-        this.options.offset = -this.options.offset;
-        this.options.curve = -this.options.curve;
-        if (this.options.style.name === "arrow") {
-            const swap_sides = { top: "bottom", bottom: "top" };
-            if (this.options.style.tail.name === "hook") {
-                this.options.style.tail.side = swap_sides[this.options.style.tail.side];
-            }
-            if (this.options.style.head.name === "harpoon") {
-                this.options.style.head.side = swap_sides[this.options.style.head.side];
+        if (flip_arrow) {
+            this.options.offset = -this.options.offset;
+            this.options.curve = -this.options.curve;
+            if (this.options.style.name === "arrow") {
+                const swap_sides = { top: "bottom", bottom: "top" };
+                if (this.options.style.tail.name === "hook") {
+                    this.options.style.tail.side = swap_sides[this.options.style.tail.side];
+                }
+                if (this.options.style.head.name === "harpoon") {
+                    this.options.style.head.side = swap_sides[this.options.style.head.side];
+                }
             }
         }
 
         this.render(ui);
 
-        if (!skip_dependencies) {
+        if (flip_arrow && !skip_dependencies) {
             for (const cell of ui.quiver.transitive_dependencies([this])) {
                 cell.render(ui);
             }
@@ -3937,7 +3968,7 @@ class Edge extends Cell {
         // Flipping the label will also cause a rerender.
         // Note that since we do this, the position of the edge will remain the same, which means
         // we don't need to rerender any of this edge's dependencies.
-        this.flip(ui, true);
+        this.flip(ui, true, true);
     }
 }
 
