@@ -5,18 +5,17 @@
 }
 
 :root {
-    /* Selection blue. */
-    --blue: hsl(200, 100%, 50%);
-    /* Almost white. */
-    --white: hsl(0, 0%, 96%);
-
     /* UI colours. */
-    --ui-black: hsla(0, 0%, 0%, 0.9);
+    --ui-black: hsla(0, 0%, 0%, 0.9); /* Almost black. */
+    --ui-white: hsl(0, 0%, 96%); /* Almost white. */
+    --ui-blue: hsl(200, 100%, 50%); /* Selection blue. */
+    --ui-orange: hsl(30, 100%, 50%); /* Highlight orange. */
+
     --ui-background: transparent;
     --ui-border: hsla(0, 0%, 100%, 0.2);
     --ui-hover: hsla(0, 0%, 100%, 0.1);
     --ui-active: hsla(0, 0%, 100%, 0.2);
-    --ui-focus: var(--blue);
+    --ui-focus: var(--ui-blue);
     --ui-text: hsla(0, 0%, 100%, 0.6);
 
     /* Cell states. */
@@ -313,7 +312,7 @@ body:not(.modal) {
     border-radius: 8px;
     outline: none;
 
-    color: var(--white);
+    color: var(--ui-white);
     font-size: 16pt;
     font-family: monospace;
     text-align: center;
@@ -377,11 +376,11 @@ input[type="text"].flash {
 
 @keyframes shadow-flash {
     from {
-        box-shadow: 0 0 0 4px var(--blue);
+        box-shadow: 0 0 0 4px var(--ui-blue);
     }
 
     to {
-        box-shadow: 0 0 0 var(--blue);
+        box-shadow: 0 0 0 var(--ui-blue);
     }
 }
 
@@ -478,7 +477,7 @@ input[type="text"].flash {
 .panel input[type="radio"]:checked {
     background-color: var(--ui-focus);
     background-size: auto, 0%;
-    border-color: var(--blue);
+    border-color: var(--ui-blue);
 }
 
 .panel input[type="range"] {
@@ -516,8 +515,8 @@ input[type="text"].flash {
 }
 
 .panel input[type="range"].focused::-webkit-slider-thumb {
-    background: var(--blue);
-    border-color: var(--blue);
+    background: var(--ui-blue);
+    border-color: var(--ui-blue);
 }
 
 .panel input[type="range"]::-moz-range-thumb {
@@ -530,8 +529,8 @@ input[type="text"].flash {
 }
 
 .panel input[type="range"].focused::-moz-range-thumb {
-    background: var(--blue);
-    border-color: var(--blue);
+    background: var(--ui-blue);
+    border-color: var(--ui-blue);
 }
 
 .panel input[type="range"]:hover:not(.focused)::-webkit-slider-thumb {
@@ -552,7 +551,7 @@ input[type="text"].flash {
 
 .panel input[type="range"].focused::-webkit-slider-runnable-track {
     background: white;
-    border-color: var(--blue);
+    border-color: var(--ui-blue);
 }
 
 .panel input[type="range"]::-moz-range-track {
@@ -565,7 +564,7 @@ input[type="text"].flash {
 
 .panel input[type="range"].focused::-moz-range-track {
     background: white;
-    border-color: var(--blue);
+    border-color: var(--ui-blue);
 }
 
 .panel input[type="range"]:active:not(.focused)::-webkit-slider-thumb {
@@ -588,7 +587,7 @@ input[type="text"].flash {
     outline: none;
 
     font: inherit;
-    color: var(--white);
+    color: var(--ui-white);
 }
 
 .global button {
@@ -611,6 +610,30 @@ input[type="text"].flash {
 
 .panel button:active {
     background: var(--ui-active);
+}
+
+kbd {
+    position: absolute;
+    min-width: 20px;
+    padding: 2px 4px;
+
+    background: var(--ui-orange);
+    border-radius: 2px;
+
+    color: var(--ui-black);
+    text-align: center;
+}
+
+.ui:not(.help) kbd {
+    display: none;
+}
+
+kbd.button {
+    transform: translate(-25%, -25%);
+}
+
+kbd.slider {
+    transform: translateX(-25%);
 }
 
 .indicator-container {
@@ -663,7 +686,7 @@ input[type="text"].flash {
     border-radius: 8px;
     overflow: hidden;
 
-    color: var(--white);
+    color: var(--ui-white);
 
     transition: opacity 0.1s;
 }
@@ -685,7 +708,7 @@ input[type="text"].flash {
 
     font: inherit;
     text-align: center;
-    font-size: 24px;
+    font-size: 20px;
     color: inherit;
     white-space: nowrap;
 
@@ -698,7 +721,7 @@ input[type="text"].flash {
 }
 
 .toolbar .action:active {
-    background: var(--blue);
+    background: var(--ui-blue);
 }
 
 .toolbar .action:disabled {
@@ -722,7 +745,7 @@ button.flash {
 
 @keyframes background-flash {
     from {
-        background: var(--blue);
+        background: var(--ui-blue);
     }
 }
 
@@ -842,7 +865,7 @@ button.flash {
 }
 
 .arrow-endpoint:hover {
-    border: var(--blue) 2px solid;
+    border: var(--ui-blue) 2px solid;
 }
 
 /* Arrow labels */

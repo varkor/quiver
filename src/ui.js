@@ -2184,7 +2184,8 @@ class Panel {
         });
 
         const add_button = (title, label, key, action) => {
-            const button = Panel.create_button_with_shortcut(ui, title, label, { key }, action);
+            const button
+                = Panel.create_button_with_shortcut(ui, wrapper, title, label, { key }, action);
             button.set_attributes({ disabled: true });
             button.add_to(wrapper);
         };
@@ -2250,123 +2251,107 @@ class Panel {
             },
         );
 
-        const create_option_slider = (name, property, range) => {
-            const slider = new DOM.Element("label").add(`${name}: `).add(
-                new DOM.Element(
-                    "input",
-                    {
-                        type: "range",
-                        name: property,
-                        min: range.min,
-                        value: range.value,
-                        max: range.max,
-                        step: range.step || 1,
-                        disabled: true,
-                    },
-                ).listen("input", (_, slider) => {
-                    const value = parseInt(slider.value);
-                    const collapse = [property, ui.selection];
-                    const actions = ui.history.get_collapsible_actions(collapse);
-                    if (actions !== null) {
-                        // If the previous history event was to modify the property, then
-                        // we're just going to modify that event rather than add a new
-                        // one, as with the label input.
-                        let unchanged = true;
-                        for (const action of actions) {
-                            // This ought always to be true.
-                            if (action.kind === property) {
-                                // Modify the `to` field of each property modification.
-                                action[`${property}s`].forEach((modification) => {
-                                    modification.to = value;
-                                    if (modification.to !== modification.from) {
-                                        unchanged = false;
-                                    }
-                                });
-                            }
+        const create_option_slider = (name, property, key, range) => {
+            const slider = new DOM.Element(
+                "input",
+                {
+                    type: "range",
+                    name: property,
+                    min: range.min,
+                    value: range.value,
+                    max: range.max,
+                    step: range.step || 1,
+                    disabled: true,
+                },
+            ).listen("input", (_, slider) => {
+                const value = parseInt(slider.value);
+                const collapse = [property, ui.selection];
+                const actions = ui.history.get_collapsible_actions(collapse);
+                if (actions !== null) {
+                    // If the previous history event was to modify the property, then
+                    // we're just going to modify that event rather than add a new
+                    // one, as with the label input.
+                    let unchanged = true;
+                    for (const action of actions) {
+                        // This ought always to be true.
+                        if (action.kind === property) {
+                            // Modify the `to` field of each property modification.
+                            action[`${property}s`].forEach((modification) => {
+                                modification.to = value;
+                                if (modification.to !== modification.from) {
+                                    unchanged = false;
+                                }
+                            });
                         }
-                        // Invoke the new property changes immediately.
-                        ui.history.effect(ui, actions, false);
-                        if (unchanged) {
-                            ui.history.pop(ui);
-                        }
-                    } else {
-                        // If this is the start of our property modification,
-                        // we need to add a new history event.
-                        ui.history.add_collapsible(ui, collapse, [{
-                            kind: property,
-                            [`${property}s`]: Array.from(ui.selection)
-                                .filter(cell => cell.is_edge())
-                                .map((edge) => ({
-                                    edge,
-                                    from: edge.options[property],
-                                    to: value,
-                                })),
-                        }], true);
                     }
-                })
-            );
+                    // Invoke the new property changes immediately.
+                    ui.history.effect(ui, actions, false);
+                    if (unchanged) {
+                        ui.history.pop(ui);
+                    }
+                } else {
+                    // If this is the start of our property modification,
+                    // we need to add a new history event.
+                    ui.history.add_collapsible(ui, collapse, [{
+                        kind: property,
+                        [`${property}s`]: Array.from(ui.selection)
+                            .filter(cell => cell.is_edge())
+                            .map((edge) => ({
+                                edge,
+                                from: edge.options[property],
+                                to: value,
+                            })),
+                    }], true);
+                }
+            });
 
-            wrapper.add(slider);
+            // Allow sliders to be focused via the keyboard.
+            ui.shortcuts.add([{ key }], () => {
+                if (!this.element.class_list.contains("hidden")) {
+                    if (slider.class_list.contains("focused")) {
+                        slider.class_list.remove("focused");
+                    } else {
+                        const focused_sliders
+                            = ui.element.query_selector_all('input[type="range"].focused');
+                        for (const slider of focused_sliders) {
+                            slider.class_list.remove("focused");
+                        }
+                        slider.class_list.add("focused");
+                    }
+                }
+            });
 
-            return slider;
+            const label = new DOM.Element("label").add(`${name}: `).add(slider);
+
+            UI.delay(() => {
+                wrapper.add(new DOM.Element("kbd", { class: "slider" }, {
+                    position: "absolute",
+                    right: "0px",
+                    top: `${slider.element.offsetTop}px`,
+                }).add(key.toUpperCase()));
+            });
+
+            return label.add_to(wrapper);
         };
 
         // The offset slider.
-        create_option_slider("Offset", "offset", { min: -5, value: 0, max: 5 });
+        create_option_slider("Offset", "offset", "o", { min: -5, value: 0, max: 5 });
 
         // The curve slider.
-        create_option_slider("Curve", "curve", { min: -5, value: 0, max: 5 })
+        create_option_slider("Curve", "curve", "k", { min: -5, value: 0, max: 5 })
             .class_list.add("arrow-style");
 
         // The length slider, which affects `shorten`.
-        create_option_slider("Length", "length", { min: 20, value: 100, max: 100, step: 10 })
+        create_option_slider("Length", "length", "l", { min: 20, value: 100, max: 100, step: 10 })
             .class_list.add("arrow-style", "percentage");
 
         // The level slider. We limit to 3 for now because there are issues with pixel perfection
         // (especially for squiggly arrows, e.g. with their interaction with hooked tails) after 4,
         // and 3 seems a more consistent setting number with the other settings.. Besides, it's
         // unlikely people will want to draw diagrams involving 4- or 5-cells.
-        const level_slider = create_option_slider("Level", "level", { min: 1, value: 1, max: 3 });
+        const level_slider
+            = create_option_slider("Level", "level", "m", { min: 1, value: 1, max: 3 });
         level_slider.class_list.add("arrow-style");
-
-        // Shortcuts associated with buttons or sliders. Eventually, we'll want to link these with
-        // the actual buttons, so they're not desynchronised, and can animate appropriately.
-
-        const toggle_slider_focus = (name) => {
-            if (!this.element.class_list.contains("hidden")) {
-                const slider = ui.element.query_selector(`input[name="${name}"]`);
-                if (slider.class_list.contains("focused")) {
-                    slider.class_list.remove("focused");
-                } else {
-                    const focused_sliders
-                        = ui.element.query_selector_all('input[type="range"].focused');
-                    for (const slider of focused_sliders) {
-                        slider.class_list.remove("focused");
-                    }
-                    slider.class_list.add("focused");
-                }
-            }
-        };
-
-        // Offset.
-        ui.shortcuts.add([{ key: "o" }], () => {
-            toggle_slider_focus("offset");
-        });
-
-        // Curve.
-        ui.shortcuts.add([{ key: "k" }], () => {
-            toggle_slider_focus("curve");
-        });
-
-        // Length.
-        ui.shortcuts.add([{ key: "l" }], () => {
-            toggle_slider_focus("length");
-        });
-
-        // Level.
-        ui.shortcuts.add([{ key: "," }], () => {
-            toggle_slider_focus("level");
-        });
 
         // The list of tail styles.
         // The length of the arrow to draw in the centre style buttons.
@@ -2636,16 +2621,19 @@ class Panel {
             }
         };
 
+        this.global = new DOM.Element("div", { class: "panel global" });
+
         // The export button.
         const export_to_latex = Panel.create_button_with_shortcut(
             ui,
+            this.global,
             "Export to LaTeX",
             "Export to LaTeX",
             { key: "e", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always },
             () => display_export_pane("tikz-cd"),
         );
 
-        this.global = new DOM.Element("div", { class: "panel global" }).add(
+        this.global.add(
             // The shareable link button.
             new DOM.Element("button").add("Get shareable link")
                 .listen("click", () => {
@@ -2690,13 +2678,20 @@ class Panel {
     }
 
     /// Creates a UI button with an associated keyboard shortcut.
-    static create_button_with_shortcut(ui, title, label, key, action) {
+    static create_button_with_shortcut(ui, parent, title, label, shortcut, action) {
         const button = new DOM.Element("button", { title })
             .add(label)
             .listen("click", action);
-        ui.shortcuts.add([key], (event) => {
+        ui.shortcuts.add([shortcut], (event) => {
             action(event);
             Shortcuts.flash(button);
+        });
+        UI.delay(() => {
+            parent.add(new DOM.Element("kbd", { class: "button" }, {
+                position: "absolute",
+                left: `${button.element.offsetLeft}px`,
+                top: `${button.element.offsetTop}px`,
+            }).add(Shortcuts.name([shortcut])));
         });
         return button;
     }
@@ -3149,6 +3144,37 @@ class Shortcuts {
         }
     }
 
+    /// Return the name of a keyboard shortcut, to display to the user.
+    static name(combinations) {
+        // By default, we display "Ctrl" and "Shift" as modifier keys, as most
+        // operating systems use this to initiate keyboard shortcuts. For Mac
+        // and iOS, we switch to displaying "⌘" and "⇧". However, both keys
+        // (on any operating system) work with the shortcuts: this is simply
+        // used to work out what to display.
+        const apple_platform = /^(Mac|iPhone|iPod|iPad)/.test(navigator.platform);
+
+        const shortcuts_keys = [];
+        for (const shortcut of combinations) {
+            // Format the keyboard shortcut to make it discoverable in the toolbar.
+            let key = shortcut.key;
+            if (key.length === 1) {
+                // Upper case any letter key.
+                key = key.toUpperCase();
+            }
+            const shortcut_keys = [key];
+            if (shortcut.modifier) {
+                shortcut_keys.unshift(apple_platform ? "⌘" : "Ctrl");
+            }
+            if (shortcut.shift) {
+                shortcut_keys.unshift(apple_platform ? "⇧" : "Shift");
+            }
+            shortcuts_keys.push(shortcut_keys.join(apple_platform ? "" : "+"));
+        }
+        // For now, we simply display the first shortcut (there's rarely enough room
+        // to display more than one shortcut name).
+        return shortcuts_keys.slice(0, 1).join("/");
+    }
+
     /// Trigger a "flash" animation on an element, typically in response to its corresponding
     /// keyboard shortcut being triggered.
     static flash(button) {
@@ -3185,35 +3211,10 @@ class Toolbar {
         this.element = new DOM.Element("div", { class: "toolbar" })
             .listen("mousedown", (event) => event.stopImmediatePropagation());
 
-        // By default, we display "Ctrl" and "Shift" as modifier keys, as most
-        // operating systems use this to initiate keyboard shortcuts. For Mac
-        // and iOS, we switch to displaying "⌘" and "⇧". However, both keys
-        // (on any operating system) work with the shortcuts: this is simply
-        // used to work out what to display.
-        const apple_platform = /^(Mac|iPhone|iPod|iPad)/.test(navigator.platform);
+
 
         const add_action = (symbol, name, combinations, action, disabled) => {
-            const shortcuts_keys = [];
-            for (const shortcut of combinations) {
-                // Format the keyboard shortcut to make it discoverable in the toolbar.
-                let key = shortcut.key;
-                if (key.length === 1) {
-                    // Upper case any letter key.
-                    key = key.toUpperCase();
-                }
-                const shortcut_keys = [key];
-                if (shortcut.modifier) {
-                    shortcut_keys.unshift(apple_platform ? "⌘" : "Ctrl");
-                }
-                if (shortcut.shift) {
-                    shortcut_keys.unshift(apple_platform ? "⇧" : "Shift");
-                }
-                shortcuts_keys.push(shortcut_keys.join(apple_platform ? "" : "+"));
-            }
-            // For now, we simply display the first shortcut (there's rarely enough room
-            // to display more than one shortcut name).
-            const shortcut_name = shortcuts_keys.slice(0, 1).join("/");
-
+            const shortcut_name = Shortcuts.name(combinations);
             const trigger_action_and_update_toolbar = (event) => {
                 action(event);
                 ui.toolbar.update(ui);
@@ -3298,7 +3299,7 @@ class Toolbar {
         );
 
         add_action(
-            "⨉",
+            "×",
             "Delete",
             [
                 { key: "Backspace" },
@@ -3325,7 +3326,7 @@ class Toolbar {
         );
 
         add_action(
-            "-",
+            "–",
             "Zoom out",
             [{ key: "-", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always }],
             () => {
@@ -3365,6 +3366,16 @@ class Toolbar {
             [{ key: "h", modifier: false, context: Shortcuts.SHORTCUT_PRIORITY.Defer }],
             () => {
                 ui.grid.class_list.toggle("hidden");
+            },
+            false,
+        );
+
+        add_action(
+            "?",
+            "Toggle help",
+            [{ key: "/", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always }],
+            () => {
+                ui.element.class_list.toggle("help");
             },
             false,
         );
