@@ -505,7 +505,7 @@ class UI {
         // Using a delay makes the transition much smoother.
         UI.delay(() => {
             this.panel.hide();
-            this.panel.label_input.class_list.add("hidden");
+            this.panel.label_input.parent.class_list.add("hidden");
         });
     }
 
@@ -524,8 +524,15 @@ class UI {
         this.panel.initialise(this);
         this.element.add(this.panel.element);
         this.panel.update_position();
-        this.element.add(this.panel.label_input);
         this.element.add(this.panel.global);
+        this.element.add(
+            new DOM.Element("div", { class: "label-input-container hidden" })
+                .add(this.panel.label_input)
+        );
+        UI.delay(() => {
+            this.panel.label_input.parent.add(new DOM.Element("kbd", { class: "input" }).add("↵"));
+        });
+
 
         // Set up the toolbar.
         this.toolbar.initialise(this);
@@ -613,7 +620,7 @@ class UI {
                     this.panel.hide();
                 }
                 if (this.selection.size === 0) {
-                    this.panel.label_input.class_list.add("hidden");
+                    this.panel.label_input.parent.class_list.add("hidden");
                 }
             }
         });
@@ -948,9 +955,19 @@ class UI {
             }
         });
 
-        this.shortcuts.add([{ key: "Escape", shift: null, context: Shortcuts.SHORTCUT_PRIORITY.Always }], () => {
+        this.shortcuts.add([
+            { key: "Escape", shift: null, context: Shortcuts.SHORTCUT_PRIORITY.Always }
+        ], () => {
+            // In the following, we return if we perform any successful action. This means Escape
+            // will do at most one thing, and the user may press Escape repeatedly if necessary.
+
             // If an error banner is visible, the first thing Escape will do is dismiss the banner.
             if (UI.dismiss_error()) {
+                return;
+            }
+
+            // Close any open panes.
+            if (this.panel.dismiss_export_pane(this)) {
                 return;
             }
 
@@ -966,23 +983,36 @@ class UI {
                     }], false, this.selection_excluding(created));
                 }
                 this.switch_mode(UIState.default);
+                return;
             }
+
             // If we're waiting to start connecting a cell, then we stop waiting.
             const pending = this.element.query_selector(".cell.pending");
             if (pending !== null) {
                 pending.class_list.remove("pending");
+                return;
             }
+
             // Defocus the label input.
             const input = this.input_is_active();
             if (input) {
                 input.blur();
+                return;
             }
+
             // Defocus any sliders.
-            for (const slider of this.element.query_selector_all('input[type="range"].focused')) {
-                slider.class_list.remove("focused");
+            const focused_sliders = this.element.query_selector_all('input[type="range"].focused');
+            if (focused_sliders.length > 0) {
+                for (const slider of focused_sliders) {
+                    slider.class_list.remove("focused");
+                }
+                return;
             }
-            // Close any open panes.
-            this.panel.dismiss_export_pane(this);
+
+            // Defocus selected cells.
+            this.deselect();
+            this.panel.hide();
+            this.panel.label_input.parent.class_list.add("hidden");
         });
 
         // Holding Option or Control triggers panning mode (and releasing ends panning mode).
@@ -1331,7 +1361,7 @@ class UI {
                 this.panel.element.class_list.remove("hidden");
             }
             if (this.selection.size > 0) {
-                this.panel.label_input.class_list.remove("hidden");
+                this.panel.label_input.parent.class_list.remove("hidden");
             }
         }
     }
@@ -2126,7 +2156,7 @@ class Panel {
 
         // The label.
         this.label_input = new DOM.Element("input", {
-            class: "label-input hidden",
+            class: "label-input",
             type: "text",
             disabled: true,
         });
@@ -2185,7 +2215,7 @@ class Panel {
 
         const add_button = (title, label, key, action) => {
             const button
-                = Panel.create_button_with_shortcut(ui, wrapper, title, label, { key }, action);
+                = Panel.create_button_with_shortcut(ui, title, label, { key }, action);
             button.set_attributes({ disabled: true });
             button.add_to(wrapper);
         };
@@ -2325,8 +2355,6 @@ class Panel {
 
             UI.delay(() => {
                 wrapper.add(new DOM.Element("kbd", { class: "slider" }, {
-                    position: "absolute",
-                    right: "0px",
                     top: `${slider.element.offsetTop}px`,
                 }).add(key.toUpperCase()));
             });
@@ -2621,19 +2649,16 @@ class Panel {
             }
         };
 
-        this.global = new DOM.Element("div", { class: "panel global" });
-
         // The export button.
         const export_to_latex = Panel.create_button_with_shortcut(
             ui,
-            this.global,
             "Export to LaTeX",
             "Export to LaTeX",
             { key: "e", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always },
             () => display_export_pane("tikz-cd"),
         );
 
-        this.global.add(
+        this.global = new DOM.Element("div", { class: "panel global" }).add(
             // The shareable link button.
             new DOM.Element("button").add("Get shareable link")
                 .listen("click", () => {
@@ -2678,7 +2703,7 @@ class Panel {
     }
 
     /// Creates a UI button with an associated keyboard shortcut.
-    static create_button_with_shortcut(ui, parent, title, label, shortcut, action) {
+    static create_button_with_shortcut(ui, title, label, shortcut, action) {
         const button = new DOM.Element("button", { title })
             .add(label)
             .listen("click", action);
@@ -2687,11 +2712,7 @@ class Panel {
             Shortcuts.flash(button);
         });
         UI.delay(() => {
-            parent.add(new DOM.Element("kbd", { class: "button" }, {
-                position: "absolute",
-                left: `${button.element.offsetLeft}px`,
-                top: `${button.element.offsetTop}px`,
-            }).add(Shortcuts.name([shortcut])));
+            button.add(new DOM.Element("kbd", { class: "button" }).add(Shortcuts.name([shortcut])));
         });
         return button;
     }
@@ -3022,7 +3043,9 @@ class Panel {
             this.export = null;
             ui.switch_mode(UIState.default);
             this.update(ui);
+            return true;
         }
+        return false;
     }
 }
 
@@ -3293,7 +3316,7 @@ class Toolbar {
             () => {
                 ui.deselect();
                 ui.panel.hide();
-                ui.panel.label_input.class_list.add("hidden");
+                ui.panel.label_input.parent.class_list.add("hidden");
             },
             true,
         );

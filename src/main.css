@@ -298,13 +298,19 @@ body:not(.modal) {
     margin-bottom: 8px;
 }
 
-.label-input {
+.label-input-container {
     position: fixed;
     left: 50%;
     /* Position 8px above the global panel. */
     bottom: calc(8px + 46px);
     width: 40%; min-width: 280px;
     transform: translateX(-50%);
+
+    transition: bottom 0.1s;
+}
+
+.label-input {
+    width: 100%;
     padding: 4px 6px;
 
     background: var(--ui-black);
@@ -316,11 +322,9 @@ body:not(.modal) {
     font-size: 16pt;
     font-family: monospace;
     text-align: center;
-
-    transition: bottom 0.1s;
 }
 
-.label-input.hidden {
+.label-input-container.hidden {
     bottom: calc(-16pt - 4px * 2 - 16px);
 }
 
@@ -628,11 +632,13 @@ kbd {
     display: none;
 }
 
-kbd.button {
+kbd.button, kbd.input {
+    left: 0; top: 0;
     transform: translate(-25%, -25%);
 }
 
 kbd.slider {
+    right: 0;
     transform: translateX(-25%);
 }
 
