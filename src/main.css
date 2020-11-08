@@ -281,6 +281,7 @@ body:not(.modal) {
     border-radius: 8px 8px 0 0;
 
     text-align: center;
+    white-space: nowrap;
 }
 
 .panel .wrapper {
