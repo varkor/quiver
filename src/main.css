@@ -237,22 +237,25 @@ body:not(.modal) {
 
 .panel {
     position: fixed;
+    z-index: 100;
+    overflow-y: auto;
+
+    font: 14px sans-serif;
+    color: var(--ui-text);
+}
+
+.side.panel {
     width: calc(16px * 18);
     top: 16px;
     bottom: 16px;
     right: 16px;
-    z-index: 100;
-    overflow-y: auto;
 
     border-radius: 16px;
-
-    font: 14px sans-serif;
-    color: var(--ui-text);
 
     transition: right 0.1s;
 }
 
-.panel.hidden {
+.side.panel.hidden {
     right: calc(16px * -18);
 }
 
@@ -265,14 +268,19 @@ body:not(.modal) {
 }
 
 .global {
-    top: auto; right: auto;
-    left: 16px;
-    padding: 8px 16px;
+    left: 50%;
+    bottom: 0;
+    transform: translateX(-50%);
+    width: 40%; min-width: 280px;
+    height: 46px;
+    padding: 8px;
     /* Display above the export pane. */
     z-index: 101;
 
     background: var(--ui-black);
-    border-radius: 16px;
+    border-radius: 8px 8px 0 0;
+
+    text-align: center;
 }
 
 .panel .wrapper {
@@ -285,7 +293,7 @@ body:not(.modal) {
     border-radius: 16px;
 }
 
-.panel label {
+.side label {
     display: block;
     margin-bottom: 8px;
 }
@@ -293,7 +301,8 @@ body:not(.modal) {
 .label-input {
     position: fixed;
     left: 50%;
-    bottom: 16px;
+    /* Position 8px above the global panel. */
+    bottom: calc(8px + 46px);
     width: 40%; min-width: 280px;
     transform: translateX(-50%);
     padding: 4px 6px;
@@ -346,7 +355,7 @@ body:not(.modal) {
     color: hsla(0, 0%, 100%, 0.4);
 }
 
-.panel input[type="text"]:hover {
+.panel input[type="text"]:hover:not(:disabled):not(:focus) {
     background: var(--ui-hover);
 }
 
@@ -581,12 +590,31 @@ input[type="text"].flash {
     color: var(--white);
 }
 
-.panel button:hover {
+.global button {
+    display: inline-block;
+    width: calc(25% - 4px);
+    margin: 0;
+}
+
+.global button:first-of-type {
+    margin-right: 4px;
+}
+
+.global button:last-of-type {
+    margin-left: 4px;
+}
+
+.panel button:hover:not(:disabled) {
     background: var(--ui-hover);
 }
 
 .panel button:active {
     background: var(--ui-active);
+}
+
+.indicator-container {
+    display: inline-block;
+    margin-left: 24px;
 }
 
 .panel .success-indicator {
