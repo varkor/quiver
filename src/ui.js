@@ -2184,14 +2184,9 @@ class Panel {
         });
 
         const add_button = (title, label, key, action) => {
-            const button = new DOM.Element("button", { title, disabled: true })
-                .add(label)
-                .listen("click", action)
-            wrapper.add(button);
-            ui.shortcuts.add([{ key }], (event) => {
-                action(event);
-                Shortcuts.flash(button);
-            });
+            const button = Panel.create_button_with_shortcut(ui, title, label, { key }, action);
+            button.set_attributes({ disabled: true });
+            button.add_to(wrapper);
         };
 
         // The button to reverse an edge.
@@ -2641,6 +2636,15 @@ class Panel {
             }
         };
 
+        // The export button.
+        const export_to_latex = Panel.create_button_with_shortcut(
+            ui,
+            "Export to LaTeX",
+            "Export to LaTeX",
+            { key: "e", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always },
+            () => display_export_pane("tikz-cd"),
+        );
+
         this.global = new DOM.Element("div", { class: "panel global" }).add(
             // The shareable link button.
             new DOM.Element("button").add("Get shareable link")
@@ -2657,11 +2661,8 @@ class Panel {
                         return output;
                     });
                 })
-        ).add(
-            // The export button.
-            new DOM.Element("button").add("Export to LaTeX")
-                .listen("click", () => display_export_pane("tikz-cd"))
-        ).add(
+        ).add(export_to_latex)
+        .add(
             new DOM.Element("div", { class: "indicator-container" }).add(
                 new DOM.Element("label").add("Macros: ")
                     .add(
@@ -2686,6 +2687,18 @@ class Panel {
         this.global.listen("mousedown", (event) => {
             event.stopImmediatePropagation();
         });
+    }
+
+    /// Creates a UI button with an associated keyboard shortcut.
+    static create_button_with_shortcut(ui, title, label, key, action) {
+        const button = new DOM.Element("button", { title })
+            .add(label)
+            .listen("click", action);
+        ui.shortcuts.add([key], (event) => {
+            action(event);
+            Shortcuts.flash(button);
+        });
+        return button;
     }
 
     // A helper function for creating a list of radio inputs with backgrounds drawn based
