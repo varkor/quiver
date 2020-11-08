@@ -364,22 +364,35 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                     parameters.push(`shift ${side}=${Math.abs(edge.options.offset)}`);
                 }
 
-                // For now, to convert quiver dimensions into TikZ dimensions, we convert to `pt`
-                // and multiply by a constant that, heuristically, gave reasonable results. It would
-                // be nice to eventually correct this by using proportional lengths everywhere.
-                const TIKZ_MULTIPLIER = 1/3;
+                // For curves and shortening, we need to try to convert proportional measurements
+                // into absolute distances (in `pt`) for TikZ. There are several subtleties, one of
+                // which is that the grid cell size in tikz-cd has a greater width than height, so
+                // when we scale things, we need to scale differently in the horizontal and vertical
+                // directions. For now, we simply multiply by constants that, heuristically, give
+                // reasonable results for various diagrams I tested. It would be nice to eventually
+                // correct this by using proportional lengths, but that requires a custom TikZ style
+                // I do not currently possess the skills to create.
+                const TIKZ_HORIZONTAL_MULTIPLIER = 1/4;
+                const TIKZ_VERTICAL_MULTIPLIER = 1/6;
+                // This is the calculation for the radius of an ellipse, combining the two
+                // multipliers based on the angle of the edge.
+                const multiplier = TIKZ_HORIZONTAL_MULTIPLIER * TIKZ_VERTICAL_MULTIPLIER
+                    / ((TIKZ_HORIZONTAL_MULTIPLIER ** 2 * Math.sin(edge.angle()) ** 2
+                    + TIKZ_VERTICAL_MULTIPLIER ** 2 * Math.cos(edge.angle()) ** 2) ** 0.5);
 
                 if (edge.options.curve !== 0) {
                     has_curves = true;
                     parameters.push(
                         `curve={height=${
-                            edge.options.curve * CONSTANTS.CURVE_HEIGHT * TIKZ_MULTIPLIER
+                            // Using a fixed multiplier for curves of any angle tends to work better
+                            // in the examples I tested.
+                            edge.options.curve * CONSTANTS.CURVE_HEIGHT * TIKZ_HORIZONTAL_MULTIPLIER
                         }pt}`
                     );
                 }
 
                 if (edge.options.length !== 100) {
-                    const shorten = Math.round(edge.arrow.style.shorten * TIKZ_MULTIPLIER);
+                    const shorten = Math.round(edge.arrow.style.shorten * multiplier);
                     parameters.push(`shorten <=${shorten}pt`);
                     parameters.push(`shorten >=${shorten}pt`);
                     if (edge.options.curve !== 0) {
