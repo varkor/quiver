@@ -616,12 +616,7 @@ class UI {
                     }
                     this.switch_mode(UIState.default);
                 }
-                if (!Array.from(this.selection).find((cell) => cell.is_edge())) {
-                    this.panel.hide();
-                }
-                if (this.selection.size === 0) {
-                    this.panel.label_input.parent.class_list.add("hidden");
-                }
+                this.panel.hide_if_unselected(this);
             }
         });
 
@@ -1348,6 +1343,12 @@ class UI {
         // ensure that existing references to the selection are not modified.
         this.selection = new Set(this.selection);
         for (const cell of cells) {
+            if (this.quiver.deleted.has(cell)) {
+                // This should not happen in practice, but to avoid bugs, we make sure only to
+                // select cells that exist in the diagram. In the past, the history system has
+                // occasionally had trouble keeping track of which cells to select.
+                continue;
+            }
             if (!this.selection.has(cell)) {
                 this.selection.add(cell);
                 cell.select();
@@ -2066,6 +2067,7 @@ class History {
 
         if (update_panel) {
             ui.panel.update(ui);
+            ui.panel.hide_if_unselected(ui);
         }
         // Though we have already updated the `panel` if `update_panel`, `undo` and
         // `redo` may want to update the panel again, if they change which cells are
@@ -2084,6 +2086,7 @@ class History {
             ui.select(...this.selections[this.present]);
             if (update_panel) {
                 ui.panel.update(ui);
+                ui.panel.hide_if_unselected(ui);
             }
 
             ui.toolbar.update(ui);
@@ -2109,6 +2112,7 @@ class History {
             }
             if (update_panel) {
                 ui.panel.update(ui);
+                ui.panel.hide_if_unselected(ui);
             }
 
             ui.toolbar.update(ui);
@@ -3024,6 +3028,16 @@ class Panel {
         const focused_sliders = this.element.query_selector_all('input[type="range"].focused');
         for (const slider of focused_sliders) {
             slider.class_list.remove("focused");
+        }
+    }
+
+    /// Hide the panel and label input if no relevant cells are selected.
+    hide_if_unselected(ui) {
+        if (!Array.from(ui.selection).find((cell) => cell.is_edge())) {
+            this.hide();
+        }
+        if (ui.selection.size === 0) {
+            this.label_input.parent.class_list.add("hidden");
         }
     }
 
