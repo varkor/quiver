@@ -2359,7 +2359,7 @@ class Panel {
         });
 
         // The button to flip a label.
-        add_button("Flip labels", "⥮ Flip labels", "v", () => {
+        add_button("Flip labels", "⥮ Flip labels", "e", () => {
             ui.history.add(ui, [{
                 kind: "flip labels",
                 cells: ui.selection,
@@ -2371,9 +2371,9 @@ class Panel {
             ui,
             wrapper,
             [
-                ["left", "Left align label", "left"],
-                ["centre", "Centre align label (clear)", "centre"],
-                ["over", "Centre align label (over)", "over"],
+                ["left", "Left align label", "left", "v"],
+                ["centre", "Centre align label (clear)", "centre", "c"],
+                ["over", "Centre align label (over)", "over", "x"],
                 ["right", "Right align label", "right"]
             ],
             "label-alignment",
@@ -2563,8 +2563,8 @@ class Panel {
                 ["none", "No tail", { name: "none" }],
                 ["maps to", "Maps to", { name: "maps to" }],
                 ["mono", "Mono", { name: "mono"} ],
-                ["top-hook", "Top hook", { name: "hook", side: "top" }, ["short"]],
-                ["bottom-hook", "Bottom hook", { name: "hook", side: "bottom" }, ["short"]],
+                ["top-hook", "Top hook", { name: "hook", side: "top" }, null, ["short"]],
+                ["bottom-hook", "Bottom hook", { name: "hook", side: "bottom" }, null, ["short"]],
             ],
             "tail-type",
             ["vertical", "short", "arrow-style"],
@@ -2621,8 +2621,9 @@ class Panel {
                 ["arrowhead", "Arrowhead", { name: "arrowhead" }],
                 ["none", "No arrowhead", { name: "none" }],
                 ["epi", "Epi", { name: "epi"} ],
-                ["top-harpoon", "Top harpoon", { name: "harpoon", side: "top" }, ["short"]],
-                ["bottom-harpoon", "Bottom harpoon", { name: "harpoon", side: "bottom" }, ["short"]],
+                ["top-harpoon", "Top harpoon", { name: "harpoon", side: "top" }, null, ["short"]],
+                ["bottom-harpoon", "Bottom harpoon",
+                    { name: "harpoon", side: "bottom" }, null, ["short"]],
             ],
             "head-type",
             ["vertical", "short", "arrow-style"],
@@ -2852,7 +2853,7 @@ class Panel {
         on_check,
         properties,
     ) {
-        const options_list = new DOM.Element("div", { class: `options` });
+        const options_list = new DOM.Element("div", { class: "options" });
         options_list.class_list.add(...classes);
 
         const create_option = (value, tooltip, data) => {
@@ -2930,8 +2931,24 @@ class Panel {
             return button;
         };
 
-        for (const [value, tooltip, data, classes = []] of entries) {
-            create_option(value, tooltip, data).class_list.add(...classes);
+        for (const [value, tooltip, data, key = null, classes = []] of entries) {
+            const option = create_option(value, tooltip, data);
+            option.class_list.add(...classes);
+            if (key !== null) {
+                ui.shortcuts.add([{ key }], () => {
+                    if (!option.element.checked) {
+                        option.element.checked = true;
+                        option.element.dispatchEvent(new Event("change"))
+                        Shortcuts.flash(option);
+                    }
+                });
+                UI.delay(() => {
+                    options_list.add(new DOM.Element("kbd", { class: "button" }, {
+                        left: `${option.element.offsetLeft}px`,
+                        top: `${option.element.offsetTop}px`,
+                    }).add(Shortcuts.name([{ key }])));
+                });
+            }
         }
 
         options_list.query_selector(`input[name="${name}"]`).element.checked = true;
