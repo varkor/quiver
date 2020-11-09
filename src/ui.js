@@ -1058,24 +1058,26 @@ class UI {
                     break;
             }
             const vertices = Array.from(this.selection).filter((cell) => cell.is_vertex());
-            for (const vertex of vertices) {
-                this.positions.delete(`${vertex.position}`);
-            }
-            const all_new_positions_free = vertices.every((vertex) => {
-                return !this.positions.has(`${vertex.position.add(offset)}`);
-            });
-            for (const vertex of vertices) {
-                this.positions.set(`${vertex.position}`, vertex);
-            }
-            if (all_new_positions_free) {
-                this.history.add(this, [{
-                    kind: "move",
-                    displacements: vertices.map((vertex) => ({
-                        vertex,
-                        from: vertex.position,
-                        to: vertex.position.add(offset),
-                    })),
-                }], true);
+            if (vertices.length > 0) {
+                for (const vertex of vertices) {
+                    this.positions.delete(`${vertex.position}`);
+                }
+                const all_new_positions_free = vertices.every((vertex) => {
+                    return !this.positions.has(`${vertex.position.add(offset)}`);
+                });
+                for (const vertex of vertices) {
+                    this.positions.set(`${vertex.position}`, vertex);
+                }
+                if (all_new_positions_free) {
+                    this.history.add(this, [{
+                        kind: "move",
+                        displacements: vertices.map((vertex) => ({
+                            vertex,
+                            from: vertex.position,
+                            to: vertex.position.add(offset),
+                        })),
+                    }], true);
+                }
             }
         });
     }
