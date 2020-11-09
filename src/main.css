@@ -630,6 +630,8 @@ kbd {
 
     color: var(--ui-black);
     text-align: center;
+
+    pointer-events: none;
 }
 
 kbd.focused {
