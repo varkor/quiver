@@ -2560,9 +2560,9 @@ class Panel {
             ui,
             wrapper,
             [
+                ["mono", "Mono", { name: "mono"} ],
                 ["none", "No tail", { name: "none" }],
                 ["maps to", "Maps to", { name: "maps to" }],
-                ["mono", "Mono", { name: "mono"} ],
                 ["top-hook", "Top hook", { name: "hook", side: "top" }, null, ["short"]],
                 ["bottom-hook", "Bottom hook", { name: "hook", side: "bottom" }, null, ["short"]],
             ],
@@ -2590,11 +2590,11 @@ class Panel {
             wrapper,
             [
                 ["solid", "Solid", { name: "cell", level: 1 }],
+                ["none", "No body", { name: "none" }],
                 ["dashed", "Dashed", { name: "dashed", level: 1 }],
                 ["dotted", "Dotted", { name: "dotted", level: 1 }],
                 ["squiggly", "Squiggly", { name: "squiggly", level: 1 }],
                 ["barred", "Barred", { name: "barred", level: 1 }],
-                ["none", "No body", { name: "none" }],
             ],
             "body-type",
             ["vertical", "arrow-style"],
