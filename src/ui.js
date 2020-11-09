@@ -402,6 +402,30 @@ UIState.Pan = class extends UIState {
     }
 };
 
+/// The user is jumping to a cell.
+UIState.Jump = class extends UIState {
+    constructor(ui) {
+        super();
+
+        this.name = "jump";
+
+        ui.panel.label_input.parent.class_list.remove("hidden");
+        ui.panel.label_input.remove_attributes("disabled");
+        ui.panel.label_input.element.value = "";
+        ui.panel.label_input.element.focus();
+    }
+
+    release(ui) {
+        for (const element of ui.element.query_selector_all(".cell kbd.focused")) {
+            element.class_list.remove("focused");
+        }
+        ui.panel.label_input.element.blur();
+        ui.panel.update(ui);
+        ui.toolbar.update(ui);
+        ui.panel.hide_if_unselected(ui);
+    }
+};
+
 /// The object responsible for controlling all aspects of the user interface.
 class UI {
     constructor(element) {
@@ -939,14 +963,66 @@ class UI {
         // Add various keyboard shortcuts.
 
         this.shortcuts.add([{ key: "Enter", context: Shortcuts.SHORTCUT_PRIORITY.Always }], () => {
-            // Toggle the focus of the label input.
-            const input = this.panel.label_input.element;
-            if (document.activeElement !== input) {
-                input.focus();
-                // Select all existing text.
-                input.select();
-            } else {
-                input.blur();
+            if (!this.in_mode(UIState.Modal)) {
+                if (this.in_mode(UIState.Jump)) {
+                    let relative = false;
+                    // Get the list of IDs to select.
+                    let value = this.panel.label_input.element.value;
+
+                    // Prefixing the jump string with "⊻" will add deselected cells to the selection
+                    // instead of making an entirely new selection, or remove them from the
+                    // selection if they are already selected.
+                    if (/^⊻/.test(value)) {
+                        relative = true;
+                        value = value.slice(1);
+                    }
+
+                    const jump = new Set(value.split(" "));
+                    if (!relative) {
+                        // Deselect all selected cells.
+                        this.deselect();
+                    }
+                    if (jump.size > 0) {
+                        let selected = 0;
+                        // For now, a linear scan through every cell is sufficiently efficient.
+                        for (const cell of this.quiver.all_cells()) {
+                            if (jump.has(cell.id)) {
+                                if (!this.selection.has(cell)) {
+                                    this.select(cell);
+                                } else {
+                                    this.deselect(cell);
+                                }
+                                ++selected;
+                            }
+                            // Stop searching eagerly. We are assuming here there are no cells with
+                            // the same ID.
+                            if (selected === jump.size) {
+                                break;
+                            }
+                        }
+                    }
+                    this.switch_mode(UIState.default);
+                } else {
+                    // Toggle the focus of the label input.
+                    const input = this.panel.label_input.element;
+                    if (document.activeElement !== input) {
+                        input.focus();
+                        // Select all existing text.
+                        input.select();
+                    } else {
+                        input.blur();
+                    }
+                }
+            }
+        });
+
+        this.shortcuts.add([{ key: "Tab", context: Shortcuts.SHORTCUT_PRIORITY.Always }], () => {
+            if (!this.in_mode(UIState.Modal)) {
+                if (!this.in_mode(UIState.Jump)) {
+                    this.switch_mode(new UIState.Jump(this));
+                } else {
+                    this.switch_mode(UIState.default);
+                }
             }
         });
 
@@ -988,7 +1064,7 @@ class UI {
                 return;
             }
 
-            // Defocus the label input.
+            // Defocus the label input. This works both in normal mode and in jump mode.
             const input = this.input_is_active();
             if (input) {
                 input.blur();
@@ -2175,48 +2251,88 @@ class Panel {
         // Handle label interaction: update the labels of the selected cells when
         // the input field is modified.
         this.label_input.listen("input", () => {
-            const collapse = ["label", ui.selection];
-            const actions = ui.history.get_collapsible_actions(collapse);
-            if (actions !== null) {
-                // If the previous history event was to modify the label, then
-                // we're just going to modify that event rather than add a new
-                // one. This means we won't have to undo every single character
-                // change: we'll undo the entire label change.
-                let unchanged = true;
-                for (const action of actions) {
-                    // This ought always to be true.
-                    if (action.kind === "label") {
-                        // Modify the `to` field of each label.
-                        action.labels.forEach(label => {
-                            label.to = this.label_input.element.value;
-                            if (label.to !== label.from) {
-                                unchanged = false;
-                            }
-                        });
+            if (!ui.in_mode(UIState.Jump)) {
+                const collapse = ["label", ui.selection];
+                const actions = ui.history.get_collapsible_actions(collapse);
+                if (actions !== null) {
+                    // If the previous history event was to modify the label, then
+                    // we're just going to modify that event rather than add a new
+                    // one. This means we won't have to undo every single character
+                    // change: we'll undo the entire label change.
+                    let unchanged = true;
+                    for (const action of actions) {
+                        // This ought always to be true.
+                        if (action.kind === "label") {
+                            // Modify the `to` field of each label.
+                            action.labels.forEach(label => {
+                                label.to = this.label_input.element.value;
+                                if (label.to !== label.from) {
+                                    unchanged = false;
+                                }
+                            });
+                        }
                     }
-                }
-                // Invoke the new label changes immediately.
-                ui.history.effect(ui, actions, false);
-                if (unchanged) {
-                    ui.history.pop(ui);
+                    // Invoke the new label changes immediately.
+                    ui.history.effect(ui, actions, false);
+                    if (unchanged) {
+                        ui.history.pop(ui);
+                    }
+                } else {
+                    // If this is the start of our label modification,
+                    // we need to add a new history event.
+                    ui.history.add_collapsible(ui, collapse, [{
+                        kind: "label",
+                        labels: Array.from(ui.selection).map((cell) => ({
+                            cell,
+                            from: cell.label,
+                            to: this.label_input.element.value,
+                        })),
+                    }], true);
                 }
             } else {
-                // If this is the start of our label modification,
-                // we need to add a new history event.
-                ui.history.add_collapsible(ui, collapse, [{
-                    kind: "label",
-                    labels: Array.from(ui.selection).map((cell) => ({
-                        cell,
-                        from: cell.label,
-                        to: this.label_input.element.value,
-                    })),
-                }], true);
+                // We are jumping to a cell with the entered ID.
+                const relative
+                    = (this.label_input.element.value.match(/[⊻;]/g) || []).length % 2 === 1;
+                let replaced
+                    = this.label_input.element.value
+                        // We are going to remove any `|` symbols in the next step, so it's safe
+                        // to convert them to any other symbol that will be removed. Then we can use
+                        // `|` as a placeholder for the position of the caret, which conveniently
+                        // allows us to preserve the position when typing, even after modifying the
+                        // input.
+                        .replace(/\|/g, ";");
+                replaced = replaced.slice(0, this.label_input.element.selectionStart) + "|"
+                    + replaced.slice(this.label_input.element.selectionStart);
+                replaced = (relative ? "⊻ " : "")
+                    + replaced
+                    .replace(/[^ASDFJKL |]/gi, "")
+                    .replace(/\s{2,}/g, " ")
+                    .replace(/^\s+/, "")
+                    .replace(/^\|\s*/, "|")
+                    .toUpperCase();
+                const caret = replaced.indexOf("|");
+                replaced = replaced.replace("|", "");
+                this.label_input.element.value = replaced;
+                this.label_input.element.setSelectionRange(caret, caret);
+                for (const element of ui.element.query_selector_all(".cell kbd.focused")) {
+                    element.class_list.remove("focused");
+                }
+                for (const id of replaced.split(" ")) {
+                    const element = ui.element.query_selector(`kbd[data-jump="${id}"]`);
+                    if (element !== null) {
+                        element.class_list.add("focused");
+                    }
+                }
             }
         }).listen("blur", () => {
-            // As soon as the input is blurred, treat the label modification as
-            // a discrete event, so if we modify again, we'll need to undo both
-            // modifications to completely undo the label change.
-            ui.history.permanentise();
+            if (!ui.in_mode(UIState.Jump)) {
+                // As soon as the input is blurred, treat the label modification as
+                // a discrete event, so if we modify again, we'll need to undo both
+                // modifications to completely undo the label change.
+                ui.history.permanentise();
+            } else {
+                ui.switch_mode(UIState.default);
+            }
         });
 
         const add_button = (title, label, key, action) => {
@@ -3454,16 +3570,23 @@ class Toolbar {
 /// abstract properties of the cell as well as their HTML representation.
 class Cell {
     constructor(quiver, level, label = "") {
-        /// The k for which this cell is an k-cell.
+        // The k for which this cell is an k-cell.
         this.level = level;
 
-        /// The label with which the vertex or edge is annotated.
+        // The label with which the vertex or edge is annotated.
         this.label = label;
 
-        /// Add this cell to the quiver.
+        // An ID used to allow the user to jump to this cell via the keyboard.
+        this.id = "";
+        const chars = "ASDFJKL".split("");
+        for (let value = Cell.NEXT_ID++; value >= 0; value = Math.floor(value / chars.length) - 1) {
+            this.id = chars[value % chars.length] + this.id;
+        }
+
+        // Add this cell to the quiver.
         quiver.add(this);
 
-        /// Elements are specialised depending on whether the cell is a vertex (0-cell) or edge.
+        // Elements are specialised depending on whether the cell is a vertex (0-cell) or edge.
         this.element = null;
     }
 
@@ -3473,9 +3596,9 @@ class Cell {
 
         const content_element = this.content_element;
 
-        /// For cells with a separate `content_element`, we allow the cell to be moved
-        /// by dragging its `element` (under the assumption it doesn't totally overlap
-        /// its `content_element`). For now, these are precisely the vertices.
+        // For cells with a separate `content_element`, we allow the cell to be moved
+        // by dragging its `element` (under the assumption it doesn't totally overlap
+        // its `content_element`). For now, these are precisely the vertices.
         // We allow vertices to be moved by dragging its `element` (which contains its
         // `content_element`, the element with the actual cell content).
         if (this.is_vertex()) {
@@ -3498,6 +3621,11 @@ class Cell {
                     }
                 }
             });
+        } else {
+            // Vertices have custom handling for adding `kbd`, but it's more convenient to handle
+            // edges here.
+            // The identifier that notifies the user how to jump to this cell.
+            this.element.add(new DOM.Element("kbd", { "data-jump": this.id }).add(`${this.id}`));
         }
 
         // We record whether a cell was already selected when we click on it, because
@@ -3604,8 +3732,7 @@ class Cell {
                         const input = ui.panel.label_input.element;
                         input.focus();
                         // Select all the text.
-                        input.selectionStart = 0;
-                        input.selectionEnd = input.value.length;
+                        input.setSelectionRange(0, input.value.length);
                     }
                 }
 
@@ -3700,6 +3827,9 @@ class Cell {
     }
 }
 
+// We use an ID system for cells, so that we have an identifier that the user can jump to.
+Cell.NEXT_ID = 0;
+
 /// 0-cells, or vertices. This is primarily specialised in its set up of HTML elements.
 class Vertex extends Cell {
     constructor(ui, label = "", position) {
@@ -3768,6 +3898,8 @@ class Vertex extends Cell {
             // The cell content (containing the label).
             new DOM.Element("div", { class: "content" })
                 .add(new DOM.Element("div", { class: "label" }))
+                // The identifier that notifies the user how to jump to this cell.
+                .add(new DOM.Element("kbd", { "data-jump": this.id }).add(`${this.id}`))
                 .add_to(this.element);
         }
 
@@ -3829,7 +3961,7 @@ class Edge extends Cell {
         this.element = this.arrow.element;
 
         // `this.shape` is used for the source/target from (higher) cells connected to this one.
-        // This is located at the centre of the arrow.
+        // This is located at the centre of the arrow (it will be updated in `render`).
         this.shape = new Shape.Endpoint(Point.zero());
 
         this.reconnect(ui, source, target);
@@ -3910,7 +4042,7 @@ class Edge extends Cell {
         // consistently and cleanly across browsers, but Safari is _wrong_ and deserves to
         // be treated like the subpar implementation that it is.
         if (/^((?!chrome|android).)*safari/i.test(navigator.userAgent)) {
-            const [x, y, angle, rx, ry] = this.arrow.label.element.parent.get_attribute("transform")
+            const [x, y, angle] = this.arrow.label.element.parent.get_attribute("transform")
                 .replace(/\s+/g, " ").match(/-?\d+(\.\d+)?/g);
             const katex_element = this.arrow.label.element.query_selector(".katex, .katex-error");
             if (katex_element !== null) {
@@ -3950,6 +4082,16 @@ class Edge extends Cell {
             this.shape.origin = this.arrow.source.origin.add(
                 centre.add(new Point(0, this.arrow.style.shift)).rotate(this.arrow.angle()),
             );
+        }
+
+        // Move the jump label to the centre of the edge. We may not have created the `kbd` element
+        // yet, during initialisation, so we need to check.
+        const jump_label = this.element.query_selector("kbd");
+        if (jump_label) {
+            jump_label.set_style({
+                left: `${this.shape.origin.x}px`,
+                top: `${this.shape.origin.y}px`,
+            });
         }
 
         // We override the source and target whilst drawing, so we need to reset them.
