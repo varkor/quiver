@@ -1019,6 +1019,7 @@ class UI {
         this.shortcuts.add([{ key: "Tab", context: Shortcuts.SHORTCUT_PRIORITY.Always }], () => {
             if (!this.in_mode(UIState.Modal)) {
                 if (!this.in_mode(UIState.Jump)) {
+                    this.panel.defocus_inputs();
                     this.switch_mode(new UIState.Jump(this));
                 } else {
                     this.switch_mode(UIState.default);
@@ -1072,11 +1073,9 @@ class UI {
             }
 
             // Defocus any sliders.
-            const focused_sliders = this.element.query_selector_all('input[type="range"].focused');
-            if (focused_sliders.length > 0) {
-                for (const slider of focused_sliders) {
-                    slider.class_list.remove("focused");
-                }
+            const focused_elements = this.panel.element.query_selector_all(".focused");
+            if (focused_elements.length > 0) {
+                this.panel.defocus_inputs();
                 return;
             }
 
@@ -2463,11 +2462,7 @@ class Panel {
                     if (slider.class_list.contains("focused")) {
                         slider.class_list.remove("focused");
                     } else {
-                        const focused_sliders
-                            = ui.element.query_selector_all('input[type="range"].focused');
-                        for (const slider of focused_sliders) {
-                            slider.class_list.remove("focused");
-                        }
+                        this.defocus_inputs();
                         slider.class_list.add("focused");
                     }
                 }
@@ -2556,24 +2551,47 @@ class Panel {
             }
         };
 
-        this.create_option_list(
+        // To each style for each component (tail, body, head), we associated a number, so the user
+        // can select it from the keyboard.
+        let key_index = 1;
+
+        // See below for definition. We declare this here so that it is in scope for the
+        // events below.
+        let progress_style_selection;
+
+        const update_style = (option_list, name) => {
+            return (edges, _, data, user_triggered, idempotent) => {
+                if (!idempotent) {
+                    effect_edge_style_change(user_triggered, () => {
+                        edges.forEach((edge) => edge.options.style[name] = data);
+                    });
+                }
+                if (option_list.class_list.contains("focused")) {
+                    progress_style_selection();
+                } else {
+                    this.defocus_inputs();
+                }
+            };
+        };
+
+        // The list of tail styles.
+        const tail_styles = this.create_option_list(
             ui,
             wrapper,
             [
-                ["mono", "Mono", { name: "mono"} ],
-                ["none", "No tail", { name: "none" }],
-                ["maps to", "Maps to", { name: "maps to" }],
-                ["top-hook", "Top hook", { name: "hook", side: "top" }, null, ["short"]],
-                ["bottom-hook", "Bottom hook", { name: "hook", side: "bottom" }, null, ["short"]],
+                ["mono", "Mono", { name: "mono"}, `${key_index++}`],
+                ["none", "No tail", { name: "none" }, `${key_index++}`],
+                ["maps to", "Maps to", { name: "maps to" }, `${key_index++}`],
+                ["top-hook", "Top hook",
+                    { name: "hook", side: "top" }, `${key_index++}`, ["short"]],
+                ["bottom-hook", "Bottom hook",
+                    { name: "hook", side: "bottom" }, `${key_index++}`, ["short"]],
             ],
             "tail-type",
-            ["vertical", "short", "arrow-style"],
+            ["vertical", "short", "arrow-style", "kbd-requires-focus"],
             true, // `disabled`
-            (edges, _, data, user_triggered) => {
-                effect_edge_style_change(user_triggered, () => {
-                    edges.forEach((edge) => edge.options.style.tail = data);
-                });
-            },
+            (edges, _, data, user_triggered, idempotent) =>
+                update_style(tail_styles, "tail")(edges, _, data, user_triggered, idempotent),
             (data) => ({
                 length: 0,
                 options: Edge.default_options(null, {
@@ -2585,25 +2603,23 @@ class Panel {
         );
 
         // The list of body styles.
-        this.create_option_list(
+        key_index = 1;
+        const body_styles = this.create_option_list(
             ui,
             wrapper,
             [
-                ["solid", "Solid", { name: "cell", level: 1 }],
-                ["none", "No body", { name: "none" }],
-                ["dashed", "Dashed", { name: "dashed", level: 1 }],
-                ["dotted", "Dotted", { name: "dotted", level: 1 }],
-                ["squiggly", "Squiggly", { name: "squiggly", level: 1 }],
-                ["barred", "Barred", { name: "barred", level: 1 }],
+                ["solid", "Solid", { name: "cell", level: 1 }, `${key_index++}`],
+                ["none", "No body", { name: "none" }, `${key_index++}`],
+                ["dashed", "Dashed", { name: "dashed", level: 1 }, `${key_index++}`],
+                ["dotted", "Dotted", { name: "dotted", level: 1 }, `${key_index++}`],
+                ["squiggly", "Squiggly", { name: "squiggly", level: 1 }, `${key_index++}`],
+                ["barred", "Barred", { name: "barred", level: 1 }, `${key_index++}`],
             ],
             "body-type",
-            ["vertical", "arrow-style"],
+            ["vertical", "arrow-style", "kbd-requires-focus"],
             true, // `disabled`
-            (edges, _, data, user_triggered) => {
-                effect_edge_style_change(user_triggered, () => {
-                    edges.forEach((edge) => edge.options.style.body = data);
-                });
-            },
+            (edges, _, data, user_triggered, idempotent) =>
+                update_style(body_styles, "body")(edges, _, data, user_triggered, idempotent),
             (data) => ({
                 length: ARROW_LENGTH,
                 options: Edge.default_options(null, {
@@ -2614,25 +2630,24 @@ class Panel {
         );
 
         // The list of head styles.
-        this.create_option_list(
+        key_index = 1;
+        const head_styles = this.create_option_list(
             ui,
             wrapper,
             [
-                ["arrowhead", "Arrowhead", { name: "arrowhead" }],
-                ["none", "No arrowhead", { name: "none" }],
-                ["epi", "Epi", { name: "epi"} ],
-                ["top-harpoon", "Top harpoon", { name: "harpoon", side: "top" }, null, ["short"]],
+                ["arrowhead", "Arrowhead", { name: "arrowhead" }, `${key_index++}`],
+                ["none", "No arrowhead", { name: "none" }, `${key_index++}`],
+                ["epi", "Epi", { name: "epi"}, `${key_index++}`],
+                ["top-harpoon", "Top harpoon",
+                    { name: "harpoon", side: "top" }, `${key_index++}`, ["short"]],
                 ["bottom-harpoon", "Bottom harpoon",
-                    { name: "harpoon", side: "bottom" }, null, ["short"]],
+                    { name: "harpoon", side: "bottom" }, `${key_index++}`, ["short"]],
             ],
             "head-type",
-            ["vertical", "short", "arrow-style"],
+            ["vertical", "short", "arrow-style", "kbd-requires-focus"],
             true, // `disabled`
-            (edges, _, data, user_triggered) => {
-                effect_edge_style_change(user_triggered, () => {
-                    edges.forEach((edge) => edge.options.style.head = data);
-                });
-            },
+            (edges, _, data, user_triggered, idempotent) =>
+                update_style(head_styles, "head")(edges, _, data, user_triggered, idempotent),
             (data) => ({
                 length: 0,
                 options: Edge.default_options(null, {
@@ -2643,13 +2658,13 @@ class Panel {
         );
 
         // The list of (non-arrow) edge styles.
-        this.create_option_list(
+        const edge_styles = this.create_option_list(
             ui,
             wrapper,
             [
-                ["arrow", "Arrow", Edge.default_options().style],
-                ["adjunction", "Adjunction", { name: "adjunction" }],
-                ["corner", "Pullback / pushout", { name: "corner" }],
+                ["arrow", "Arrow", Edge.default_options().style, "a"],
+                ["adjunction", "Adjunction", { name: "adjunction" }, "j"],
+                ["corner", "Pullback / pushout", { name: "corner" }, "p"],
             ],
             "edge-type",
             ["vertical", "centre"],
@@ -2697,6 +2712,8 @@ class Panel {
                     if (data.name === "arrow") {
                         ui.element.query_selector_all('.arrow-style input[type="radio"]:checked')
                             .forEach((input) => input.element.dispatchEvent(new Event("change")))
+                    } else {
+                        this.defocus_inputs();
                     }
                 });
             },
@@ -2705,6 +2722,48 @@ class Panel {
                 options: Edge.default_options(null, data),
             }),
         );
+
+        progress_style_selection = () => {
+            const elements = [head_styles, body_styles, tail_styles];
+            while (elements.length > 0) {
+                const first = elements.pop();
+                if (first.class_list.contains("focused")) {
+                    first.class_list.remove("focused");
+                    if (elements.length > 0) {
+                        const second = elements.pop();
+                        second.class_list.remove("next-to-focus");
+                        second.class_list.add("focused");
+                        if (elements.length > 0) {
+                            const third = elements.pop();
+                            third.class_list.add("next-to-focus");
+                        }
+                    } else {
+                        tail_styles.class_list.add("next-to-focus");
+                    }
+                    return;
+                }
+            }
+            this.defocus_inputs();
+            tail_styles.class_list.add("focused");
+            tail_styles.class_list.remove("next-to-focus");
+            body_styles.class_list.add("next-to-focus");
+        };
+
+        // Handle the keyboard shortcuts for changing the arrow style.
+        ui.shortcuts.add([{ key: "s" }], () => {
+            // We can only select an arrow style if that's the edge style that's actually selected.
+            if (edge_styles.query_selector(":checked").element.value !== "arrow") {
+                return;
+            }
+            progress_style_selection();
+        });
+
+        UI.delay(() => {
+            for (const styles of [head_styles, body_styles, tail_styles]) {
+                new DOM.Element("kbd", { class: "button triggers-focus" }).add("S").add_to(styles);
+            }
+            tail_styles.class_list.add("next-to-focus");
+        });
 
         const display_export_pane = (format, modify = (output) => output) => {
             // Handle export button interaction: export the quiver.
@@ -2865,7 +2924,13 @@ class Panel {
             }).listen("change", (event, button) => {
                 if (button.checked) {
                     const selected_edges = Array.from(ui.selection).filter(cell => cell.is_edge());
-                    on_check(selected_edges, value, data, event.isTrusted);
+                    on_check(
+                        selected_edges,
+                        value,
+                        data,
+                        event.isTrusted || event.triggered_by_shortcut,
+                        event.idempotent || false,
+                    );
                     for (const edge of selected_edges) {
                         edge.render(ui);
                     }
@@ -2931,29 +2996,56 @@ class Panel {
             return button;
         };
 
+        let i = 0;
         for (const [value, tooltip, data, key = null, classes = []] of entries) {
             const option = create_option(value, tooltip, data);
             option.class_list.add(...classes);
             if (key !== null) {
                 ui.shortcuts.add([{ key }], () => {
-                    if (!option.element.checked) {
-                        option.element.checked = true;
-                        option.element.dispatchEvent(new Event("change"))
-                        Shortcuts.flash(option);
+                    const is_focused = options_list.class_list.contains("focused");
+                    if (!option.element.disabled) {
+                        if (!options_list.class_list.contains("kbd-requires-focus") || is_focused) {
+                            // When the list is focused, we allow the user to choose checked
+                            // options for convenience. Obviously this should have no effect in
+                            // terms of triggering that option, but may progress a selection.
+                            // We leave it to the caller to distinguish between these cases using
+                            // `event.idempotent`.
+                            if (!option.element.checked || is_focused) {
+                                const event = new Event("change");
+                                // Trigger history changes even though it wasn't initiated by a user
+                                // click.
+                                event.triggered_by_shortcut = true;
+                                event.idempotent = option.element.checked;
+                                option.element.checked = true;
+                                option.element.dispatchEvent(event);
+                                Shortcuts.flash(option);
+                                // Prevent other elements from being triggered by the same key press.
+                                return true;
+                            }
+                        }
                     }
+                    return false;
                 });
-                UI.delay(() => {
+                // JavaScript's scoping is messed up.
+                UI.delay(((i) => (() => {
+                    const left = options_list.class_list.contains("vertical")
+                        ? ((i % 2 === 0 && classes.includes("short"))
+                            ? option.element.offsetWidth : 0)
+                        : option.element.offsetLeft;
                     options_list.add(new DOM.Element("kbd", { class: "button" }, {
-                        left: `${option.element.offsetLeft}px`,
+                        left: `${left}px`,
                         top: `${option.element.offsetTop}px`,
                     }).add(Shortcuts.name([{ key }])));
-                });
+                }))(i));
             }
+            ++i;
         }
 
         options_list.query_selector(`input[name="${name}"]`).element.checked = true;
 
         wrapper.add(options_list);
+
+        return options_list;
     }
 
     /// Render the TeX contained in the label of a cell.
@@ -3167,10 +3259,7 @@ class Panel {
     /// Hide the panel off-screen.
     hide() {
         this.element.class_list.add("hidden");
-        const focused_sliders = this.element.query_selector_all('input[type="range"].focused');
-        for (const slider of focused_sliders) {
-            slider.class_list.remove("focused");
-        }
+        this.defocus_inputs();
     }
 
     /// Hide the panel and label input if no relevant cells are selected.
@@ -3181,6 +3270,19 @@ class Panel {
         if (ui.selection.size === 0) {
             this.label_input.parent.class_list.add("hidden");
         }
+    }
+
+    /// Defocuses any elements that have been focused via the keyboard.
+    defocus_inputs() {
+        const focused_elements = this.element.query_selector_all(".focused");
+        for (const element of focused_elements) {
+            element.class_list.remove("focused");
+        }
+        const next_to_focus = this.element.query_selector(".next-to-focus");
+        if (next_to_focus !== null) {
+            next_to_focus.class_list.remove("next-to-focus");
+        }
+        this.element.query_selector(".kbd-requires-focus").class_list.add("next-to-focus");
     }
 
     /// Centre the panel vertically.
@@ -3235,13 +3337,14 @@ class Shortcuts {
                                 || ["Control", "Meta"].includes(key))
                     ) {
                         const effect = () => {
+                            let prevent_others = false;
                             // Trigger the shortcut effect.
                             const action = shortcut[{ keydown: "action", keyup: "unaction" }[type]];
                             if (action !== null) {
+                                // Only trigger the action if the associated button is not
+                                // disabled.
                                 if (shortcut.button === null || !shortcut.button.element.disabled) {
-                                    // Only trigger the action if the associated button is not
-                                    // disabled.
-                                    action(event);
+                                    prevent_others = action(event);
                                 }
                                 if (shortcut.button !== null) {
                                     // The button might be disabled by `action`, but we still want
@@ -3254,13 +3357,16 @@ class Shortcuts {
                                     }
                                 }
                             }
+                            return prevent_others;
                         };
 
                         if (!editing_input && !ui.in_mode(UIState.Modal)
                             || shortcut.context === Shortcuts.SHORTCUT_PRIORITY.Always)
                         {
                             event.preventDefault();
-                            effect();
+                            if (effect()) {
+                                break;
+                            }
                         } else if (!ui.in_mode(UIState.Modal) && type === "keydown") {
                             // If we were editing an input, and the keyboard shortcut doesn't
                             // trigger in that case, then if the keyboard shortcut is deemed
