@@ -150,34 +150,39 @@ UIState.Connect = class extends UIState {
 
     /// Returns whether the `source` is compatible with the specified `target`.
     /// This first checks that the source is valid at all.
-    valid_connection(ui, target) {
+    static valid_connection(ui, source, target, reconnect = null) {
         // To allow `valid_connection` to be used to simply check whether the source is valid,
         // we ignore source--target compatibility if `target` is null.
         // We allow cells to be connected even if they do not have the same level. This is
         // because it's often useful when drawing diagrams, even if it may not always be
         // semantically valid.
-        const source_target_level = Math.max(this.source.level, target === null ? 0 : target.level);
+        const source_target_level = Math.max(source.level, target === null ? 0 : target.level);
         if (source_target_level + 1 > CONSTANTS.MAXIMUM_CELL_LEVEL) {
             return false;
         }
 
-        if (this.reconnect === null) {
+        if (reconnect === null) {
             // If there are no edges depending on this one, then there are no other obstructions to
             // being connectable.
             return true;
         } else {
+            if (target === reconnect.edge) {
+                // We obviously can't connect an edge to itself.
+                return false;
+            }
+
             // We need to check that the dependencies also don't have too great a level after
             // reconnecting.
             // We're going to temporarily increase the level of the edge to what it would be,
             // and check for any edges that then exceed the `MAXIMUM_CELL_LEVEL`. This is
             // conceptually the simplest version of the check.
-            const edge_level = this.reconnect.edge.level;
-            this.reconnect.edge.level = source_target_level + 1;
+            const edge_level = reconnect.edge.level;
+            reconnect.edge.level = source_target_level + 1;
 
             let exceeded_max_level = false;
 
             const update_levels = () => {
-                for (const cell of ui.quiver.transitive_dependencies([this.reconnect.edge], true)) {
+                for (const cell of ui.quiver.transitive_dependencies([reconnect.edge], true)) {
                     if (target === cell) {
                         // We shouldn't be able to connect to an edge that's connected to this one.
                         exceeded_max_level = true;
@@ -194,7 +199,7 @@ UIState.Connect = class extends UIState {
             // Check for violations of `MAXIMUM_CELL_LEVEL`.
             update_levels();
             // Reset the edge level.
-            this.reconnect.edge.level = edge_level;
+            reconnect.edge.level = edge_level;
             // Reset the levels of its dependencies.
             update_levels();
 
@@ -1008,15 +1013,28 @@ class UI {
                                         const edges = Array.from(this.selection)
                                             .filter((cell) => cell.is_edge());
                                         for (const edge of edges) {
-                                            actions.push({
-                                                kind: "connect",
-                                                edge,
-                                                end,
-                                                from: edge[end],
-                                                to: cell,
-                                            });
+                                            const source = mode === "Source" ? cell : edge.source;
+                                            const target = mode === "Target" ? cell : edge.target;
+                                            const valid_connection =
+                                                UIState.Connect.valid_connection(
+                                                    this,
+                                                    { source: target, target: source }[end],
+                                                    { source, target }[end],
+                                                    { end, edge },
+                                                );
+                                            if (valid_connection) {
+                                                actions.push({
+                                                    kind: "connect",
+                                                    edge,
+                                                    end,
+                                                    from: edge[end],
+                                                    to: cell,
+                                                });
+                                            }
                                         }
-                                        this.history.add(this, actions, true);
+                                        if (actions.length > 0) {
+                                            this.history.add(this, actions, true);
+                                        }
                                         break;
                                 }
                                 ++matched;
@@ -3888,7 +3906,10 @@ class Cell {
                 // not working.
                 if (ui.state.source !== this
                     && (ui.state.reconnect === null || ui.state.reconnect.edge !== this)) {
-                    if (ui.state.valid_connection(ui, this)) {
+                    if (
+                        UIState.Connect.valid_connection(
+                            ui, ui.state.source, this, ui.state.reconnect)
+                    ) {
                         ui.state.target = this;
                         this.element.class_list.add("target");
                         // Hide the insertion point (e.g. if we're connecting a vertex to an edge).
@@ -3905,7 +3926,9 @@ class Cell {
 
                 // Start connecting the node.
                 const state = new UIState.Connect(ui, this, false);
-                if (state.valid_connection(ui, null)) {
+                if (
+                    UIState.Connect.valid_connection(ui, state.source, null, state.reconnect)
+                ) {
                     ui.switch_mode(state);
                     this.element.class_list.add("source");
                 }
