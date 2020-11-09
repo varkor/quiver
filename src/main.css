@@ -338,6 +338,10 @@ body:not(.modal) {
     color: black;
 }
 
+.jump .label-input:focus {
+    background: var(--ui-orange);
+}
+
 .label-input::selection {
     background-color: white;
 }
@@ -628,6 +632,10 @@ kbd {
     text-align: center;
 }
 
+kbd.focused {
+    color: var(--ui-white);
+}
+
 .ui:not(.help) kbd {
     display: none;
 }
@@ -640,6 +648,26 @@ kbd.button, kbd.input {
 kbd.slider {
     right: 0;
     transform: translateX(-25%);
+}
+
+.ui.jump .cell kbd {
+    display: block;
+}
+
+.vertex kbd {
+    left: 50%; top: 0;
+    transform: translateX(-50%);
+}
+
+.arrow kbd {
+    z-index: 10;
+    transform: translate(-50%, -50%);
+}
+
+/* Display a tab symbol for the usual keyboard shortcut symbol. This is not necessary when the user
+has already pressed tab, placing us in jump mode. */
+.ui:not(.jump) .cell kbd::before {
+    content: "⇥";
 }
 
 .indicator-container {
