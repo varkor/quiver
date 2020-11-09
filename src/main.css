@@ -300,35 +300,46 @@ body:not(.modal) {
 
 .label-input-container {
     position: fixed;
-    left: 50%;
+    left: 50%; height: 32px;
     /* Position 8px above the global panel. */
     bottom: calc(8px + 46px);
     width: 40%; min-width: 280px;
     transform: translateX(-50%);
 
+    background: var(--ui-black);
+    border-radius: 8px;
+
+    color: var(--ui-white);
+
     transition: bottom 0.1s;
 }
 
+.jump .label-input-container {
+    background: var(--ui-orange);
+}
+
 .label-input {
-    width: 100%;
+    width: 100%; height: 32px;
     padding: 4px 6px;
 
-    background: var(--ui-black);
+    background: transparent;
     border: none;
     border-radius: 8px;
     outline: none;
 
-    color: var(--ui-white);
-    font-size: 16pt;
     font-family: monospace;
+    font-size: 16pt;
+    color: inherit;
     text-align: center;
+
+    transition: width 0.1s;
 }
 
 .label-input-container.hidden {
     bottom: calc(-16pt - 4px * 2 - 16px);
 }
 
-.label-input:hover {
+.label-input:hover:not(:disabled):not(:focus) {
     background: hsla(0, 0%, 15%, 0.9);
 }
 
@@ -338,8 +349,32 @@ body:not(.modal) {
     color: black;
 }
 
+.input-mode {
+    display: inline-block;
+    vertical-align: bottom;
+    width: 0px; height: 32px;
+    line-height: 32px;
+    overflow: hidden;
+
+    border-radius: 8px 0 0 8px;
+
+    font-size: 12pt;
+    text-align: center;
+
+    transition: width 0.1s;
+}
+
+.jump .input-mode {
+    width: 80px;
+}
+
 .jump .label-input:focus {
+    width: calc(100% - 80px);
+
     background: var(--ui-orange);
+    /* We override this value to make `shadow-flash` the correct colour. This isn't really
+    semantic naming. */
+    --ui-blue: var(--ui-orange);
 }
 
 .label-input::selection {
