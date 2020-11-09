@@ -404,14 +404,15 @@ UIState.Pan = class extends UIState {
 
 /// The user is jumping to a cell.
 UIState.Jump = class extends UIState {
-    constructor(ui) {
+    constructor(ui, mode) {
         super();
 
         this.name = "jump";
 
+        ui.panel.label_input.element.value = "";
+        this.switch_mode(ui, mode);
         ui.panel.label_input.parent.class_list.remove("hidden");
         ui.panel.label_input.remove_attributes("disabled");
-        ui.panel.label_input.element.value = "";
         ui.panel.label_input.element.focus();
     }
 
@@ -423,6 +424,11 @@ UIState.Jump = class extends UIState {
         ui.panel.update(ui);
         ui.toolbar.update(ui);
         ui.panel.hide_if_unselected(ui);
+    }
+
+    switch_mode(ui, mode) {
+        this.mode = mode;
+        ui.element.query_selector(".input-mode").clear().add(this.mode);
     }
 };
 
@@ -551,12 +557,16 @@ class UI {
         this.element.add(this.panel.global);
         this.element.add(
             new DOM.Element("div", { class: "label-input-container hidden" })
+                .add(new DOM.Element("div", { class: "input-mode" }))
                 .add(this.panel.label_input)
         );
         UI.delay(() => {
             this.panel.label_input.parent.add(new DOM.Element("kbd", { class: "input" }).add("↵"));
         });
 
+        // Prevent the label input being dismissed when clicked on in jump mode, when no cells are
+        // selected.
+        this.panel.label_input.parent.listen("mouseup", (event) => event.stopPropagation());
 
         // Set up the toolbar.
         this.toolbar.initialise(this);
@@ -965,38 +975,51 @@ class UI {
         this.shortcuts.add([{ key: "Enter", context: Shortcuts.SHORTCUT_PRIORITY.Always }], () => {
             if (!this.in_mode(UIState.Modal)) {
                 if (this.in_mode(UIState.Jump)) {
-                    let relative = false;
                     // Get the list of IDs to select.
-                    let value = this.panel.label_input.element.value;
+                    const mode = this.state.mode;
 
-                    // Prefixing the jump string with "⊻" will add deselected cells to the selection
-                    // instead of making an entirely new selection, or remove them from the
-                    // selection if they are already selected.
-                    if (/^⊻/.test(value)) {
-                        relative = true;
-                        value = value.slice(1);
-                    }
-
-                    const jump = new Set(value.split(" "));
-                    if (!relative) {
+                    const jump = new Set(this.panel.label_input.element.value.split(" "));
+                    if (mode === "Select") {
                         // Deselect all selected cells.
                         this.deselect();
                     }
                     if (jump.size > 0) {
-                        let selected = 0;
+                        let matched = 0;
                         // For now, a linear scan through every cell is sufficiently efficient.
                         for (const cell of this.quiver.all_cells()) {
                             if (jump.has(cell.id)) {
-                                if (!this.selection.has(cell)) {
-                                    this.select(cell);
-                                } else {
-                                    this.deselect(cell);
+                                switch (mode) {
+                                    case "Select":
+                                    case "Toggle":
+                                        if (!this.selection.has(cell)) {
+                                            this.select(cell);
+                                        } else {
+                                            this.deselect(cell);
+                                        }
+                                        break;
+                                    case "Source":
+                                    case "Target":
+                                        const actions = [];
+                                        const end = mode.toLowerCase();
+                                        const edges = Array.from(this.selection)
+                                            .filter((cell) => cell.is_edge());
+                                        for (const edge of edges) {
+                                            actions.push({
+                                                kind: "connect",
+                                                edge,
+                                                end,
+                                                from: edge[end],
+                                                to: cell,
+                                            });
+                                        }
+                                        this.history.add(this, actions, true);
+                                        break;
                                 }
-                                ++selected;
+                                ++matched;
                             }
                             // Stop searching eagerly. We are assuming here there are no cells with
                             // the same ID.
-                            if (selected === jump.size) {
+                            if (matched === jump.size) {
                                 break;
                             }
                         }
@@ -1020,9 +1043,23 @@ class UI {
             if (!this.in_mode(UIState.Modal)) {
                 if (!this.in_mode(UIState.Jump)) {
                     this.panel.defocus_inputs();
-                    this.switch_mode(new UIState.Jump(this));
+                    this.switch_mode(new UIState.Jump(this, "Select"));
                 } else {
                     this.switch_mode(UIState.default);
+                }
+            }
+        });
+
+        this.shortcuts.add([{ key: "," }, { key: "." } ], (event) => {
+            if (!this.in_mode(UIState.Modal)) {
+                if (!this.in_mode(UIState.Jump)) {
+                    if (Array.from(this.selection).find((cell) => cell.is_edge())) {
+                        this.panel.defocus_inputs();
+                        this.switch_mode(new UIState.Jump(
+                            this,
+                            event.key === "," ? "Source" : "Target",
+                        ));
+                    }
                 }
             }
         });
@@ -2247,6 +2284,21 @@ class Panel {
             event.stopImmediatePropagation();
         });
 
+        this.label_input.listen("keydown", (event) => {
+            if (ui.in_mode(UIState.Jump)) {
+                if (event.key === ";") {
+                    switch (ui.state.mode) {
+                        case "Select":
+                            ui.state.switch_mode(ui, "Toggle");
+                            break;
+                        case "Toggle":
+                            ui.state.switch_mode(ui, "Select");
+                            break;
+                    }
+                }
+            }
+        });
+
         // Handle label interaction: update the labels of the selected cells when
         // the input field is modified.
         this.label_input.listen("input", () => {
@@ -2290,8 +2342,6 @@ class Panel {
                 }
             } else {
                 // We are jumping to a cell with the entered ID.
-                const relative
-                    = (this.label_input.element.value.match(/[⊻;]/g) || []).length % 2 === 1;
                 let replaced
                     = this.label_input.element.value
                         // We are going to remove any `|` symbols in the next step, so it's safe
@@ -2299,20 +2349,30 @@ class Panel {
                         // `|` as a placeholder for the position of the caret, which conveniently
                         // allows us to preserve the position when typing, even after modifying the
                         // input.
-                        .replace(/\|/g, ";");
+                        .replace(/\|/g, " ");
                 replaced = replaced.slice(0, this.label_input.element.selectionStart) + "|"
                     + replaced.slice(this.label_input.element.selectionStart);
-                replaced = (relative ? "⊻ " : "")
-                    + replaced
-                    .replace(/[^ASDFJKL |]/gi, "")
+                switch (ui.state.mode) {
+                    case "Select":
+                    case "Toggle":
+                        replaced = replaced.replace(/[^ASDFJKL |]/gi, "");
+                        break;
+                    case "Source":
+                    case "Target":
+                        replaced = replaced.replace(/[^ASDFJKL|]/gi, "");
+                        break;
+                }
+                replaced = replaced
                     .replace(/\s{2,}/g, " ")
                     .replace(/^\s+/, "")
                     .replace(/^\|\s*/, "|")
+                    .replace(/ \| /, " |")
                     .toUpperCase();
                 const caret = replaced.indexOf("|");
                 replaced = replaced.replace("|", "");
                 this.label_input.element.value = replaced;
                 this.label_input.element.setSelectionRange(caret, caret);
+
                 for (const element of ui.element.query_selector_all(".cell kbd.focused")) {
                     element.class_list.remove("focused");
                 }
@@ -2890,8 +2950,10 @@ class Panel {
             .add(label)
             .listen("click", action);
         ui.shortcuts.add([shortcut], (event) => {
-            action(event);
-            Shortcuts.flash(button);
+            if (!button.element.disabled) {
+                action(event);
+                Shortcuts.flash(button);
+            }
         });
         UI.delay(() => {
             button.add(new DOM.Element("kbd", { class: "button" }).add(Shortcuts.name([shortcut])));
@@ -3019,7 +3081,8 @@ class Panel {
                                 option.element.checked = true;
                                 option.element.dispatchEvent(event);
                                 Shortcuts.flash(option);
-                                // Prevent other elements from being triggered by the same key press.
+                                // Prevent other elements from being triggered by the same key
+                                // press.
                                 return true;
                             }
                         }
@@ -3114,15 +3177,12 @@ class Panel {
 
             // Enable the label input if at least one cell has been selected.
             this.label_input.element.disabled = ui.selection.size === 0;
-            if (this.label_input.element.disabled && document.activeElement === this.label_input.element) {
+            if (this.label_input.element.disabled
+                    && document.activeElement === this.label_input.element
+            ) {
                 // In Firefox, if the active element is disabled, then key
                 // presses aren't registered, so we need to blur it manually.
                 this.label_input.element.blur();
-            }
-
-            // Label alignment options are always enabled.
-            for (const option of label_alignments) {
-                option.element.disabled = false;
             }
 
             // A map from option names to values. If a value is `null`, that means that
@@ -3611,7 +3671,7 @@ class Toolbar {
         );
 
         add_action(
-            "–",
+            "\u2013",
             "Zoom out",
             [{ key: "-", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always }],
             () => {
