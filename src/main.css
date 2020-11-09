@@ -393,6 +393,7 @@ input[type="text"].flash {
 }
 
 .panel .options {
+    position: relative;
     margin: 8px 0;
 
     text-align: center;
@@ -403,7 +404,7 @@ input[type="text"].flash {
     display: inline-block;
     width: 48px; height: 48px;
 
-    background-color: transparent;
+    background-color: var(--ui-background);
     background-repeat: no-repeat;
     background-position: center;
     /* We use stacked backgrounds for the background image, */
@@ -412,6 +413,12 @@ input[type="text"].flash {
     border: var(--ui-border) solid 1px;
     border-radius: 2px;
     outline: none;
+}
+
+.panel .options.focused input[type="radio"]:not(:checked) {
+    background-size: auto, 0%;
+    background-color: var(--ui-white);
+    border-color: var(--ui-focus);
 }
 
 .panel .vertical {
@@ -463,18 +470,18 @@ input[type="text"].flash {
 }
 
 .panel .vertical input[type="radio"].short + input[type="radio"].short {
-    border-left-color: transparent;
+    border-left-width: 0;
 }
 
-.panel .vertical input[type="radio"].short:nth-last-child(2) {
+.panel .vertical input[type="radio"].short:nth-last-of-type(2) {
     border-radius: 0 0 0 2px;
 }
 
-.panel .vertical input[type="radio"].short:last-child {
+.panel .vertical input[type="radio"].short:last-of-type {
     border-radius: 0 0 2px 0;
 }
 
-.panel input[type="radio"]:hover {
+.panel input[type="radio"]:hover:not(:disabled) {
     background-color: var(--ui-hover);
 }
 
@@ -482,7 +489,7 @@ input[type="text"].flash {
     background-color: var(--ui-active);
 }
 
-.panel input[type="radio"]:checked {
+.panel input[type="radio"]:checked:not(:disabled) {
     background-color: var(--ui-focus);
     background-size: auto, 0%;
     border-color: var(--ui-blue);
@@ -541,11 +548,11 @@ input[type="text"].flash {
     border-color: var(--ui-blue);
 }
 
-.panel input[type="range"]:hover:not(.focused)::-webkit-slider-thumb {
+.panel input[type="range"]:hover:not(:disabled):not(.focused)::-webkit-slider-thumb {
     background: hsl(0, 0%, 20%);
 }
 
-.panel input[type="range"]:hover:not(.focused)::-moz-range-thumb {
+.panel input[type="range"]:hover:not(:disabled):not(.focused)::-moz-range-thumb {
     background: hsl(0, 0%, 20%);
 }
 
@@ -558,7 +565,7 @@ input[type="text"].flash {
 }
 
 .panel input[type="range"].focused::-webkit-slider-runnable-track {
-    background: white;
+    background: var(--ui-white);
     border-color: var(--ui-blue);
 }
 
@@ -664,6 +671,21 @@ kbd.slider {
 .arrow kbd {
     z-index: 10;
     transform: translate(-50%, -50%);
+}
+
+/* `.kbd-requires-focus` and `.triggers-focus` are mutually exclusive classes. The first is
+intended to trigger the latter. */
+.kbd-requires-focus:not(.focused) kbd:not(.triggers-focus) {
+    display: none;
+}
+
+.kbd-requires-focus:not(.next-to-focus) kbd.triggers-focus {
+    display: none;
+}
+
+/* We always display shortcuts for lists when they're focused. */
+.kbd-requires-focus.focused kbd {
+    display: block;
 }
 
 /* Display a tab symbol for the usual keyboard shortcut symbol. This is not necessary when the user
