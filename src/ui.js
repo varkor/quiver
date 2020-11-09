@@ -420,6 +420,10 @@ UIState.Jump = class extends UIState {
         for (const element of ui.element.query_selector_all(".cell kbd.focused")) {
             element.class_list.remove("focused");
         }
+        for (const element of ui.element.query_selector_all(".cell kbd.partially-focused")) {
+            element.class_list.remove("partially-focused");
+            element.clear().add(element.get_attribute("data-jump"));
+        }
         ui.panel.label_input.element.blur();
         ui.panel.update(ui);
         ui.toolbar.update(ui);
@@ -2376,10 +2380,29 @@ class Panel {
                 for (const element of ui.element.query_selector_all(".cell kbd.focused")) {
                     element.class_list.remove("focused");
                 }
+                for (
+                    const element of ui.element.query_selector_all(".cell kbd.partially-focused")
+                ) {
+                    element.class_list.remove("partially-focused");
+                    element.clear().add(element.get_attribute("data-jump"));
+                }
+                const highlighted = new Set();
                 for (const id of replaced.split(" ")) {
-                    const element = ui.element.query_selector(`kbd[data-jump="${id}"]`);
-                    if (element !== null) {
-                        element.class_list.add("focused");
+                    if (!highlighted.has(id)) {
+                        const element = ui.element.query_selector(`kbd[data-jump="${id}"]`);
+                        if (element !== null) {
+                            element.class_list.add("focused");
+                            highlighted.add(id);
+                            continue;
+                        }
+                    }
+                    for (
+                        const element of ui.element.query_selector_all(`kbd[data-jump^="${id}"]`)
+                    ) {
+                        element.class_list.add("partially-focused");
+                        element.clear()
+                            .add(new DOM.Element("span", { class: "focused" }).add(id))
+                            .add(element.get_attribute("data-jump").slice(id.length));
                     }
                 }
             }
@@ -3334,8 +3357,7 @@ class Panel {
 
     /// Defocuses any elements that have been focused via the keyboard.
     defocus_inputs() {
-        const focused_elements = this.element.query_selector_all(".focused");
-        for (const element of focused_elements) {
+        for (const element of this.element.query_selector_all(".focused")) {
             element.class_list.remove("focused");
         }
         const next_to_focus = this.element.query_selector(".next-to-focus");
