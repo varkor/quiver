@@ -3022,6 +3022,24 @@ class Panel {
                         event.stopImmediatePropagation();
                     }, { passive: true });
 
+                    // Create message regarding, and linking to, `quiver.sty`.
+                    new DOM.Element("span", { class: "tip" })
+                        .add("Remember to include ")
+                        .add(new DOM.Element("code").add("\\usepackage{quiver}"))
+                        .add(" in your LaTeX preamble. You can ")
+                        .add(
+                            new DOM.Element("a", { href: "quiver.sty", download: "quiver.sty" })
+                                .add("download ")
+                                .add(new DOM.Element("code").add("quiver.sty"))
+                        )
+                        .add(", or ")
+                        .add(
+                            new DOM.Element("a", { href: "quiver.sty", target: "_blank" })
+                                .add("open it in a new tab")
+                        )
+                        .add(" to copy-and-paste.")
+                        .add_to(export_pane);
+
                     warning = new DOM.Element("span", { class: "warning hidden" })
                         .add("The exported tikz-cd diagram may not match the quiver diagram " +
                             "exactly, as tikz-cd does not support the following features that " +
