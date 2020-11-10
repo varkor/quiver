@@ -852,6 +852,12 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
         // Centre the view on the quiver.
         ui.centre_view();
 
+        // When cells are created, they are usually queued. We don't want any cells that have been
+        // imported to be queued.
+        for (const cell of indices) {
+            cell.element.query_selector("kbd.queue").class_list.remove("queue");
+        }
+
         // Update all the affected columns and rows.
         UI.delay(() => ui.update_col_row_size(
             ...indices.filter((cell) => cell.is_vertex()).map((vertex) => vertex.position)

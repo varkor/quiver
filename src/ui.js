@@ -867,6 +867,18 @@ class UI {
                                 this.state.connect(this, event);
                             }
 
+                            // If we've forged a source vertex, then we select the source, which
+                            // allows us to tab sequentially through the source, morphism, and
+                            // target.
+                            if (this.state.forged_vertex) {
+                                if (!event.shiftKey && !event.metaKey && !event.ctrlKey) {
+                                    this.deselect();
+                                    this.select(this.state.source);
+                                    this.panel.hide_if_unselected(this);
+                                    this.panel.focus_label_input();
+                                }
+                            }
+
                             this.history.add(
                                 this,
                                 actions,
@@ -1064,6 +1076,8 @@ class UI {
                         // Select all existing text.
                         input.select();
                     } else {
+                        // Pressing Enter "confirms" the currently selected queued cells.
+                        this.panel.unqueue_selected(this);
                         input.blur();
                     }
                 }
@@ -1078,6 +1092,7 @@ class UI {
             if (!this.in_mode(UIState.Modal)) {
                 if (!this.in_mode(UIState.Jump)) {
                     this.panel.defocus_inputs();
+                    this.cancel_creation();
 
                     // If there are any cells in the queue, we may cycle through them using Tab.
                     // Otherwise, Tab brings up the jump input. To cycle through the cells, we
@@ -1133,9 +1148,14 @@ class UI {
                         this.panel.update(this);
                         this.panel.hide_if_unselected(this);
                         // Bring up the label input and select the text.
-                        const input = this.panel.label_input.element;
-                        input.focus();
-                        input.setSelectionRange(0, input.value.length);
+                        this.panel.focus_label_input();
+                    } else if (document.activeElement === this.panel.label_input.element) {
+                        // After emptying the queue, it is natural to press Tab again to conclude.
+                        // In this case, we do not want to bring up the jump interface. Thus, when
+                        // the label input is focused, Tab instead defocuses everything.
+                        this.deselect();
+                        this.panel.update(this);
+                        this.panel.hide_if_unselected(this);
                     } else if (this.element.query_selector("kbd.queue") === null) {
                         this.switch_mode(new UIState.Jump(this, "Select"));
                     } else {
@@ -1178,25 +1198,7 @@ class UI {
                 return;
             }
 
-            // Stop trying to connect cells.
-            if (this.in_mode(UIState.Connect)) {
-                if (this.state.forged_vertex) {
-                    // If we created a vertex as part of the connection, we need to record
-                    // that as an action.
-                    const created = new Set([this.state.source]);
-                    this.history.add(this, [{
-                        kind: "create",
-                        cells: created,
-                    }], false, this.selection_excluding(created));
-                }
-                this.switch_mode(UIState.default);
-                return;
-            }
-
-            // If we're waiting to start connecting a cell, then we stop waiting.
-            const pending = this.element.query_selector(".cell.pending");
-            if (pending !== null) {
-                pending.class_list.remove("pending");
+            if (this.cancel_creation()) {
                 return;
             }
 
@@ -1631,6 +1633,41 @@ class UI {
             removed.element.remove();
         }
         this.update_col_row_size(...update_positions);
+    }
+
+    /// Cancel the creation of a new vertex or edge via clicking or dragging.
+    cancel_creation() {
+        // Stop trying to connect cells.
+        if (this.in_mode(UIState.Connect)) {
+            if (this.state.forged_vertex) {
+                // If we created a vertex as part of the connection, we need to record
+                // that as an action.
+                const created = new Set([this.state.source]);
+                this.history.add(this, [{
+                    kind: "create",
+                    cells: created,
+                }], false, this.selection_excluding(created));
+            }
+            this.switch_mode(UIState.default);
+            return true;
+        }
+
+        // If we're waiting to start connecting a cell, then we stop waiting.
+        const pending = this.element.query_selector(".cell.pending");
+        if (pending !== null) {
+            pending.class_list.remove("pending");
+            return true;
+        }
+
+        // If the user has revealed the insertion point (and possibly started dragging), hide it
+        // again.
+        const insertion_point = this.element.query_selector(".insertion-point.revealed");
+        if (insertion_point !== null) {
+            insertion_point.class_list.remove("revealed", "pending", "active");
+            return true;
+        }
+
+        return false;
     }
 
     /// Repositions the view by a relative offset.
@@ -2409,10 +2446,7 @@ class Panel {
         // the input field is modified.
         this.label_input.listen("input", () => {
             if (!ui.in_mode(UIState.Jump)) {
-                // Unqueue any selected cell.
-                for (const element of ui.element.query_selector_all(".cell.selected kbd.queue")) {
-                    element.class_list.remove("queue");
-                }
+                this.unqueue_selected(ui);
 
                 const collapse = ["label", ui.selection];
                 const actions = ui.history.get_collapsible_actions(collapse);
@@ -2526,7 +2560,10 @@ class Panel {
 
         const add_button = (title, label, key, action) => {
             const button
-                = Panel.create_button_with_shortcut(ui, title, label, { key }, action);
+                = Panel.create_button_with_shortcut(ui, title, label, { key }, (event) => {
+                    this.unqueue_selected(ui);
+                    return action(event);
+                });
             button.set_attributes({ disabled: true });
             button.add_to(wrapper);
         };
@@ -2605,6 +2642,7 @@ class Panel {
                     disabled: true,
                 },
             ).listen("input", (_, slider) => {
+                this.unqueue_selected(ui);
                 const value = parseInt(slider.value);
                 const collapse = [property, ui.selection];
                 const actions = ui.history.get_collapsible_actions(collapse);
@@ -3115,6 +3153,7 @@ class Panel {
                 title: tooltip,
             }).listen("change", (event, button) => {
                 if (button.checked) {
+                    this.unqueue_selected(ui);
                     const selected_edges = Array.from(ui.selection).filter(cell => cell.is_edge());
                     on_check(
                         selected_edges,
@@ -3462,6 +3501,13 @@ class Panel {
         }
     }
 
+    /// Focuses and selects all the text in the label input.
+    focus_label_input() {
+        const input = this.label_input.element;
+        input.focus();
+        input.setSelectionRange(0, input.value.length);
+    }
+
     /// Defocuses any elements that have been focused via the keyboard.
     defocus_inputs() {
         for (const element of this.element.query_selector_all(".focused")) {
@@ -3472,6 +3518,14 @@ class Panel {
             next_to_focus.class_list.remove("next-to-focus");
         }
         this.element.query_selector(".kbd-requires-focus").class_list.add("next-to-focus");
+    }
+
+    /// Unqueue any selected cell, typically after a user action affecting the cells in the
+    /// selection.
+    unqueue_selected(ui) {
+        for (const element of ui.element.query_selector_all(".cell.selected kbd.queue")) {
+            element.class_list.remove("queue");
+        }
     }
 
     /// Centre the panel vertically.
@@ -3684,8 +3738,6 @@ class Toolbar {
     initialise(ui) {
         this.element = new DOM.Element("div", { class: "toolbar" })
             .listen("mousedown", (event) => event.stopImmediatePropagation());
-
-
 
         const add_action = (symbol, name, combinations, action, disabled) => {
             const shortcut_name = Shortcuts.name(combinations);
@@ -3953,7 +4005,7 @@ class Cell {
 
         content_element.listen("mousedown", (event) => {
             if (event.button === 0) {
-                if (ui.in_mode(UIState.Default)) {
+                if (ui.in_mode(UIState.Default) || ui.in_mode(UIState.Jump)) {
                     event.stopPropagation();
                     event.preventDefault();
 
@@ -4050,10 +4102,7 @@ class Cell {
                     // automatically blur when we click on the cell again, so this allows us to
                     // toggle the focus of the input when we click on any cell.
                     if (was_previously_selected) {
-                        const input = ui.panel.label_input.element;
-                        input.focus();
-                        // Select all the text.
-                        input.setSelectionRange(0, input.value.length);
+                        ui.panel.focus_label_input();
                     }
                 }
 
