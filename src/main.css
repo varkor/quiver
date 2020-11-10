@@ -194,7 +194,8 @@ body:not(.modal) {
 }
 
 /* This is so explicit because of the CSS specificity rules. */
-.ui.default .vertex:not(.selected):not(.source):not(.target) .content:hover {
+.ui.default .vertex:not(.selected):not(.source):not(.target) .content:hover,
+.ui.jump .vertex:not(.selected):not(.source):not(.target) .content:hover {
     background: var(--cell-hover);
 }
 
