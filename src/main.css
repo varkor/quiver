@@ -680,7 +680,20 @@ kbd.focused, kbd .focused {
     color: var(--ui-white);
 }
 
-.ui:not(.help) kbd {
+kbd.queue {
+    background: var(--ui-white);
+    border: var(--ui-blue) 1px solid;
+
+    color: var(--ui-blue);
+}
+
+.cell.selected kbd.queue {
+    background: var(--ui-blue);
+
+    color: var(--ui-white);
+}
+
+.ui:not(.help) kbd:not(.queue) {
     display: none;
 }
 
