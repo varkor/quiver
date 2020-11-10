@@ -105,6 +105,20 @@ body:not(.modal) {
     opacity: 1;
 }
 
+.ui:not(.help) .version {
+    display: none;
+}
+
+.version {
+    position: fixed;
+    left: 50px; top: 48px;
+
+    font-size: 8pt;
+    color: var(--ui-black);
+
+    pointer-events: none;
+}
+
 /* The canvas of cells */
 
 .container {
