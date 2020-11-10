@@ -2065,30 +2065,42 @@ class UI {
 
         const success_indicator = macro_input.parent.query_selector(".success-indicator");
         success_indicator.class_list.remove("success", "failure");
-        success_indicator.class_list.add("unknown");
 
         // Clear the error banner if it's an error caused by a previous failure of
         // `load_macros`.
         UI.dismiss_error("macro-load");
 
-        fetch(url)
-            .then((response) => response.text())
-            .then((text) => {
-                this.load_macros(text);
-                this.macro_url = url;
-                success_indicator.class_list.remove("unknown");
-                success_indicator.class_list.add("success");
-                macro_input.element.blur();
-            })
-            .catch(() => {
-                UI.display_error(
-                    "Macro definitions could not be loaded " +
-                    "from the given URL.",
-                    "macro-load",
-                );
-                success_indicator.class_list.remove("unknown");
-                success_indicator.class_list.add("failure");
-            })
+        if (url !== "") {
+            success_indicator.class_list.add("unknown");
+
+            fetch(url)
+                .then((response) => response.text())
+                .then((text) => {
+                    this.load_macros(text);
+                    this.macro_url = url;
+                    success_indicator.class_list.remove("unknown");
+                    success_indicator.class_list.add("success");
+                    macro_input.element.blur();
+                })
+                .catch(() => {
+                    UI.display_error(
+                        "Macro definitions could not be loaded " +
+                        "from the given URL.",
+                        "macro-load",
+                    );
+                    success_indicator.class_list.remove("unknown");
+                    success_indicator.class_list.add("failure");
+                })
+        } else {
+            // If the URL is empty, we simply reset all macro definitions (as if the user had never
+            // loaded any macros).
+            this.macros = new Map();
+
+            // Rerender all the existing labels without the new macro definitions.
+            for (const cell of this.quiver.all_cells()) {
+                this.panel.render_tex(this, cell);
+            }
+        }
     }
 }
 
