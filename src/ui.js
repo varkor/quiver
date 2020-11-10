@@ -427,7 +427,7 @@ UIState.Jump = class extends UIState {
         }
         for (const element of ui.element.query_selector_all(".cell kbd.partially-focused")) {
             element.class_list.remove("partially-focused");
-            element.clear().add(element.get_attribute("data-jump"));
+            element.clear().add(element.get_attribute("data-code"));
         }
         ui.panel.label_input.element.blur();
         ui.panel.update(ui);
@@ -499,6 +499,9 @@ class UI {
 
         /// Keyboard shortcuts.
         this.shortcuts = new Shortcuts(this);
+
+        /// A map from cell codes (i.e. IDs) to cells.
+        this.codes = new Map();
 
         /// The panel for viewing and editing cell data.
         this.panel = new Panel();
@@ -829,6 +832,21 @@ class UI {
                                 // to create a new one.
                                 const edge = this.state.connect(this, event);
                                 created.add(edge);
+
+                                // We just created a new vertex for the target, and a new edge, so
+                                // we've allocated two new codes. By default, the vertex code will
+                                // have been allocated before the edge (because the edge is
+                                // dependent) on the vertex. However, it feels more natural to cycle
+                                // to the edge before the vertex, because it comes first
+                                // "diagramatically". Therefore, we're going to swap the two codes.
+                                const vertex = this.state.target;
+                                [vertex.code, edge.code] = [edge.code, vertex.code];
+                                for (const cell of [vertex, edge]) {
+                                    this.codes.set(cell.code, cell);
+                                    const element = cell.element.query_selector("kbd");
+                                    element.set_attributes({ "data-code": cell.code });
+                                    element.clear().add(cell.code);
+                                }
                             } else {
                                 // Unless we're holding Shift/Command/Control (in which case we just
                                 // add the new vertex to the selection) we want to focus and select
@@ -992,57 +1010,48 @@ class UI {
                         // Deselect all selected cells.
                         this.deselect();
                     }
-                    if (jump.size > 0) {
-                        let matched = 0;
-                        // For now, a linear scan through every cell is sufficiently efficient.
-                        for (const cell of this.quiver.all_cells()) {
-                            if (jump.has(cell.id)) {
-                                switch (mode) {
-                                    case "Select":
-                                    case "Toggle":
-                                        if (!this.selection.has(cell)) {
-                                            this.select(cell);
-                                        } else {
-                                            this.deselect(cell);
+                    for (const code of jump) {
+                        const cell = this.codes.get(code);
+                        if (cell !== undefined) {
+                            switch (mode) {
+                                case "Select":
+                                case "Toggle":
+                                    if (!this.selection.has(cell)) {
+                                        this.select(cell);
+                                    } else {
+                                        this.deselect(cell);
+                                    }
+                                    break;
+                                case "Source":
+                                case "Target":
+                                    const actions = [];
+                                    const end = mode.toLowerCase();
+                                    const edges = Array.from(this.selection)
+                                        .filter((cell) => cell.is_edge());
+                                    for (const edge of edges) {
+                                        const source = mode === "Source" ? cell : edge.source;
+                                        const target = mode === "Target" ? cell : edge.target;
+                                        const valid_connection =
+                                            UIState.Connect.valid_connection(
+                                                this,
+                                                { source: target, target: source }[end],
+                                                { source, target }[end],
+                                                { end, edge },
+                                            );
+                                        if (valid_connection) {
+                                            actions.push({
+                                                kind: "connect",
+                                                edge,
+                                                end,
+                                                from: edge[end],
+                                                to: cell,
+                                            });
                                         }
-                                        break;
-                                    case "Source":
-                                    case "Target":
-                                        const actions = [];
-                                        const end = mode.toLowerCase();
-                                        const edges = Array.from(this.selection)
-                                            .filter((cell) => cell.is_edge());
-                                        for (const edge of edges) {
-                                            const source = mode === "Source" ? cell : edge.source;
-                                            const target = mode === "Target" ? cell : edge.target;
-                                            const valid_connection =
-                                                UIState.Connect.valid_connection(
-                                                    this,
-                                                    { source: target, target: source }[end],
-                                                    { source, target }[end],
-                                                    { end, edge },
-                                                );
-                                            if (valid_connection) {
-                                                actions.push({
-                                                    kind: "connect",
-                                                    edge,
-                                                    end,
-                                                    from: edge[end],
-                                                    to: cell,
-                                                });
-                                            }
-                                        }
-                                        if (actions.length > 0) {
-                                            this.history.add(this, actions, true);
-                                        }
-                                        break;
-                                }
-                                ++matched;
-                            }
-                            // Stop searching eagerly. We are assuming here there are no cells with
-                            // the same ID.
-                            if (matched === jump.size) {
-                                break;
+                                    }
+                                    if (actions.length > 0) {
+                                        this.history.add(this, actions, true);
+                                    }
+                                    break;
                             }
                         }
                     }
@@ -1061,11 +1070,78 @@ class UI {
             }
         });
 
-        this.shortcuts.add([{ key: "Tab", context: Shortcuts.SHORTCUT_PRIORITY.Always }], () => {
+        this.shortcuts.add([
+            { key: "Tab", context: Shortcuts.SHORTCUT_PRIORITY.Always },
+            // We will mostly ignore the Shift key, apart from selecting queued cells.
+            { key: "TAB", shift: true, context: Shortcuts.SHORTCUT_PRIORITY.Always }
+        ], (event) => {
             if (!this.in_mode(UIState.Modal)) {
                 if (!this.in_mode(UIState.Jump)) {
                     this.panel.defocus_inputs();
-                    this.switch_mode(new UIState.Jump(this, "Select"));
+
+                    // If there are any cells in the queue, we may cycle through them using Tab.
+                    // Otherwise, Tab brings up the jump input. To cycle through the cells, we
+                    // find the first cell in the queue after any selected cell (queued or not).
+                    // Holding Shift cycles in reverse order.
+                    const unselected = Array.from(
+                        this.element.query_selector_all(".cell:not(.selected) kbd.queue")
+                    );
+                    if (unselected.length > 0) {
+                        const sign = !event.shiftKey ? 1 : -1;
+                        let select = this.codes.get((
+                            sign > 0 ? unselected[0] : unselected[unselected.length - 1]
+                        ).get_attribute("data-code"));
+
+                        // Check there is a selected cell. If not, we will use the default `select`
+                        // (i.e. the first or last queued cell).
+                        if (this.element.query_selector(".cell.selected kbd") !== null) {
+                            // Find the first selected cell.
+                            const codes = Array.from(this.codes);
+                            const selected_index = codes.findIndex(([, cell]) => {
+                                return cell.element.class_list.contains("selected");
+                            });
+                            // Find the first queued cell after the selected cell.
+                            for (
+                                let i = selected_index + sign;
+                                i !== selected_index;
+                                i += sign
+                            ) {
+                                // When we reach the end (or the start when Shift is pressed), we
+                                // cycle back to the beginning, so we eventually iterate through the
+                                // entirety of `code` (which has been cyclically shifted).
+                                if (i === codes.length) {
+                                    i = 0;
+                                }
+                                if (i === -1) {
+                                    i = codes.length - 1;
+                                }
+                                const [, cell] = codes[i];
+                                if (!this.quiver.deleted.has(cell)
+                                    && !cell.element.class_list.contains("selected")
+                                    && cell.element.query_selector("kbd.queue") !== null
+                                ) {
+                                    select = cell;
+                                    break;
+                                }
+                            }
+                        }
+
+                        // Deselect all other cells.
+                        this.deselect();
+                        this.select(select);
+                        // Update the panel.
+                        this.panel.update(this);
+                        this.panel.hide_if_unselected(this);
+                        // Bring up the label input and select the text.
+                        const input = this.panel.label_input.element;
+                        input.focus();
+                        input.setSelectionRange(0, input.value.length);
+                    } else if (this.element.query_selector("kbd.queue") === null) {
+                        this.switch_mode(new UIState.Jump(this, "Select"));
+                    } else {
+                        // Otherwise, just do nothing. We have no other cells in the queue to
+                        // switch to.
+                    }
                 } else {
                     this.switch_mode(UIState.default);
                 }
@@ -1139,9 +1215,17 @@ class UI {
             }
 
             // Defocus selected cells.
-            this.deselect();
-            this.panel.hide();
-            this.panel.label_input.parent.class_list.add("hidden");
+            if (this.element.query_selector(".cell.selected")) {
+                this.deselect();
+                this.panel.hide();
+                this.panel.label_input.parent.class_list.add("hidden");
+                return;
+            }
+
+            // Unqueue queued cells.
+            for (const element of this.element.query_selector_all("kbd.queue")) {
+                element.class_list.remove("queue");
+            }
         });
 
         // Holding Option or Control triggers panning mode (and releasing ends panning mode).
@@ -2325,6 +2409,11 @@ class Panel {
         // the input field is modified.
         this.label_input.listen("input", () => {
             if (!ui.in_mode(UIState.Jump)) {
+                // Unqueue any selected cell.
+                for (const element of ui.element.query_selector_all(".cell.selected kbd.queue")) {
+                    element.class_list.remove("queue");
+                }
+
                 const collapse = ["label", ui.selection];
                 const actions = ui.history.get_collapsible_actions(collapse);
                 if (actions !== null) {
@@ -2337,7 +2426,7 @@ class Panel {
                         // This ought always to be true.
                         if (action.kind === "label") {
                             // Modify the `to` field of each label.
-                            action.labels.forEach(label => {
+                            action.labels.forEach((label) => {
                                 label.to = this.label_input.element.value;
                                 if (label.to !== label.from) {
                                     unchanged = false;
@@ -2402,25 +2491,25 @@ class Panel {
                     const element of ui.element.query_selector_all(".cell kbd.partially-focused")
                 ) {
                     element.class_list.remove("partially-focused");
-                    element.clear().add(element.get_attribute("data-jump"));
+                    element.clear().add(element.get_attribute("data-code"));
                 }
                 const highlighted = new Set();
-                for (const id of replaced.split(" ")) {
-                    if (!highlighted.has(id)) {
-                        const element = ui.element.query_selector(`kbd[data-jump="${id}"]`);
+                for (const code of replaced.split(" ")) {
+                    if (!highlighted.has(code)) {
+                        const element = ui.element.query_selector(`kbd[data-code="${code}"]`);
                         if (element !== null) {
                             element.class_list.add("focused");
-                            highlighted.add(id);
+                            highlighted.add(code);
                             continue;
                         }
                     }
                     for (
-                        const element of ui.element.query_selector_all(`kbd[data-jump^="${id}"]`)
+                        const element of ui.element.query_selector_all(`kbd[data-code^="${code}"]`)
                     ) {
                         element.class_list.add("partially-focused");
                         element.clear()
-                            .add(new DOM.Element("span", { class: "focused" }).add(id))
-                            .add(element.get_attribute("data-jump").slice(id.length));
+                            .add(new DOM.Element("span", { class: "focused" }).add(code))
+                            .add(element.get_attribute("data-code").slice(code.length));
                     }
                 }
             }
@@ -3424,7 +3513,7 @@ class Shortcuts {
             // On Mac OS X, holding the Command key seems to override the usual capitalisation
             // modifier that holding Shift does. This is inconsistent with other operating systems,
             // so we override it manually here.
-            if (event.shiftKey && /[a-z]/.test(key)) {
+            if (event.shiftKey) {
                 key = key.toUpperCase();
             }
 
@@ -3800,10 +3889,10 @@ class Cell {
         this.label = label;
 
         // An ID used to allow the user to jump to this cell via the keyboard.
-        this.id = "";
+        this.code = "";
         const chars = "ASDFJKL".split("");
         for (let value = Cell.NEXT_ID++; value >= 0; value = Math.floor(value / chars.length) - 1) {
-            this.id = chars[value % chars.length] + this.id;
+            this.code = chars[value % chars.length] + this.code;
         }
 
         // Add this cell to the quiver.
@@ -3848,7 +3937,11 @@ class Cell {
             // Vertices have custom handling for adding `kbd`, but it's more convenient to handle
             // edges here.
             // The identifier that notifies the user how to jump to this cell.
-            this.element.add(new DOM.Element("kbd", { "data-jump": this.id }).add(`${this.id}`));
+            ui.codes.set(this.code, this);
+            this.element.add(new DOM.Element("kbd", {
+                "data-code": this.code,
+                class: "queue",
+            }).add(`${this.code}`));
         }
 
         // We record whether a cell was already selected when we click on it, because
@@ -4123,11 +4216,15 @@ class Vertex extends Cell {
         if (construct) {
             this.element.class_list.add("vertex");
 
+            ui.codes.set(this.code, this);
             // The cell content (containing the label).
             new DOM.Element("div", { class: "content" })
                 .add(new DOM.Element("div", { class: "label" }))
                 // The identifier that notifies the user how to jump to this cell.
-                .add(new DOM.Element("kbd", { "data-jump": this.id }).add(`${this.id}`))
+                .add(new DOM.Element("kbd", {
+                    "data-code": this.code,
+                    class: "queue",
+                }).add(`${this.code}`))
                 .add_to(this.element);
         }
 
