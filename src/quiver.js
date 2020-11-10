@@ -200,33 +200,19 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
         // Wrap tikz-cd code with `\begin{tikzcd} ... \end{tikzcd}`.
         // We also add custom TikZ styles if required, e.g. for drawing fixed-height curves, which
         // improve upon the build-in `bend` option.
-        const wrap_boilerplate = (output, include_style) => {
-            // This custom TikZ style for fixed-height curves was designed by @AndréC:
-            // https://tex.stackexchange.com/a/556902/
-            const bend_style =
-`\\tikzset{curve/.style={settings={#1},to path={(\\tikztostart)
-    .. controls ($(\\tikztostart)!\\pv{pos}!(\\tikztotarget)!\\pv{height}!270:(\\tikztotarget)$)
-    and ($(\\tikztostart)!1-\\pv{pos}!(\\tikztotarget)!\\pv{height}!270:(\\tikztotarget)$)
-    .. (\\tikztotarget)\\tikztonodes}},
-    settings/.code={\\tikzset{quiver/.cd,#1}
-        \\def\\pv##1{\\pgfkeysvalueof{/tikz/quiver/##1}}},
-    quiver/.cd,pos/.initial=0.35,height/.initial=0}`;
+        const wrap_boilerplate = (output) => {
             const tikzcd = `\\[\\begin{tikzcd}\n${
                 output.length > 0 ? `${
                     output.split("\n").map(line => `\t${line}`).join("\n")
                 }\n` : ""
             }\\end{tikzcd}\\]`;
-            return `% ${QuiverImportExport.base64.export(quiver).data}\n${
-                include_style ? `{${bend_style}\n` : ""
-            }${tikzcd}${
-                include_style ? "}" : ""
-            }`;
+            return `% ${QuiverImportExport.base64.export(quiver).data}\n${tikzcd}`;
         };
 
         // Early exit for empty quivers.
         if (quiver.is_empty()) {
             return {
-                data: wrap_boilerplate(output, false),
+                data: wrap_boilerplate(output),
                 metadata: { tikz_incompatibilities: new Set() },
             };
         }
@@ -572,7 +558,7 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
         }
 
         return {
-            data: wrap_boilerplate(output, has_curves),
+            data: wrap_boilerplate(output),
             metadata: { tikz_incompatibilities },
         };
     }

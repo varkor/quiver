@@ -904,14 +904,27 @@ button.flash {
     -webkit-backdrop-filter: blur(4px);
 }
 
-.export .warning {
+.export a {
+    color: var(--ui-white);
+}
+
+.export .tip, .export .warning {
     display: inline-block;
     width: 100%;
-    background: hsla(50, 100%, 70%, 1);
     padding: 8pt;
     margin-bottom: 8pt;
 
     border-radius: 2px;
+}
+
+.export .tip {
+    background: var(--ui-black);
+
+    color: var(--ui-white);
+}
+
+.export .warning {
+    background: hsla(50, 100%, 70%, 1);
 }
 
 .export .warning.hidden {
