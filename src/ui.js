@@ -586,12 +586,7 @@ class UI {
         this.toolbar.initialise(this);
         this.element.add(this.toolbar.element);
 
-        // Add the logo.
-        this.element.add(
-            new DOM.Element("a", { href: "https://github.com/varkor/quiver", target: "_blank" })
-                .add(new DOM.Element("img", { src: "quiver.svg", class: "logo" }))
-                );
-        // Add the version information.
+        // Add the version information underneath the logo.
         this.element.add(new DOM.Element(
             "span",
             { class: "version" }

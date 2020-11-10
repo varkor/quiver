@@ -40,6 +40,20 @@ body:not(.modal) {
     -webkit-user-select: none;
 }
 
+noscript {
+    display: inline-block;
+    position: fixed;
+    left: 50%; top: 50%;
+    padding: 6pt 8pt;
+    transform: translate(-50%, -50%);
+
+    background: var(--ui-black);
+    border-radius: 8px;
+
+    text-align: center;
+    color: var(--ui-white);
+}
+
 /* Special elements */
 
 .MathJax_SVG {
@@ -97,6 +111,7 @@ body:not(.modal) {
     position: fixed;
     left: 16px; top: 16px;
     width: 100px;
+    z-index: 100;
 
     opacity: 0.8;
 }
@@ -112,6 +127,7 @@ body:not(.modal) {
 .version {
     position: fixed;
     left: 50px; top: 48px;
+    z-index: 100;
 
     font-size: 8pt;
     color: var(--ui-black);
