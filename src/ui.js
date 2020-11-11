@@ -1686,24 +1686,45 @@ class UI {
         this.update_grid();
     }
 
-    /// Centre the view on the quiver.
+    /// Centre the view with respect to the selection, or the entire quiver if no cells are
+    /// selected.
     centre_view() {
-        if (this.quiver.cells.length > 0 && this.quiver.cells[0].size > 0) {
-            // We want to centre the view on the diagram, so we take the range of all vertex
-            // offsets.
-            let min_offset = new Offset(Infinity, Infinity);
-            let max_offset = new Offset(-Infinity, -Infinity);
-            this.view = Offset.zero();
+        let cells;
+        if (this.selection.size > 0) {
+            cells = this.selection;
+        } else if (this.quiver.cells.length > 0 && this.quiver.cells[0].size > 0) {
+            cells = this.quiver.cells[0];
+        } else {
+            return;
+        }
 
-            for (const vertex of this.quiver.cells[0]) {
-                const offset = this.centre_offset_from_position(vertex.position);
-                const centre = this.cell_centre_at_position(vertex.position);
+        // We want to centre the view on the cells, so we take the range of all cell offsets.
+        let min_offset = new Offset(Infinity, Infinity);
+        let max_offset = new Offset(-Infinity, -Infinity);
+        this.view = Offset.zero();
+
+        for (const cell of cells) {
+            if (cell.is_vertex()) {
+                // For vertices, we want to include the entire cell they occupy.
+                const offset = this.centre_offset_from_position(cell.position);
+                const centre = this.cell_centre_at_position(cell.position);
                 min_offset = min_offset.min(offset.sub(centre));
                 max_offset = max_offset.max(offset.add(centre));
+            } else {
+                // For edges, we want to include the centre point (for curved edges) and endpoints.
+                const offsets = [
+                    cell.shape.origin,
+                    cell.source.shape.origin,
+                    cell.target.shape.origin
+                ];
+                for (const offset of offsets) {
+                    min_offset = min_offset.min(offset);
+                    max_offset = max_offset.max(offset);
+                }
             }
-
-            this.pan_view(min_offset.add(max_offset).div(2));
         }
+
+        this.pan_view(min_offset.add(max_offset).div(2));
     }
 
     /// Returns a unique identifier for an object.
