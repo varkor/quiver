@@ -297,7 +297,7 @@ being. */
 
 /* This is so explicit because of the CSS specificity rules. */
 .ui.default .vertex:not(.selected):not(.source):not(.target) .content:hover,
-.ui.jump .vertex:not(.selected):not(.source):not(.target) .content:hover {
+.ui.command .vertex:not(.selected):not(.source):not(.target) .content:hover {
     background: var(--cell-hover);
 }
 
@@ -423,7 +423,7 @@ being. */
     transform: translate(-50%, calc(16pt + 4px * 2 + 16px + 8px + 46px));
 }
 
-.jump .label-input-container {
+.command .label-input-container {
     background: var(--ui-orange);
 }
 
@@ -469,11 +469,11 @@ being. */
     transition: width 0.1s;
 }
 
-.jump .input-mode {
+.command .input-mode {
     width: 80px;
 }
 
-.jump .label-input:focus {
+.command .label-input:focus {
     width: calc(100% - 80px);
 
     background: var(--ui-orange);
@@ -812,7 +812,7 @@ kbd.hint.slider {
     transform: translateX(-25%);
 }
 
-.ui.jump .cell kbd.hint {
+.ui.command .cell kbd.hint {
     display: block;
 }
 
@@ -842,8 +842,8 @@ intended to trigger the latter. */
 }
 
 /* Display a tab symbol for the usual keyboard shortcut symbol. This is not necessary when the user
-has already pressed tab, placing us in jump mode. */
-.ui:not(.jump) .cell kbd.hint::before {
+has already pressed tab, placing us in command mode. */
+.ui:not(.command) .cell kbd.hint::before {
     content: "⇥";
 }
 

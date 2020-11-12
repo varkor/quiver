@@ -161,6 +161,10 @@ UIState.Connect = class extends UIState {
         // We allow cells to be connected even if they do not have the same level. This is
         // because it's often useful when drawing diagrams, even if it may not always be
         // semantically valid.
+        if (source === target) {
+            // We don't currently permit loops.
+            return false;
+        }
         const source_target_level = Math.max(source.level, target === null ? 0 : target.level);
         if (source_target_level + 1 > CONSTANTS.MAXIMUM_CELL_LEVEL) {
             return false;
@@ -450,11 +454,11 @@ UIState.Pan = class extends UIState {
 };
 
 /// The user is jumping to a cell.
-UIState.Jump = class extends UIState {
+UIState.Command = class extends UIState {
     constructor(ui, mode) {
         super();
 
-        this.name = "jump";
+        this.name = "command";
 
         ui.panel.label_input.element.value = "";
         this.switch_mode(ui, mode);
@@ -627,8 +631,8 @@ class UI {
             );
         });
 
-        // Prevent the label input being dismissed when clicked on in jump mode, when no cells are
-        // selected.
+        // Prevent the label input being dismissed when clicked on in command mode, when no cells
+        // are selected.
         this.panel.label_input.parent.listen("mouseup", (event) => event.stopPropagation());
 
         // Set up the toolbar.
@@ -1072,16 +1076,18 @@ class UI {
 
         this.shortcuts.add([{ key: "Enter", context: Shortcuts.SHORTCUT_PRIORITY.Always }], () => {
             if (!this.in_mode(UIState.Modal)) {
-                if (this.in_mode(UIState.Jump)) {
+                if (this.in_mode(UIState.Command)) {
                     // Get the list of IDs to select.
                     const mode = this.state.mode;
 
-                    const jump = new Set(this.panel.label_input.element.value.split(" "));
+                    const codes = new Set(this.panel.label_input.element.value.split(" "));
                     if (mode === "Select") {
                         // Deselect all selected cells.
                         this.deselect();
                     }
-                    for (const code of jump) {
+                    let final_selection = null;
+                    const actions = [];
+                    for (const code of codes) {
                         const cell = this.codes.get(code);
                         if (cell !== undefined) {
                             switch (mode) {
@@ -1095,20 +1101,18 @@ class UI {
                                     break;
                                 case "Source":
                                 case "Target":
-                                    const actions = [];
                                     const end = mode.toLowerCase();
                                     const edges = Array.from(this.selection)
                                         .filter((cell) => cell.is_edge());
                                     for (const edge of edges) {
                                         const source = mode === "Source" ? cell : edge.source;
                                         const target = mode === "Target" ? cell : edge.target;
-                                        const valid_connection =
-                                            UIState.Connect.valid_connection(
-                                                this,
-                                                { source: target, target: source }[end],
-                                                { source, target }[end],
-                                                { end, edge },
-                                            );
+                                        const valid_connection = UIState.Connect.valid_connection(
+                                            this,
+                                            { source: target, target: source }[end],
+                                            { source, target }[end],
+                                            { end, edge },
+                                        );
                                         if (valid_connection) {
                                             actions.push({
                                                 kind: "connect",
@@ -1117,14 +1121,44 @@ class UI {
                                                 from: edge[end],
                                                 to: cell,
                                             });
+                                            edge.reconnect(this, source, target);
                                         }
                                     }
-                                    if (actions.length > 0) {
-                                        this.history.add(this, actions, true);
+                                    break;
+                                case "Create":
+                                    const created = new Set();
+                                    for (const source of this.selection) {
+                                        const valid_connection = UIState.Connect.valid_connection(
+                                            this,
+                                            source,
+                                            cell,
+                                        );
+                                        if (valid_connection) {
+                                            created.add(
+                                                UIState.Connect.create_edge(this, source, cell)
+                                            );
+                                        }
+                                    }
+                                    if (created.size > 0) {
+                                        if (final_selection === null) {
+                                            final_selection = new Set();
+                                        }
+                                        final_selection = new Set([...final_selection, ...created]);
+                                        actions.push({
+                                            kind: "create",
+                                            cells: created,
+                                        });
                                     }
                                     break;
                             }
                         }
+                    }
+                    if (final_selection !== null) {
+                        this.deselect();
+                        this.select(...final_selection);
+                    }
+                    if (actions.length > 0) {
+                        this.history.add(this, actions);
                     }
                     this.switch_mode(UIState.default);
                 } else {
@@ -1159,10 +1193,9 @@ class UI {
                     this.cancel_creation();
                     this.focus_point.class_list.remove("focused", "smooth");
 
-                    // If there are any cells in the queue, we may cycle through them using Tab.
-                    // Otherwise, Tab brings up the jump input. To cycle through the cells, we
-                    // find the first cell in the queue after any selected cell (queued or not).
-                    // Holding Shift cycles in reverse order.
+                    // If there are any cells in the queue, we may cycle through them using Tab. To
+                    // cycle through the cells, we find the first cell in the queue after any
+                    // selected cell (queued or not). Holding Shift cycles in reverse order.
                     const unselected = Array.from(
                         this.element.query_selector_all(".cell:not(.selected) kbd.queue")
                     );
@@ -1216,14 +1249,12 @@ class UI {
                         this.panel.focus_label_input();
                     } else if (document.activeElement === this.panel.label_input.element) {
                         // After emptying the queue, it is natural to press Tab again to conclude.
-                        // In this case, we do not want to bring up the jump interface. Thus, when
-                        // the label input is focused, Tab instead defocuses everything.
+                        // In this case, we do not want to bring up the command interface. Thus,
+                        // when the label input is focused, Tab instead defocuses everything.
                         this.deselect();
                         this.panel.update(this);
                         this.panel.hide_if_unselected(this);
-                    } else if (this.element.query_selector("kbd.queue") === null) {
-                        this.switch_mode(new UIState.Jump(this, "Select"));
-                    } else {
+                    } else if (this.element.query_selector("kbd.queue") !== null) {
                         // In this case, we have no other cells in the queue to switch to. We simply
                         // focus the label input if it is not focused, and otherwise do nothing.
                         this.panel.focus_label_input();
@@ -1234,15 +1265,34 @@ class UI {
             }
         });
 
-        this.shortcuts.add([{ key: "," }, { key: "." } ], (event) => {
-            if (!this.in_mode(UIState.Modal)) {
-                if (this.in_mode(UIState.Default)) {
-                    if (this.selection_contains_edge()) {
+        this.shortcuts.add([
+            { key: ",", context: Shortcuts.SHORTCUT_PRIORITY.Defer },
+            { key: ".", context: Shortcuts.SHORTCUT_PRIORITY.Defer },
+            { key: "/", context: Shortcuts.SHORTCUT_PRIORITY.Defer },
+            { key: ";", context: Shortcuts.SHORTCUT_PRIORITY.Defer },
+            { key: "'", context: Shortcuts.SHORTCUT_PRIORITY.Defer }
+        ], (event) => {
+            if (this.in_mode(UIState.Default) || this.in_mode(UIState.Command)) {
+                if (
+                    this.selection_contains_edge()
+                        || this.selection.size > 0 && event.key === "/"
+                        || event.key === ";"
+                        || event.key === "'"
+                ) {
+                    const mode = {
+                        ";": "Select",
+                        "'": "Toggle",
+                        ",": "Source",
+                        ".": "Target",
+                        "/": "Create",
+                    }[event.key];
+                    if (this.in_mode(UIState.Default)) {
                         this.panel.defocus_inputs();
-                        this.switch_mode(new UIState.Jump(
-                            this,
-                            event.key === "," ? "Source" : "Target",
-                        ));
+                        this.switch_mode(new UIState.Command(this, mode));
+                    } else if (this.state.mode !== mode) {
+                        this.state.switch_mode(this, mode);
+                    } else {
+                        this.switch_mode(UIState.default);
                     }
                 }
             }
@@ -1273,7 +1323,7 @@ class UI {
                 return;
             }
 
-            // Defocus the label input. This works both in normal mode and in jump mode.
+            // Defocus the label input. This works both in normal mode and in command mode.
             const input = this.input_is_active();
             if (input) {
                 input.blur();
@@ -2847,31 +2897,10 @@ class Panel {
             event.stopImmediatePropagation();
         });
 
-        this.label_input.listen("keydown", (event) => {
-            if (ui.in_mode(UIState.Jump)) {
-                if (event.key === ";") {
-                    switch (ui.state.mode) {
-                        case "Select":
-                            ui.state.switch_mode(ui, "Toggle");
-                            break;
-                        case "Toggle":
-                            ui.state.switch_mode(ui, "Select");
-                            break;
-                    }
-                }
-                if (event.key === "," && ui.state.mode === "Target") {
-                    ui.state.switch_mode(ui, "Source");
-                }
-                if (event.key === "." && ui.state.mode === "Source") {
-                    ui.state.switch_mode(ui, "Target");
-                }
-            }
-        });
-
         // Handle label interaction: update the labels of the selected cells when
         // the input field is modified.
         this.label_input.listen("input", () => {
-            if (!ui.in_mode(UIState.Jump)) {
+            if (!ui.in_mode(UIState.Command)) {
                 this.unqueue_selected(ui);
 
                 const collapse = ["label", ui.selection];
@@ -2926,6 +2955,7 @@ class Panel {
                 switch (ui.state.mode) {
                     case "Select":
                     case "Toggle":
+                    case "Create":
                         replaced = replaced.replace(/[^ASDFJKL |]/gi, "");
                         break;
                     case "Source":
@@ -2974,7 +3004,7 @@ class Panel {
                 }
             }
         }).listen("blur", () => {
-            if (!ui.in_mode(UIState.Jump)) {
+            if (!ui.in_mode(UIState.Command)) {
                 // As soon as the input is blurred, treat the label modification as
                 // a discrete event, so if we modify again, we'll need to undo both
                 // modifications to completely undo the label change.
@@ -4476,7 +4506,7 @@ class Cell {
 
         content_element.listen("mousedown", (event) => {
             if (event.button === 0) {
-                if (ui.in_mode(UIState.Default) || ui.in_mode(UIState.Jump)) {
+                if (ui.in_mode(UIState.Default) || ui.in_mode(UIState.Command)) {
                     event.stopPropagation();
                     event.preventDefault();
 
