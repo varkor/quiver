@@ -282,11 +282,12 @@ noscript {
 
     border-radius: 16px;
 
-    transition: right 0.1s;
+    transition: transform 0.1s;
 }
 
 .side.panel.hidden {
-    right: calc(16px * -18);
+    /* We use `translateX` instead of `right` to avoid continually performing layout. */
+    transform: translateX(calc(16px * 18 + 16px));
 }
 
 .ui.connect .panel {
@@ -342,7 +343,12 @@ noscript {
 
     color: var(--ui-white);
 
-    transition: bottom 0.1s;
+    transition: transform 0.1s;
+}
+
+.label-input-container.hidden {
+    /* We use `translate` instead of `bottom` to avoid continually performing layout. */
+    transform: translate(-50%, calc(16pt + 4px * 2 + 16px + 8px + 46px));
 }
 
 .jump .label-input-container {
@@ -364,10 +370,6 @@ noscript {
     text-align: center;
 
     transition: width 0.1s;
-}
-
-.label-input-container.hidden {
-    bottom: calc(-16pt - 4px * 2 - 16px);
 }
 
 .label-input:hover:not(:disabled):not(:focus) {
