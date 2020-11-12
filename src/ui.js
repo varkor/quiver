@@ -16,12 +16,15 @@ Object.assign(CONSTANTS, {
     /// How much (horizontal and vertical) space (in pixels) in the SVG to give around the arrow
     /// (to account for artefacts around the drawing).
     SVG_PADDING: 6,
-    // How much space (in pixels) to leave between adjacent parallel arrows.
+    /// How much space (in pixels) to leave between adjacent parallel arrows.
     EDGE_OFFSET_DISTANCE: 8,
-    // How many pixels each unit of curve height corresponds to.
+    /// How many pixels each unit of curve height corresponds to.
     CURVE_HEIGHT: 24,
-    // How many pixels of padding to place around labels on edges.
+    /// How many pixels of padding to place around labels on edges.
     EDGE_LABEL_PADDING: 8,
+    /// How much padding to try to keep around the focus point when moving it via the keyboard
+    /// (in pixels).
+    VIEW_PADDING: 128,
 });
 
 /// Various states for the UI (e.g. whether cells are being rearranged, or connected, etc.).
@@ -98,8 +101,8 @@ UIState.Connect = class extends UIState {
             this.target.element.class_list.remove("target");
             this.target = null;
         }
-        // If we're connecting from an insertion point, then we need to hide it again.
-        ui.element.query_selector(".insertion-point").class_list.remove("revealed");
+        // If we're connecting from an focus point, then we need to hide it again.
+        ui.element.query_selector(".focus-point").class_list.remove("revealed");
         if (this.reconnect === null) {
             this.overlay.remove();
             this.arrow = null;
@@ -209,127 +212,129 @@ UIState.Connect = class extends UIState {
         }
     }
 
+    /// Creates a new edge.
+    static create_edge(ui, source, target) {
+        // We attempt to guess what the intended label alignment is and what the intended edge
+        // offset is, if the cells being connected form some path with existing connections.
+        // Otherwise we revert to the currently-selected label alignment in the panel and the
+        // default offset (0).
+        const options = {
+            // By default, 2-cells and above have a little padding for aesthetic purposes.
+            length: Math.max(source.level, target.level) === 0 ? 100 : 70,
+            // We will guess the label alignment below, but in case there's no selected label
+            // alignment, we default to "left".
+            label_alignment: "left",
+            // The default settings for the other options are fine.
+        };
+        const selected_alignment
+            = ui.panel.element.query_selector('input[name="label-alignment"]:checked');
+        if (selected_alignment !== null) {
+            // If multiple edges are selected and not all selected edges have the same label
+            // alignment, there will be no checked input.
+            options.label_alignment = selected_alignment.element.value;
+        }
+        // If *every* existing connection to source and target has a consistent label alignment,
+        // then `align` will be a singleton, in which case we use that element as the alignment.
+        // If it has `left` and `right` in equal measure (regardless of `centre`), then
+        // we will pick `centre`. Otherwise we keep the default. And similarly for `offset` and
+        // `curve`.
+        const align = new Map();
+        const offset = new Map();
+        const curve = new Map();
+        // We only want to pick `centre` when the source and target are equally constraining
+        // (otherwise we end up picking `centre` far too often). So we check that they're both
+        // being considered equally. This means `centre` is chosen only rarely, but often in
+        // the situations you want it. (This has no analogue in `offset` or `curve`.)
+        let balance = 0;
+
+        const swap = (options) => {
+            return {
+                label_alignment: {
+                    left: "right",
+                    centre: "centre",
+                    over: "over",
+                    right: "left",
+                }[options.label_alignment],
+                offset: -options.offset,
+                curve: -options.curve,
+            };
+        };
+
+        const conserve = (options, between) => {
+            return {
+                label_alignment: options.label_alignment,
+                // We ignore the offsets and curves of edges that aren't directly `between` the
+                // source and target.
+                offset: between ? options.offset : null,
+                curve: between ? options.curve : null,
+            };
+        };
+
+        const consider = (options, tip) => {
+            if (!align.has(options.label_alignment)) {
+                align.set(options.label_alignment, 0);
+            }
+            align.set(options.label_alignment, align.get(options.label_alignment) + 1);
+            if (options.offset !== null) {
+                if (!offset.has(options.offset)) {
+                    offset.set(options.offset, 0);
+                }
+                offset.set(options.offset, offset.get(options.offset) + 1);
+            }
+            if (options.curve !== null) {
+                if (!curve.has(options.curve)) {
+                    curve.set(options.curve, 0);
+                }
+                curve.set(options.curve, curve.get(options.curve) + 1);
+            }
+            balance += tip;
+        };
+
+        const source_dependencies = ui.quiver.dependencies_of(source);
+        const target_dependencies = ui.quiver.dependencies_of(target);
+        for (const [edge, relationship] of source_dependencies) {
+            consider({
+                source: swap,
+                target: options => conserve(options, target_dependencies.has(edge)),
+            }[relationship](edge.options), -1);
+        }
+        for (const [edge, relationship] of target_dependencies) {
+            consider({
+                source: options => conserve(options, source_dependencies.has(edge)),
+                target: swap,
+            }[relationship](edge.options), 1);
+        }
+
+        if (align.size === 1) {
+            options.label_alignment = align.keys().next().value;
+        } else if (align.size > 0 && align.get("left") === align.get("right") && balance === 0) {
+            options.label_alignment = "centre";
+        }
+
+        if (offset.size === 1) {
+            options.offset = offset.keys().next().value;
+        }
+        if (curve.size === 1) {
+            options.curve = curve.keys().next().value;
+        }
+
+        const label = "";
+        // The edge itself does all the set up, such as adding itself to the page.
+        return new Edge(ui, label, source, target, options);
+    }
+
     /// Connects the source and target. Note that this does *not* check whether the source and
     /// target are compatible with each other.
     connect(ui, event) {
         if (this.reconnect === null) {
-            // Create a new edge.
-
-            // We attempt to guess what the intended label alignment is and what the intended edge
-            // offset is, if the cells being connected form some path with existing connections.
-            // Otherwise we revert to the currently-selected label alignment in the panel and the
-            // default offset (0).
-            const options = {
-                // By default, 2-cells and above have a little padding for aesthetic purposes.
-                length: Math.max(this.source.level, this.target.level) === 0 ? 100 : 70,
-                // We will guess the label alignment below, but in case there's no selected label
-                // alignment, we default to "left".
-                label_alignment: "left",
-                // The default settings for the other options are fine.
-            };
-            const selected_alignment
-                = ui.panel.element.query_selector('input[name="label-alignment"]:checked');
-            if (selected_alignment !== null) {
-                // If multiple edges are selected and not all selected edges have the same label
-                // alignment, there will be no checked input.
-                options.label_alignment = selected_alignment.element.value;
-            }
-            // If *every* existing connection to source and target has a consistent label alignment,
-            // then `align` will be a singleton, in which case we use that element as the alignment.
-            // If it has `left` and `right` in equal measure (regardless of `centre`), then
-            // we will pick `centre`. Otherwise we keep the default. And similarly for `offset` and
-            // `curve`.
-            const align = new Map();
-            const offset = new Map();
-            const curve = new Map();
-            // We only want to pick `centre` when the source and target are equally constraining
-            // (otherwise we end up picking `centre` far too often). So we check that they're both
-            // being considered equally. This means `centre` is chosen only rarely, but often in
-            // the situations you want it. (This has no analogue in `offset` or `curve`.)
-            let balance = 0;
-
-            const swap = (options) => {
-                return {
-                    label_alignment: {
-                        left: "right",
-                        centre: "centre",
-                        over: "over",
-                        right: "left",
-                    }[options.label_alignment],
-                    offset: -options.offset,
-                    curve: -options.curve,
-                };
-            };
-
-            const conserve = (options, between) => {
-                return {
-                    label_alignment: options.label_alignment,
-                    // We ignore the offsets and curves of edges that aren't directly `between` the
-                    // source and target.
-                    offset: between ? options.offset : null,
-                    curve: between ? options.curve : null,
-                };
-            };
-
-            const consider = (options, tip) => {
-                if (!align.has(options.label_alignment)) {
-                    align.set(options.label_alignment, 0);
-                }
-                align.set(options.label_alignment, align.get(options.label_alignment) + 1);
-                if (options.offset !== null) {
-                    if (!offset.has(options.offset)) {
-                        offset.set(options.offset, 0);
-                    }
-                    offset.set(options.offset, offset.get(options.offset) + 1);
-                }
-                if (options.curve !== null) {
-                    if (!curve.has(options.curve)) {
-                        curve.set(options.curve, 0);
-                    }
-                    curve.set(options.curve, curve.get(options.curve) + 1);
-                }
-                balance += tip;
-            };
-
-            const source_dependencies = ui.quiver.dependencies_of(this.source);
-            const target_dependencies = ui.quiver.dependencies_of(this.target);
-            for (const [edge, relationship] of source_dependencies) {
-                consider({
-                    source: swap,
-                    target: options => conserve(options, target_dependencies.has(edge)),
-                }[relationship](edge.options), -1);
-            }
-            for (const [edge, relationship] of target_dependencies) {
-                consider({
-                    source: options => conserve(options, source_dependencies.has(edge)),
-                    target: swap,
-                }[relationship](edge.options), 1);
-            }
-
-            if (align.size === 1) {
-                options.label_alignment = align.keys().next().value;
-            } else if (align.size > 0 && align.get("left") === align.get("right") && balance === 0) {
-                options.label_alignment = "centre";
-            }
-
-            if (offset.size === 1) {
-                options.offset = offset.keys().next().value;
-            }
-            if (curve.size === 1) {
-                options.curve = curve.keys().next().value;
-            }
-
             if (!event.shiftKey && !event.metaKey && !event.ctrlKey) {
                 ui.deselect();
             }
-            const label = "";
-            // The edge itself does all the set up, such as adding itself to the page.
-            const edge = new Edge(ui, label, this.source, this.target, options);
+            const edge = UIState.Connect.create_edge(ui, this.source, this.target);
             ui.select(edge);
             if (!event.shiftKey && !event.metaKey && !event.ctrlKey) {
                 ui.panel.label_input.element.focus();
             }
-
             return edge;
         } else {
             // Reconnect an existing edge.
@@ -351,12 +356,12 @@ UIState.Connect = class extends UIState {
     }
 };
 
-/// Cells are being moved to a different position.
-UIState.Move = class extends UIState {
+/// Cells are being moved to a different position, via the mouse.
+UIState.MouseMove = class extends UIState {
     constructor(ui, origin, selection) {
         super();
 
-        this.name = "move";
+        this.name = "mouse-move";
 
         /// The location from which the move was initiated.
         this.origin = origin;
@@ -388,6 +393,41 @@ UIState.Move = class extends UIState {
         for (const cell of this.selection) {
             ui.positions.set(`${cell.position}`, cell);
         }
+    }
+};
+
+/// Cells are being moved to a different position, via the keyboard.
+UIState.KeyMove = class extends UIState {
+    constructor(ui) {
+        super();
+
+        this.name = "key-move";
+
+        this.tooltip = new DOM.Element("div", { class: "tooltip" })
+                .add("Move the selected objects with the arrow keys.")
+                .add(new DOM.Element("br"))
+                .add("Press ")
+                .add(new DOM.Element("kbd").add("B"))
+                .add(" or ")
+                .add(new DOM.Element("kbd").add("esc"))
+                .add(" to finish moving.");
+
+        // Always centre the view on the selected cells to begin.
+        ui.centre_view();
+        // Hide various inputs and panels.
+        ui.panel.hide();
+        ui.panel.label_input.parent.class_list.add("hidden");
+        ui.focus_point.class_list.remove("focused", "smooth");
+        // Add the tooltip.
+        ui.element.add(this.tooltip);
+    }
+
+    release(ui) {
+        this.tooltip.remove();
+        if (ui.selection_contains_edge()) {
+            ui.panel.element.class_list.remove("hidden");
+        }
+        ui.panel.label_input.parent.class_list.remove("hidden");
     }
 };
 
@@ -446,75 +486,82 @@ UIState.Jump = class extends UIState {
 /// The object responsible for controlling all aspects of the user interface.
 class UI {
     constructor(element) {
-        /// The quiver identified with the UI.
+        // The quiver identified with the UI.
         this.quiver = new Quiver();
 
-        /// The UI state (e.g. whether cells are being rearranged, or connected, etc.).
+        // The UI state (e.g. whether cells are being rearranged, or connected, etc.).
         this.state = null;
 
-        /// The width and height of each grid cell. Defaults to `default_cell_size`.
+        // The width and height of each grid cell. Defaults to `default_cell_size`.
         this.cell_width = new Map();
         this.cell_height = new Map();
-        /// The default (minimum) size of each column and row, if a width or height has not been
-        /// specified.
+        // The default (minimum) size of each column and row, if a width or height has not been
+        // specified.
         this.default_cell_size = 128;
-        /// The constraints on the width and height of each cell: we use the maximum constaint for
-        /// final width/height. We store these separately from `cell_width` and `cell_height` to
-        /// avoid recomputing the sizes every time, as we access them frequently.
+        // The constraints on the width and height of each cell: we use the maximum constaint for
+        // final width/height. We store these separately from `cell_width` and `cell_height` to
+        // avoid recomputing the sizes every time, as we access them frequently.
         this.cell_width_constraints = new Map();
         this.cell_height_constraints = new Map();
 
-        /// All currently selected cells;
+        // All currently selected cells;
         this.selection = new Set();
 
-        /// The element in which to place the interface elements.
+        // The element in which to place the interface elements.
         this.element = element;
 
-        /// A map from `x,y` positions to vertices. Note that this
-        /// implies that only one vertex may occupy each position.
+        // A map from `x,y` positions to vertices. Note that this
+        // implies that only one vertex may occupy each position.
         this.positions = new Map();
 
-        /// A set of unique idenitifiers for various objects (used for generating HTML `id`s).
+        // A set of unique idenitifiers for various objects (used for generating HTML `id`s).
         this.ids = new Map();
 
-        /// The element containing all the cells themselves.
+        // The element containing all the cells themselves.
         this.canvas = null;
 
-        /// The grid background.
+        // The grid background.
         this.grid = null;
 
-        /// Whether to prevent relayout for individual cell changes so as to batch it instead.
+        // Whether to prevent relayout for individual cell changes so as to batch it instead.
         this.buffer_updates = false;
 
-        /// The offset of the view (i.e. the centre of the view).
+        // The offset of the view (i.e. the centre of the view).
         this.view = Offset.zero();
 
-        /// The scale of the view, as a log of 2. E.g. `scale = 0` is normal, `scale = 1` is 2x
-        /// zoom, `scale = -1` is 0.5x and so on.
+        // The scale of the view, as a log of 2. E.g. `scale = 0` is normal, `scale = 1` is 2x
+        // zoom, `scale = -1` is 0.5x and so on.
         this.scale = 0;
 
-        /// The size of the view (i.e. the document body dimensions).
+        // The position of focus for the keyboard, i.e. where new cells will be added if Space is
+        // pressed.
+        this.focus_position = Position.zero();
+
+        // The element associated with the focus position.
+        this.focus_point = null;
+
+        // The size of the view (i.e. the document body dimensions).
         this.dimensions = new Dimensions(document.body.offsetWidth, document.body.offsetHeight);
 
-        /// Undo/redo for actions.
+        // Undo/redo for actions.
         this.history = new History();
 
-        /// Keyboard shortcuts.
+        // Keyboard shortcuts.
         this.shortcuts = new Shortcuts(this);
 
-        /// A map from cell codes (i.e. IDs) to cells.
+        // A map from cell codes (i.e. IDs) to cells.
         this.codes = new Map();
 
-        /// The panel for viewing and editing cell data.
+        // The panel for viewing and editing cell data.
         this.panel = new Panel();
 
-        /// The toolbar.
+        // The toolbar.
         this.toolbar = new Toolbar();
 
-        /// LaTeX macro definitions.
+        // LaTeX macro definitions.
         this.macros = new Map();
 
-        /// The URL from which the macros have been fetched (if at all).
+        // The URL from which the macros have been fetched (if at all).
         this.macro_url = null;
     }
 
@@ -575,7 +622,9 @@ class UI {
                 .add(this.panel.label_input)
         );
         UI.delay(() => {
-            this.panel.label_input.parent.add(new DOM.Element("kbd", { class: "input" }).add("↵"));
+            this.panel.label_input.parent.add(
+                new DOM.Element("kbd", { class: "hint input" }).add("↵")
+            );
         });
 
         // Prevent the label input being dismissed when clicked on in jump mode, when no cells are
@@ -592,17 +641,19 @@ class UI {
             { class: "version" }
         ).add(`Version ${CONSTANTS.VERSION}`));
 
-        // Add the insertion point for new nodes.
-        const insertion_point = new DOM.Element("div", { class: "insertion-point" })
+        // Add the focus point for new nodes.
+        this.focus_point = new DOM.Element("div", { class: "focus-point focused smooth" })
+            .add(new DOM.Element("div", { class: "tooltip" }))
             .add_to(this.canvas);
+        this.update_focus_tooltip();
 
         // Handle panning via scrolling.
         window.addEventListener("wheel", (event) => {
             // We don't want to scroll the page while using the mouse wheel.
             event.preventDefault();
 
-            // Hide the insertion point if it is visible.
-            insertion_point.class_list.remove("revealed");
+            // Hide the focus point if it is visible.
+            this.focus_point.class_list.remove("revealed");
 
             this.pan_view(new Offset(
                 event.deltaX * 2 ** -this.scale,
@@ -649,7 +700,7 @@ class UI {
                 if (this.in_mode(UIState.Pan)) {
                     // We only want to pan when the pointer is held.
                     this.state.origin = null;
-                } else if (this.in_mode(UIState.Move)) {
+                } else if (this.in_mode(UIState.MouseMove)) {
                     commit_move_event();
                     this.switch_mode(UIState.default);
                 } else if (this.in_mode(UIState.Connect)) {
@@ -670,11 +721,13 @@ class UI {
 
         // Stop dragging cells when the mouse leaves the window.
         this.element.listen("mouseleave", () => {
-            if (this.in_mode(UIState.Move)) {
+            if (this.in_mode(UIState.MouseMove)) {
                 commit_move_event();
                 this.switch_mode(UIState.default);
             }
         });
+
+        this.reposition_focus_point(Position.zero());
 
         this.element.listen("mousedown", (event) => {
             if (event.button === 0) {
@@ -682,6 +735,11 @@ class UI {
                 // the Pan mode. However, if the window is not in focus, they will not have been
                 // detected, so we switch modes on mouse click.
                 if (this.in_mode(UIState.Default)) {
+                    if (this.focus_point.class_list.contains("focused")) {
+                        this.focus_point.class_list.remove("focused", "smooth");
+                        this.reposition_focus_point(this.position_from_event(event));
+                        this.focus_point.class_list.add("revealed", "pending");
+                    }
                     if (event.altKey) {
                         this.switch_mode(new UIState.Pan("Alt"));
                     } else if (event.ctrlKey) {
@@ -689,11 +747,13 @@ class UI {
                     }
                 }
                 if (this.in_mode(UIState.Pan)) {
-                    // Hide the insertion point if it is visible.
-                    insertion_point.class_list.remove("revealed");
+                    // Hide the focus point if it is visible.
+                    this.focus_point.class_list.remove("revealed");
                     // Record the position the pointer was pressed at, so we can pan relative
                     // to that location by dragging.
                     this.state.origin = this.offset_from_event(event).sub(this.view);
+                } else if (this.in_mode(UIState.KeyMove)) {
+                    this.switch_mode(UIState.default);
                 } else if (!this.in_mode(UIState.Modal)) {
                     if (!event.shiftKey && !event.metaKey && !event.ctrlKey) {
                         // Deselect cells when the mouse is pressed (at least when the Shift/Command
@@ -715,26 +775,41 @@ class UI {
             return new Vertex(this, label, position);
         };
 
-        // Move the insertion point under the pointer.
-        const reposition_insertion_point = (event) => {
-            const position = this.position_from_event(event);
-            const offset = this.offset_from_position(position);
-            const height =
-                this.cell_size(this.cell_height, position.y) - CONSTANTS.GRID_BORDER_WIDTH;
-            insertion_point.set_style({
-                left: `${offset.x}px`,
-                top: `${offset.y}px`,
-                // Resize the insertion point appropriately for the grid cell.
-                width: `${
-                    this.cell_size(this.cell_width, position.x) - CONSTANTS.GRID_BORDER_WIDTH}px`,
-                height: `${height}px`,
-                lineHeight: `${height}px`,
-            });
-            return position;
+        const create_vertex_at_focus_point = (event) => {
+            this.focus_point.class_list.remove("revealed");
+            // We want the new vertex to be the only selected cell, unless we've held
+            // Shift/Command/Control when creating it.
+            if (!event.shiftKey && !event.metaKey && !event.ctrlKey) {
+                this.deselect();
+            }
+            const vertex = create_vertex(this.focus_position);
+            this.select(vertex);
+            return vertex;
         };
 
-        // Clicking on the insertion point reveals it, after which another click adds a new node.
-        insertion_point.listen("mousedown", (event) => {
+        // We expect `edges.length > 0`.
+        const insert_codes_before = (vertex, ...edges) => {
+            // When we create a target vertex and an edge simultaneously, the new vertex has to be
+            // created first, because the edge needs a target. Therefore, the vertex will get a code
+            // assigned before the edge. However, in practice, it feels more natural to cycle to the
+            // edge before the vertex, because this aligns with the diagrammatic order. In these
+            // situations, we manually insert the edge codes before the vertex code.
+            const vertex_code = vertex.code;
+            edges.push(vertex);
+            for (let i = edges.length - 1; i > 0; --i) {
+                edges[i].code = edges[i - 1].code;
+            }
+            edges[0].code = vertex_code;
+            for (const cell of edges) {
+                this.codes.set(cell.code, cell);
+                const element = cell.element.query_selector("kbd");
+                element.set_attributes({ "data-code": cell.code });
+                element.clear().add(cell.code);
+            }
+        };
+
+        // Clicking on the focus point reveals it, after which another click adds a new node.
+        this.focus_point.listen("mousedown", (event) => {
             if (event.button === 0) {
                 if (this.in_mode(UIState.Default)) {
                     event.preventDefault();
@@ -744,30 +819,23 @@ class UI {
                     for (const input of global.query_selector_all('input[type="text"]')) {
                         input.element.blur();
                     }
-                    if (!insertion_point.class_list.contains("revealed")) {
-                        // Reveal the insertion point upon a click.
-                        reposition_insertion_point(event);
-                        insertion_point.class_list.add("revealed", "pending");
+                    if (!this.focus_point.class_list.contains("revealed")) {
+                        // Reveal the focus point upon a click.
+                        this.reposition_focus_point(this.position_from_event(event));
+                        this.focus_point.class_list.add("revealed", "pending");
                     } else {
                         // We only stop propagation in this branch, so that clicking once in an
                         // empty grid cell will deselect any selected cells, but clicking a second
                         // time to add a new vertex will not deselect the new, selected vertex we've
                         // just added. Note that it's not possible to select other cells in between
                         // the first and second click, because leaving the grid cell with the cursor
-                        // (to select other cells) hides the insertion point again.
+                        // (to select other cells) hides the focus point again.
                         event.stopPropagation();
-                        insertion_point.class_list.remove("revealed");
-                        // We want the new vertex to be the only selected cell, unless we've held
-                        // Shift/Command/Control when creating it.
-                        if (!event.shiftKey && !event.metaKey && !event.ctrlKey) {
-                            this.deselect();
-                        }
-                        const vertex = create_vertex(this.position_from_event(event));
+                        const vertex = create_vertex_at_focus_point(event);
                         this.history.add(this, [{
                             kind: "create",
                             cells: new Set([vertex]),
                         }]);
-                        this.select(vertex);
                         // When the user is creating a vertex and adding it to the selection,
                         // it is unlikely they expect to edit all the labels simultaneously,
                         // so in this case we do not focus the input.
@@ -784,30 +852,30 @@ class UI {
         // to an `"active"` state. Moving the mouse off the insertion
         // point in this state will create a new vertex and trigger the
         // connection mode.
-        insertion_point.listen("mousemove", () => {
-            if (insertion_point.class_list.contains("pending")) {
-                insertion_point.class_list.remove("pending");
-                insertion_point.class_list.add("active");
+        this.focus_point.listen("mousemove", () => {
+            if (this.focus_point.class_list.contains("pending")) {
+                this.focus_point.class_list.remove("pending");
+                this.focus_point.class_list.add("active");
             }
         });
 
-        // If we release the mouse while hovering over the insertion point, there are two
-        // possibilities. Either we haven't moved the mouse, in which case the insertion point loses
+        // If we release the mouse while hovering over the focus point, there are two
+        // possibilities. Either we haven't moved the mouse, in which case the focus point loses
         // its `"pending"` or `"active"` state; or we have, in which case we're mid-connection and
         // we need to create a new vertex and connect it. We add the event listener to the
-        // container, rather than the insertion point, so that we don't have to worry about the
-        // insertion point being exactly the same size as a grid cell (there is some padding for
-        // aesthetic purposes) or the insertion point being covered by other elements (like edge
+        // container, rather than the focus point, so that we don't have to worry about the
+        // focus point being exactly the same size as a grid cell (there is some padding for
+        // aesthetic purposes) or the focus point being covered by other elements (like edge
         // endpoints).
         this.container.listen("mouseup", (event) => {
             if (event.button === 0) {
                 // Handle mouse releases without having moved the cursor from the initial cell.
-                insertion_point.class_list.remove("pending", "active");
+                this.focus_point.class_list.remove("pending", "active");
 
-                // We only want to create a connection if the insertion point is visible. E.g. not
+                // We only want to create a connection if the focus point is visible. E.g. not
                 // if we're hovering over a grid cell that contains a vertex, but not hovering over
                 // the vertex itself (i.e. the whitespace around the vertex).
-                if (insertion_point.class_list.contains("revealed")) {
+                if (this.focus_point.class_list.contains("revealed")) {
                     // When releasing the mouse over an empty grid cell, we want to create a new
                     // cell and connect it to the source.
                     if (this.in_mode(UIState.Connect)) {
@@ -834,21 +902,7 @@ class UI {
                                 // to create a new one.
                                 const edge = this.state.connect(this, event);
                                 created.add(edge);
-
-                                // We just created a new vertex for the target, and a new edge, so
-                                // we've allocated two new codes. By default, the vertex code will
-                                // have been allocated before the edge (because the edge is
-                                // dependent) on the vertex. However, it feels more natural to cycle
-                                // to the edge before the vertex, because it comes first
-                                // "diagramatically". Therefore, we're going to swap the two codes.
-                                const vertex = this.state.target;
-                                [vertex.code, edge.code] = [edge.code, vertex.code];
-                                for (const cell of [vertex, edge]) {
-                                    this.codes.set(cell.code, cell);
-                                    const element = cell.element.query_selector("kbd");
-                                    element.set_attributes({ "data-code": cell.code });
-                                    element.clear().add(cell.code);
-                                }
+                                insert_codes_before(this.state.target, edge);
                             } else {
                                 // Unless we're holding Shift/Command/Control (in which case we just
                                 // add the new vertex to the selection) we want to focus and select
@@ -894,44 +948,47 @@ class UI {
             }
         });
 
-        // If the cursor leaves the insertion point and the mouse has *not*
+        // If the cursor leaves the focus point and the mouse has *not*
         // been held, it gets hidden again. However, if the cursor leaves the
-        // insertion point whilst remaining held, then the insertion point will
+        // focus point whilst remaining held, then the focus point will
         // be `"active"` and we create a new vertex and immediately start
         // connecting it to something (possibly an empty grid cell, which will
         // create a new vertex and connect them both).
-        insertion_point.listen("mouseleave", () => {
-            insertion_point.class_list.remove("pending");
+        this.focus_point.listen("mouseleave", () => {
+            this.focus_point.class_list.remove("pending");
 
-            if (insertion_point.class_list.contains("active")) {
-                // If the insertion point is `"active"`, we're going to create
+            if (this.focus_point.class_list.contains("active")) {
+                // If the focus point is `"active"`, we're going to create
                 // a vertex and start connecting it.
-                insertion_point.class_list.remove("active");
+                this.focus_point.class_list.remove("active");
                 const vertex = create_vertex(this.position_from_offset(new Offset(
-                    insertion_point.element.offsetLeft,
-                    insertion_point.element.offsetTop,
+                    this.focus_point.element.offsetLeft,
+                    this.focus_point.element.offsetTop,
                 )));
                 this.select(vertex);
                 this.switch_mode(new UIState.Connect(this, vertex, true));
                 vertex.element.class_list.add("source");
             } else if (!this.in_mode(UIState.Connect)) {
-                // If the cursor leaves the insertion point and we're *not*
+                // If the cursor leaves the focus point and we're *not*
                 // connecting anything, then hide it.
-                insertion_point.class_list.remove("revealed");
+                this.focus_point.class_list.remove("revealed");
             }
         });
 
-        // Moving the insertion point, panning, and rearranging cells.
+        // Moving the focus point, panning, and rearranging cells.
         this.element.listen("mousemove", (event) => {
-            // If the user has currently clicked to place a vertex, then don't reposition the
-            // insertion point until the new vertex has been created: otherwise we might move the
-            // insertion point before the vertex has been created and accidentally place the vertex
-            // in the new position of the insertion point, rather than the old one.
-            if (this.in_mode(UIState.Default) && insertion_point.class_list.contains("revealed")) {
+            // If the user has currently clicked to place a vertex, or activated keyboard controls,
+            // then don't reposition the focus point until the new vertex has been created:
+            // otherwise we might move the focus point before the vertex has been created and
+            // accidentally place the vertex in the new position of the focus point, rather than
+            // the old one.
+            if (this.in_mode(UIState.Default) && (this.focus_point.class_list.contains("revealed")
+                || this.focus_point.class_list.contains("focused"))
+            ) {
                 return;
             }
 
-            const position = reposition_insertion_point(event);
+            const position = this.reposition_focus_point(this.position_from_event(event), false);
 
             if (this.in_mode(UIState.Pan) && this.state.origin !== null) {
                 const new_offset = this.offset_from_event(event).sub(this.view);
@@ -939,19 +996,19 @@ class UI {
                 this.state.origin = new_offset;
             }
 
-            // We want to reveal the insertion point if and only if it is
+            // We want to reveal the focus point if and only if it is
             // not at the same position as an existing vertex (i.e. over an
             // empty grid cell).
             if (this.in_mode(UIState.Connect)) {
                 // We only permit the forgery of vertices, not edges.
                 if (this.state.source.is_vertex() && this.state.target === null) {
-                    insertion_point.class_list
+                    this.focus_point.class_list
                         .toggle("revealed", !this.positions.has(`${position}`));
                 }
             }
 
             // Moving cells around with the mouse.
-            if (this.in_mode(UIState.Move)) {
+            if (this.in_mode(UIState.MouseMove)) {
                 // Prevent dragging from selecting random elements.
                 event.preventDefault();
 
@@ -1074,9 +1131,15 @@ class UI {
                     // Toggle the focus of the label input.
                     const input = this.panel.label_input.element;
                     if (document.activeElement !== input) {
-                        input.focus();
-                        // Select all existing text.
-                        input.select();
+                        if (this.selection.size === 0) {
+                            // If no cells are selected, check whether there is one targeted by the
+                            // keyboard: in this case, select it.
+                            const cell_under_focus_point = this.cell_under_focus_point();
+                            if (cell_under_focus_point !== null) {
+                                this.select(cell_under_focus_point);
+                            }
+                        }
+                        this.panel.focus_label_input();
                     } else {
                         // Pressing Enter "confirms" the currently selected queued cells.
                         this.panel.unqueue_selected(this);
@@ -1087,14 +1150,14 @@ class UI {
         });
 
         this.shortcuts.add([
-            { key: "Tab", context: Shortcuts.SHORTCUT_PRIORITY.Always },
             // We will mostly ignore the Shift key, apart from selecting queued cells.
-            { key: "TAB", shift: true, context: Shortcuts.SHORTCUT_PRIORITY.Always }
+            { key: "Tab", shift: null, context: Shortcuts.SHORTCUT_PRIORITY.Always },
         ], (event) => {
             if (!this.in_mode(UIState.Modal)) {
-                if (!this.in_mode(UIState.Jump)) {
+                if (this.in_mode(UIState.Default)) {
                     this.panel.defocus_inputs();
                     this.cancel_creation();
+                    this.focus_point.class_list.remove("focused", "smooth");
 
                     // If there are any cells in the queue, we may cycle through them using Tab.
                     // Otherwise, Tab brings up the jump input. To cycle through the cells, we
@@ -1161,8 +1224,9 @@ class UI {
                     } else if (this.element.query_selector("kbd.queue") === null) {
                         this.switch_mode(new UIState.Jump(this, "Select"));
                     } else {
-                        // Otherwise, just do nothing. We have no other cells in the queue to
-                        // switch to.
+                        // In this case, we have no other cells in the queue to switch to. We simply
+                        // focus the label input if it is not focused, and otherwise do nothing.
+                        this.panel.focus_label_input();
                     }
                 } else {
                     this.switch_mode(UIState.default);
@@ -1172,8 +1236,8 @@ class UI {
 
         this.shortcuts.add([{ key: "," }, { key: "." } ], (event) => {
             if (!this.in_mode(UIState.Modal)) {
-                if (!this.in_mode(UIState.Jump)) {
-                    if (Array.from(this.selection).find((cell) => cell.is_edge())) {
+                if (this.in_mode(UIState.Default)) {
+                    if (this.selection_contains_edge()) {
                         this.panel.defocus_inputs();
                         this.switch_mode(new UIState.Jump(
                             this,
@@ -1197,6 +1261,11 @@ class UI {
 
             // Close any open panes.
             if (this.panel.dismiss_export_pane(this)) {
+                return;
+            }
+
+            if (this.in_mode(UIState.KeyMove)) {
+                this.switch_mode(UIState.default);
                 return;
             }
 
@@ -1226,6 +1295,12 @@ class UI {
                 return;
             }
 
+            if (this.focus_point.class_list.contains("focused")) {
+                this.focus_point.class_list.remove("focused", "smooth");
+                this.toolbar.update(this);
+                return;
+            }
+
             // Unqueue queued cells.
             for (const element of this.element.query_selector_all("kbd.queue")) {
                 element.class_list.remove("queue");
@@ -1246,10 +1321,100 @@ class UI {
             }
         });
 
+        // "B" for "Bring".
+        this.shortcuts.add([{ key: "B" }], () => {
+            if (this.in_mode(UIState.Default)) {
+                let selection_contains_vertex = this.selection_contains_vertex();
+                const cell_under_focus_point = this.cell_under_focus_point();
+                if (!selection_contains_vertex && cell_under_focus_point !== null) {
+                    this.select(cell_under_focus_point);
+                    selection_contains_vertex = true;
+                }
+                if (selection_contains_vertex) {
+                    this.switch_mode(new UIState.KeyMove(this));
+                }
+            } else if (this.in_mode(UIState.KeyMove)) {
+                this.switch_mode(UIState.default);
+            }
+        });
+
+        // "S" for "Select".
+        this.shortcuts.add([{ key: "S" }], () => {
+            if (this.in_mode(UIState.Default)) {
+                if (this.focus_point.class_list.contains("focused")) {
+                    const cell_under_focus_point = this.cell_under_focus_point();
+                    if (cell_under_focus_point !== null) {
+                        if (!this.selection.has(cell_under_focus_point)) {
+                            this.select(cell_under_focus_point);
+                        } else {
+                            this.deselect(cell_under_focus_point);
+                            this.panel.hide_if_unselected(this);
+                        }
+                    }
+                }
+            }
+        });
+
+        // Space bar.
+        this.shortcuts.add([{ key: " ", shift: null, modifier: null }], (event) => {
+            if (this.in_mode(UIState.Default)) {
+                if (this.focus_point.class_list.contains("focused")) {
+                    const selected = Array.from(this.codes)
+                        .filter(([, cell]) => cell.is_vertex() && this.selection.has(cell));
+                    if (!this.positions.has(`${this.focus_position}`)) {
+                        const target = create_vertex_at_focus_point(event);
+                        // Connect any selected vertices to the target.
+                        const edges = selected.map(([, source]) => {
+                            return UIState.Connect.create_edge(this, source, target);
+                        });
+                        insert_codes_before(target, ...edges);
+                        const actions = [{
+                            kind: "create",
+                            cells: new Set([target, ...edges]),
+                        }];
+                        this.history.add(
+                            this,
+                            actions,
+                        );
+                    } else {
+                        const target = this.positions.get(`${this.focus_position}`);
+                        selected.forEach(([, source]) => {
+                            // The `target` vertex already exists, so it may already be selected.
+                            // In this case, we do not want to try to connect it to itself.
+                            if (source !== target) {
+                                const edge = UIState.Connect.create_edge(this, source, target);
+                                this.history.add(
+                                    this,
+                                    [{
+                                        kind: "create",
+                                        cells: new Set([edge]),
+                                    }],
+                                );
+                            }
+                        });
+                        if (!event.shiftKey && !event.metaKey && !event.ctrlKey) {
+                            this.deselect();
+                        }
+                        this.select(target);
+                    }
+                } else {
+                    // Move the focus point back to where it was the last time it was moved using
+                    // the keyboard (or the user clicked somewhere on the canvas).
+                    this.reposition_focus_point(this.focus_position);
+                    this.focus_point.class_list.remove("revealed", "pending", "active");
+                    this.focus_point.class_list.add("focused");
+                    UI.delay(() => this.focus_point.class_list.add("smooth"));
+                }
+            }
+        });
+
         // Use the arrow keys for moving vertices around, as well as changing slider values via the
         // keyboard.
         this.shortcuts.add([
-            { key: "ArrowLeft" }, { key: "ArrowDown" }, { key: "ArrowRight" }, { key: "ArrowUp" },
+            { key: "ArrowLeft", shift: null },
+            { key: "ArrowDown", shift: null },
+            { key: "ArrowRight", shift: null },
+            { key: "ArrowUp", shift: null },
         ], (event) => {
             let delta = 0;
             if (event.key === "ArrowLeft") {
@@ -1263,45 +1428,154 @@ class UI {
                 return;
             }
 
-            // Move vertices around.
-            let offset;
+            let position_delta;
             switch (event.key) {
                 case "ArrowLeft":
-                    offset = new Position(-1, 0);
+                    position_delta = new Position(-1, 0);
                     break;
                 case "ArrowDown":
-                    offset = new Position(0, 1);
+                    position_delta = new Position(0, 1);
                     break;
                 case "ArrowRight":
-                    offset = new Position(1, 0);
+                    position_delta = new Position(1, 0);
                     break;
                 case "ArrowUp":
-                    offset = new Position(0, -1);
+                    position_delta = new Position(0, -1);
                     break;
             }
-            const vertices = Array.from(this.selection).filter((cell) => cell.is_vertex());
-            if (vertices.length > 0) {
-                for (const vertex of vertices) {
-                    this.positions.delete(`${vertex.position}`);
+
+            if (this.in_mode(UIState.Default)) {
+                if (!this.focus_point.class_list.contains("focused")) {
+                    // The first time we press an arrow key, and the focus point is not focused,
+                    // focus it. After that, pressing an arrow key will move the focus point.
+                    this.reposition_focus_point(this.focus_position);
+                    this.focus_point.class_list.remove("revealed", "pending", "active");
+                    this.focus_point.class_list.add("focused");
+                    UI.delay(() => this.focus_point.class_list.add("smooth"));
+                } else {
+                    this.reposition_focus_point(this.focus_position.add(position_delta));
                 }
-                const all_new_positions_free = vertices.every((vertex) => {
-                    return !this.positions.has(`${vertex.position.add(offset)}`);
-                });
-                for (const vertex of vertices) {
-                    this.positions.set(`${vertex.position}`, vertex);
+                this.update_focus_tooltip();
+
+                // Reposition the view if the focus point is not complete in-view.
+                const offset = this.offset_from_position(this.focus_position);
+                const width = this.cell_size(this.cell_width, this.focus_position.x);
+                const height = this.cell_size(this.cell_height, this.focus_position.y);
+                const view = new Dimensions(
+                    document.body.offsetWidth / 2 ** this.scale,
+                    document.body.offsetHeight / 2 ** this.scale,
+                ).sub(Dimensions.diag(CONSTANTS.VIEW_PADDING * 2));
+                const pan = Offset.zero();
+                // We only adjust in the direction of movement, to avoid issues with edge cases,
+                // e.g. where the height of the screen is too small, which can cause panning
+                // vertically back and forth with each key press.
+                if (position_delta.x !== 0) {
+                    // Left.
+                    pan.x += Math.min(offset.x - (this.view.x - view.width / 2), 0);
+                    // Right.
+                    pan.x += Math.max(offset.x + width - (this.view.x + view.width / 2), 0);
                 }
-                if (all_new_positions_free) {
-                    this.history.add(this, [{
-                        kind: "move",
-                        displacements: vertices.map((vertex) => ({
-                            vertex,
-                            from: vertex.position,
-                            to: vertex.position.add(offset),
-                        })),
-                    }], true);
+                if (position_delta.y !== 0) {
+                    // Top.
+                    pan.y += Math.min(offset.y - (this.view.y - view.height / 2), 0);
+                    // Bottom.
+                    pan.y += Math.max(offset.y + height - (this.view.y + view.height / 2), 0);
+                }
+
+                const start = performance.now();
+                const view_origin = new Offset(this.view.x, this.view.y);
+                // We want to transition the view smoothly. We can animate the offset with CSS, but
+                // the grid is drawn using a <canvas> and so must be updated manually.
+                const partial_pan = () => {
+                    requestAnimationFrame(() => {
+                        // The panning animation lasts for 0.1 seconds.
+                        const x
+                            = Math.max(Math.min((performance.now() - start) / (1000 * 0.1), 1), 0);
+                        // The definition of the `ease` transition duration in CSS, which is the
+                        // default transition and the one we use.
+                        const ease = new CubicBezier(
+                            Point.zero(),
+                            new Point(0.25, 0.1),
+                            new Point(0.25, 1.0),
+                            Point.diag(1),
+                        );
+
+                        // Do a binary search to find the value of `t` corresponding to the x
+                        // co-ordinate `x`. The value of `p.y` thereat is the distance through the
+                        // animation.
+                        let p;
+                        let [min, max] = [ease.point(0), ease.point(1)];
+
+                        if (x === 0) {
+                            p = min;
+                        } else if (x === 1) {
+                            p = max;
+                        } else if (x > 0 && x < 1) {
+                            const EPSILON = 0.01;
+                            const BAIL_OUT = 128;
+                            let i = 0;
+                            while (true) {
+                                p = ease.point((max.t + min.t) / 2);
+                                if (p.x === x || max.t - min.t <= EPSILON || ++i >= BAIL_OUT) {
+                                    break;
+                                }
+                                if (x > p.x) {
+                                    min = p;
+                                }
+                                if (x < p.x) {
+                                    max = p;
+                                }
+                            }
+                        }
+
+                        this.pan_to(view_origin.add(pan.mul(p.y)));
+                        if (x < 1) {
+                            partial_pan();
+                        }
+                    })
+                };
+                partial_pan();
+            }
+
+            if (this.in_mode(UIState.KeyMove)) {
+                // Move vertices around.
+                const vertices = Array.from(this.selection).filter((cell) => cell.is_vertex());
+                if (vertices.length > 0) {
+                    // Find the first available space for all selected vertices, in the direction of
+                    // the key press.
+                    // We are guaranteed to eventually satisfy `all_new_positions_free`, because
+                    // diagrams are finite.
+                    for (let distance = 1;; ++distance) {
+                        for (const vertex of vertices) {
+                            this.positions.delete(`${vertex.position}`);
+                        }
+                        const all_new_positions_free = vertices.every((vertex) => {
+                            return !this.positions.has(`${
+                                vertex.position.add(position_delta.mul(distance))
+                            }`);
+                        });
+                        for (const vertex of vertices) {
+                            this.positions.set(`${vertex.position}`, vertex);
+                        }
+                        if (all_new_positions_free) {
+                            this.history.add(this, [{
+                                kind: "move",
+                                displacements: vertices.map((vertex) => ({
+                                    vertex,
+                                    from: vertex.position,
+                                    to: vertex.position.add(position_delta.mul(distance)),
+                                })),
+                            }], true);
+                            this.centre_view();
+                            break;
+                        }
+                    }
                 }
             }
         });
+
+        // Centre the cell at (0, 0) in the view, which looks prettier.
+        this.pan_view(Offset.diag(this.default_cell_size / 2));
     }
 
     /// Returns whether the UI has a particular state.
@@ -1320,6 +1594,7 @@ class UI {
                 }
             }
             this.state = state;
+            this.toolbar.update(this);
             if (this.state.name !== null) {
                 this.element.class_list.add(this.state.name);
             }
@@ -1511,6 +1786,16 @@ class UI {
                 view_offset = view_offset.sub(offset);
                 rerender = true;
             }
+
+            if (this.focus_position.x === position.x || this.focus_position.y === position.y) {
+                // Resize the focus point if necessary.
+                if (this.focus_point.class_list.contains("focused")) {
+                    // Don't animate the size change, which should happen instantaneously.
+                    this.focus_point.class_list.remove("smooth");
+                    this.reposition_focus_point(this.focus_position);
+                    UI.delay(() => this.focus_point.class_list.add("smooth"));
+                }
+            }
         }
 
         if (rerender) {
@@ -1543,6 +1828,83 @@ class UI {
         if (!this.buffer_updates) {
             this.update_col_row_size(cell.position);
         }
+    }
+
+    /// Move the focus point to a given position. This will also resize the focus point
+    /// appropriately, so this isn't necessarily an idempotent operation.
+    reposition_focus_point(position, update_focus_position = true) {
+        if (update_focus_position) {
+            // Sometimes, we will want to move the focus point element, but not change its
+            // remembered position, so that when we press a key (e.g. Space, or one of the arrow
+            // keys), the focus point will jump back to where it last was when we used the keyboard.
+            this.focus_position = position;
+        }
+        const offset = this.offset_from_position(position);
+        const height = this.cell_size(this.cell_height, position.y) - CONSTANTS.GRID_BORDER_WIDTH;
+        this.element.query_selector(".focus-point").set_style({
+            left: `${offset.x}px`,
+            top: `${offset.y}px`,
+            // Resize the focus point appropriately for the grid cell.
+            width: `${
+                this.cell_size(this.cell_width, position.x) - CONSTANTS.GRID_BORDER_WIDTH}px`,
+            height: `${height}px`,
+            "padding-top": `${height / 2}px`,
+        });
+        return position;
+    };
+
+    /// Returns the cell under the focus point, if the focus point is active and such a cell exists.
+    /// Otherwise, returns `null`.
+    cell_under_focus_point() {
+        if (!this.focus_point.class_list.contains("focused")) {
+            return null;
+        }
+        if (this.positions.has(`${this.focus_position}`)) {
+            return this.positions.get(`${this.focus_position}`);
+        }
+        return null;
+    }
+
+    /// Updates the tooltip associated to the focus point.
+    update_focus_tooltip() {
+        const tooltip = this.focus_point.query_selector(".tooltip").clear();
+        if (this.focus_point.class_list.contains("revealed")) {
+            tooltip.add("Create vertex");
+            return;
+        }
+        const cell = this.cell_under_focus_point();
+        if (cell !== null) {
+            if (this.selection.has(cell)) {
+                if (this.selection.size === 1) {
+                    // No tooltip if there's a cell under the focus point, as pressing Space
+                    // won't do anything.
+                    return;
+                }
+            }
+            if (this.selection.size > 0) {
+                tooltip.add("Press Space to connect the selection to this object");
+            } else {
+                tooltip.add("Press Space to select this object");
+            }
+            return;
+        }
+        if (this.selection.size > 0) {
+            tooltip.add("Press Space to connect the selection to a new object");
+            return;
+        } else {
+            tooltip.add("Press Space to add a new object");
+            return;
+        }
+    }
+
+    /// Returns whether there are any selected vertices.
+    selection_contains_vertex() {
+        return Array.from(this.selection).some((cell) => cell.is_vertex());
+    }
+
+    /// Returns whether there are any selected edges.
+    selection_contains_edge() {
+        return Array.from(this.selection).some((cell) => cell.is_edge());
     }
 
     /// Returns the current UI selection, excluding the given `cells`.
@@ -1580,9 +1942,10 @@ class UI {
             }
         }
         if (selection_changed) {
+            this.update_focus_tooltip();
             this.panel.update(this);
             this.toolbar.update(this);
-            if (Array.from(this.selection).find((cell) => cell.is_edge())) {
+            if (this.selection_contains_edge()) {
                 this.panel.element.class_list.remove("hidden");
             }
             if (this.selection.size > 0) {
@@ -1607,6 +1970,7 @@ class UI {
             }
         }
 
+        this.update_focus_tooltip();
         this.panel.update(this);
         this.toolbar.update(this);
     }
@@ -1661,29 +2025,33 @@ class UI {
             return true;
         }
 
-        // If the user has revealed the insertion point (and possibly started dragging), hide it
+        // If the user has revealed the focus point (and possibly started dragging), hide it
         // again.
-        const insertion_point = this.element.query_selector(".insertion-point.revealed");
-        if (insertion_point !== null) {
-            insertion_point.class_list.remove("revealed", "pending", "active");
+        if (this.focus_point.class_list.contains("revealed")) {
+            this.focus_point.class_list.remove("revealed", "pending", "active");
             return true;
         }
 
         return false;
     }
 
-    /// Repositions the view by a relative offset.
-    /// If `offset` is positive, then everything will appear to move towards the top left.
-    /// If `zoom` is positive, then everything will grow larger.
-    pan_view(offset, zoom = 0) {
-        this.view.x += offset.x;
-        this.view.y += offset.y;
-        this.scale += zoom;
+    /// Repositions the view by an absolute offset.
+    pan_to(offset, zoom = this.scale) {
+        this.view.x = offset.x;
+        this.view.y = offset.y;
+        this.scale = zoom;
         const view = this.view.mul(2 ** this.scale);
         this.canvas.set_style({
             transform: `translate(${-view.x}px, ${-view.y}px) scale(${2 ** this.scale})`,
         });
         this.update_grid();
+    }
+
+    /// Repositions the view by a relative offset.
+    /// If `offset` is positive, then everything will appear to move towards the top left.
+    /// If `zoom` is positive, then everything will grow larger.
+    pan_view(offset, zoom = 0) {
+        this.pan_to(this.view.add(offset), this.scale + zoom);
     }
 
     /// Centre the view with respect to the selection, or the entire quiver if no cells are
@@ -2128,20 +2496,21 @@ class UI {
 /// The history system (i.e. undo and redo).
 class History {
     constructor() {
-        /// A list of all actions taken by the user.
-        /// Each "action" actually comprises a list of atomic actions.
+        // A list of all actions taken by the user.
+        // Each "action" actually comprises a list of atomic actions.
         this.actions = [];
 
-        /// The index after the last taken action (usually equal to `this.actions.length`).
-        /// `0` therefore signifies that no action has been taken (or we've reverted history
-        /// to that point).
+        // The index after the last taken action (usually equal to `this.actions.length`).
+        // `0` therefore signifies that no action has been taken (or we've reverted history
+        // to that point).
         this.present = 0;
 
-        /// We keep track of cell selection between events to conserve it as expected.
-        this.selections = [new Set()];
+        // We keep track of the state of the editor at the various points in history, e.g. the
+        // selection.
+        this.states = [new History.State(new Set(), Position.zero())];
 
-        /// We allow history events to be collapsed if two consecutive events have the same
-        /// (elementwise) `collapse` array. This tracks the previous one.
+        // We allow history events to be collapsed if two consecutive events have the same
+        // (elementwise) `collapse` array. This tracks the previous one.
         this.collapse = null;
     }
 
@@ -2153,10 +2522,11 @@ class History {
         // Append a new history event.
         // If there are future actions, clear them. (Our history only forms a list, not a tree.)
         ui.quiver.flush(this.present);
-        this.selections.splice(this.present + 1, this.actions.length - this.present);
-        // Update the current selection, so that if we undo to it, we restore the exact
-        // selection we had before making the action.
-        this.selections[this.present] = selection;
+        this.states.splice(this.present + 1, this.actions.length - this.present);
+        // Update the current state, so that if we undo to it, we restore the exact
+        // state we had before making the action.
+        const state = new History.State(selection, ui.focus_position);
+        this.states[this.present] = state;
         this.actions.splice(this.present, this.actions.length - this.present);
         this.actions.push(actions);
 
@@ -2166,7 +2536,7 @@ class History {
             ++this.present;
         }
 
-        this.selections.push(selection);
+        this.states.push(state);
         this.collapse = null;
 
         // Update the history toolbar buttons (e.g. enabling Redo).
@@ -2202,7 +2572,7 @@ class History {
         --this.present;
         this.permanentise();
         ui.quiver.flush(this.present);
-        this.selections.splice(this.present + 1, 1);
+        this.states.splice(this.present + 1, 1);
         this.actions.splice(this.present, 1);
     }
 
@@ -2375,7 +2745,9 @@ class History {
             // Trigger the reverse of the previous action.
             const update_panel = this.effect(ui, this.actions[this.present], true);
             ui.deselect();
-            ui.select(...this.selections[this.present]);
+            const state = this.states[this.present];
+            ui.select(...state.selection);
+            ui.reposition_focus_point(state.focus_position);
             if (update_panel) {
                 ui.panel.update(ui);
                 ui.panel.hide_if_unselected(ui);
@@ -2398,9 +2770,11 @@ class History {
             this.permanentise();
             // If we're immediately invoking `redo`, then the selection has not
             // been recorded yet, in which case the current selection is correct.
-            if (this.present < this.selections.length) {
+            if (this.present < this.states.length) {
                 ui.deselect();
-                ui.select(...this.selections[this.present]);
+                const state = this.states[this.present];
+                ui.select(...state.selection);
+                ui.reposition_focus_point(state.focus_position);
             }
             if (update_panel) {
                 ui.panel.update(ui);
@@ -2415,6 +2789,17 @@ class History {
         return false;
     }
 }
+
+/// The data tracked and restored by the history system.
+History.State = class {
+    constructor(selection, focus_position) {
+        // We keep track of cell selection between events to conserve it as expected.
+        this.selection = selection;
+
+        // We also keep track of the position of the focus point for keyboard use.
+        this.focus_position = focus_position;
+    }
+};
 
 /// A panel for editing cell data.
 class Panel {
@@ -2473,6 +2858,12 @@ class Panel {
                             ui.state.switch_mode(ui, "Select");
                             break;
                     }
+                }
+                if (event.key === "," && ui.state.mode === "Target") {
+                    ui.state.switch_mode(ui, "Source");
+                }
+                if (event.key === "." && ui.state.mode === "Source") {
+                    ui.state.switch_mode(ui, "Target");
                 }
             }
         });
@@ -2734,7 +3125,7 @@ class Panel {
             const label = new DOM.Element("label").add(`${name}: `).add(slider);
 
             UI.delay(() => {
-                wrapper.add(new DOM.Element("kbd", { class: "slider" }, {
+                wrapper.add(new DOM.Element("kbd", { class: "hint slider" }, {
                     top: `${slider.element.offsetTop}px`,
                 }).add(key.toUpperCase()));
             });
@@ -3013,17 +3404,23 @@ class Panel {
         };
 
         // Handle the keyboard shortcuts for changing the arrow style.
-        ui.shortcuts.add([{ key: "s" }], () => {
-            // We can only select an arrow style if that's the edge style that's actually selected.
-            if (edge_styles.query_selector(":checked").element.value !== "arrow") {
-                return;
+        // "D" for "Design".
+        ui.shortcuts.add([{ key: "D" }], () => {
+            if (ui.selection_contains_edge()) {
+                // We can only select an arrow style if that's the edge style that's actually
+                // selected.
+                if (edge_styles.query_selector(":checked").element.value !== "arrow") {
+                    return;
+                }
+                progress_style_selection();
             }
-            progress_style_selection();
         });
 
         UI.delay(() => {
             for (const styles of [head_styles, body_styles, tail_styles]) {
-                new DOM.Element("kbd", { class: "button triggers-focus" }).add("S").add_to(styles);
+                new DOM.Element("kbd", { class: "hint button triggers-focus" })
+                    .add("D")
+                    .add_to(styles);
             }
             tail_styles.class_list.add("next-to-focus");
         });
@@ -3117,7 +3514,7 @@ class Panel {
             ui,
             "Export to LaTeX",
             "Export to LaTeX",
-            { key: "e", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always },
+            { key: "E", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always },
             () => display_export_pane("tikz-cd"),
         );
 
@@ -3177,7 +3574,9 @@ class Panel {
             }
         });
         UI.delay(() => {
-            button.add(new DOM.Element("kbd", { class: "button" }).add(Shortcuts.name([shortcut])));
+            button.add(
+                new DOM.Element("kbd", { class: "hint button" }).add(Shortcuts.name([shortcut]))
+            );
         });
         return button;
     }
@@ -3317,7 +3716,7 @@ class Panel {
                         ? ((i % 2 === 0 && classes.includes("short"))
                             ? option.element.offsetWidth : 0)
                         : option.element.offsetLeft;
-                    options_list.add(new DOM.Element("kbd", { class: "button" }, {
+                    options_list.add(new DOM.Element("kbd", { class: "hint button" }, {
                         left: `${left}px`,
                         top: `${option.element.offsetTop}px`,
                     }).add(Shortcuts.name([{ key }])));
@@ -3391,11 +3790,11 @@ class Panel {
 
             // Multiple selection is always permitted, so the following code must provide sensible
             // behaviour for both single and multiple selections (including empty selections).
-            const selection_includes_edge = Array.from(ui.selection).some((cell) => cell.is_edge());
+            const selection_contains_edge = ui.selection_contains_edge();
 
             // Enable all the inputs iff we've selected at least one edge.
             this.element.query_selector_all('input:not([type="text"]), button')
-                .forEach((input) => input.element.disabled = !selection_includes_edge);
+                .forEach((input) => input.element.disabled = !selection_contains_edge);
 
             // Enable the label input if at least one cell has been selected.
             this.label_input.element.disabled = ui.selection.size === 0;
@@ -3412,7 +3811,7 @@ class Panel {
             // uncheck all such inputs or set them to an empty string (in the case of text
             // inputs).
             const values = new Map();
-            let all_edges_are_arrows = selection_includes_edge;
+            let all_edges_are_arrows = selection_contains_edge;
 
             const consider = (name, value) => {
                 if (values.has(name) && values.get(name) !== value) {
@@ -3546,7 +3945,7 @@ class Panel {
 
     /// Hide the panel and label input if no relevant cells are selected.
     hide_if_unselected(ui) {
-        if (!Array.from(ui.selection).find((cell) => cell.is_edge())) {
+        if (!ui.selection_contains_edge()) {
             this.hide();
         }
         if (ui.selection.size === 0) {
@@ -3616,13 +4015,10 @@ class Shortcuts {
             // through typing in an input, which should capture key presses.
             const editing_input = ui.input_is_active();
 
-            let key = event.key;
             // On Mac OS X, holding the Command key seems to override the usual capitalisation
             // modifier that holding Shift does. This is inconsistent with other operating systems,
             // so we override it manually here.
-            if (event.shiftKey) {
-                key = key.toUpperCase();
-            }
+            const key = event.key.toLowerCase();
 
             if (this.shortcuts.has(key)) {
                 for (const shortcut of this.shortcuts.get(key)) {
@@ -3707,10 +4103,13 @@ class Shortcuts {
     // action, making it easier to facilitate different keyboard layouts.
     add(combinations, action, button = null, unaction = null) {
         for (const shortcut of combinations) {
-            if (!this.shortcuts.has(shortcut.key)) {
-                this.shortcuts.set(shortcut.key, []);
+            // We prefer to be case-insensitive due to differences in OS behaviour (see comment
+            // above).
+            const key = shortcut.key.toLowerCase();
+            if (!this.shortcuts.has(key)) {
+                this.shortcuts.set(key, []);
             }
-            this.shortcuts.get(shortcut.key).push({
+            this.shortcuts.get(key).push({
                 // `null` means we don't care about whether the modifier key
                 // is pressed or not, so we need to special case it.
                 modifier: shortcut.modifier !== null ? (shortcut.modifier || false) : null,
@@ -3822,7 +4221,7 @@ class Toolbar {
         add_action(
             "▴",
             "Save",
-            [{ key: "s", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always }],
+            [{ key: "S", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always }],
             () => {
                 // For now, we do not include macro information in the URL.
                 const { data } = ui.quiver.export("base64");
@@ -3835,7 +4234,7 @@ class Toolbar {
         add_action(
             "⎌",
             "Undo",
-            [{ key: "z", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Defer }],
+            [{ key: "Z", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Defer }],
             () => {
                 ui.history.undo(ui);
             },
@@ -3858,7 +4257,7 @@ class Toolbar {
         add_action(
             "■",
             "Select all",
-            [{ key: "a", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Defer }],
+            [{ key: "A", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Defer }],
             () => {
                 ui.select(...ui.quiver.all_cells());
             },
@@ -3897,11 +4296,17 @@ class Toolbar {
         add_action(
             "⌖",
             "Centre view",
-            [],
+            [{ key: "G" }],
             () => {
-                ui.centre_view();
+                // If the focus point is focused, we centre on it; otherwise we centre on the
+                // selection, or the entire quiver if no cells are selected.
+                if (ui.element.query_selector(".focus-point.focused")) {
+                    ui.pan_to(ui.centre_offset_from_position(ui.focus_position));
+                } else {
+                    ui.centre_view();
+                }
             },
-            true,
+            false,
         );
 
         add_action(
@@ -3942,7 +4347,7 @@ class Toolbar {
         add_action(
             "⌗",
             "Toggle grid",
-            [{ key: "h", modifier: false, context: Shortcuts.SHORTCUT_PRIORITY.Defer }],
+            [{ key: "H", modifier: false, context: Shortcuts.SHORTCUT_PRIORITY.Defer }],
             () => {
                 ui.grid.class_list.toggle("hidden");
             },
@@ -3962,6 +4367,12 @@ class Toolbar {
 
     /// Update the toolbar (e.g. enabling or disabling buttons based on UI state).
     update(ui) {
+        if (this.element === null) {
+            // During initialisation, the `UI` may call `toolbar.update` when switching modes.
+            // We may simply ignore this.
+            return;
+        }
+
         const enable_if = (name, condition) => {
             const element = this.element.query_selector(`.action[data-name="${name}"]`).element;
             element.disabled = !condition;
@@ -3969,10 +4380,16 @@ class Toolbar {
 
         enable_if("Undo", ui.history.present !== 0);
         enable_if("Redo", ui.history.present < ui.history.actions.length);
-        enable_if("Select all", ui.selection.size < ui.quiver.all_cells().length);
-        enable_if("Deselect all", ui.selection.size > 0);
-        enable_if("Delete", ui.selection.size > 0);
-        enable_if("Centre view", ui.quiver.cells.length > 0 && ui.quiver.cells[0].size > 0);
+        enable_if("Select all",
+            ui.in_mode(UIState.Default) && ui.selection.size < ui.quiver.all_cells().length);
+        enable_if("Deselect all", ui.in_mode(UIState.Default) && ui.selection.size > 0);
+        enable_if("Delete", ui.in_mode(UIState.Default) && ui.selection.size > 0);
+        enable_if("Centre view",
+            ui.element.query_selector(".focus-point.focused")
+            // Technically the first condition below is subsumed by the latter, but we keep it to
+            // mirror the conditions in `centre_view`.
+            || ui.selection.size > 0 || (ui.quiver.cells.length > 0 && ui.quiver.cells[0].size > 0)
+        );
         enable_if("Zoom in", ui.scale < 1);
         enable_if("Zoom out", ui.scale > -2.5);
         enable_if("Reset zoom", ui.scale !== 0);
@@ -4023,13 +4440,14 @@ class Cell {
                 if (event.button === 0) {
                     if (ui.in_mode(UIState.Default)) {
                         event.stopPropagation();
+                        ui.focus_point.class_list.remove("focused", "smooth");
                         // If the cell we're dragging is part of the existing selection,
                         // then we'll move every cell that is selected. However, if it's
                         // not already part of the selection, we'll just drag this cell
                         // and ignore the selection.
                         const move = new Set(ui.selection.has(this) ? [...ui.selection] : [this]);
                         ui.switch_mode(
-                            new UIState.Move(
+                            new UIState.MouseMove(
                                 ui,
                                 ui.position_from_event(event),
                                 move,
@@ -4045,7 +4463,7 @@ class Cell {
             ui.codes.set(this.code, this);
             this.element.add(new DOM.Element("kbd", {
                 "data-code": this.code,
-                class: "queue",
+                class: "hint queue",
             }).add(`${this.code}`));
         }
 
@@ -4093,6 +4511,9 @@ class Cell {
                     // will then convert to a connection if the mouse leaves the element
                     // while remaining held.
                     this.element.class_list.add("pending");
+                    ui.focus_point.class_list.remove("focused", "smooth");
+                } else if (ui.in_mode(UIState.KeyMove)) {
+                    was_previously_selected = false;
                 }
             }
         });
@@ -4110,9 +4531,8 @@ class Cell {
                     ) {
                         ui.state.target = this;
                         this.element.class_list.add("target");
-                        // Hide the insertion point (e.g. if we're connecting a vertex to an edge).
-                        const insertion_point = ui.canvas.query_selector(".insertion-point");
-                        insertion_point.class_list.remove("revealed", "pending", "active");
+                        // Hide the focus point (e.g. if we're connecting a vertex to an edge).
+                        ui.focus_point.class_list.remove("revealed", "pending", "active");
                     }
                 }
             }
@@ -4325,7 +4745,7 @@ class Vertex extends Cell {
                 // The identifier that notifies the user how to jump to this cell.
                 .add(new DOM.Element("kbd", {
                     "data-code": this.code,
-                    class: "queue",
+                    class: "hint queue",
                 }).add(`${this.code}`))
                 .add_to(this.element);
         }
