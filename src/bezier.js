@@ -376,3 +376,23 @@ class RoundedRectangle {
         return points;
     }
 }
+
+/// A very simple class for computing the value of a cubic Bézier at a point, using for replicating
+/// CSS transition timing functions in JavaScript.
+class CubicBezier {
+    constructor(p0, p1, p2, p3) {
+        this.p0 = p0;
+        this.p1 = p1;
+        this.p2 = p2;
+        this.p3 = p3;
+    }
+
+    point(t) {
+        const p = this.p0.mul((1 - t) ** 3)
+            .add(this.p1.mul(3 * (1 - t) ** 2 * t))
+            .add(this.p2.mul(3 * (1 - t) * t ** 2))
+            .add(this.p3.mul(t ** 3));
+        // The caller of this method never needs an angle.
+        return new BezierPoint(p, t, null);
+    }
+}

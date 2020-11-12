@@ -135,6 +135,36 @@ noscript {
     pointer-events: none;
 }
 
+.tooltip {
+    display: block;
+    position: absolute;
+    left: 50%;
+    padding: 8px 12px;
+    line-height: 18pt;
+    transform: translateX(-50%);
+    z-index: 90;
+
+    background: var(--ui-blue);
+    border-radius: 4px;
+
+    text-align: center;
+    color: var(--ui-black);
+}
+
+.ui > .tooltip {
+    /* Display just below the toolbar. */
+    top: calc(16px + 48px + 8px);
+}
+
+.tooltip kbd {
+    padding: 1px 6px;
+
+    background: var(--ui-white);
+    border: hsla(0, 0%, 0%, 0.4) 1px solid;
+    border-radius: 4px;
+    box-shadow: hsla(0, 0%, 0%, 0.1) 0 2px 0px;
+}
+
 /* The canvas of cells */
 
 .container {
@@ -170,10 +200,11 @@ noscript {
     display: none;
 }
 
-.insertion-point {
+.focus-point {
     display: block;
     position: absolute;
     margin-left: 1px; margin-top: 1px;
+    width: 126px; height: 126px;
 
     background: hsla(0, 0%, 0%, 0);
 
@@ -182,21 +213,54 @@ noscript {
     color: hsla(0, 0%, 0%, 0.4);
 }
 
-.insertion-point.revealed {
+.focus-point.revealed {
     background: hsla(0, 0%, 0%, 0.1);
 }
 
-.insertion-point::before {
-    content: "Add vertex";
-    visibility: hidden;
+.focus-point.focused {
+    border: var(--ui-focus) 4px solid;
+    border-radius: 8px;
 }
 
-.insertion-point.active::before {
+.focus-point.smooth {
+    transition: left 0.1s, top 0.1s, width 0.1s, height 0.1s, padding-top 0.1s;
+}
+
+.focus-point::before {
+    content: "Add vertex";
+    visibility: hidden;
+    position: relative;
+    top: -8px;
+}
+
+.focus-point.active::before {
     content: "Add edge";
 }
 
-.insertion-point.revealed::before {
+.focus-point.revealed::before {
     visibility: visible;
+}
+
+.ui:not(.help) .focus-point .tooltip, .focus-point:not(.focused) .tooltip, .tooltip:empty {
+    display: none;
+}
+
+.focus-point .tooltip {
+    bottom: 100%;
+    margin-bottom: 24px;
+
+    white-space: nowrap;
+}
+
+.focus-point .tooltip::before {
+    content: "";
+    position: absolute;
+    top: 100%; left: calc(50% - 14px);
+    width: 0; height: 0;
+
+    border: 14px solid transparent;
+    border-top-color: var(--ui-blue);
+    border-bottom: none;
 }
 
 /* Vertices */
@@ -218,6 +282,14 @@ noscript {
 
     text-align: center;
 }
+
+/* We would like to animate the movement of vertices when moving them via the keyboard, but the
+transitions are quite subtle, especially when interacting with the origin of the resizable grid, so
+in the interest of time, I have decided to be satisfied with instantaneous movement for the timing
+being. */
+/* .ui.key-move .vertex, .ui.key-move .vertex .content {
+    transition: left 0.1s, top 0.1s, width 0.1s, height 0.1s;
+} */
 
 .ui.default .vertex .content {
     cursor: default;
@@ -695,7 +767,7 @@ input[type="text"].flash {
     background: var(--ui-active);
 }
 
-kbd {
+kbd.hint {
     position: absolute;
     min-width: 20px;
     padding: 2px 4px;
@@ -709,42 +781,42 @@ kbd {
     pointer-events: none;
 }
 
-kbd.focused, kbd .focused {
+kbd.hint.focused, kbd.hint .focused {
     color: var(--ui-white);
 }
 
-kbd.queue {
+kbd.hint.queue {
     background: var(--ui-white);
     border: var(--ui-blue) 1px solid;
 
     color: var(--ui-blue);
 }
 
-.cell.selected kbd.queue {
+.cell.selected kbd.hint.queue {
     background: var(--ui-blue);
 
     color: var(--ui-white);
 }
 
-.ui:not(.help) kbd:not(.queue) {
+.ui:not(.help) kbd.hint:not(.queue) {
     display: none;
 }
 
-kbd.button, kbd.input {
+kbd.hint.button, kbd.hint.input {
     left: 0; top: 0;
     transform: translate(-25%, -25%);
 }
 
-kbd.slider {
+kbd.hint.slider {
     right: 0;
     transform: translateX(-25%);
 }
 
-.ui.jump .cell kbd {
+.ui.jump .cell kbd.hint {
     display: block;
 }
 
-.vertex kbd {
+.vertex kbd.hint {
     left: 50%; top: 0;
     transform: translateX(-50%);
 }
@@ -756,22 +828,22 @@ kbd.slider {
 
 /* `.kbd-requires-focus` and `.triggers-focus` are mutually exclusive classes. The first is
 intended to trigger the latter. */
-.kbd-requires-focus:not(.focused) kbd:not(.triggers-focus) {
+.kbd-requires-focus:not(.focused) kbd.hint:not(.triggers-focus) {
     display: none;
 }
 
-.kbd-requires-focus:not(.next-to-focus) kbd.triggers-focus {
+.kbd-requires-focus:not(.next-to-focus) kbd.hint.triggers-focus {
     display: none;
 }
 
 /* We always display shortcuts for lists when they're focused. */
-.kbd-requires-focus.focused kbd {
+.kbd-requires-focus.focused kbd.hint {
     display: block;
 }
 
 /* Display a tab symbol for the usual keyboard shortcut symbol. This is not necessary when the user
 has already pressed tab, placing us in jump mode. */
-.ui:not(.jump) .cell kbd::before {
+.ui:not(.jump) .cell kbd.hint::before {
     content: "⇥";
 }
 
@@ -993,7 +1065,7 @@ button.flash {
 
 .arrow:not(.selected) > svg:first-child:not(:hover) > .arrow-background,
 .ui.connect .cell:not(.target):not(.selected) > svg:first-child:hover > .arrow-background,
-.ui.move .cell:not(.selected) > svg:first-child:hover > .arrow-background {
+.ui.mouse-move .cell:not(.selected) > svg:first-child:hover > .arrow-background {
     opacity: 0;
 }
 
