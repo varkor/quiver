@@ -639,6 +639,110 @@ class UI {
         this.toolbar.initialise(this);
         this.element.add(this.toolbar.element);
 
+        // Set up the keyboard shortcuts pane.
+        // For now, we simply keep this in sync with the various keyboard shortcuts manually.
+        const pane = new DOM.Element("div", { class: "pane hidden" })
+            .add(
+                new DOM.Element("h1")
+                    .add("Keyboard shortcuts")
+                    .add(Shortcuts.element(
+                        new DOM.Element("span", { class: "right" }),
+                        [{ key: "/", modifier: true }],
+                    ))
+            )
+            .add(new DOM.Element("h2").add("General"))
+            .add(new DOM.Table([
+                ["Dismiss errors, and panels;\nCancel modification or movement;\n"
+                    + "Hide focus point;\nDeselect, and dequeue cells", (td) =>
+                        Shortcuts.element(td, [{ key: "Escape" }])],
+                ["Export to LaTeX", (td) => Shortcuts.element(td, [{ key: "E", modifier: true }])]
+            ]))
+            .add(new DOM.Element("h2").add("Navigation"))
+            .add(new DOM.Table([
+                ["Enable mouse panning", (td) => Shortcuts.element(td, [
+                    { key: "Control" }, { key: "Alt" }
+                ])],
+                ["Move focus point", (td) => Shortcuts.element(td, [
+                    { key: "ArrowLeft" },
+                    { key: "ArrowUp" },
+                    { key: "ArrowDown" },
+                    { key: "ArrowRight" },
+                ])],
+                ["Select next queued cell", (td) => Shortcuts.element(td, [{ key: "Tab" }])],
+                ["Select previous queued cell", (td) => Shortcuts.element(td, [
+                    { key: "Tab", shift: true }
+                ])],
+                ["Select / deselect object", (td) => Shortcuts.element(td, [{ key: "S" }])],
+                ["Select cells", (td) => Shortcuts.element(td, [{ key: ";" }])],
+                ["Toggle cell selection", (td) => Shortcuts.element(td, [
+                    { key: "'" }
+                ])],
+            ]))
+            .add(new DOM.Element("h2").add("Modification"))
+            .add(new DOM.Table([
+                ["Focus / defocus label input", (td) => Shortcuts.element(td, [{ key: "Enter" }])],
+                ["Create object, and connect to selection", (td) => Shortcuts.element(td, [
+                    { key: " " }
+                ])],
+                ["Move selected objects", (td) => Shortcuts.element(td, [{ key: "B" }])],
+                ["Change source", (td) => Shortcuts.element(td, [{ key: "," }])],
+                ["Change target", (td) => Shortcuts.element(td, [{ key: "." }])],
+                ["Create edges from selection", (td) => Shortcuts.element(td, [{ key: "/" }])],
+            ]))
+            .add(new DOM.Element("h2").add("Arrow styling"))
+            .add(new DOM.Table([
+                ["Reverse arrows", (td) => Shortcuts.element(td, [{ key: "R" }])],
+                ["Flip arrows", (td) => Shortcuts.element(td, [{ key: "F" }])],
+                ["Flip labels", (td) => Shortcuts.element(td, [{ key: "E" }])],
+                ["Left-align labels", (td) => Shortcuts.element(td, [{ key: "V" }])],
+                ["Centre-align labels", (td) => Shortcuts.element(td, [{ key: "C" }])],
+                ["Over-align labels", (td) => Shortcuts.element(td, [{ key: "X" }])],
+                ["Modify offset", (td) => Shortcuts.element(td, [{ key: "O" }])],
+                ["Modify curve", (td) => Shortcuts.element(td, [{ key: "K" }])],
+                ["Modify length", (td) => Shortcuts.element(td, [{ key: "L" }])],
+                ["Modify level", (td) => Shortcuts.element(td, [{ key: "M" }])],
+                ["Modify style", (td) => Shortcuts.element(td, [{ key: "D" }])],
+                ["Display as arrow", (td) => Shortcuts.element(td, [{ key: "A" }])],
+                ["Display as adjunction", (td) => Shortcuts.element(td, [{ key: "J" }])],
+                ["Display as pullback/pushout", (td) => Shortcuts.element(td, [{ key: "P" }])]
+            ]))
+            .add(new DOM.Element("h2").add("Toolbar"))
+            .add(new DOM.Table([
+                ["Save diagram in URL", (td) => Shortcuts.element(td, [
+                    { key: "S", modifier: true }
+                ])],
+                ["Undo", (td) => Shortcuts.element(td, [{ key: "Z", modifier: true }])],
+                ["Redo", (td) => Shortcuts.element(td, [
+                    { key: "Z", modifier: true, shift: true }
+                ])],
+                ["Select all", (td) => Shortcuts.element(td, [{ key: "A", modifier: true }])],
+                ["Deselect all", (td) => Shortcuts.element(td, [
+                    { key: "A", modifier: true, shift: true }
+                ])],
+                ["Delete", (td) => Shortcuts.element(td, [
+                    { key: "Backspace" }, { key: "Delete" }
+                ])],
+                ["Centre view", (td) => Shortcuts.element(td, [{ key: "G" }])],
+                ["Zoom out", (td) => Shortcuts.element(td, [{ key: "-", modifier: true }])],
+                ["Zoom in", (td) => Shortcuts.element(td, [{ key: "=", modifier: true }])],
+                ["Toggle grid", (td) => Shortcuts.element(td, [{ key: "H" }])],
+                ["Toggle help", (td) => Shortcuts.element(td, [{
+                    key: "H", modifier: true, shift: true
+                }])]
+            ]))
+            .add_to(this.element);
+
+        // Prevent propagation of mouse events when interacting with the pane.
+        pane.listen("mousedown", (event) => {
+            event.stopImmediatePropagation();
+        });
+
+        // Prevent propagation of scrolling when the cursor is over the pane.
+        // This allows the user to scroll the pane when not all the content fits.
+        pane.listen("wheel", (event) => {
+            event.stopImmediatePropagation();
+        }, { passive: true });
+
         // Add the version information underneath the logo.
         this.element.add(new DOM.Element(
             "span",
@@ -2877,7 +2981,7 @@ class Panel {
         });
 
         // Prevent propagation of scrolling when the cursor is over the panel.
-        // This allows the user to scroll the panel when all the elements don't fit on it.
+        // This allows the user to scroll the panel when not all the elements fit on it.
         this.element.listen("wheel", (event) => {
             event.stopImmediatePropagation();
         }, { passive: true });
@@ -4154,35 +4258,78 @@ class Shortcuts {
         }
     }
 
-    /// Return the name of a keyboard shortcut, to display to the user.
-    static name(combinations) {
+    /// Returns whether this is likely to be an Apple platform or not, which determines what style
+    /// of keyboard shortcut we will display.
+    static is_Apple_platform() {
+        return /^(Mac|iPhone|iPod|iPad)/.test(navigator.platform);
+    }
+
+    /// Returns the names of each of the keys involved in the key combinations. This is not intended
+    /// to be called directly, but instead by `name` and `element`.
+    static components(combinations) {
         // By default, we display "Ctrl" and "Shift" as modifier keys, as most
         // operating systems use this to initiate keyboard shortcuts. For Mac
         // and iOS, we switch to displaying "⌘" and "⇧". However, both keys
         // (on any operating system) work with the shortcuts: this is simply
         // used to work out what to display.
-        const apple_platform = /^(Mac|iPhone|iPod|iPad)/.test(navigator.platform);
+        const is_Apple_platform = Shortcuts.is_Apple_platform();
 
         const shortcuts_keys = [];
         for (const shortcut of combinations) {
             // Format the keyboard shortcut to make it discoverable in the toolbar.
             let key = shortcut.key;
-            if (key.length === 1) {
+            if (/^[a-z]$/.test(key)) {
                 // Upper case any letter key.
                 key = key.toUpperCase();
             }
+            const symbols = {
+                Backspace: "⌫",
+                Tab: "⇥",
+                Enter: "↵",
+                Escape: "esc",
+                " ": "        ",
+                ArrowLeft: "←",
+                ArrowDown: "↓",
+                ArrowRight: "→",
+                ArrowUp: "↑",
+                Delete: "del",
+                Control: "ctrl",
+                Alt: "alt",
+            };
+            key = symbols[key] || key;
             const shortcut_keys = [key];
             if (shortcut.modifier) {
-                shortcut_keys.unshift(apple_platform ? "⌘" : "Ctrl");
+                shortcut_keys.unshift(is_Apple_platform ? "⌘" : "ctrl");
             }
             if (shortcut.shift) {
-                shortcut_keys.unshift(apple_platform ? "⇧" : "Shift");
+                shortcut_keys.unshift(is_Apple_platform ? "⇧" : "shift");
             }
-            shortcuts_keys.push(shortcut_keys.join(apple_platform ? "" : "+"));
+            shortcuts_keys.push(shortcut_keys);
         }
-        // For now, we simply display the first shortcut (there's rarely enough room
-        // to display more than one shortcut name).
-        return shortcuts_keys.slice(0, 1).join("/");
+
+        return shortcuts_keys;
+    }
+
+    /// Fills `element` with a series of `kbd` elements, representing the key combinations.
+    static element(element, combinations) {
+        const components = Shortcuts.components(combinations);
+        for (let i = 0; i < components.length; ++i) {
+            for (const key of components[i]) {
+                element.add(new DOM.Element("kbd").add(key));
+            }
+            if (i + 1 < components.length) {
+                element.add(",");
+            }
+        }
+        return element;
+    }
+
+    /// Return the name of a keyboard shortcut, to display to the user.
+    static name(combinations) {
+        const components = Shortcuts.components(combinations);
+        return components.map((shortcut_keys) => {
+            return shortcut_keys.join(Shortcuts.is_Apple_platform() ? "" : "+");
+        }).slice(0, 1).join("/");
     }
 
     /// Trigger a "flash" animation on an element, typically in response to its corresponding
@@ -4387,9 +4534,23 @@ class Toolbar {
         add_action(
             "?",
             "Toggle help",
-            [{ key: "/", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always }],
+            [{
+                key: "H", modifier: true, shift: true, context: Shortcuts.SHORTCUT_PRIORITY.Always
+            }],
             () => {
                 ui.element.class_list.toggle("help");
+            },
+            false,
+        );
+
+        add_action(
+            "/",
+            "Shortcuts",
+            [{
+                key: "/", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always
+            }],
+            () => {
+                ui.element.query_selector(".pane").class_list.toggle("hidden");
             },
             false,
         );

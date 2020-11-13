@@ -158,3 +158,22 @@ DOM.Canvas = class extends DOM.Element {
         }
     }
 }
+
+/// A class for conveniently dealing with tables.
+DOM.Table = class extends DOM.Element {
+    constructor(rows, attributes = {}, style = {}) {
+        super("table", attributes, style);
+
+        for (const row of rows) {
+            const tr = new DOM.Element("tr").add_to(this);
+            for (const value of row) {
+                const td = new DOM.Element("td").add_to(tr);
+                if (typeof value === "function") {
+                    value(td);
+                } else {
+                    td.add(value);
+                }
+            }
+        }
+    }
+}
