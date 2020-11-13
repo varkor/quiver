@@ -156,13 +156,24 @@ noscript {
     top: calc(16px + 48px + 8px);
 }
 
-.tooltip kbd {
+kbd {
+    white-space: pre;
+}
+
+.tooltip kbd, .pane kbd {
     padding: 1px 6px;
 
-    background: var(--ui-white);
-    border: hsla(0, 0%, 0%, 0.4) 1px solid;
     border-radius: 4px;
     box-shadow: hsla(0, 0%, 0%, 0.1) 0 2px 0px;
+}
+
+.tooltip kbd {
+    background: var(--ui-white);
+    border: hsla(0, 0%, 0%, 0.4) 1px solid;
+}
+
+.tooltip kbd + kbd, .pane kbd + kbd {
+    margin-left: 4px;
 }
 
 /* The canvas of cells */
@@ -326,8 +337,6 @@ being. */
 
     pointer-events: none;
     user-select: none;
-
-    transition: opacity 0.2s;
 }
 
 /* The overlay edge drawn while connecting cells. */
@@ -841,9 +850,14 @@ intended to trigger the latter. */
     display: block;
 }
 
-/* Display a tab symbol for the usual keyboard shortcut symbol. This is not necessary when the user
-has already pressed tab, placing us in command mode. */
+/* Display a semicolon symbol for the usual keyboard shortcut symbol. This is not necessary when the
+user has already pressed semicolon, placing us in command mode. */
 .ui:not(.command) .cell kbd.hint::before {
+    content: ";";
+}
+
+/* When cells are queued, we can press Tab to select them. */
+.ui:not(.command) .cell kbd.queue.hint::before {
     content: "⇥";
 }
 
@@ -951,7 +965,7 @@ has already pressed tab, placing us in command mode. */
 }
 
 button.flash {
-    animation: background-flash 0.6s ease-in;
+    animation: background-flash 0.4s ease-in;
 }
 
 @keyframes background-flash {
@@ -976,6 +990,100 @@ button.flash {
 
 .toolbar .action .shortcut {
     bottom: 4px;
+}
+
+/* The keyboard shortcuts pane */
+
+.pane {
+    position: fixed;
+    /* Display just below the toolbar. */
+    left: 50%;
+    top: calc(16px + 48px + 8px);
+    transform: translateX(-50%);
+    width: 50%;
+    /* Display at most to just above the global panel. */
+    max-height: calc(100% - (16px + 48px + 8px + 16pt + 4px * 2 + 16px + 8px));
+    padding: 8pt 20pt;
+    overflow-y: auto;
+    z-index: 100;
+
+    opacity: 1;
+    background: var(--ui-black);
+    border-radius: 16px;
+
+    color: var(--ui-white);
+
+    transition: opacity 0.2s, transform 0.2s;
+}
+
+.pane.hidden {
+    pointer-events: none;
+
+    transform: scale(0.75, 0.75) translateX(calc(-1 / 0.75 * 50%));
+
+    opacity: 0;
+
+    transition: opacity 0.1s, transform 0.1s;
+}
+
+.pane h1 {
+    margin: 0;
+
+    border-bottom: hsla(0, 0%, 100%, 0.1) 1px solid;
+    padding-bottom: 6px;
+
+    font-size: 18pt;
+    font-weight: normal;
+    text-align: center;
+}
+
+.pane h1 .right {
+    margin-left: 16pt;
+}
+
+.pane h1 kbd {
+    font-size: 12pt;
+}
+
+.pane kbd {
+    display: inline-block;
+    height: 16.5pt;
+    vertical-align: middle;
+
+    background: hsl(0, 0%, 0%, 0.9);
+    border: hsla(0, 0%, 100%, 0.4) 1px solid;
+}
+
+.pane h2 {
+    margin-bottom: 6pt;
+
+    font-size: 14pt;
+    font-weight: normal;
+}
+
+.pane table {
+    width: 100%;
+
+    border-spacing: 0;
+
+    color: hsl(0, 0%, 76%);
+    white-space: pre-line;
+}
+
+.pane table td {
+    width: 50%;
+    padding: 4pt 0;
+}
+
+.pane table tr:first-child td {
+    padding-top: 0;
+}
+
+.pane table kbd {
+    height: 14.5pt;
+
+    font-size: 10pt;
+    color: var(--ui-white);
 }
 
 /* Modal elements */
