@@ -1076,9 +1076,12 @@ class UI {
             // Compute how much each column or row size has changed and update the size in
             // `cell_width_constraints` or `cell_height_constraints`.
             const delta = (constraints, sizes, offset, margin) => {
+                // If we have just deleted a cell, there may be no constraint data for that offset,
+                // in which case the maximum size is simply zero.
+                const constraint_sizes = constraints.has(offset) ?
+                    Array.from(constraints.get(offset)).map(([_, size]) => size) : [];
                 // The size of a column or row is determined by the largest cell.
-                const max_size
-                    = Math.max(0, ...Array.from(constraints.get(offset)).map(([_, size]) => size));
+                const max_size = Math.max(0, ...constraint_sizes);
                 const new_size = Math.max(this.default_cell_size, max_size + margin);
                 const delta = new_size - this.cell_size(sizes, offset);
 
@@ -1206,22 +1209,28 @@ class UI {
 
     /// Adds a cell to the canvas.
     add_cell(cell) {
+        this.canvas.add(cell.element);
         if (cell.is_vertex()) {
             this.positions.set(`${cell.position}`, cell);
+            cell.recalculate_size(this);
         }
-        this.canvas.add(cell.element);
     }
 
     /// Removes a cell.
     remove_cell(cell, when) {
         // Remove this cell and its dependents from the quiver and then from the HTML.
+        const update_positions = new Set();
         for (const removed of this.quiver.remove(cell, when)) {
             if (removed.is_vertex()) {
                 this.positions.delete(`${removed.position}`);
+                this.cell_width_constraints.delete(cell.position.x);
+                this.cell_height_constraints.delete(cell.position.y);
+                update_positions.add(removed.position);
             }
             this.deselect(removed);
             removed.element.remove();
         }
+        this.update_col_row_size(...update_positions);
     }
 
     /// Repositions the view by a relative offset.
@@ -3531,11 +3540,17 @@ class Vertex extends Cell {
         } else {
             // The vertex may have moved, in which case we need to update the size of the grid cell
             // in which the vertex now lives, as the grid cell may now need to be resized.
-            const label = this.element.query_selector(".label");
-            const { offsetWidth, offsetHeight } = label.element;
-            ui.update_cell_size(this, offsetWidth, offsetHeight);
-            this.resize_content(ui, [offsetWidth, offsetHeight]);
+            this.recalculate_size(ui);
         }
+    }
+
+    /// Calculates the size of the vertex and updates the grid accordingly. This should be called
+    /// whenever the size or position may have changed.
+    recalculate_size(ui) {
+        const label = this.element.query_selector(".label");
+        const { offsetWidth, offsetHeight } = label.element;
+        ui.update_cell_size(this, offsetWidth, offsetHeight);
+        this.resize_content(ui, [offsetWidth, offsetHeight]);
     }
 
     /// Get the size of the cell content.
