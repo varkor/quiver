@@ -80,9 +80,11 @@ gh-pages:
 
 	# Push to the remote `gh-pages` branch.
 	git push --force
-	# GitHub Pages will not rebuild in response to a force push, so we have to add a dummy commit to
-	# force a rebuild.
-	git commit -m 'Rebuild GitHub Pages' --allow-empty
+	# Set the CNAME. It is convenient to do so here, because GitHub Pages will not rebuild in
+	# response to a force push, so we have to push a commit to force a rebuild.
+	printf "q.uiver.app" > CNAME
+	git add CNAME
+	git commit -m 'Create CNAME'
 	git push
 
 	# Navigate back to the main working tree.
