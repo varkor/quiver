@@ -2624,25 +2624,39 @@ class UI {
 
         if (url !== "") {
             success_indicator.class_list.add("unknown");
+            // CORS is terribly frustrating. We simply want to fetch some text, but are often
+            // unable to do so, because CORS is opt-in and most sites have not. To alleviate this
+            // problem, we try to prefix URLs that failed to load with the following service
+            // (which should surely not be necessary with `credentials: "omit"`). In doing so, we
+            // are hoping that the service never becomes malicious.
+            const CORS_ANYWHERE = "https://cors-anywhere.herokuapp.com/";
 
-            fetch(url)
-                .then((response) => response.text())
-                .then((text) => {
-                    this.load_macros(text);
-                    this.macro_url = url;
-                    success_indicator.class_list.remove("unknown");
-                    success_indicator.class_list.add("success");
-                    macro_input.element.blur();
-                })
-                .catch(() => {
-                    UI.display_error(
-                        "Macro definitions could not be loaded " +
-                        "from the given URL.",
-                        "macro-load",
-                    );
-                    success_indicator.class_list.remove("unknown");
-                    success_indicator.class_list.add("failure");
-                })
+            const attempt_to_fetch_macros = (url, prefix = "") => {
+                fetch(`${prefix}${url}`, { credentials: "omit" })
+                    .then((response) => response.text())
+                    .then((text) => {
+                        this.load_macros(text);
+                        this.macro_url = url;
+                        success_indicator.class_list.remove("unknown");
+                        success_indicator.class_list.add("success");
+                        macro_input.element.blur();
+                    })
+                    .catch(() => {
+                        if (!url.startsWith(CORS_ANYWHERE)) {
+                            // Attempt to fetch using cors-anywhere.
+                            attempt_to_fetch_macros(url, CORS_ANYWHERE);
+                            return;
+                        }
+                        UI.display_error(
+                            "Macro definitions could not be loaded " +
+                            "from the given URL.",
+                            "macro-load",
+                        );
+                        success_indicator.class_list.remove("unknown");
+                        success_indicator.class_list.add("failure");
+                    });
+            };
+            attempt_to_fetch_macros(url);
         } else {
             // If the URL is empty, we simply reset all macro definitions (as if the user had never
             // loaded any macros).
