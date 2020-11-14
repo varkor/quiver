@@ -916,6 +916,7 @@ user has already pressed semicolon, placing us in command mode. */
     overflow: hidden;
 
     color: var(--ui-white);
+    white-space: nowrap;
 
     transition: opacity 0.1s;
 }
@@ -1088,6 +1089,19 @@ button.flash {
 
     font-size: 10pt;
     color: var(--ui-white);
+}
+
+.pane a {
+    color: var(--ui-white);
+}
+
+.pane ul {
+    margin: 0;
+    padding: 0 20pt;
+}
+
+.pane li {
+    margin: 4pt 0;
 }
 
 /* Modal elements */

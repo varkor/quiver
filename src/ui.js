@@ -639,9 +639,12 @@ class UI {
         this.toolbar.initialise(this);
         this.element.add(this.toolbar.element);
 
+        // Set up the keyboard shortcuts, and about, panes.
+        const panes = [];
+
         // Set up the keyboard shortcuts pane.
         // For now, we simply keep this in sync with the various keyboard shortcuts manually.
-        const pane = new DOM.Element("div", { class: "pane hidden" })
+        panes.push(new DOM.Element("div", { id: "keyboard-shortcuts-pane", class: "pane hidden" })
             .add(
                 new DOM.Element("h1")
                     .add("Keyboard shortcuts")
@@ -729,19 +732,58 @@ class UI {
                 ["Toggle help", (td) => Shortcuts.element(td, [{
                     key: "H", modifier: true, shift: true
                 }])]
-            ]))
-            .add_to(this.element);
+            ])));
 
-        // Prevent propagation of mouse events when interacting with the pane.
-        pane.listen("mousedown", (event) => {
-            event.stopImmediatePropagation();
-        });
+        // Set up the "About" pane.
+        panes.push(new DOM.Element("div", { id: "about-pane", class: "pane hidden" })
+            .add(new DOM.Element("h1").add("About"))
+            .add(new DOM.Element("p").add(new DOM.Element("b").add("quiver")).add(
+                " is a modern, graphical editor for commutative and pasting " +
+                "diagrams, capable of rendering high-quality diagrams for screen viewing, and " +
+                "exporting to LaTeX via tikz-cd."
+            ))
+            .add(new DOM.Element("p").add(
+                "Creating and modifying diagrams with "
+            ).add(new DOM.Element("b").add("quiver")).add(
+                " is orders of magnitude faster than writing the equivalent LaTeX by hand and, " +
+                "with a little experience, competes with pen-and-paper."
+            ))
+            .add(new DOM.Element("p").add(
+                "The editor is open source and may be found on "
+            ).add(new DOM.Element("a", { href: "https://github.com/varkor/quiver" })
+                .add("GitHub")).add(
+                    ". If you would like to request a feature, or want to report an issue, you can "
+                ).add(new DOM.Element("a", { href: "https://github.com/varkor/quiver/issues" })
+                .add("do so here")).add(".")
+            )
+            .add(new DOM.Element("h2").add("Thanks to"))
+            .add(new DOM.List(false, [
+                new DOM.Element("li").add(
+                    new DOM.Element("a", {
+                        href: "https://www.cl.cam.ac.uk/~scs62/",
+                    }).add("S. C. Steenkamp")
+                ).add(", for helpful discussions regarding the aesthetic rendering of arrows."),
+                new DOM.Element("li").add(
+                    new DOM.Element("a", {
+                        href: "https://tex.stackexchange.com/users/138900/andr%c3%a9c"
+                    }).add("AndréC")
+                ).add(", for the custom TikZ style for curves of a fixed height.")
+            ])));
 
-        // Prevent propagation of scrolling when the cursor is over the pane.
-        // This allows the user to scroll the pane when not all the content fits.
-        pane.listen("wheel", (event) => {
-            event.stopImmediatePropagation();
-        }, { passive: true });
+        for (const pane of panes) {
+            this.element.add(pane);
+
+            // Prevent propagation of mouse events when interacting with the pane.
+            pane.listen("mousedown", (event) => {
+                event.stopImmediatePropagation();
+            });
+
+            // Prevent propagation of scrolling when the cursor is over the pane.
+            // This allows the user to scroll the pane when not all the content fits.
+            pane.listen("wheel", (event) => {
+                event.stopImmediatePropagation();
+            }, { passive: true });
+        }
 
         // Add the version information underneath the logo.
         this.element.add(new DOM.Element(
@@ -1421,9 +1463,9 @@ class UI {
                 return;
             }
 
-            const keyboard_shortcuts = this.element.query_selector(".pane");
-            if (!keyboard_shortcuts.class_list.contains("hidden")) {
-                keyboard_shortcuts.class_list.add("hidden");
+            const unhidden_pane = this.element.query_selector(".pane:not(.hidden)");
+            if (unhidden_pane !== null) {
+                unhidden_pane.class_list.add("hidden");
                 return;
             }
 
@@ -4568,6 +4610,18 @@ class Toolbar {
         );
 
         add_action(
+            "/",
+            "Shortcuts",
+            [{
+                key: "/", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always
+            }],
+            () => {
+                ui.element.query_selector("#keyboard-shortcuts-pane").class_list.toggle("hidden");
+            },
+            false,
+        );
+
+        add_action(
             "?",
             "Toggle help",
             [{
@@ -4580,13 +4634,11 @@ class Toolbar {
         );
 
         add_action(
-            "/",
-            "Shortcuts",
-            [{
-                key: "/", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always
-            }],
+            "ⓘ",
+            "About",
+            [],
             () => {
-                ui.element.query_selector(".pane").class_list.toggle("hidden");
+                ui.element.query_selector("#about-pane").class_list.toggle("hidden");
             },
             false,
         );
