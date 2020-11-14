@@ -601,13 +601,13 @@ input[type="text"].flash {
     border-radius: 0;
 }
 
-.panel .vertical input[type="radio"]:first-child {
+.panel .vertical input[type="radio"]:first-of-type {
     margin-top: 0;
 
     border-radius: 2px 2px 0 0;
 }
 
-.panel .vertical input[type="radio"]:last-child {
+.panel .vertical input[type="radio"]:last-of-type {
     border-radius: 0 0 2px 2px;
 }
 
