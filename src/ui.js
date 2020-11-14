@@ -3363,8 +3363,9 @@ class Panel {
         level_slider.class_list.add("arrow-style");
 
         // The list of tail styles.
-        // The length of the arrow to draw in the centre style buttons.
-        const ARROW_LENGTH = 72;
+        // The lengths of the arrows to draw in the centre style buttons.
+        const ARROW_LENGTH = 72; // The body styles.
+        const SHORTER_ARROW_LENGTH = 48; // The edge styles.
 
         // To make selecting the arrow style button work as expected, we automatically
         // trigger the `"change"` event for the arrow style buttons. This in turn will
@@ -3531,7 +3532,7 @@ class Panel {
                 ["corner", "Pullback / pushout", { name: "corner" }, "p"],
             ],
             "edge-type",
-            ["vertical", "centre"],
+            ["large"],
             true, // `disabled`
             (edges, _, data, user_triggered) => {
                 effect_edge_style_change(user_triggered, () => {
@@ -3582,7 +3583,7 @@ class Panel {
                 });
             },
             (data) => ({
-                length: ARROW_LENGTH,
+                length: SHORTER_ARROW_LENGTH,
                 options: Edge.default_options(null, data),
             }),
         );
@@ -3843,6 +3844,16 @@ class Panel {
 
             let { length, options, draw_label } = properties(data);
 
+            // We use a custom pre-drawn SVG for the pullback/pushout button.
+            if (options.style.name === "corner") {
+                button.set_style({
+                    "background-image": ["", "un"].map((prefix) => {
+                        return `url("icons/pullback-${prefix}checked.svg")`;
+                    }).join(", ")
+                });
+                return button;
+            }
+
             // Usually heads are drawn with zero length, but for epimorphisms, we need to have some
             // length so that the two arrowheads are spaced out appropriately. Thus, in this case,
             // we add an extra `head_width` to make sure they display properly.
@@ -3883,22 +3894,8 @@ class Panel {
                         background: colour,
                     });
                 }
-                if (options.style.name === "corner") {
-                    // Using the corner symbol has proven confusing for users, so we instead simply
-                    // replace it with text.
-                    svg.clear().add(new DOM.SVGElement("text", {
-                        x: parseFloat(svg.get_attribute("width")) / 2,
-                        y: parseFloat(svg.get_attribute("height")) / 2,
-                        "text-anchor": "middle",
-                        "dominant-baseline": "middle",
-                    }, {
-                        "font-family": "sans-serif",
-                        "font-size": "10pt",
-                        fill: colour,
-                    }).add("Pullback / pushout"));
-                }
-                backgrounds.push(`url('data:image/svg+xml;utf8,${
-                    encodeURIComponent(svg.element.outerHTML)}')`);
+                backgrounds.push(`url("data:image/svg+xml;utf8,${
+                    encodeURIComponent(svg.element.outerHTML)}")`);
             }
             button.set_style({ "background-image": backgrounds.join(", ") });
 

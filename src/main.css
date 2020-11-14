@@ -564,6 +564,11 @@ input[type="text"].flash {
     outline: none;
 }
 
+.panel .large input[type="radio"] {
+    width: 72px;
+    height: 64px;
+}
+
 .panel .options.focused input[type="radio"]:not(:checked) {
     background-size: auto, 0%;
     background-color: var(--ui-white);
