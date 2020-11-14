@@ -3883,6 +3883,20 @@ class Panel {
                         background: colour,
                     });
                 }
+                if (options.style.name === "corner") {
+                    // Using the corner symbol has proven confusing for users, so we instead simply
+                    // replace it with text.
+                    svg.clear().add(new DOM.SVGElement("text", {
+                        x: parseFloat(svg.get_attribute("width")) / 2,
+                        y: parseFloat(svg.get_attribute("height")) / 2,
+                        "text-anchor": "middle",
+                        "dominant-baseline": "middle",
+                    }, {
+                        "font-family": "sans-serif",
+                        "font-size": "10pt",
+                        fill: colour,
+                    }).add("Pullback / pushout"));
+                }
                 backgrounds.push(`url('data:image/svg+xml;utf8,${
                     encodeURIComponent(svg.element.outerHTML)}')`);
             }
