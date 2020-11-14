@@ -468,12 +468,12 @@ UIState.Command = class extends UIState {
     }
 
     release(ui) {
-        for (const element of ui.element.query_selector_all(".cell kbd.focused")) {
-            element.class_list.remove("focused");
-        }
-        for (const element of ui.element.query_selector_all(".cell kbd.partially-focused")) {
-            element.class_list.remove("partially-focused");
-            element.clear().add(element.get_attribute("data-code"));
+        const focused_cells = ui.element.query_selector_all(
+            ".cell kbd.focused, .cell kbd.partially-focused"
+        );
+        for (const element of focused_cells) {
+            element.class_list.remove("focused", "partially-focused");
+            element.clear();
         }
         ui.panel.label_input.element.blur();
         ui.panel.update(ui);
@@ -912,7 +912,6 @@ class UI {
                 this.codes.set(cell.code, cell);
                 const element = cell.element.query_selector("kbd");
                 element.set_attributes({ "data-code": cell.code });
-                element.clear().add(cell.code);
             }
         };
 
@@ -1392,6 +1391,10 @@ class UI {
                     }[event.key];
                     if (this.in_mode(UIState.Default)) {
                         this.panel.defocus_inputs();
+                        // We won't actually be creating anything, but the focus point might be
+                        // visible, in which case the following will hide it.
+                        this.cancel_creation();
+                        this.focus_point.class_list.remove("focused", "smooth");
                         this.switch_mode(new UIState.Command(this, mode));
                     } else if (this.state.mode !== mode) {
                         this.state.switch_mode(this, mode);
@@ -3073,28 +3076,30 @@ class Panel {
                         replaced = replaced.replace(/[^ASDFJKL|]/gi, "");
                         break;
                 }
+                // We allow the pattern " | " to appear, just in case the user does decide to go
+                // back and insert a code (for whatever reason).
                 replaced = replaced
                     .replace(/\s{2,}/g, " ")
                     .replace(/^\s+/, "")
                     .replace(/^\|\s*/, "|")
-                    .replace(/ \| /, " |")
                     .toUpperCase();
-                const caret = replaced.indexOf("|");
-                replaced = replaced.replace("|", "");
-                this.label_input.element.value = replaced;
-                this.label_input.element.setSelectionRange(caret, caret);
 
-                for (const element of ui.element.query_selector_all(".cell kbd.focused")) {
-                    element.class_list.remove("focused");
-                }
-                for (
-                    const element of ui.element.query_selector_all(".cell kbd.partially-focused")
-                ) {
-                    element.class_list.remove("partially-focused");
-                    element.clear().add(element.get_attribute("data-code"));
+                // While selecting cells, we keep the caret indicator "|" in `replaced`. This allows
+                // us to only partially-select codes when we know the user is still typing that code
+                // (i.e. the caret is immediately after it).
+
+                const focused_cells = ui.element.query_selector_all(
+                    ".cell kbd.focused, .cell kbd.partially-focused"
+                );
+                for (const element of focused_cells) {
+                    element.class_list.remove("focused", "partially-focused");
+                    // Only partially-focused cells need clearing.
+                    element.clear();
                 }
                 const highlighted = new Set();
-                for (const code of replaced.split(" ")) {
+                for (let code of replaced.split(" ")) {
+                    const in_progress = code.endsWith("|");
+                    code = code.replace(/\|$/, "");
                     if (!highlighted.has(code)) {
                         const element = ui.element.query_selector(`kbd[data-code="${code}"]`);
                         if (element !== null) {
@@ -3103,15 +3108,24 @@ class Panel {
                             continue;
                         }
                     }
-                    for (
-                        const element of ui.element.query_selector_all(`kbd[data-code^="${code}"]`)
-                    ) {
-                        element.class_list.add("partially-focused");
-                        element.clear()
-                            .add(new DOM.Element("span", { class: "focused" }).add(code))
-                            .add(element.get_attribute("data-code").slice(code.length));
+                    // If the user is in the process of typing a code, partially-select all the
+                    // codes that it matches so far.
+                    if (in_progress) {
+                        const matches_prefix
+                            = ui.element.query_selector_all(`kbd[data-code^="${code}"]`);
+                        for (const element of matches_prefix) {
+                            element.class_list.add("partially-focused");
+                            element.clear()
+                                .add(new DOM.Element("span", { class: "focused" }).add(code))
+                                .add(element.get_attribute("data-code").slice(code.length));
+                        }
                     }
                 }
+
+                const caret = replaced.indexOf("|");
+                replaced = replaced.replace("|", "");
+                this.label_input.element.value = replaced;
+                this.label_input.element.setSelectionRange(caret, caret);
             }
         }).listen("blur", () => {
             if (!ui.in_mode(UIState.Command)) {
@@ -4661,7 +4675,7 @@ class Cell {
             this.element.add(new DOM.Element("kbd", {
                 "data-code": this.code,
                 class: "hint queue",
-            }).add(`${this.code}`));
+            }));
         }
 
         // We record whether a cell was already selected when we click on it, because
@@ -4943,7 +4957,7 @@ class Vertex extends Cell {
                 .add(new DOM.Element("kbd", {
                     "data-code": this.code,
                     class: "hint queue",
-                }).add(`${this.code}`))
+                }))
                 .add_to(this.element);
         }
 

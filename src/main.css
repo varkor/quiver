@@ -794,14 +794,14 @@ kbd.hint.focused, kbd.hint .focused {
     color: var(--ui-white);
 }
 
-kbd.hint.queue {
+.ui:not(.command) kbd.hint.queue {
     background: var(--ui-white);
     border: var(--ui-blue) 1px solid;
 
     color: var(--ui-blue);
 }
 
-.cell.selected kbd.hint.queue {
+.ui:not(.command) .cell.selected kbd.hint.queue {
     background: var(--ui-blue);
 
     color: var(--ui-white);
@@ -854,6 +854,10 @@ intended to trigger the latter. */
 user has already pressed semicolon, placing us in command mode. */
 .ui:not(.command) .cell kbd.hint::before {
     content: ";";
+}
+
+.cell kbd.hint:empty:not(.queue)::after, .ui.command kbd.hint:empty::after {
+    content: attr(data-code);
 }
 
 /* When cells are queued, we can press Tab to select them. */
