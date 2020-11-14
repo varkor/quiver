@@ -1089,7 +1089,7 @@ class UI {
             // otherwise we might move the focus point before the vertex has been created and
             // accidentally place the vertex in the new position of the focus point, rather than
             // the old one.
-            if (this.in_mode(UIState.Default) && (this.focus_point.class_list.contains("revealed")
+            if (!this.in_mode(UIState.Connect) && (this.focus_point.class_list.contains("revealed")
                 || this.focus_point.class_list.contains("focused"))
             ) {
                 return;
@@ -3590,7 +3590,7 @@ class Panel {
                 // Get the encoding of the diagram. The output may be modified by the caller.
                 const { data, metadata } = modify(ui.quiver.export(format));
 
-                let export_pane, warning, list, content;
+                let export_pane, tip, warning, list, content;
                 if (this.export === null) {
                     // Create the export pane.
                     export_pane = new DOM.Element("div", { class: "export" });
@@ -3602,7 +3602,7 @@ class Panel {
                     }, { passive: true });
 
                     // Create message regarding, and linking to, `quiver.sty`.
-                    new DOM.Element("span", { class: "tip" })
+                    tip = new DOM.Element("span", { class: "tip hidden" })
                         .add("Remember to include ")
                         .add(new DOM.Element("code").add("\\usepackage{quiver}"))
                         .add(" in your LaTeX preamble. You can ")
@@ -3630,6 +3630,7 @@ class Panel {
                 } else {
                     // Find the existing export pane.
                     export_pane = ui.element.query_selector(".export");
+                    tip = export_pane.query_selector(".tip");
                     warning = export_pane.query_selector(".warning");
                     list = export_pane.query_selector("ul");
                     content = export_pane.query_selector(".code");
@@ -3643,6 +3644,7 @@ class Panel {
                         .add(`${item}${index + 1 < unsupported_items.length ? ";" : "."}`)
                     );
                 }
+                tip.class_list.toggle("hidden", format !== "tikz-cd");
                 warning.class_list.toggle("hidden", unsupported_items.length === 0);
 
                 // At present, the data is always a string.
