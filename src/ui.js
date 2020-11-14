@@ -633,7 +633,11 @@ class UI {
 
         // Prevent the label input being dismissed when clicked on in command mode, when no cells
         // are selected.
-        this.panel.label_input.parent.listen("mouseup", (event) => event.stopPropagation());
+        this.panel.label_input.parent.listen("mouseup", (event) => {
+            if (event.button === 0) {
+                event.stopPropagation();
+            }
+        });
 
         // Set up the toolbar.
         this.toolbar.initialise(this);
@@ -775,7 +779,9 @@ class UI {
 
             // Prevent propagation of mouse events when interacting with the pane.
             pane.listen("mousedown", (event) => {
-                event.stopImmediatePropagation();
+                if (event.button === 0) {
+                    event.stopImmediatePropagation();
+                }
             });
 
             // Prevent propagation of scrolling when the cursor is over the pane.
@@ -3042,7 +3048,9 @@ class Panel {
 
         // Prevent propagation of mouse events when interacting with the panel.
         this.element.listen("mousedown", (event) => {
-            event.stopImmediatePropagation();
+            if (event.button === 0) {
+                event.stopImmediatePropagation();
+            }
         });
 
         // Prevent propagation of scrolling when the cursor is over the panel.
@@ -3063,7 +3071,9 @@ class Panel {
 
         // Prevent propagation of mouse events when interacting with the label input.
         this.label_input.listen("mousedown", (event) => {
-            event.stopImmediatePropagation();
+            if (event.button === 0) {
+                event.stopImmediatePropagation();
+            }
         });
 
         // Handle label interaction: update the labels of the selected cells when
@@ -3771,7 +3781,9 @@ class Panel {
 
         // Prevent propagation of mouse events when interacting with the global options.
         this.global.listen("mousedown", (event) => {
-            event.stopImmediatePropagation();
+            if (event.button === 0) {
+                event.stopImmediatePropagation();
+            }
         });
     }
 
@@ -4455,7 +4467,11 @@ class Toolbar {
 
     initialise(ui) {
         this.element = new DOM.Element("div", { class: "toolbar" })
-            .listen("mousedown", (event) => event.stopImmediatePropagation());
+            .listen("mousedown", (event) => {
+                if (event.button === 0) {
+                    event.stopImmediatePropagation();
+                }
+            });
 
         const add_action = (symbol, name, combinations, action, disabled) => {
             const shortcut_name = Shortcuts.name(combinations);
@@ -4468,8 +4484,11 @@ class Toolbar {
                 .add(new DOM.Element("span", { class: "symbol" }).add(symbol))
                 .add(new DOM.Element("span", { class: "name" }).add(name))
                 .add(new DOM.Element("span", { class: "shortcut" }).add(shortcut_name))
-                .listen("mousedown", (event) => event.stopImmediatePropagation())
-                .listen("click", trigger_action_and_update_toolbar);
+                .listen("mousedown", (event) => {
+                    if (event.button === 0) {
+                        event.stopImmediatePropagation();
+                    }
+                }).listen("click", trigger_action_and_update_toolbar);
 
             if (disabled) {
                 button.element.disabled = true;
@@ -5148,7 +5167,11 @@ class Edge extends Cell {
         // Set up the endpoint handle interaction events.
         for (const end of ["source", "target"]) {
             const handle = this.arrow.element.query_selector(`.arrow-endpoint.${end}`);
-            handle.listen("mousedown", (event) => reconnect(event, end));
+            handle.listen("mousedown", (event) => {
+                if (event.button === 0) {
+                    reconnect(event, end);
+                }
+            });
         }
 
         ui.panel.render_tex(ui, this);

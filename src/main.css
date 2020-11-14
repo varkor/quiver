@@ -432,7 +432,11 @@ being. */
     transform: translate(-50%, calc(16pt + 4px * 2 + 16px + 8px + 46px));
 }
 
-.command .label-input-container {
+.ui.connect .label-input-container {
+    pointer-events: none;
+}
+
+.ui.command .label-input-container {
     background: var(--ui-orange);
 }
 
