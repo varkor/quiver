@@ -4630,6 +4630,7 @@ class Toolbar {
                 key: "/", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always
             }],
             () => {
+                ui.element.query_selector("#about-pane").class_list.add("hidden");
                 ui.element.query_selector("#keyboard-shortcuts-pane").class_list.toggle("hidden");
             },
             false,
@@ -4652,6 +4653,7 @@ class Toolbar {
             "About",
             [],
             () => {
+                ui.element.query_selector("#keyboard-shortcuts-pane").class_list.add("hidden");
                 ui.element.query_selector("#about-pane").class_list.toggle("hidden");
             },
             false,
