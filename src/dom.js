@@ -176,4 +176,19 @@ DOM.Table = class extends DOM.Element {
             }
         }
     }
-}
+};
+
+/// A class for conveniently dealing with lists.
+DOM.List = class extends DOM.Element {
+    constructor(ordered = true, items, attributes = {}, style = {}) {
+        super(ordered ? "ol" : "ul", attributes, style);
+
+        for (let item of items) {
+            // Wrap in `<li>` if necessary.
+            if (!(item instanceof DOM.Element) || item.element.className !== "li") {
+                item = new DOM.Element("li").add(item);
+            }
+            this.add(item);
+        }
+    }
+};
