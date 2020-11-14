@@ -1418,6 +1418,12 @@ class UI {
                 return;
             }
 
+            const keyboard_shortcuts = this.element.query_selector(".pane");
+            if (!keyboard_shortcuts.class_list.contains("hidden")) {
+                keyboard_shortcuts.class_list.add("hidden");
+                return;
+            }
+
             if (this.in_mode(UIState.KeyMove)) {
                 this.switch_mode(UIState.default);
                 return;
