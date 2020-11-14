@@ -1129,7 +1129,7 @@ button.flash {
     background: hsla(50, 100%, 70%, 1);
 }
 
-.export .warning.hidden {
+.export .tip.hidden, .export .warning.hidden {
     display: none;
 }
 
