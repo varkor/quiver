@@ -5354,13 +5354,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 const query_segs = query_string[1].split("&");
                 const query_data = new Map(query_segs.map(segment => segment.split("=")));
                 // Decode the diagram.
-                if (query_data.has("q")) {
-                    QuiverImportExport.base64.import(ui, query_data.get("q"));
-                } else {
-                    // In earlier versions of quiver, we also supported URLs without the `q` key.
-                    // This may eventually be deprecated.
-                    QuiverImportExport.base64.import(ui, query_segs[0]);
-                }
+                QuiverImportExport.base64.import(ui, query_data.get("q"));
                 // If there is a `macro_url`, load the macros from it.
                 if (query_data.has("macro_url")) {
                     ui.load_macros_from_url(decodeURIComponent(query_data.get("macro_url")));
