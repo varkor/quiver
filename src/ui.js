@@ -5360,11 +5360,13 @@ document.addEventListener("DOMContentLoaded", () => {
             try {
                 const query_segs = query_string[1].split("&");
                 const query_data = new Map(query_segs.map(segment => segment.split("=")));
-                // Decode the diagram.
-                QuiverImportExport.base64.import(ui, query_data.get("q"));
-                // If there is a `macro_url`, load the macros from it.
-                if (query_data.has("macro_url")) {
-                    ui.load_macros_from_url(decodeURIComponent(query_data.get("macro_url")));
+                if (query_data.has("q")) {
+                    // Decode the diagram.
+                    QuiverImportExport.base64.import(ui, query_data.get("q"));
+                    // If there is a `macro_url`, load the macros from it.
+                    if (query_data.has("macro_url")) {
+                        ui.load_macros_from_url(decodeURIComponent(query_data.get("macro_url")));
+                    }
                 }
             } catch (error) {
                 if (ui.quiver.is_empty()) {
