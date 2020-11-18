@@ -1109,8 +1109,21 @@ button.flash {
     padding: 0 20pt;
 }
 
+.pane p, .pane li {
+    color: hsl(0, 0%, 76%);
+}
+
 .pane li {
     margin: 4pt 0;
+}
+
+.pane footer {
+    margin-top: 8pt;
+    padding-top: 8pt;
+
+    border-top: hsla(0, 0%, 100%, 0.1) 1px solid;
+
+    text-align: center;
 }
 
 /* Modal elements */

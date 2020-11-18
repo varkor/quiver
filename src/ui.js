@@ -771,8 +771,15 @@ class UI {
                     new DOM.Element("a", {
                         href: "https://tex.stackexchange.com/users/138900/andr%c3%a9c"
                     }).add("AndréC")
-                ).add(", for the custom TikZ style for curves of a fixed height.")
-            ])));
+                ).add(", for the custom TikZ style for curves of a fixed height."),
+                new DOM.Element("li").add(
+                    "Everyone who has improved "
+                ).add(new DOM.Element("b").add("quiver"))
+                .add(" by reporting issues or suggesting improvements.")
+            ]))
+            .add(new DOM.Element("footer")
+                .add("Created by varkor.")
+            ));
 
         for (const pane of panes) {
             this.element.add(pane);
