@@ -506,7 +506,7 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                             case "adjunction":
                                 label = "\"\\dashv\"";
                                 // Adjunction symbols should point in the direction of the arrow.
-                                angle = -edge.angle() * 180 / Math.PI;
+                                angle = -Math.round(edge.angle() * 180 / Math.PI);
                                 break;
                             case "corner":
                                 label = "\"\\lrcorner\"";
