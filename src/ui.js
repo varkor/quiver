@@ -4486,7 +4486,7 @@ class Toolbar {
                 }
             });
 
-        const add_action = (name, combinations, action, disabled) => {
+        const add_action = (name, combinations, action) => {
             const shortcut_name = Shortcuts.name(combinations);
 
             const button = new DOM.Element("button", { class: "action", "data-name": name })
@@ -4510,10 +4510,6 @@ class Toolbar {
 
             button.listen("click", trigger_action_and_update_toolbar);
 
-            if (disabled) {
-                button.element.disabled = true;
-            }
-
             ui.shortcuts.add(combinations, trigger_action_and_update_toolbar, button);
 
             this.element.add(button);
@@ -4532,7 +4528,6 @@ class Toolbar {
                 // `data` is the new URL.
                 history.pushState({}, "", data);
             },
-            false,
         );
 
         add_action(
@@ -4541,7 +4536,6 @@ class Toolbar {
             () => {
                 ui.history.undo(ui);
             },
-            true,
         );
 
         add_action(
@@ -4550,7 +4544,6 @@ class Toolbar {
             () => {
                 ui.history.redo(ui);
             },
-            true,
         );
 
         add_action(
@@ -4559,7 +4552,6 @@ class Toolbar {
             () => {
                 ui.select(...ui.quiver.all_cells());
             },
-            true,
         );
 
         add_action(
@@ -4570,7 +4562,6 @@ class Toolbar {
                 ui.panel.hide();
                 ui.panel.label_input.parent.class_list.add("hidden");
             },
-            true,
         );
 
         add_action(
@@ -4586,7 +4577,6 @@ class Toolbar {
                 }], true);
                 ui.panel.update(ui);
             },
-            true,
         );
 
         add_action(
@@ -4601,7 +4591,6 @@ class Toolbar {
                     ui.centre_view();
                 }
             },
-            false,
         );
 
         add_action(
@@ -4610,7 +4599,6 @@ class Toolbar {
             () => {
                 ui.pan_view(Offset.zero(), -0.25);
             },
-            false,
         );
 
         add_action(
@@ -4619,7 +4607,6 @@ class Toolbar {
             () => {
                 ui.pan_view(Offset.zero(), 0.25);
             },
-            false,
         );
 
         add_action(
@@ -4633,7 +4620,6 @@ class Toolbar {
                 ui.scale = 0;
                 ui.pan_view(Offset.zero());
             },
-            true,
         );
 
         add_action(
@@ -4646,7 +4632,6 @@ class Toolbar {
                     (hidden ? "Show" : "Hide") + " grid"
                 );
             },
-            false,
         );
 
         add_action(
@@ -4661,7 +4646,6 @@ class Toolbar {
                     (hidden ? "Show" : "Hide") + " hints"
                 );
             },
-            false,
         );
 
         add_action(
@@ -4674,7 +4658,6 @@ class Toolbar {
                     (hidden ? "Show" : "Hide") + " queue"
                 );
             },
-            false,
         );
 
         add_action(
@@ -4686,7 +4669,6 @@ class Toolbar {
                 ui.element.query_selector("#about-pane").class_list.add("hidden");
                 ui.element.query_selector("#keyboard-shortcuts-pane").class_list.toggle("hidden");
             },
-            false,
         );
 
         add_action(
@@ -4697,8 +4679,10 @@ class Toolbar {
                 ui.element.query_selector("#about-pane").class_list.toggle("hidden");
                 ui.element.query_selector(".version").class_list.toggle("hidden");
             },
-            false,
         );
+
+        // Disable those buttons that need to be disabled.
+        this.update(ui);
     }
 
     /// Update the toolbar (e.g. enabling or disabling buttons based on UI state).
