@@ -383,7 +383,8 @@ being. */
     left: 50%;
     bottom: 0;
     transform: translateX(-50%);
-    width: 40%; min-width: 280px;
+    width: 40%;
+    min-width: 560px;
     height: 46px;
     padding: 8px;
     /* Display above the export pane. */
@@ -416,7 +417,8 @@ being. */
     left: 50%; height: 32px;
     /* Position 8px above the global panel. */
     bottom: calc(8px + 46px);
-    width: 40%; min-width: 280px;
+    width: 40%;
+    min-width: 560px;
     transform: translateX(-50%);
 
     background: var(--ui-black);
