@@ -1023,11 +1023,11 @@ button.flash {
     position: fixed;
     /* Display just below the toolbar. */
     left: 50%;
-    top: calc(16px + 48px + 8px);
+    top: calc(16px + 52px + 8px);
     transform: translateX(-50%);
     width: 50%;
     /* Display at most to just above the global panel. */
-    max-height: calc(100% - (16px + 48px + 8px + 16pt + 4px * 2 + 16px + 8px));
+    max-height: calc(100% - (16px + 52px + 8px + 16pt + 4px * 2 + 16px + 8px));
     padding: 8pt 20pt;
     overflow-y: auto;
     z-index: 100;
