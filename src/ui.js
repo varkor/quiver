@@ -3148,11 +3148,11 @@ class Panel {
                     case "Select":
                     case "Toggle":
                     case "Create":
-                        replaced = replaced.replace(/[^ASDFJKL |]/gi, "");
+                        replaced = replaced.replace(/[^ASDFJKLGHEIRUCM |]/gi, "");
                         break;
                     case "Source":
                     case "Target":
-                        replaced = replaced.replace(/[^ASDFJKL|]/gi, "");
+                        replaced = replaced.replace(/[^ASDFJKLGHEIRUCM|]/gi, "");
                         break;
                 }
                 // We allow the pattern " | " to appear, just in case the user does decide to go
@@ -4732,7 +4732,7 @@ class Cell {
 
         // An ID used to allow the user to jump to this cell via the keyboard.
         this.code = "";
-        const chars = "ASDFJKL".split("");
+        const chars = "ASDFJKLGHEIRUCM".split("");
         for (let value = Cell.NEXT_ID++; value >= 0; value = Math.floor(value / chars.length) - 1) {
             this.code = chars[value % chars.length] + this.code;
         }
