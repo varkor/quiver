@@ -120,7 +120,7 @@ noscript {
     opacity: 1;
 }
 
-.ui:not(.help) .version {
+.version.hidden {
     display: none;
 }
 
@@ -252,7 +252,7 @@ kbd {
     visibility: visible;
 }
 
-.ui:not(.help) .focus-point .tooltip, .focus-point:not(.focused) .tooltip, .tooltip:empty {
+.ui:not(.hints) .focus-point .tooltip, .focus-point:not(.focused) .tooltip, .tooltip:empty {
     display: none;
 }
 
@@ -816,7 +816,7 @@ kbd.hint.focused, kbd.hint .focused {
     color: var(--ui-white);
 }
 
-.ui:not(.help) kbd.hint:not(.queue) {
+.ui:not(.hints) kbd.hint:not(.queue) {
     display: none;
 }
 
@@ -915,7 +915,7 @@ user has already pressed semicolon, placing us in command mode. */
 
 .toolbar {
     position: fixed;
-    height: 48px;
+    height: 52px;
     left: 50%; top: 16px;
     transform: translateX(-50%);
     z-index: 100;
@@ -939,7 +939,7 @@ user has already pressed semicolon, placing us in command mode. */
 .toolbar .action {
     position: relative;
     vertical-align: middle;
-    width: 48px; height: 48px;
+    width: 48px; height: 52px;
 
     background: transparent;
     border: none;
@@ -963,19 +963,21 @@ user has already pressed semicolon, placing us in command mode. */
     background: var(--ui-blue);
 }
 
+.toolbar .action img {
+    width: 28px;
+    vertical-align: middle;
+}
+
 .toolbar .action:disabled {
     background: transparent;
+}
 
-    color: hsl(0, 0%, 64%);
+.toolbar .action:disabled img {
+    opacity: 0.6;
 }
 
 .toolbar .action:disabled .name, .toolbar .action:disabled .shortcut {
     color: hsl(0, 0%, 64%);
-}
-
-.toolbar .action .flip {
-    display: inline-block;
-    transform: scaleX(-1);
 }
 
 button.flash {

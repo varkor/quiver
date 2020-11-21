@@ -801,7 +801,7 @@ class UI {
         // Add the version information underneath the logo.
         this.element.add(new DOM.Element(
             "span",
-            { class: "version" }
+            { class: "version hidden" }
         ).add(`Version ${CONSTANTS.VERSION}`));
 
         // Add the focus point for new nodes.
@@ -4480,7 +4480,7 @@ class Toolbar {
                 }
             });
 
-        const add_action = (symbol, name, combinations, action, disabled) => {
+        const add_action = (name, combinations, action, disabled) => {
             const shortcut_name = Shortcuts.name(combinations);
             const trigger_action_and_update_toolbar = (event) => {
                 action(event);
@@ -4488,7 +4488,11 @@ class Toolbar {
             };
 
             const button = new DOM.Element("button", { class: "action", "data-name": name })
-                .add(new DOM.Element("span", { class: "symbol" }).add(symbol))
+                .add(new DOM.Element("span", { class: "symbol" }).add(
+                    new DOM.Element("img", { src: `icons/${
+                        name.toLowerCase().replace(/ /g, "-")
+                    }.svg` })
+                ))
                 .add(new DOM.Element("span", { class: "name" }).add(name))
                 .add(new DOM.Element("span", { class: "shortcut" }).add(shortcut_name))
                 .listen("mousedown", (event) => {
@@ -4511,7 +4515,6 @@ class Toolbar {
 
         // "Saving" updates the URL to reflect the current diagram.
         add_action(
-            "▴",
             "Save",
             [{ key: "S", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always }],
             () => {
@@ -4524,7 +4527,6 @@ class Toolbar {
         );
 
         add_action(
-            "⎌",
             "Undo",
             [{ key: "Z", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Defer }],
             () => {
@@ -4533,8 +4535,7 @@ class Toolbar {
             true,
         );
 
-        const redo = add_action(
-            "⎌",
+        add_action(
             "Redo",
             [{ key: "Z", modifier: true, shift: true, context: Shortcuts.SHORTCUT_PRIORITY.Defer }],
             () => {
@@ -4542,12 +4543,8 @@ class Toolbar {
             },
             true,
         );
-        // There's no "Redo" symbol in Unicode, so we make do by flipping the "Undo"
-        // symbol horizontally.
-        redo.query_selector(".symbol").class_list.add("flip");
 
         add_action(
-            "■",
             "Select all",
             [{ key: "A", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Defer }],
             () => {
@@ -4557,7 +4554,6 @@ class Toolbar {
         );
 
         add_action(
-            "□",
             "Deselect all",
             [{ key: "A", modifier: true, shift: true, context: Shortcuts.SHORTCUT_PRIORITY.Defer }],
             () => {
@@ -4569,7 +4565,6 @@ class Toolbar {
         );
 
         add_action(
-            "×",
             "Delete",
             [
                 { key: "Backspace" },
@@ -4586,7 +4581,6 @@ class Toolbar {
         );
 
         add_action(
-            "⌖",
             "Centre view",
             [{ key: "G" }],
             () => {
@@ -4602,7 +4596,6 @@ class Toolbar {
         );
 
         add_action(
-            "\u2013",
             "Zoom out",
             [{ key: "-", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always }],
             () => {
@@ -4612,7 +4605,6 @@ class Toolbar {
         );
 
         add_action(
-            "+",
             "Zoom in",
             [{ key: "=", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always }],
             () => {
@@ -4622,7 +4614,6 @@ class Toolbar {
         );
 
         add_action(
-            "=",
             "Reset zoom",
             // We'd like to display the current zoom level, so we use a slight hack: we set the
             // "key" to be the zoom level: this will never be triggered by a shortcut, because there
@@ -4637,7 +4628,6 @@ class Toolbar {
         );
 
         add_action(
-            "⌗",
             "Toggle grid",
             [{ key: "H", modifier: false, context: Shortcuts.SHORTCUT_PRIORITY.Defer }],
             () => {
@@ -4647,7 +4637,6 @@ class Toolbar {
         );
 
         add_action(
-            "/",
             "Shortcuts",
             [{
                 key: "/", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always
@@ -4660,24 +4649,23 @@ class Toolbar {
         );
 
         add_action(
-            "?",
-            "Toggle help",
+            "Toggle hints",
             [{
                 key: "H", modifier: true, shift: true, context: Shortcuts.SHORTCUT_PRIORITY.Always
             }],
             () => {
-                ui.element.class_list.toggle("help");
+                ui.element.class_list.toggle("hints");
             },
             false,
         );
 
         add_action(
-            "ⓘ",
             "About",
             [],
             () => {
                 ui.element.query_selector("#keyboard-shortcuts-pane").class_list.add("hidden");
                 ui.element.query_selector("#about-pane").class_list.toggle("hidden");
+                ui.element.query_selector(".version").class_list.toggle("hidden");
             },
             false,
         );
