@@ -252,7 +252,7 @@ kbd {
     visibility: visible;
 }
 
-.ui:not(.hints) .focus-point .tooltip, .focus-point:not(.focused) .tooltip, .tooltip:empty {
+.ui:not(.show-hints) .focus-point .tooltip, .focus-point:not(.focused) .tooltip, .tooltip:empty {
     display: none;
 }
 
@@ -799,24 +799,29 @@ kbd.hint {
     pointer-events: none;
 }
 
+/* Highlight the hints when their codes are (partially) typed. */
 kbd.hint.focused, kbd.hint .focused {
     color: var(--ui-white);
 }
 
-.ui:not(.command) kbd.hint.queue {
+.ui:not(.command).show-queue kbd.hint.queue {
     background: var(--ui-white);
     border: var(--ui-blue) 1px solid;
 
     color: var(--ui-blue);
 }
 
-.ui:not(.command) .cell.selected kbd.hint.queue {
+.ui:not(.command).show-queue .cell.selected kbd.hint.queue {
     background: var(--ui-blue);
 
     color: var(--ui-white);
 }
 
-.ui:not(.hints) kbd.hint:not(.queue) {
+.ui:not(.command):not(.show-queue):not(.show-hints) kbd.hint.queue {
+    display: none;
+}
+
+.ui:not(.show-hints) kbd.hint:not(.queue) {
     display: none;
 }
 
@@ -865,12 +870,14 @@ user has already pressed semicolon, placing us in command mode. */
     content: ";";
 }
 
-.cell kbd.hint:empty:not(.queue)::after, .ui.command kbd.hint:empty::after {
+.ui.command kbd.hint:empty::after,
+.cell kbd.hint:empty:not(.queue)::after,
+.ui:not(.show-queue) kbd.hint:empty::after {
     content: attr(data-code);
 }
 
 /* When cells are queued, we can press Tab to select them. */
-.ui:not(.command) .cell kbd.queue.hint::before {
+.ui:not(.command).show-queue .cell kbd.queue.hint::before {
     content: "⇥";
 }
 

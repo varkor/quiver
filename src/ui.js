@@ -1403,6 +1403,10 @@ class UI {
                         // Update the panel.
                         this.panel.update(this);
                         this.panel.hide_if_unselected(this);
+                        // Display the queue.
+                        this.element.class_list.add("show-queue");
+                        this.toolbar.element.query_selector('.action[data-name="Show queue"] .name')
+                            .clear().add("Hide queue");
                         // Bring up the label input and select the text.
                         this.panel.focus_label_input();
                     } else if (document.activeElement === this.panel.label_input.element) {
@@ -1520,8 +1524,10 @@ class UI {
             }
 
             // Unqueue queued cells.
-            for (const element of this.element.query_selector_all("kbd.queue")) {
-                element.class_list.remove("queue");
+            if (this.element.class_list.contains("show-queue")) {
+                for (const element of this.element.query_selector_all("kbd.queue")) {
+                    element.class_list.remove("queue");
+                }
             }
         });
 
@@ -4482,10 +4488,6 @@ class Toolbar {
 
         const add_action = (name, combinations, action, disabled) => {
             const shortcut_name = Shortcuts.name(combinations);
-            const trigger_action_and_update_toolbar = (event) => {
-                action(event);
-                ui.toolbar.update(ui);
-            };
 
             const button = new DOM.Element("button", { class: "action", "data-name": name })
                 .add(new DOM.Element("span", { class: "symbol" }).add(
@@ -4499,7 +4501,14 @@ class Toolbar {
                     if (event.button === 0) {
                         event.stopImmediatePropagation();
                     }
-                }).listen("click", trigger_action_and_update_toolbar);
+                })
+
+            const trigger_action_and_update_toolbar = (event) => {
+                action.call(button, event);
+                ui.toolbar.update(ui);
+            };
+
+            button.listen("click", trigger_action_and_update_toolbar);
 
             if (disabled) {
                 button.element.disabled = true;
@@ -4628,10 +4637,42 @@ class Toolbar {
         );
 
         add_action(
-            "Toggle grid",
+            "Hide grid",
             [{ key: "H", modifier: false, context: Shortcuts.SHORTCUT_PRIORITY.Defer }],
-            () => {
+            function () {
                 ui.grid.class_list.toggle("hidden");
+                const hidden = ui.grid.class_list.contains("hidden");
+                this.query_selector(".name").clear().add(
+                    (hidden ? "Show" : "Hide") + " grid"
+                );
+            },
+            false,
+        );
+
+        add_action(
+            "Show hints",
+            [{
+                key: "H", modifier: true, shift: true, context: Shortcuts.SHORTCUT_PRIORITY.Always
+            }],
+            function () {
+                ui.element.class_list.toggle("show-hints");
+                const hidden = !ui.element.class_list.contains("show-hints");
+                this.query_selector(".name").clear().add(
+                    (hidden ? "Show" : "Hide") + " hints"
+                );
+            },
+            false,
+        );
+
+        add_action(
+            "Show queue",
+            [],
+            function () {
+                ui.element.class_list.toggle("show-queue");
+                const hidden = !ui.element.class_list.contains("show-queue");
+                this.query_selector(".name").clear().add(
+                    (hidden ? "Show" : "Hide") + " queue"
+                );
             },
             false,
         );
@@ -4644,17 +4685,6 @@ class Toolbar {
             () => {
                 ui.element.query_selector("#about-pane").class_list.add("hidden");
                 ui.element.query_selector("#keyboard-shortcuts-pane").class_list.toggle("hidden");
-            },
-            false,
-        );
-
-        add_action(
-            "Toggle hints",
-            [{
-                key: "H", modifier: true, shift: true, context: Shortcuts.SHORTCUT_PRIORITY.Always
-            }],
-            () => {
-                ui.element.class_list.toggle("hints");
             },
             false,
         );
