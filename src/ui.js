@@ -1180,6 +1180,12 @@ class UI {
 
         // Moving the focus point, panning, and rearranging cells.
         this.element.listen("mousemove", (event) => {
+            if (this.in_mode(UIState.Pan) && this.state.origin !== null) {
+                const new_offset = this.offset_from_event(event).sub(this.view);
+                this.pan_view(this.state.origin.sub(new_offset));
+                this.state.origin = new_offset;
+            }
+
             // If the user has currently clicked to place a vertex, or activated keyboard controls,
             // then don't reposition the focus point until the new vertex has been created:
             // otherwise we might move the focus point before the vertex has been created and
@@ -1192,12 +1198,6 @@ class UI {
             }
 
             const position = this.reposition_focus_point(this.position_from_event(event), false);
-
-            if (this.in_mode(UIState.Pan) && this.state.origin !== null) {
-                const new_offset = this.offset_from_event(event).sub(this.view);
-                this.pan_view(this.state.origin.sub(new_offset));
-                this.state.origin = new_offset;
-            }
 
             // We want to reveal the focus point if and only if it is
             // not at the same position as an existing vertex (i.e. over an
@@ -4315,7 +4315,7 @@ class Shortcuts {
                         (shortcut.shift === null || event.shiftKey === shortcut.shift)
                             && (shortcut.modifier === null
                                 || (event.metaKey || event.ctrlKey) === shortcut.modifier
-                                || ["Control", "Meta"].includes(key))
+                                || ["control", "meta"].includes(key))
                     ) {
                         const effect = () => {
                             let prevent_others = false;

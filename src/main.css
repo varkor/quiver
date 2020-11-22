@@ -191,11 +191,11 @@ kbd {
     transform-origin: top left;
 }
 
-.ui.pan .canvas {
+.ui.pan .container {
     cursor: grab;
 }
 
-.ui.pan .canvas:active {
+.ui.pan .container:active {
     cursor: grabbing;
 }
 
