@@ -750,7 +750,7 @@ input[type="text"].flash {
     background: hsl(0, 0%, 30%);
 }
 
-.panel button {
+.panel button, .pane button {
     position: relative;
     display: block;
     width: 100%; height: 30px;
@@ -779,11 +779,11 @@ input[type="text"].flash {
     margin-left: 4px;
 }
 
-.panel button:hover:not(:disabled) {
+.panel button:hover:not(:disabled):not(:active), .pane button:hover:not(:disabled):not(:active) {
     background: var(--ui-hover);
 }
 
-.panel button:active {
+.panel button:active, .pane button:active {
     background: var(--ui-active);
 }
 
@@ -1128,6 +1128,13 @@ button.flash {
     margin: 4pt 0;
 }
 
+.pane button {
+    width: 50%;
+    margin-left: auto;
+    margin-right: auto;
+    margin-top: 12pt;
+}
+
 .pane footer {
     margin-top: 8pt;
     padding-top: 8pt;
@@ -1145,6 +1152,7 @@ button.flash {
     left: 0; top: 0;
     z-index: 100;
     padding: 20px 24px;
+    padding-bottom: calc(46px + 8px);
     overflow-y: auto;
 
     background: hsla(0, 0%, 10%, 0.8);

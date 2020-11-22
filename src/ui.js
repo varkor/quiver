@@ -694,7 +694,7 @@ class UI {
                 ["Move selected objects", (td) => Shortcuts.element(td, [{ key: "B" }])],
                 ["Change source", (td) => Shortcuts.element(td, [{ key: "," }])],
                 ["Change target", (td) => Shortcuts.element(td, [{ key: "." }])],
-                ["Create edges from selection", (td) => Shortcuts.element(td, [{ key: "/" }])],
+                ["Create arrows from selection", (td) => Shortcuts.element(td, [{ key: "/" }])],
             ]))
             .add(new DOM.Element("h2").add("Arrow styling"))
             .add(new DOM.Table([
@@ -779,7 +779,48 @@ class UI {
             ]))
             .add(new DOM.Element("footer")
                 .add("Created by varkor.")
-            ));
+            )
+        );
+
+        // The version of quiver last used by the user. If they have not used quiver before, this
+        // will be `null`. If it's `null`, we display the welcome pane. If it's non-null, but
+        // doesn't match the current version of quiver, we may display the new features of the
+        // current version of quiver. Otherwise, we do nothing.
+        const version_previous_use = window.localStorage.getItem("version-previous-use");
+
+        // Set up the welcome pane.
+        const welcome_pane = new DOM.Element("div", {
+            id: "welcome-pane",
+            // We only display the welcome pane the first time the user visits quiver.
+            class: "pane" + (version_previous_use ? " hidden" : "")
+        }).add(new DOM.Element("h1").add("Welcome"))
+            .add(new DOM.Element("p").add(new DOM.Element("b").add("quiver")).add(
+                " is a modern, graphical editor for commutative and pasting " +
+                "diagrams, capable of rendering high-quality diagrams for screen viewing, and " +
+                "exporting to LaTeX via tikz-cd."
+            ))
+            .add(new DOM.Element("p").add(new DOM.Element("b").add("quiver")).add(
+                " is intended to be intuitive to use and easy to pick up. Here are a few tips to " +
+                "help you get started:"
+            ))
+            .add(new DOM.List(false, [
+                "Click and drag to create new arrows: the source and target objects will be " +
+                "created automatically.",
+                "Double-click to create a new object.",
+                "Edit labels with the input bar at the bottom of the screen.",
+                "Click and drag the empty space around a object to move it around.",
+                "Hold Shift (⇧) to select multiple cells to edit them simultaneously."
+            ]));
+        panes.push(welcome_pane);
+        new DOM.Element("button").add("Get started").listen("click", () => {
+            // There are technically other ways to dismiss the welcome pane (e.g. opening the
+            // keyboard shortcuts pane without clicking this button). We choose not to set the
+            // `version-previous-use` variable in these edge cases: the user may have dismissed the
+            // welcome pane accidentally, in which case refreshing the page will be enough to get
+            // the pane back.
+            window.localStorage.setItem("version-previous-use", CONSTANTS.VERSION);
+            welcome_pane.class_list.add("hidden");
+        }).add_to(welcome_pane);
 
         for (const pane of panes) {
             this.element.add(pane);
@@ -4666,8 +4707,13 @@ class Toolbar {
                 key: "/", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always
             }],
             () => {
-                ui.element.query_selector("#about-pane").class_list.add("hidden");
-                ui.element.query_selector("#keyboard-shortcuts-pane").class_list.toggle("hidden");
+                const hidden = ui.element.query_selector("#keyboard-shortcuts-pane").class_list
+                    .contains("hidden");
+                ui.element.query_selector_all(".pane").forEach((pane) => {
+                    pane.class_list.add("hidden");
+                });
+                ui.element.query_selector("#keyboard-shortcuts-pane").class_list
+                    .toggle("hidden", !hidden);
             },
         );
 
@@ -4675,8 +4721,12 @@ class Toolbar {
             "About",
             [],
             () => {
-                ui.element.query_selector("#keyboard-shortcuts-pane").class_list.add("hidden");
-                ui.element.query_selector("#about-pane").class_list.toggle("hidden");
+                const hidden = ui.element.query_selector("#about-pane").class_list
+                    .contains("hidden");
+                ui.element.query_selector_all(".pane").forEach((pane) => {
+                    pane.class_list.add("hidden");
+                });
+                ui.element.query_selector("#about-pane").class_list.toggle("hidden", !hidden);
                 ui.element.query_selector(".version").class_list.toggle("hidden");
             },
         );
