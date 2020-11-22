@@ -699,8 +699,8 @@ class UI {
             .add(new DOM.Element("h2").add("Arrow styling"))
             .add(new DOM.Table([
                 ["Reverse arrows", (td) => Shortcuts.element(td, [{ key: "R" }])],
-                ["Flip arrows", (td) => Shortcuts.element(td, [{ key: "F" }])],
-                ["Flip labels", (td) => Shortcuts.element(td, [{ key: "E" }])],
+                ["Flip arrows", (td) => Shortcuts.element(td, [{ key: "E" }])],
+                ["Flip labels", (td) => Shortcuts.element(td, [{ key: "F" }])],
                 ["Left-align labels", (td) => Shortcuts.element(td, [{ key: "V" }])],
                 ["Centre-align labels", (td) => Shortcuts.element(td, [{ key: "C" }])],
                 ["Over-align labels", (td) => Shortcuts.element(td, [{ key: "X" }])],
@@ -3277,7 +3277,7 @@ class Panel {
         });
 
         // The button to flip an edge.
-        add_button("Flip arrows", "⥮ Flip", "f", () => {
+        add_button("Flip arrows", "⥮ Flip", "e", () => {
             ui.history.add(ui, [{
                 kind: "flip",
                 cells: ui.selection,
@@ -3285,7 +3285,7 @@ class Panel {
         });
 
         // The button to flip a label.
-        add_button("Flip labels", "⥮ Flip labels", "e", () => {
+        add_button("Flip labels", "⥮ Flip labels", "f", () => {
             ui.history.add(ui, [{
                 kind: "flip labels",
                 cells: ui.selection,
