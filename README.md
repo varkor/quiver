@@ -1,8 +1,9 @@
 # quiver: a modern commutative diagram editor
 
-[![quiver](screenshots/title.png "quiver: a modern commutative diagram editor")](q.uiver.app)
+[![quiver](screenshots/title.png "quiver: a modern commutative diagram editor")](https://q.uiver.app)
 
-**quiver** is a modern, graphical editor for [commutative] and [pasting diagrams], capable of rendering high-quality diagrams for screen viewing, and exporting to LaTeX via [tikz-cd].
+**quiver** is a modern, graphical editor for [commutative] and [pasting diagrams], capable of
+rendering high-quality diagrams for screen viewing, and exporting to LaTeX via [tikz-cd].
 
 Creating and modifying diagrams with **quiver** is orders of magnitude faster than writing the
 equivalent LaTeX by hand and, with a little experience, competes with pen-and-paper.
@@ -15,7 +16,8 @@ Try **quiver** out: [q.uiver.app](https://q.uiver.app)
 
 ## Features & screenshots
 
-**quiver** features an efficient, intuitive interface for creating complex commutative diagrams and pasting diagrams. It's easy to draw diagrams involving pullbacks and pushouts,
+**quiver** features an efficient, intuitive interface for creating complex commutative diagrams and
+pasting diagrams. It's easy to draw diagrams involving pullbacks and pushouts,
 
 [![Pullback](screenshots/pullback.png "Pullback")](http://q.uiver.app/?q=WzAsNSxbMSwyLCJBIl0sWzIsMSwiQiJdLFsyLDIsIkMiXSxbMSwxLCJBIFxcdGltZXNfQyBCIl0sWzAsMCwiWCJdLFswLDIsImYiLDJdLFsxLDIsImciXSxbMywwLCJcXHBpXzEiLDJdLFszLDEsIlxccGlfMiJdLFs0LDAsImEiLDIseyJjdXJ2ZSI6M31dLFs0LDEsImIiLDAseyJjdXJ2ZSI6LTN9XSxbNCwzLCJcXGxhbmdsZSBhLCBiIFxccmFuZ2xlIiwxLHsic3R5bGUiOnsiYm9keSI6eyJuYW1lIjoiZGFzaGVkIiwibGV2ZWwiOjF9fX1dLFszLDIsIiIsMSx7InN0eWxlIjp7Im5hbWUiOiJjb3JuZXIifX1dXQ==)
 
@@ -37,7 +39,8 @@ There is a wide range of composable arrow styles.
 
 [![Screenshot mode](screenshots/grid-hidden.png "Screenshot mode")](https://q.uiver.app/?q=WzAsOCxbMCwwLCJHeCJdLFsxLDAsIkZ4Il0sWzIsMCwiR3giXSxbMywwLCJGeCJdLFswLDEsIkd5Il0sWzEsMSwiRnkiXSxbMiwxLCJHeSJdLFszLDEsIkZ5Il0sWzAsMSwiXFxiZXRhX3giXSxbMSwyLCJcXGFscGhhX3giXSxbMiwzLCJcXGJldGFfeCJdLFswLDQsIkdmIiwyXSxbNCw1LCJcXGJldGFfeSIsMl0sWzUsNiwiXFxhbHBoYV95IiwyXSxbNiw3LCJcXGJldGFfeSIsMl0sWzMsNywiRmYiXSxbMSw1LCJGZiIsMV0sWzIsNiwiR2YiLDFdLFs0LDEsIlxcYmV0YV9mIiwwLHsibGVuZ3RoIjo1MCwibGV2ZWwiOjJ9XSxbNSwyLCJcXGFscGhhX2YiLDAseyJsZW5ndGgiOjUwLCJsZXZlbCI6Mn1dLFs2LDMsIlxcYmV0YSdmIiwwLHsibGVuZ3RoIjo1MCwibGV2ZWwiOjJ9XSxbMCwyLCIxIiwwLHsiY3VydmUiOi00fV0sWzUsNywiMSIsMix7ImN1cnZlIjo0fV0sWzEsMjEsIlxcdmFyZXBzaWxvbl94IiwwLHsibGVuZ3RoIjo1MH1dLFsyMiw2LCJcXGV0YV95IiwyLHsibGVuZ3RoIjo1MH1dXQ==)
 
-**quiver** is intended to look good for screenshots, as well as to export LaTeX that looks as close as possible to the original diagram.
+**quiver** is intended to look good for screenshots, as well as to export LaTeX that looks as close
+as possible to the original diagram.
 
 [![Keyboard hints](screenshots/hints.png "Keyboard hints")](https://q.uiver.app/?q=WzAsMixbMCwwLCJBIl0sWzEsMCwiQiJdLFswLDEsImYiXV0=)
 
@@ -45,7 +48,8 @@ Diagrams may be created and modified using either the mouse, by clicking and dra
 
 [![Export to LaTeX](screenshots/export.png "Export to LaTeX")](https://q.uiver.app/?q=WzAsOCxbMCwwLCJHeCJdLFsxLDAsIkZ4Il0sWzIsMCwiR3giXSxbMywwLCJGeCJdLFswLDEsIkd5Il0sWzEsMSwiRnkiXSxbMiwxLCJHeSJdLFszLDEsIkZ5Il0sWzAsMSwiXFxiZXRhX3giXSxbMSwyLCJcXGFscGhhX3giXSxbMiwzLCJcXGJldGFfeCJdLFswLDQsIkdmIiwyXSxbNCw1LCJcXGJldGFfeSIsMl0sWzUsNiwiXFxhbHBoYV95IiwyXSxbNiw3LCJcXGJldGFfeSIsMl0sWzMsNywiRmYiXSxbMSw1LCJGZiIsMV0sWzIsNiwiR2YiLDFdLFs0LDEsIlxcYmV0YV9mIiwwLHsibGVuZ3RoIjo1MCwibGV2ZWwiOjJ9XSxbNSwyLCJcXGFscGhhX2YiLDAseyJsZW5ndGgiOjUwLCJsZXZlbCI6Mn1dLFs2LDMsIlxcYmV0YSdmIiwwLHsibGVuZ3RoIjo1MCwibGV2ZWwiOjJ9XSxbMCwyLCIxIiwwLHsiY3VydmUiOi00fV0sWzUsNywiMSIsMix7ImN1cnZlIjo0fV0sWzEsMjEsIlxcdmFyZXBzaWxvbl94IiwwLHsibGVuZ3RoIjo1MH1dLFsyMiw2LCJcXGV0YV95IiwyLHsibGVuZ3RoIjo1MH1dXQ==)
 
-When you export diagrams to LaTeX, **quiver** will embed a link to the diagram, which will allow you to return to it later if you decide it needs to be modified, or to share it with others.
+When you export diagrams to LaTeX, **quiver** will embed a link to the diagram, which will allow you
+to return to it later if you decide it needs to be modified, or to share it with others.
 
 ### Other features
 - Multiple selection, making mass changes easy and fast.
