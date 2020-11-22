@@ -4714,6 +4714,7 @@ class Toolbar {
                 });
                 ui.element.query_selector("#keyboard-shortcuts-pane").class_list
                     .toggle("hidden", !hidden);
+                ui.element.query_selector(".version").class_list.add("hidden");
             },
         );
 
@@ -4727,7 +4728,7 @@ class Toolbar {
                     pane.class_list.add("hidden");
                 });
                 ui.element.query_selector("#about-pane").class_list.toggle("hidden", !hidden);
-                ui.element.query_selector(".version").class_list.toggle("hidden");
+                ui.element.query_selector(".version").class_list.toggle("hidden", !hidden);
             },
         );
 
