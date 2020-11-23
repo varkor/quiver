@@ -267,6 +267,8 @@ kbd {
     content: "";
     position: absolute;
     top: 100%; left: calc(50% - 14px);
+    /* Make sure there's not a subpixel gap between this and the tooltip. */
+    margin-top: -1px;
     width: 0; height: 0;
 
     border: 14px solid transparent;
