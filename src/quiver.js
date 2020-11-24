@@ -288,9 +288,6 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
         // unable to export faithfully to tikz-cd. In this case, we issue a warning to alert the
         // user that their diagram is not expected to match the quiver representation.
         const tikz_incompatibilities = new Set();
-        // We keep track of whether there are any curves in the diagram, because if so we need to
-        // output a custom style to draw fixed-height curves in TikZ.
-        let has_curves = false;
 
         // Output the edges.
         for (let level = 1; level < quiver.cells.length; ++level) {
@@ -639,7 +636,7 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
 
         for (let level = 1; level < quiver.cells.length; ++level) {
             for (const edge of quiver.cells[level]) {
-                const { level, label, options: { label_alignment, ...options } } = edge;
+                const { label, options: { label_alignment, ...options } } = edge;
                 const [source, target] = [indices.get(edge.source), indices.get(edge.target)];
                 indices.set(edge, cells.length);
                 const cell = [source, target];

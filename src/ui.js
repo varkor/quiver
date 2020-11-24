@@ -2601,6 +2601,7 @@ class UI {
                     // If we can't find the endpoints, the arrow isn't being drawn, so we don't
                     // need to bother trying to shorten it.
                 }
+
                 // Body style.
                 switch (options.style.body.name) {
                     case "squiggly":
@@ -3566,12 +3567,12 @@ class Panel {
             ui,
             wrapper,
             [
-                ["solid", "Solid", { name: "cell", level: 1 }, `${key_index++}`],
+                ["solid", "Solid", { name: "cell" }, `${key_index++}`],
                 ["none", "No body", { name: "none" }, `${key_index++}`],
-                ["dashed", "Dashed", { name: "dashed", level: 1 }, `${key_index++}`],
-                ["dotted", "Dotted", { name: "dotted", level: 1 }, `${key_index++}`],
-                ["squiggly", "Squiggly", { name: "squiggly", level: 1 }, `${key_index++}`],
-                ["barred", "Barred", { name: "barred", level: 1 }, `${key_index++}`],
+                ["dashed", "Dashed", { name: "dashed" }, `${key_index++}`],
+                ["dotted", "Dotted", { name: "dotted" }, `${key_index++}`],
+                ["squiggly", "Squiggly", { name: "squiggly" }, `${key_index++}`],
+                ["barred", "Barred", { name: "barred" }, `${key_index++}`],
             ],
             "body-type",
             ["vertical", "arrow-style", "kbd-requires-focus"],
@@ -5231,20 +5232,39 @@ class Edge extends Cell {
     }
 
     /// A set of defaults for edge options: a basic arrow (→).
-    static default_options(override_properties = null, override_style = null) {
-        let options = Object.assign({
+    static default_options(properties = null, style = null) {
+        const options = {
             label_alignment: "left",
             offset: 0,
             curve: 0,
             length: 100,
             level: 1,
-            style: Object.assign({
+            style: {
                 name: "arrow",
                 tail: { name: "none" },
                 body: { name: "cell" },
                 head: { name: "arrowhead" },
-            }, override_style),
-        }, override_properties);
+            },
+        };
+
+        // Copy values in `properties` and `style` into `options`.
+        const deep_assign = (target, source) => {
+            if (typeof source === "undefined" || source === null) {
+                return;
+            }
+
+            for (const [key, value] of Object.entries(source)) {
+                if (typeof value === "object") {
+                    target[key] ||= {};
+                    deep_assign(target[key], value);
+                } else {
+                    target[key] = value;
+                }
+            }
+        };
+
+        deep_assign(options, properties);
+        deep_assign(options.style, style);
 
         return options;
     }
