@@ -118,6 +118,11 @@ class Quiver {
         return Array.from(this.dependencies.keys()).filter(cell => !this.deleted.has(cell));
     }
 
+    /// Returns whether a cell exists in the quiver (i.e. hasn't been deleted).
+    contains_cell(cell) {
+        return this.all_cells().includes(cell);
+    }
+
     /// Rerender the entire quiver. This is expensive, so should only be used when more
     /// conservative rerenderings are inappropriate (e.g. when the grid has been resized).
     rerender(ui) {

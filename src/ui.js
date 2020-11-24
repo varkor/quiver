@@ -1428,7 +1428,12 @@ class UI {
                         // (i.e. the first or last queued cell).
                         if (this.element.query_selector(".cell.selected kbd") !== null) {
                             // Find the first selected cell.
-                            const codes = Array.from(this.codes);
+                            const codes = Array.from(this.codes).filter(([, cell]) => {
+                                // We currently do not flush the `codes`, so we need to make sure
+                                // we're only considering cells that currently exist (and haven't
+                                // been deleted).
+                                return this.quiver.contains_cell(cell);
+                            });
                             const selected_index = codes.findIndex(([, cell]) => {
                                 return cell.element.class_list.contains("selected");
                             });
@@ -1448,8 +1453,7 @@ class UI {
                                     i = codes.length - 1;
                                 }
                                 const [, cell] = codes[i];
-                                if (!this.quiver.deleted.has(cell)
-                                    && !cell.element.class_list.contains("selected")
+                                if (!cell.element.class_list.contains("selected")
                                     && cell.element.query_selector("kbd.queue") !== null
                                 ) {
                                     select = cell;
