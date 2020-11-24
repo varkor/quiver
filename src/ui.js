@@ -1300,7 +1300,7 @@ class UI {
                     const actions = [];
                     for (const code of codes) {
                         const cell = this.codes.get(code);
-                        if (cell !== undefined) {
+                        if (cell !== undefined && this.quiver.contains_cell(cell)) {
                             switch (mode) {
                                 case "Select":
                                 case "Toggle":
@@ -4909,6 +4909,8 @@ class Cell {
                             ui.deselect(this);
                         }
                     }
+
+                    ui.panel.defocus_inputs();
 
                     // We won't start a new connection immediately, because that will hide
                     // the toolbar prematurely. Instead, we'll add a `.pending` class, which
