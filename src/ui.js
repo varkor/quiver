@@ -911,11 +911,10 @@ class UI {
                     // Stop trying to connect cells when the mouse is released outside
                     // the `<body>`.
                     if (this.state.forged_vertex) {
-                        const created = new Set([this.state.source]);
                         this.history.add(this, [{
                             kind: "create",
-                            cells: created,
-                        }], false, this.selection_excluding(created));
+                            cells: new Set([this.state.source]),
+                        }]);
                     }
                     this.switch_mode(UIState.default);
                 }
@@ -1197,7 +1196,12 @@ class UI {
                 return;
             }
 
-            const position = this.reposition_focus_point(this.position_from_event(event), false);
+            // We permanently change the focus point position if we are dragging to connect an edge,
+            // so that the focus point will be in the location we drag to.
+            const position = this.reposition_focus_point(
+                this.position_from_event(event),
+                this.in_mode(UIState.Connect),
+            );
 
             // We want to reveal the focus point if and only if it is
             // not at the same position as an existing vertex (i.e. over an
@@ -1284,6 +1288,7 @@ class UI {
                         // Deselect all selected cells.
                         this.deselect();
                     }
+                    let repositioned_focus_point = false;
                     let final_selection = null;
                     const actions = [];
                     for (const code of codes) {
@@ -1296,6 +1301,11 @@ class UI {
                                         this.select(cell);
                                     } else {
                                         this.deselect(cell);
+                                    }
+                                    // Focus on the first vertex that the user typed.
+                                    if (!repositioned_focus_point && cell.is_vertex()) {
+                                        this.reposition_focus_point(cell.position, true);
+                                        repositioned_focus_point = true;
                                     }
                                     break;
                                 case "Source":
@@ -1372,7 +1382,10 @@ class UI {
                                 this.select(cell_under_focus_point);
                             }
                         }
-                        this.panel.focus_label_input();
+                        this.panel.defocus_inputs();
+                        if (this.selection.size > 0) {
+                            this.panel.focus_label_input();
+                        }
                     } else {
                         // Pressing Enter "confirms" the currently selected queued cells.
                         this.panel.unqueue_selected(this);
@@ -1710,16 +1723,21 @@ class UI {
             }
 
             if (this.in_mode(UIState.Default)) {
+                // Reveal the focus point if it wasn't already visible.
                 if (!this.focus_point.class_list.contains("focused")) {
-                    // The first time we press an arrow key, and the focus point is not focused,
-                    // focus it. After that, pressing an arrow key will move the focus point.
-                    this.reposition_focus_point(this.focus_position);
                     this.focus_point.class_list.remove("revealed", "pending", "active");
                     this.focus_point.class_list.add("focused");
-                    UI.delay(() => this.focus_point.class_list.add("smooth"));
+                    // We first reposition to the correct location, then add the delta after adding
+                    // the `smooth` class (directly below), so that it animates to the new position.
+                    this.reposition_focus_point(this.focus_position);
+                    UI.delay(() => {
+                        this.focus_point.class_list.add("smooth");
+                        this.reposition_focus_point(this.focus_position.add(position_delta));
+                    });
                 } else {
                     this.reposition_focus_point(this.focus_position.add(position_delta));
                 }
+
                 this.update_focus_tooltip();
 
                 // Reposition the view if the focus point is not complete in-view.
@@ -2273,11 +2291,10 @@ class UI {
             if (this.state.forged_vertex) {
                 // If we created a vertex as part of the connection, we need to record
                 // that as an action.
-                const created = new Set([this.state.source]);
                 this.history.add(this, [{
                     kind: "create",
-                    cells: created,
-                }], false, this.selection_excluding(created));
+                    cells: new Set([this.state.source]),
+                }]);
             }
             this.switch_mode(UIState.default);
             return true;
@@ -4950,6 +4967,7 @@ class Cell {
                     }
                 }
 
+
                 if (ui.in_mode(UIState.Connect)) {
                     event.stopImmediatePropagation();
 
@@ -4995,6 +5013,16 @@ class Cell {
                         // connecting an edge to a node it's already connected to).
                         if (actions.length > 0) {
                             ui.history.add(ui, actions, false, ui.selection_excluding(cells));
+                        }
+                    } else if (ui.state.source === this && ui.state.target === null) {
+                        // Here, we released the mouse on the source vertex, but may have forged a
+                        // vertex when we began dragging, so we need to add a history event to
+                        // record it.
+                        if (ui.state.forged_vertex) {
+                            ui.history.add(ui, [{
+                                kind: "create",
+                                cells: new Set([ui.state.source]),
+                            }]);
                         }
                     }
 
@@ -5216,6 +5244,7 @@ class Edge extends Cell {
             // We don't get the default blur behaviour here, as we've prevented it, so we have to do
             // it ourselves.
             ui.panel.label_input.element.blur();
+            ui.focus_point.class_list.remove("focused", "smooth");
 
             const fixed = { source: this.target, target: this.source }[end];
             ui.switch_mode(new UIState.Connect(ui, fixed, false, {
