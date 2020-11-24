@@ -1311,7 +1311,7 @@ class UI {
                                     }
                                     // Focus on the first vertex that the user typed.
                                     if (!repositioned_focus_point && cell.is_vertex()) {
-                                        this.reposition_focus_point(cell.position, true);
+                                        this.reposition_focus_point(cell.position);
                                         repositioned_focus_point = true;
                                     }
                                     break;
@@ -4897,6 +4897,9 @@ class Cell {
                         // Deselect all other nodes.
                         ui.deselect();
                         ui.select(this);
+                        if (this.is_vertex()) {
+                            ui.reposition_focus_point(this.position);
+                        }
                     } else {
                         // Toggle selection when holding Shift/Command/Control and clicking.
                         if (!ui.selection.has(this)) {
