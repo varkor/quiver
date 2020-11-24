@@ -839,6 +839,12 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
 
         // Centre the view on the quiver.
         ui.centre_view();
+        // Also centre the focus point, so that it's centre of screen.
+        // We subtract 0.5 from the position so that when the view is centred perfectly between
+        // two cells, we prefer the top/leftmost cell.
+        ui.focus_point.class_list.remove("smooth");
+        ui.reposition_focus_point(ui.position_from_offset(ui.view.sub(Point.diag(0.5))));
+        UI.delay(() => ui.focus_point.class_list.add("smooth"));
 
         // When cells are created, they are usually queued. We don't want any cells that have been
         // imported to be queued.
