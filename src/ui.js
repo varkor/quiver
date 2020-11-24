@@ -746,31 +746,38 @@ class UI {
                 "diagrams, capable of rendering high-quality diagrams for screen viewing, and " +
                 "exporting to LaTeX via tikz-cd."
             ))
-            .add(new DOM.Element("p").add(
-                "Creating and modifying diagrams with "
-            ).add(new DOM.Element("b").add("quiver")).add(
-                " is orders of magnitude faster than writing the equivalent LaTeX by hand and, " +
-                "with a little experience, competes with pen-and-paper."
-            ))
-            .add(new DOM.Element("p").add(
-                "The editor is open source and may be found on "
-            ).add(new DOM.Element("a", { href: "https://github.com/varkor/quiver" })
-                .add("GitHub")).add(
+            .add(new DOM.Element("p")
+                .add("Creating and modifying diagrams with ")
+                .add(new DOM.Element("b").add("quiver"))
+                .add(
+                    " is orders of magnitude faster than writing the equivalent LaTeX by hand " +
+                    "and, with a little experience, competes with pen-and-paper."
+                )
+            )
+            .add(new DOM.Element("p")
+                .add("The editor is open source and may be found ")
+                .add(new DOM.Link("https://github.com/varkor/quiver", "on GitHub", true))
+                .add(
                     ". If you would like to request a feature, or want to report an issue, you can "
-                ).add(new DOM.Element("a", { href: "https://github.com/varkor/quiver/issues" })
-                .add("do so here")).add(".")
+                ).add(new DOM.Link("https://github.com/varkor/quiver/issues", "do so here", true))
+                .add(".")
+            )
+            .add(new DOM.Element("p").add("You can follow ")
+                .add(new DOM.Element("b").add("quiver")).add(" ")
+                .add(new DOM.Link("https://twitter.com/q_uiver_app", "on Twitter", true))
+                .add(" for updates on new features.")
             )
             .add(new DOM.Element("h2").add("Thanks to"))
             .add(new DOM.List(false, [
                 new DOM.Element("li").add(
-                    new DOM.Element("a", {
-                        href: "https://www.cl.cam.ac.uk/~scs62/",
-                    }).add("S. C. Steenkamp")
+                    new DOM.Link("https://www.cl.cam.ac.uk/~scs62/", "S. C. Steenkamp", true)
                 ).add(", for helpful discussions regarding the aesthetic rendering of arrows."),
                 new DOM.Element("li").add(
-                    new DOM.Element("a", {
-                        href: "https://tex.stackexchange.com/users/138900/andr%c3%a9c"
-                    }).add("AndréC")
+                    new DOM.Link(
+                        "https://tex.stackexchange.com/users/138900/andr%c3%a9c",
+                        "AndréC",
+                        true,
+                    )
                 ).add(", for the custom TikZ style for curves of a fixed height."),
                 new DOM.Element("li").add(
                     "Everyone who has improved "
@@ -1537,6 +1544,7 @@ class UI {
             const unhidden_pane = this.element.query_selector(".pane:not(.hidden)");
             if (unhidden_pane !== null) {
                 unhidden_pane.class_list.add("hidden");
+                this.element.query_selector(".version").class_list.add("hidden");
                 return;
             }
 

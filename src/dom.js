@@ -192,3 +192,14 @@ DOM.List = class extends DOM.Element {
         }
     }
 };
+
+// A class for conveniently dealing with hyperlinks.
+DOM.Link = class extends DOM.Element {
+    constructor(url, content, new_tab = false, attributes = {}, style = {}) {
+        super("a", Object.assign({ href: url }, attributes), style);
+        if (new_tab) {
+            this.set_attributes({ target: "_blank" });
+        }
+        this.add(content);
+    }
+};
