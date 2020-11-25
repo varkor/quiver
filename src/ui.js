@@ -5261,7 +5261,7 @@ class Edge extends Cell {
 
             for (const [key, value] of Object.entries(source)) {
                 if (typeof value === "object") {
-                    target[key] ||= {};
+                    target[key] = target[key] || {};
                     deep_assign(target[key], value);
                 } else {
                     target[key] = value;

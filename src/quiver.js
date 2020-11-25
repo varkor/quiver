@@ -369,7 +369,6 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                     + TIKZ_VERTICAL_MULTIPLIER ** 2 * Math.cos(edge.angle()) ** 2) ** 0.5);
 
                 if (edge.options.curve !== 0) {
-                    has_curves = true;
                     parameters.push(
                         `curve={height=${
                             // Using a fixed multiplier for curves of any angle tends to work better
