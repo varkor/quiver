@@ -33,7 +33,7 @@ body {
 
     background: white;
 
-    font-family: sans-serif;
+    font-family: Arial, sans-serif;
 }
 
 body:not(.modal) {
@@ -220,7 +220,7 @@ kbd {
     background: hsla(0, 0%, 0%, 0);
 
     text-align: center;
-    font: 16px sans-serif;
+    font: 16px Arial, sans-serif;
     color: hsla(0, 0%, 0%, 0.4);
 }
 
@@ -353,7 +353,7 @@ being. */
     z-index: 100;
     overflow-y: auto;
 
-    font: 14px sans-serif;
+    font: 14px Arial, sans-serif;
     color: var(--ui-text);
 }
 
