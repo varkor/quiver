@@ -445,14 +445,20 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                                 break;
 
                             case "mono":
-                                parameters.push("tail");
-                                // We could potentially also support this for 2-cells, by using a
-                                // hack: `\arrow[equal, {Implies[reversed]}-Implies]`, but we leave
-                                // this for now.
-                                if (edge.options.level > 1) {
-                                    tikz_incompatibilities.add(
-                                        "double arrows or higher with mono tails"
-                                    );
+                                switch (edge.options.level) {
+                                    case 1:
+                                        parameters.push("tail");
+                                        break;
+                                    case 2:
+                                        parameters.push("2tail");
+                                        break;
+                                    default:
+                                        // We've already reported an issue with triple arrows and
+                                        // higher in tikz-cd, so we don't emit another one. Triple
+                                        // cells are currently exported as normal arrows, so we add
+                                        // the correct tail for 1-cells.
+                                        parameters.push("tail");
+                                        break;
                                 }
                                 break;
 
@@ -464,6 +470,24 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                                     tikz_incompatibilities.add(
                                         "double arrows or higher with hook tails"
                                     );
+                                }
+                                break;
+
+                            case "arrowhead":
+                                switch (edge.options.level) {
+                                    case 1:
+                                        parameters.push("tail reversed");
+                                        break;
+                                    case 2:
+                                        parameters.push("2tail reversed");
+                                        break;
+                                    default:
+                                        // We've already reported an issue with triple arrows and
+                                        // higher in tikz-cd, so we don't emit another one. Triple
+                                        // cells are currently exported as normal arrows, so we add
+                                        // the correct tail for 1-cells.
+                                        parameters.push("tail reversed");
+                                        break;
                                 }
                                 break;
                         }

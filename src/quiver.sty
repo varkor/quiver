@@ -4,13 +4,13 @@
 % This package is currently a wrapper around the `tikz-cd` package, importing necessary TikZ
 % libraries, and defining a new TikZ style for curves of a fixed height.
 %
-% Version: 1.0.0
+% Version: 1.0.1
 % Authors:
 % - varkor (https://github.com/varkor)
 % - AndréC (https://tex.stackexchange.com/users/138900/andr%C3%A9c)
 
 \NeedsTeXFormat{LaTeX2e}
-\ProvidesPackage{quiver}[2020/11/10 quiver]
+\ProvidesPackage{quiver}[2020/11/27 quiver]
 
 % `tikz-cd` is necessary to draw commutative diagrams.
 \RequirePackage{tikz-cd}
@@ -27,5 +27,10 @@
     settings/.code={\tikzset{quiver/.cd,#1}
         \def\pv##1{\pgfkeysvalueof{/tikz/quiver/##1}}},
     quiver/.cd,pos/.initial=0.35,height/.initial=0}
+
+% TikZ arrowhead/tail styles.
+\tikzset{tail reversed/.code={\pgfsetarrowsstart{tikzcd to}}}
+\tikzset{2tail/.code={\pgfsetarrowsstart{Implies[reversed]}}}
+\tikzset{2tail reversed/.code={\pgfsetarrowsstart{Implies}}}
 
 \endinput

@@ -639,8 +639,18 @@ input[type="text"].flash {
     border-radius: 0 0 0 2px;
 }
 
+.panel .vertical input[type="radio"].short:not(:nth-last-of-type(2)) + input[type="radio"].short {
+    border-radius: 0;
+}
+
 .panel .vertical input[type="radio"].short:last-of-type {
     border-radius: 0 0 2px 0;
+}
+
+input[type="radio"].short + input[type="radio"]:not(.short) {
+    /* To be honest, I'm not quite sure why this is necessary, but it produces the right effect on
+    the browsers I tested on. */
+    margin-top: -4px;
 }
 
 .panel input[type="radio"]:hover:not(:disabled) {

@@ -3,7 +3,7 @@
 /// Various parameters.
 Object.assign(CONSTANTS, {
     /// The current quiver version.
-    VERSION: "1.0.0",
+    VERSION: "1.0.1",
     /// We currently only support 0-cells, 1-cells, 2-cells, and 3-cells. This is due to
     /// a restriction with tikz-cd, which does not support n-cells greater than n = 2 (though it has
     /// issues even then), and also for usability: a user is unlikely to want to draw a higher cell.
@@ -794,6 +794,13 @@ class UI {
         // doesn't match the current version of quiver, we may display the new features of the
         // current version of quiver. Otherwise, we do nothing.
         const version_previous_use = window.localStorage.getItem("version-previous-use");
+
+        if (version_previous_use) {
+            // If the user has used quiver before, update the previous use version.
+            // Otherwise, we display a welcome message below, and only update it once the user has
+            // acknowledged it.
+            window.localStorage.setItem("version-previous-use", CONSTANTS.VERSION);
+        }
 
         // Set up the welcome pane.
         const welcome_pane = new DOM.Element("div", {
@@ -2638,6 +2645,9 @@ class UI {
                             "bottom": "HOOK_BOTTOM",
                         }[options.style.tail.side]];
                         break;
+                    case "arrowhead":
+                        style.tails = CONSTANTS.ARROW_HEAD_STYLE.NORMAL;
+                        break;
                 }
 
                 // Head style.
@@ -3545,6 +3555,7 @@ class Panel {
                     { name: "hook", side: "top" }, `${key_index++}`, ["short"]],
                 ["bottom-hook", "Bottom hook",
                     { name: "hook", side: "bottom" }, `${key_index++}`, ["short"]],
+                ["arrowhead", "Arrowhead", { name: "arrowhead"}, `${key_index++}`],
             ],
             "tail-type",
             ["vertical", "short", "arrow-style", "kbd-requires-focus"],
@@ -4166,9 +4177,9 @@ class Panel {
                     if (cell.options.style.name === "arrow") {
                         for (const component of ["tail", "body", "head"]) {
                             let value;
-                            // The following makes the assumption that the
-                            // distinguished names are unique, even between
-                            // different components.
+                            // The following makes the assumption that the distinguished names
+                            // `cell`, `hook` and `harpoon` are unique, even between different
+                            // components.
                             switch (cell.options.style[component].name) {
                                 case "cell":
                                     value = "solid";
