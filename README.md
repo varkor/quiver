@@ -60,7 +60,7 @@ to return to it later if you decide it needs to be modified, or to share it with
 
 ## Building
 Make sure you have [installed yarn](https://yarnpkg.com/lang/en/docs/install/) and have a version of
-make that supports `.ONESHELL` (e.g. GNU Make 3.82).
+Make that supports `.ONESHELL` (e.g. GNU Make 3.82).
 
 Clone the repository, and run
 ```shell
@@ -68,9 +68,15 @@ make
 ```
 which will build KaTeX. Then simply open `src/index.html` in your favourite web browser.
 
-If you have any problems building **quiver**,
-[open an issue](https://github.com/varkor/quiver/issues/new) detailing the problem and I'll try to
-help.
+**Note for macOS users:** the default version of Make on macOS is GNU Make 3.81, which does not
+contain support for `.ONESHELL`. You may need to update Make to run the Makefile.
+
+**Note for Ubuntu users:** the cmdtest package that comes with Ubuntu conflicts with the yarn
+installation. You may need to [uninstall cmdtest](https://github.com/varkor/quiver/issues/48) to
+install yarn.
+
+If you have any other problems building **quiver**, [open an
+issue](https://github.com/varkor/quiver/issues/new) detailing the problem and I'll try to help.
 
 ## Thanks to
 - [S. C. Steenkamp](https://www.cl.cam.ac.uk/~scs62/) , for helpful discussions regarding the
