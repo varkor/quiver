@@ -2293,8 +2293,8 @@ class UI {
         for (const removed of this.quiver.remove(cell, when)) {
             if (removed.is_vertex()) {
                 this.positions.delete(`${removed.position}`);
-                this.cell_width_constraints.delete(cell.position.x);
-                this.cell_height_constraints.delete(cell.position.y);
+                this.cell_width_constraints.get(cell.position.x).delete(cell);
+                this.cell_height_constraints.get(cell.position.y).delete(cell);
                 update_positions.add(removed.position);
             }
             this.deselect(removed);
