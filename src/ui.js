@@ -1521,12 +1521,18 @@ class UI {
                         "/": "Create",
                     }[event.key];
                     if (this.in_mode(UIState.Default)) {
-                        this.panel.defocus_inputs();
-                        // We won't actually be creating anything, but the focus point might be
-                        // visible, in which case the following will hide it.
-                        this.cancel_creation();
-                        this.focus_point.class_list.remove("focused", "smooth");
-                        this.switch_mode(new UIState.Command(this, mode));
+                        // We use `Defer` instead of `Conservative` so that we can switch modes by
+                        // pressing the various command keys (when the input will be focused), but
+                        // when we are in the default mode, we don't want to trigger command mode
+                        // if we are editing any input.
+                        if (!this.input_is_active()) {
+                            this.panel.defocus_inputs();
+                            // We won't actually be creating anything, but the focus point might be
+                            // visible, in which case the following will hide it.
+                            this.cancel_creation();
+                            this.focus_point.class_list.remove("focused", "smooth");
+                            this.switch_mode(new UIState.Command(this, mode));
+                        }
                     } else if (this.state.mode !== mode) {
                         this.state.switch_mode(this, mode);
                     } else {
