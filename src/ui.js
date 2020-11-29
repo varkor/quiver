@@ -783,7 +783,9 @@ class UI {
                 .add(" by reporting issues or suggesting improvements.")
             ]))
             .add(new DOM.Element("footer")
-                .add("Created by varkor.")
+                .add("Created by ")
+                .add(new DOM.Link("https://github.com/varkor", "varkor", true))
+                .add(".")
             )
         );
 
