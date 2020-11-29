@@ -936,7 +936,7 @@ user has already pressed semicolon, placing us in command mode. */
 
 .toolbar {
     position: fixed;
-    height: 52px;
+    height: 60px;
     left: 50%; top: 16px;
     transform: translateX(-50%);
     z-index: 100;
@@ -960,7 +960,7 @@ user has already pressed semicolon, placing us in command mode. */
 .toolbar .action {
     position: relative;
     vertical-align: middle;
-    width: 48px; height: 52px;
+    width: 56px; height: 60px;
 
     background: transparent;
     border: none;
@@ -1016,8 +1016,8 @@ button.flash {
     left: 50%;
     transform: translateX(-50%);
 
-    font-size: 8px;
-    line-height: 8px;
+    font-size: 9.5px;
+    line-height: 9.5px;
     color: hsl(0, 0%, 80%);
 }
 
@@ -1026,20 +1026,20 @@ button.flash {
 }
 
 .toolbar .action .shortcut {
-    bottom: 4px;
+    bottom: 6px;
 }
 
-/* The keyboard shortcuts pane */
+/* The welcome / keyboard shortcuts / about panes */
 
 .pane {
     position: fixed;
     /* Display just below the toolbar. */
     left: 50%;
-    top: calc(16px + 52px + 8px);
+    top: calc(16px + 60px + 8px);
     transform: translateX(-50%);
     width: 50%;
     /* Display at most to just above the global panel. */
-    max-height: calc(100% - (16px + 52px + 8px + 16pt + 4px * 2 + 16px + 8px));
+    max-height: calc(100% - (16px + 60px + 8px + 16pt + 4px * 2 + 16px + 8px));
     padding: 8pt 20pt;
     overflow-y: auto;
     z-index: 100;
