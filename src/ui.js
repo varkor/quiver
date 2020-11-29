@@ -416,8 +416,6 @@ UIState.KeyMove = class extends UIState {
                 .add(new DOM.Element("kbd").add("esc"))
                 .add(" to finish moving.");
 
-        // Always centre the view on the selected cells to begin.
-        ui.centre_view();
         // Hide various inputs and panels.
         ui.panel.hide();
         ui.panel.label_input.parent.class_list.add("hidden");
@@ -1874,7 +1872,6 @@ class UI {
                                     to: vertex.position.add(position_delta.mul(distance)),
                                 })),
                             }], true);
-                            this.centre_view();
                             break;
                         }
                     }
