@@ -1315,43 +1315,14 @@ class UI {
                 this.focus_point.class_list.add("active");
             }
 
-            // If the user has currently clicked to place a vertex, or activated keyboard controls,
-            // then don't reposition the focus point until the new vertex has been created:
-            // otherwise we might move the focus point before the vertex has been created and
-            // accidentally place the vertex in the new position of the focus point, rather than
-            // the old one.
-            if (!this.in_mode(UIMode.Connect) && (this.focus_point.class_list.contains("revealed")
-                || this.focus_point.class_list.contains("focused"))
-            ) {
-                return;
-            }
-
-            // We permanently change the focus point position if we are dragging to connect an edge,
-            // so that the focus point will be in the location we drag to.
-            const position = this.reposition_focus_point(
-                this.position_from_event(event),
-                this.in_mode(UIMode.Connect),
-            );
-
-            // We want to reveal the focus point if and only if it is
-            // not at the same position as an existing vertex (i.e. over an
-            // empty grid cell).
-            if (this.in_mode(UIMode.Connect)) {
-                // We only permit the forgery of vertices, not edges.
-                if (this.mode.source.is_vertex() && this.mode.target === null) {
-                    this.focus_point.class_list
-                        .toggle("revealed", !this.positions.has(`${position}`));
-                }
-            }
+            const position = this.position_from_event(event);
 
             // Moving cells around with the pointer.
             if (this.in_mode(UIMode.PointerMove)) {
                 // Prevent dragging from selecting random elements.
                 event.preventDefault();
 
-                const new_position = (cell) => {
-                    return cell.position.add(position).sub(this.mode.previous);
-                };
+                const new_position = (cell) => cell.position.add(position).sub(this.mode.previous);
 
                 // We will only try to reposition if the new position is actually different
                 // (rather than the cursor simply having moved within the same grid cell).
@@ -1395,9 +1366,33 @@ class UI {
                 }
             }
 
+            // If the user has currently clicked to place a vertex, or activated keyboard controls,
+            // then don't reposition the focus point until the new vertex has been created:
+            // otherwise we might move the focus point before the vertex has been created and
+            // accidentally place the vertex in the new position of the focus point, rather than
+            // the old one.
+            if (!this.in_mode(UIMode.Connect) && (this.focus_point.class_list.contains("revealed")
+                || this.focus_point.class_list.contains("focused"))
+            ) {
+                return;
+            }
+
+            // We permanently change the focus point position if we are dragging to connect an edge,
+            // so that the focus point will be in the location we drag to.
+            this.reposition_focus_point(position, this.in_mode(UIMode.Connect));
+
+            // We want to reveal the focus point if and only if it is
+            // not at the same position as an existing vertex (i.e. over an
+            // empty grid cell).
             if (this.in_mode(UIMode.Connect)) {
                 // Prevent dragging from selecting random elements.
                 event.preventDefault();
+
+                // We only permit the forgery of vertices, not edges.
+                if (this.mode.source.is_vertex() && this.mode.target === null) {
+                    this.focus_point.class_list
+                        .toggle("revealed", !this.positions.has(`${position}`));
+                }
 
                 // Update the position of the cursor.
                 const offset = this.offset_from_event(event);
@@ -2273,7 +2268,6 @@ class UI {
             height: `${height}px`,
             "padding-top": `${height / 2}px`,
         });
-        return position;
     };
 
     /// Returns the cell under the focus point, if the focus point is active and such a cell exists.
@@ -4983,7 +4977,9 @@ class Cell {
                 if (event.button === 0) {
                     if (ui.in_mode(UIMode.Default)) {
                         event.stopPropagation();
-                        ui.focus_point.class_list.remove("focused", "smooth");
+                        ui.focus_point.class_list.remove(
+                            "revealed", "pending", "active", "focused", "smooth"
+                        );
                         // If the cell we're dragging is part of the existing selection,
                         // then we'll move every cell that is selected. However, if it's
                         // not already part of the selection, we'll just drag this cell
