@@ -113,7 +113,7 @@ noscript {
     position: fixed;
     left: 16px; top: 16px;
     width: 100px;
-    z-index: 100;
+    z-index: 90;
 
     opacity: 0.8;
 }
@@ -129,7 +129,7 @@ noscript {
 .version {
     position: fixed;
     left: 50px; top: 48px;
-    z-index: 100;
+    z-index: 90;
 
     font-size: 8pt;
     color: var(--ui-black);
@@ -144,7 +144,7 @@ noscript {
     padding: 8px 12px;
     line-height: 18pt;
     transform: translateX(-50%);
-    z-index: 90;
+    z-index: 80;
 
     background: var(--ui-blue);
     border-radius: 4px;
@@ -352,7 +352,7 @@ being. */
 
 .panel {
     position: fixed;
-    z-index: 100;
+    z-index: 91;
     overflow-y: auto;
 
     font: 14px Arial, sans-serif;
@@ -941,7 +941,7 @@ user has already pressed semicolon, placing us in command mode. */
     height: 60px;
     left: 50%; top: 16px;
     transform: translateX(-50%);
-    z-index: 100;
+    z-index: 90;
 
     background: var(--ui-black);
     border-radius: 8px;
@@ -1044,7 +1044,7 @@ button.flash {
     max-height: calc(100% - (16px + 60px + 8px + 16pt + 4px * 2 + 16px + 8px));
     padding: 8pt 20pt;
     overflow-y: auto;
-    z-index: 100;
+    z-index: 90;
 
     opacity: 1;
     background: var(--ui-black);
