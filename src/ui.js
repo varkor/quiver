@@ -873,7 +873,7 @@ class UI {
             event.preventDefault();
 
             // Hide the focus point if it is visible.
-            this.focus_point.class_list.remove("revealed");
+            this.focus_point.class_list.remove("revealed", "pending", "active");
 
             this.pan_view(new Offset(
                 event.deltaX * 2 ** -this.scale,
@@ -925,6 +925,14 @@ class UI {
 
         document.addEventListener("touchstart", (event) => {
             is_touching = true;
+            if (event.touches.length > 1) {
+                // Multiple touches can cause strange behaviours, because they don't follow the
+                // usual rules (e.g. two consecutive `pointerdown`s without an intervening
+                // `pointerup`.)
+                if (this.in_mode(UIState.Default)) {
+                    this.cancel_creation();
+                }
+            }
         });
 
         // Disable the context menu on touchscreens. See the comment above `is_touching`.
@@ -1154,11 +1162,10 @@ class UI {
                         event.stopImmediatePropagation();
                         // We only want to forge vertices, not edges (and thus 1-cells).
                         if (this.state.source.is_vertex()) {
-                            this.state.target = create_vertex(this.position_from_event(event));
                             // Usually this vertex will be immediately deselected, except when Shift
                             // is held, in which case we want to select the forged vertices *and*
                             // the new edge.
-                            this.select(this.state.target);
+                            this.state.target = create_vertex_at_focus_point(event);
                             const created = new Set([this.state.target]);
                             const actions = [{
                                 kind: "create",
@@ -1181,8 +1188,6 @@ class UI {
                                 // the new vertex.
                                 const { edge, end } = this.state.reconnect;
                                 if (!event.shiftKey && !event.metaKey && !event.ctrlKey) {
-                                    this.deselect();
-                                    this.select(this.state.target);
                                     this.panel.label_input.element.select();
                                 }
                                 actions.push({
@@ -1234,11 +1239,7 @@ class UI {
                     // If the focus point is `"active"`, we're going to create
                     // a vertex and start connecting it.
                     this.focus_point.class_list.remove("active");
-                    const vertex = create_vertex(this.position_from_offset(new Offset(
-                        this.focus_point.element.offsetLeft,
-                        this.focus_point.element.offsetTop,
-                    )));
-                    this.select(vertex);
+                    const vertex = create_vertex_at_focus_point(event);
                     this.switch_mode(new UIState.Connect(this, vertex, true));
                     vertex.element.class_list.add("source");
                 } else if (!this.in_mode(UIState.Connect)) {
@@ -2378,6 +2379,8 @@ class UI {
 
     /// Cancel the creation of a new vertex or edge via clicking or dragging.
     cancel_creation() {
+        let effectful = false;
+
         // Stop trying to connect cells.
         if (this.in_mode(UIState.Connect)) {
             if (this.state.forged_vertex) {
@@ -2389,24 +2392,28 @@ class UI {
                 }]);
             }
             this.switch_mode(UIState.default);
-            return true;
+            effectful = true;
         }
 
         // If we're waiting to start connecting a cell, then we stop waiting.
         const pending = this.element.query_selector(".cell.pending");
         if (pending !== null) {
             pending.class_list.remove("pending");
-            return true;
+            effectful = true;
         }
 
         // If the user has revealed the focus point (and possibly started dragging), hide it
         // again.
-        if (this.focus_point.class_list.contains("revealed")) {
+        const class_list = this.focus_point.class_list;
+        if (
+            class_list.contains("revealed") || class_list.contains("pending")
+            || class_list.contains("active")
+        ) {
             this.focus_point.class_list.remove("revealed", "pending", "active");
-            return true;
+            effectful = true;
         }
 
-        return false;
+        return effectful;
     }
 
     /// Repositions the view by an absolute offset.
