@@ -34,6 +34,8 @@ body {
     background: white;
 
     font-family: Arial, sans-serif;
+
+    touch-action: none;
 }
 
 body:not(.modal) {
@@ -1242,13 +1244,13 @@ button.flash {
     pointer-events: stroke;
 }
 
-.arrow:not(.selected) > svg:first-child:not(:hover) > .arrow-background,
+.arrow:not(.target):not(.selected) > svg:first-child:not(:hover) > .arrow-background,
 .ui.connect .cell:not(.target):not(.selected) > svg:first-child:hover > .arrow-background,
-.ui.mouse-move .cell:not(.selected) > svg:first-child:hover > .arrow-background {
+.ui.pointer-move .cell:not(.selected) > svg:first-child:hover > .arrow-background {
     opacity: 0;
 }
 
-.arrow:not(.selected) > svg:first-child:hover {
+.arrow:not(.target):not(.selected) > svg:first-child:hover {
     opacity: 0.1 !important;
 }
 

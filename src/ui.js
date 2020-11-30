@@ -360,12 +360,12 @@ UIState.Connect = class extends UIState {
     }
 };
 
-/// Cells are being moved to a different position, via the mouse.
-UIState.MouseMove = class extends UIState {
+/// Cells are being moved to a different position, via the pointer.
+UIState.PointerMove = class extends UIState {
     constructor(ui, origin, selection) {
         super();
 
-        this.name = "mouse-move";
+        this.name = "pointer-move";
 
         /// The location from which the move was initiated.
         this.origin = origin;
@@ -631,8 +631,8 @@ class UI {
 
         // Prevent the label input being dismissed when clicked on in command mode, when no cells
         // are selected.
-        this.panel.label_input.parent.listen("mouseup", (event) => {
-            if (event.button === 0) {
+        this.panel.label_input.parent.listen("pointerup", (event) => {
+            if (event.button === 0 && event.pointerType !== "touch") {
                 event.stopPropagation();
             }
         });
@@ -664,6 +664,8 @@ class UI {
             ]))
             .add(new DOM.Element("h2").add("Navigation"))
             .add(new DOM.Table([
+                // Technically "pointer panning", but "mouse panning" is likely less confusing
+                // overall for users.
                 ["Enable mouse panning", (td) => Shortcuts.element(td, [
                     { key: "Control" }, { key: "Alt" }
                 ])],
@@ -839,8 +841,8 @@ class UI {
         for (const pane of panes) {
             this.element.add(pane);
 
-            // Prevent propagation of mouse events when interacting with the pane.
-            pane.listen("mousedown", (event) => {
+            // Prevent propagation of pointer events when interacting with the pane.
+            pane.listen("pointerdown", (event) => {
                 if (event.button === 0) {
                     event.stopImmediatePropagation();
                 }
@@ -903,64 +905,134 @@ class UI {
             }
         };
 
-        document.addEventListener("mousemove", (event) => {
+        document.addEventListener("pointermove", (event) => {
             if (this.in_mode(UIState.Pan)) {
-                // If we're panning, but no longer holding the requisite key, stop.
-                // This can happen if we release the key when the document is not focused.
-                if (!{ Control: event.ctrlKey, Alt: event.altKey }[this.state.key]) {
-                    this.switch_mode(UIState.default);
+                if (this.state.key !== null) {
+                    // If we're panning, but no longer holding the requisite key, stop.
+                    // This can happen if we release the key when the document is not focused.
+                    if (!{ Control: event.ctrlKey, Alt: event.altKey }[this.state.key]) {
+                        this.switch_mode(UIState.default);
+                    }
                 }
             }
         });
 
-        document.addEventListener("mouseup", (event) => {
-            if (event.button === 0) {
-                if (this.in_mode(UIState.Pan)) {
-                    // We only want to pan when the pointer is held.
-                    this.state.origin = null;
-                } else if (this.in_mode(UIState.MouseMove)) {
-                    commit_move_event();
-                    this.switch_mode(UIState.default);
-                } else if (this.in_mode(UIState.Connect)) {
-                    // Stop trying to connect cells when the mouse is released outside
-                    // the `<body>`.
-                    if (this.state.forged_vertex) {
-                        this.history.add(this, [{
-                            kind: "create",
-                            cells: new Set([this.state.source]),
-                        }]);
+        // We don't want long presses to trigger the context menu on touchscreens. However, we
+        // can't distinguish between context menus triggered by touchscreens versus, say,
+        // right-clicking. So we manually keep track of whether there are any touch events, and in
+        // this case, disable the context menu.
+        let is_touching = false;
+
+        document.addEventListener("touchstart", (event) => {
+            is_touching = true;
+        });
+
+        // Disable the context menu on touchscreens. See the comment above `is_touching`.
+        document.addEventListener("contextmenu", (event) => {
+            if (is_touching) {
+                event.preventDefault();
+            }
+        });
+
+        // The touch events don't function like pointer events by default, so we manually trigger
+        // pointer events from the touch events.
+
+        // The element that is currently being touched.
+        let touched_element = null;
+        // We have to track touch enter and touch leave events manually, since this is not directly
+        // available. One might imagine that the `touchmove` event would be ideal for this, but
+        // this appears not to trigger for small movements, whereas `pointermove` does.
+        document.addEventListener("pointermove", (event) => {
+            if (event.pointerType === "touch") {
+                const prev_touched_element = touched_element;
+                touched_element = document.elementFromPoint(event.clientX, event.clientY);
+                if (touched_element !== prev_touched_element) {
+                    // Trigger a `pointerleave` event on the element we are no longer touching.
+                    if (prev_touched_element !== null) {
+                        // We don't trigger the event if the element that is now being touched is a
+                        // child of the previous element.
+                        const prev_element_contains_next = touched_element !== null
+                            && prev_touched_element.contains(touched_element);
+                            if (!prev_element_contains_next) {
+                                prev_touched_element.dispatchEvent(
+                                    new Event("pointerleave", { bubbles: true })
+                                );
+                            }
                     }
-                    this.switch_mode(UIState.default);
+                    // Trigger a `pointerenter` event on the element we are now touching.
+                    if (touched_element !== null) {
+                        touched_element.dispatchEvent(
+                            new Event("pointerenter", { bubbles: true })
+                        );
+                    }
+                }
+            }
+        });
+
+        // Manually track touch end events, which do not properly trigger `pointerup` events
+        // automatically.
+        document.addEventListener("touchend", (event) => {
+            if (event.changedTouches.length === 1) {
+                const touch = event.changedTouches[0];
+                const touched_element = document.elementFromPoint(touch.clientX, touch.clientY);
+                if (touched_element !== null) {
+                    const pointer_event = new Event("pointerup", { bubbles: true });
+                    // We overwrite some properties that are necessary for `pointerup` listeners.
+                    pointer_event.button = 0;
+                    pointer_event.pageX = touch.pageX;
+                    pointer_event.pageY = touch.pageY;
+                    touched_element.dispatchEvent(pointer_event);
+                }
+            }
+            is_touching = false;
+            touched_element = null;
+        });
+
+        document.addEventListener("pointerup", (event) => {
+            if (event.button === 0) {
+                if (event.pointerType !== "touch") {
+                    if (this.in_mode(UIState.Pan)) {
+                        // We only want to pan when the pointer is held.
+                        this.state.origin = null;
+                    } else if (this.in_mode(UIState.PointerMove)) {
+                        commit_move_event();
+                        this.switch_mode(UIState.default);
+                    } else if (this.in_mode(UIState.Connect)) {
+                        // Stop trying to connect cells when the pointer is released outside
+                        // the `<body>`.
+                        if (this.state.forged_vertex) {
+                            this.history.add(this, [{
+                                kind: "create",
+                                cells: new Set([this.state.source]),
+                            }]);
+                        }
+                        this.switch_mode(UIState.default);
+                    }
                 }
                 this.panel.hide_if_unselected(this);
             }
         });
 
-        // Stop dragging cells when the mouse leaves the window.
-        this.element.listen("mouseleave", () => {
-            if (this.in_mode(UIState.MouseMove)) {
-                commit_move_event();
-                this.switch_mode(UIState.default);
-            }
-        });
-
         this.reposition_focus_point(Position.zero());
 
-        this.element.listen("mousedown", (event) => {
+        this.element.listen("pointerdown", (event) => {
             if (event.button === 0) {
                 // Usually, if `Alt` or `Control` have been held we will have already switched to
                 // the Pan mode. However, if the window is not in focus, they will not have been
-                // detected, so we switch modes on mouse click.
+                // detected, so we switch modes on pointer click.
                 if (this.in_mode(UIState.Default)) {
-                    if (this.focus_point.class_list.contains("focused")) {
-                        this.focus_point.class_list.remove("focused", "smooth");
-                        this.reposition_focus_point(this.position_from_event(event));
-                        this.focus_point.class_list.add("revealed", "pending");
-                    }
                     if (event.altKey) {
                         this.switch_mode(new UIState.Pan("Alt"));
                     } else if (event.ctrlKey) {
                         this.switch_mode(new UIState.Pan("Control"));
+                    } else {
+                        if (this.focus_point.class_list.contains("focused")) {
+                            this.focus_point.class_list.remove("focused", "smooth");
+                        }
+
+                        // Reveal the focus point upon a click.
+                        this.reposition_focus_point(this.position_from_event(event));
+                        this.focus_point.class_list.add("revealed", "pending");
                     }
                 }
                 if (this.in_mode(UIState.Pan)) {
@@ -973,8 +1045,8 @@ class UI {
                     this.switch_mode(UIState.default);
                 } else if (!this.in_mode(UIState.Modal)) {
                     if (!event.shiftKey && !event.metaKey && !event.ctrlKey) {
-                        // Deselect cells when the mouse is pressed (at least when the Shift/Command
-                        // /Control keys are not held).
+                        // Deselect cells when the pointer is pressed (at least when the
+                        // Shift/Command/Control keys are not held).
                         this.deselect();
                     } else {
                         // Otherwise, simply deselect the label input (it's unlikely the user
@@ -1025,7 +1097,7 @@ class UI {
         };
 
         // Clicking on the focus point reveals it, after which another click adds a new node.
-        this.focus_point.listen("mousedown", (event) => {
+        this.focus_point.listen("pointerdown", (event) => {
             if (event.button === 0) {
                 if (this.in_mode(UIState.Default)) {
                     event.preventDefault();
@@ -1035,11 +1107,7 @@ class UI {
                     for (const input of global.query_selector_all('input[type="text"]')) {
                         input.element.blur();
                     }
-                    if (!this.focus_point.class_list.contains("revealed")) {
-                        // Reveal the focus point upon a click.
-                        this.reposition_focus_point(this.position_from_event(event));
-                        this.focus_point.class_list.add("revealed", "pending");
-                    } else {
+                    if (this.focus_point.class_list.contains("revealed")) {
                         // We only stop propagation in this branch, so that clicking once in an
                         // empty grid cell will deselect any selected cells, but clicking a second
                         // time to add a new vertex will not deselect the new, selected vertex we've
@@ -1063,36 +1131,24 @@ class UI {
             }
         });
 
-        // If we move the mouse (without releasing it) while the insertion
-        // point is revealed, it will transition from a `"pending"` state
-        // to an `"active"` state. Moving the mouse off the insertion
-        // point in this state will create a new vertex and trigger the
-        // connection mode.
-        this.focus_point.listen("mousemove", () => {
-            if (this.focus_point.class_list.contains("pending")) {
-                this.focus_point.class_list.remove("pending");
-                this.focus_point.class_list.add("active");
-            }
-        });
-
-        // If we release the mouse while hovering over the focus point, there are two
-        // possibilities. Either we haven't moved the mouse, in which case the focus point loses
+        // If we release the pointer while hovering over the focus point, there are two
+        // possibilities. Either we haven't moved the pointer, in which case the focus point loses
         // its `"pending"` or `"active"` state; or we have, in which case we're mid-connection and
         // we need to create a new vertex and connect it. We add the event listener to the
         // container, rather than the focus point, so that we don't have to worry about the
         // focus point being exactly the same size as a grid cell (there is some padding for
         // aesthetic purposes) or the focus point being covered by other elements (like edge
         // endpoints).
-        this.container.listen("mouseup", (event) => {
-            if (event.button === 0) {
-                // Handle mouse releases without having moved the cursor from the initial cell.
+        this.container.listen("pointerup", (event) => {
+            if (event.button === 0 && event.pointerType !== "touch") {
+                // Handle pointer releases without having moved the cursor from the initial cell.
                 this.focus_point.class_list.remove("pending", "active");
 
                 // We only want to create a connection if the focus point is visible. E.g. not
                 // if we're hovering over a grid cell that contains a vertex, but not hovering over
                 // the vertex itself (i.e. the whitespace around the vertex).
                 if (this.focus_point.class_list.contains("revealed")) {
-                    // When releasing the mouse over an empty grid cell, we want to create a new
+                    // When releasing the pointer over an empty grid cell, we want to create a new
                     // cell and connect it to the source.
                     if (this.in_mode(UIState.Connect)) {
                         event.stopImmediatePropagation();
@@ -1164,39 +1220,51 @@ class UI {
             }
         });
 
-        // If the cursor leaves the focus point and the mouse has *not*
+        // If the cursor leaves the focus point and the pointer has *not*
         // been held, it gets hidden again. However, if the cursor leaves the
         // focus point whilst remaining held, then the focus point will
         // be `"active"` and we create a new vertex and immediately start
         // connecting it to something (possibly an empty grid cell, which will
         // create a new vertex and connect them both).
-        this.focus_point.listen("mouseleave", () => {
-            this.focus_point.class_list.remove("pending");
+        this.focus_point.listen("pointerleave", (event) => {
+            if (event.pointerType !== "touch") {
+                this.focus_point.class_list.remove("pending");
 
-            if (this.focus_point.class_list.contains("active")) {
-                // If the focus point is `"active"`, we're going to create
-                // a vertex and start connecting it.
-                this.focus_point.class_list.remove("active");
-                const vertex = create_vertex(this.position_from_offset(new Offset(
-                    this.focus_point.element.offsetLeft,
-                    this.focus_point.element.offsetTop,
-                )));
-                this.select(vertex);
-                this.switch_mode(new UIState.Connect(this, vertex, true));
-                vertex.element.class_list.add("source");
-            } else if (!this.in_mode(UIState.Connect)) {
-                // If the cursor leaves the focus point and we're *not*
-                // connecting anything, then hide it.
-                this.focus_point.class_list.remove("revealed");
+                if (this.focus_point.class_list.contains("active")) {
+                    // If the focus point is `"active"`, we're going to create
+                    // a vertex and start connecting it.
+                    this.focus_point.class_list.remove("active");
+                    const vertex = create_vertex(this.position_from_offset(new Offset(
+                        this.focus_point.element.offsetLeft,
+                        this.focus_point.element.offsetTop,
+                    )));
+                    this.select(vertex);
+                    this.switch_mode(new UIState.Connect(this, vertex, true));
+                    vertex.element.class_list.add("source");
+                } else if (!this.in_mode(UIState.Connect)) {
+                    // If the cursor leaves the focus point and we're *not*
+                    // connecting anything, then hide it.
+                    this.focus_point.class_list.remove("revealed");
+                }
             }
         });
 
         // Moving the focus point, panning, and rearranging cells.
-        this.element.listen("mousemove", (event) => {
+        this.element.listen("pointermove", (event) => {
             if (this.in_mode(UIState.Pan) && this.state.origin !== null) {
                 const new_offset = this.offset_from_event(event).sub(this.view);
                 this.pan_view(this.state.origin.sub(new_offset));
                 this.state.origin = new_offset;
+            }
+
+            // If we move the pointer (without releasing it) while the insertion
+            // point is revealed, it will transition from a `"pending"` state
+            // to an `"active"` state. Moving the pointer off the insertion
+            // point in this state will create a new vertex and trigger the
+            // connection mode.
+            if (this.focus_point.class_list.contains("pending")) {
+                this.focus_point.class_list.remove("pending");
+                this.focus_point.class_list.add("active");
             }
 
             // If the user has currently clicked to place a vertex, or activated keyboard controls,
@@ -1228,8 +1296,8 @@ class UI {
                 }
             }
 
-            // Moving cells around with the mouse.
-            if (this.in_mode(UIState.MouseMove)) {
+            // Moving cells around with the pointer.
+            if (this.in_mode(UIState.PointerMove)) {
                 // Prevent dragging from selecting random elements.
                 event.preventDefault();
 
@@ -2067,7 +2135,7 @@ class UI {
             }
 
             // We keep a margin around the content of each cell. This gives space for dragging them
-            // with the mouse.
+            // with the pointer.
             const MARGIN_X = this.default_cell_size * 0.5;
             const MARGIN_Y = this.default_cell_size * 0.5;
 
@@ -3145,8 +3213,8 @@ class Panel {
     initialise(ui) {
         this.element = new DOM.Element("div", { class: "side panel hidden" });
 
-        // Prevent propagation of mouse events when interacting with the panel.
-        this.element.listen("mousedown", (event) => {
+        // Prevent propagation of pointer events when interacting with the panel.
+        this.element.listen("pointerdown", (event) => {
             if (event.button === 0) {
                 event.stopImmediatePropagation();
             }
@@ -3168,8 +3236,8 @@ class Panel {
             disabled: true,
         });
 
-        // Prevent propagation of mouse events when interacting with the label input.
-        this.label_input.listen("mousedown", (event) => {
+        // Prevent propagation of pointer events when interacting with the label input.
+        this.label_input.listen("pointerdown", (event) => {
             if (event.button === 0) {
                 event.stopImmediatePropagation();
             }
@@ -3879,8 +3947,8 @@ class Panel {
             )
         );
 
-        // Prevent propagation of mouse events when interacting with the global options.
-        this.global.listen("mousedown", (event) => {
+        // Prevent propagation of pointer events when interacting with the global options.
+        this.global.listen("pointerdown", (event) => {
             if (event.button === 0) {
                 event.stopImmediatePropagation();
             }
@@ -4571,7 +4639,7 @@ class Toolbar {
 
     initialise(ui) {
         this.element = new DOM.Element("div", { class: "toolbar" })
-            .listen("mousedown", (event) => {
+            .listen("pointerdown", (event) => {
                 if (event.button === 0) {
                     event.stopImmediatePropagation();
                 }
@@ -4588,7 +4656,7 @@ class Toolbar {
                 ))
                 .add(new DOM.Element("span", { class: "name" }).add(name))
                 .add(new DOM.Element("span", { class: "shortcut" }).add(shortcut_name))
-                .listen("mousedown", (event) => {
+                .listen("pointerdown", (event) => {
                     if (event.button === 0) {
                         event.stopImmediatePropagation();
                     }
@@ -4857,7 +4925,7 @@ class Cell {
         // We allow vertices to be moved by dragging its `element` (which contains its
         // `content_element`, the element with the actual cell content).
         if (this.is_vertex()) {
-            this.element.listen("mousedown", (event) => {
+            this.element.listen("pointerdown", (event) => {
                 if (event.button === 0) {
                     if (ui.in_mode(UIState.Default)) {
                         event.stopPropagation();
@@ -4868,7 +4936,7 @@ class Cell {
                         // and ignore the selection.
                         const move = new Set(ui.selection.has(this) ? [...ui.selection] : [this]);
                         ui.switch_mode(
-                            new UIState.MouseMove(
+                            new UIState.PointerMove(
                                 ui,
                                 ui.position_from_event(event),
                                 move,
@@ -4895,7 +4963,12 @@ class Cell {
         // as the input field would capture it.
         let was_previously_selected = true;
 
-        content_element.listen("mousedown", (event) => {
+        content_element.listen("pointerdown", (event) => {
+            // The focus point will have already been removed on a device with a cursor, but on
+            // touch devices, we may encounter a `pointerdown` without a corresponding
+            // `pointerleave`.
+            ui.focus_point.class_list.remove("revealed");
+
             if (event.button === 0) {
                 if (ui.in_mode(UIState.Default) || ui.in_mode(UIState.Command)) {
                     event.stopPropagation();
@@ -4934,7 +5007,7 @@ class Cell {
 
                     // We won't start a new connection immediately, because that will hide
                     // the toolbar prematurely. Instead, we'll add a `.pending` class, which
-                    // will then convert to a connection if the mouse leaves the element
+                    // will then convert to a connection if the pointer leaves the element
                     // while remaining held.
                     this.element.class_list.add("pending");
                     ui.focus_point.class_list.remove("focused", "smooth");
@@ -4944,7 +5017,7 @@ class Cell {
             }
         });
 
-        content_element.listen("mouseenter", () => {
+        content_element.listen("pointerenter", () => {
             if (ui.in_mode(UIState.Connect)) {
                 // The second part of the condition should not be necessary, because pointer events
                 // are disabled for reconnected edges, but this acts as a warranty in case this is
@@ -4964,7 +5037,7 @@ class Cell {
             }
         });
 
-        content_element.listen("mouseleave", () => {
+        content_element.listen("pointerleave", () => {
             if (this.element.class_list.contains("pending")) {
                 this.element.class_list.remove("pending");
 
@@ -4990,8 +5063,8 @@ class Cell {
             }
         });
 
-        content_element.listen("mouseup", (event) => {
-            if (event.button === 0) {
+        content_element.listen("pointerup", (event) => {
+            if (event.button === 0 && event.pointerType !== "touch") {
                 // If we release the pointer without ever dragging, then
                 // we never begin connecting the cell.
                 this.element.class_list.remove("pending");
@@ -5004,7 +5077,6 @@ class Cell {
                         ui.panel.focus_label_input();
                     }
                 }
-
 
                 if (ui.in_mode(UIState.Connect)) {
                     event.stopImmediatePropagation();
@@ -5053,7 +5125,7 @@ class Cell {
                             ui.history.add(ui, actions, false, ui.selection_excluding(cells));
                         }
                     } else if (ui.state.source === this && ui.state.target === null) {
-                        // Here, we released the mouse on the source vertex, but may have forged a
+                        // Here, we released the pointer on the source vertex, but may have forged a
                         // vertex when we began dragging, so we need to add a history event to
                         // record it.
                         if (ui.state.forged_vertex) {
@@ -5313,7 +5385,7 @@ class Edge extends Cell {
         // Set up the endpoint handle interaction events.
         for (const end of ["source", "target"]) {
             const handle = this.arrow.element.query_selector(`.arrow-endpoint.${end}`);
-            handle.listen("mousedown", (event) => {
+            handle.listen("pointerdown", (event) => {
                 if (event.button === 0) {
                     reconnect(event, end);
                 }
