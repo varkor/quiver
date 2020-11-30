@@ -339,7 +339,11 @@ UIMode.Connect = class extends UIMode {
             const edge = UIMode.Connect.create_edge(ui, this.source, this.target);
             ui.select(edge);
             if (!event.shiftKey && !event.metaKey && !event.ctrlKey) {
-                ui.panel.label_input.element.focus();
+                if (event.isTrusted) {
+                    // Don't focus the input on touchscreens, since this can be
+                    // offputting, as it often brings up a virtual keyboard.
+                    ui.panel.label_input.element.focus();
+                }
             }
             return edge;
         } else {
@@ -928,9 +932,11 @@ class UI {
         // We use long presses to trigger panning mode. We have to detect these manually (in
         // some implementations, long press is equivalent to `contextmenu`, but not all).
         let long_press_timer = null;
+
         const trigger_on_long_press = (event) => {
             // Long presses enable panning mode.
             this.cancel_creation();
+            this.panel.hide_if_unselected(this);
             this.switch_mode(new UIMode.Pan(null));
             const touch = event.touches[0];
             this.mode.origin = this.offset_from_event(touch).sub(this.view);
@@ -952,6 +958,9 @@ class UI {
                 );
             }
         });
+
+        // Prevent double-tap-to-zoom on iOS.
+        document.addEventListener("dblclick", (event) => event.preventDefault());
 
         // If the touch position moves, we disable the long press. We use `touchmove` instead of
         // `pointermove`, because that has some leeway around minute changes in the position.
@@ -1242,7 +1251,11 @@ class UI {
                                     this.deselect();
                                     this.select(this.mode.source);
                                     this.panel.hide_if_unselected(this);
-                                    this.panel.focus_label_input();
+                                    if (event.isTrusted) {
+                                        // Don't focus the input on touchscreens, since this can be
+                                        // offputting, as it often brings up a virtual keyboard.
+                                        this.panel.focus_label_input();
+                                    }
                                 }
                             }
 
@@ -5078,29 +5091,31 @@ class Cell {
             }
         });
 
-        content_element.listen("pointerleave", () => {
-            if (this.element.class_list.contains("pending")) {
-                this.element.class_list.remove("pending");
+        content_element.listen("pointerleave", (event) => {
+            if (event.pointerType !== "touch") {
+                if (this.element.class_list.contains("pending")) {
+                    this.element.class_list.remove("pending");
 
-                // Start connecting the node.
-                const mode = new UIMode.Connect(ui, this, false);
-                if (
-                    UIMode.Connect.valid_connection(ui, mode.source, null, mode.reconnect)
-                ) {
-                    ui.switch_mode(mode);
-                    this.element.class_list.add("source");
+                    // Start connecting the node.
+                    const mode = new UIMode.Connect(ui, this, false);
+                    if (
+                        UIMode.Connect.valid_connection(ui, mode.source, null, mode.reconnect)
+                    ) {
+                        ui.switch_mode(mode);
+                        this.element.class_list.add("source");
+                    }
                 }
-            }
 
-            if (ui.in_mode(UIMode.Connect)) {
-                if (ui.mode.target === this) {
-                    ui.mode.target = null;
+                if (ui.in_mode(UIMode.Connect)) {
+                    if (ui.mode.target === this) {
+                        ui.mode.target = null;
+                    }
+                    // We may not have the "target" class, but we may attempt to remove it
+                    // regardless. We might still have the "target" class even if this cell
+                    // is not the target, if we've immediately transitioned from targeting
+                    // one cell to targeting another.
+                    this.element.class_list.remove("target");
                 }
-                // We may not have the "target" class, but we may attempt to remove it
-                // regardless. We might still have the "target" class even if this cell
-                // is not the target, if we've immediately transitioned from targeting
-                // one cell to targeting another.
-                this.element.class_list.remove("target");
             }
         });
 

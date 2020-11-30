@@ -35,6 +35,8 @@ body {
 
     font-family: Arial, sans-serif;
 
+    /* Safari on iOS does not currently respect `none`: double-tap-to-zoom is not disabled. We are
+    forced to prevent this in JavaScript instead. */
     touch-action: none;
 }
 
