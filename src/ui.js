@@ -25,6 +25,8 @@ Object.assign(CONSTANTS, {
     /// How much padding to try to keep around the focus point when moving it via the keyboard
     /// (in pixels).
     VIEW_PADDING: 128,
+    /// How long the user has to hold down on a touchscreen  to trigger panning.
+    LONG_PRESS_DURATION: 800,
 });
 
 /// Various states for the UI (e.g. whether cells are being rearranged, or connected, etc.).
@@ -669,6 +671,7 @@ class UI {
                 ["Enable mouse panning", (td) => Shortcuts.element(td, [
                     { key: "Control" }, { key: "Alt" }
                 ])],
+                ["Enable touch panning", "Long press"],
                 ["Move focus point", (td) => Shortcuts.element(td, [
                     { key: "ArrowLeft" },
                     { key: "ArrowUp" },
@@ -922,6 +925,16 @@ class UI {
         // right-clicking. So we manually keep track of whether there are any touch events, and in
         // this case, disable the context menu.
         let is_touching = false;
+        // We use long presses to trigger panning mode. We have to detect these manually (in
+        // some implementations, long press is equivalent to `contextmenu`, but not all).
+        let long_press_timer = null;
+        const trigger_on_long_press = (event) => {
+            // Long presses enable panning mode.
+            this.cancel_creation();
+            this.switch_mode(new UIState.Pan(null));
+            const touch = event.touches[0];
+            this.state.origin = this.offset_from_event(touch).sub(this.view);
+        };
 
         document.addEventListener("touchstart", (event) => {
             is_touching = true;
@@ -932,12 +945,27 @@ class UI {
                 if (this.in_mode(UIState.Default)) {
                     this.cancel_creation();
                 }
+            } else if (long_press_timer === null) {
+                long_press_timer = window.setTimeout(
+                    () => trigger_on_long_press(event),
+                    CONSTANTS.LONG_PRESS_DURATION,
+                );
+            }
+        });
+
+        // If the touch position moves, we disable the long press. We use `touchmove` instead of
+        // `pointermove`, because that has some leeway around minute changes in the position.
+        document.addEventListener("touchmove", () => {
+            if (!this.in_mode(UIState.Pan) && long_press_timer !== null) {
+                window.clearTimeout(long_press_timer);
+                long_press_timer = null;
             }
         });
 
         // Disable the context menu on touchscreens. See the comment above `is_touching`.
         document.addEventListener("contextmenu", (event) => {
             if (is_touching) {
+                // Don't trigger the context menu.
                 event.preventDefault();
             }
         });
@@ -980,7 +1008,9 @@ class UI {
         // Manually track touch end events, which do not properly trigger `pointerup` events
         // automatically.
         document.addEventListener("touchend", (event) => {
-            if (event.changedTouches.length === 1) {
+            if (this.in_mode(UIState.Pan)) {
+                this.switch_mode(UIState.default);
+            } if (event.changedTouches.length === 1) {
                 const touch = event.changedTouches[0];
                 const touched_element = document.elementFromPoint(touch.clientX, touch.clientY);
                 if (touched_element !== null) {
@@ -993,6 +1023,10 @@ class UI {
                 }
             }
             is_touching = false;
+            if (long_press_timer !== null) {
+                window.clearTimeout(long_press_timer);
+                long_press_timer = null;
+            }
             touched_element = null;
         });
 
