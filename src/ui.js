@@ -30,27 +30,27 @@ Object.assign(CONSTANTS, {
 });
 
 /// Various states for the UI (e.g. whether cells are being rearranged, or connected, etc.).
-class UIState {
+class UIMode {
     constructor() {
-        // Used for the CSS class associated with the state. `null` means no class.
+        // Used for the CSS class associated with the mode. `null` means no class.
         this.name = null;
     }
 
-    /// A placeholder method to clean up any state when a state is left.
+    /// A placeholder method to clean up any state when a mode is left.
     release() {}
 }
 
-/// The default state, representing no special action.
-UIState.Default = class extends UIState {
+/// The default mode, representing no special action.
+UIMode.Default = class extends UIMode {
     constructor() {
         super();
 
         this.name = "default";
     }
 };
-UIState.default = new UIState.Default();
+UIMode.default = new UIMode.Default();
 
-UIState.Modal = class extends UIState {
+UIMode.Modal = class extends UIMode {
     constructor() {
         super();
 
@@ -59,7 +59,7 @@ UIState.Modal = class extends UIState {
 }
 
 /// Two k-cells are being connected by an (k + 1)-cell.
-UIState.Connect = class extends UIState {
+UIMode.Connect = class extends UIMode {
     constructor(ui, source, forged_vertex, reconnect = null) {
         super();
 
@@ -336,7 +336,7 @@ UIState.Connect = class extends UIState {
             if (!event.shiftKey && !event.metaKey && !event.ctrlKey) {
                 ui.deselect();
             }
-            const edge = UIState.Connect.create_edge(ui, this.source, this.target);
+            const edge = UIMode.Connect.create_edge(ui, this.source, this.target);
             ui.select(edge);
             if (!event.shiftKey && !event.metaKey && !event.ctrlKey) {
                 ui.panel.label_input.element.focus();
@@ -350,7 +350,7 @@ UIState.Connect = class extends UIState {
             // be the target and vice versa.
             // Generally, the fixed end is always `this.source`, even if it isn't actually the
             // edge's source. This makes the interaction behaviour simpler elsewhere, because
-            // one can always assume that `state.target` is the possibly-null, moving endpoint
+            // one can always assume that `mode.target` is the possibly-null, moving endpoint
             // that is the one of interest.
             const [source, target] = {
                 source: [this.target, this.source],
@@ -363,7 +363,7 @@ UIState.Connect = class extends UIState {
 };
 
 /// Cells are being moved to a different position, via the pointer.
-UIState.PointerMove = class extends UIState {
+UIMode.PointerMove = class extends UIMode {
     constructor(ui, origin, selection) {
         super();
 
@@ -403,7 +403,7 @@ UIState.PointerMove = class extends UIState {
 };
 
 /// Cells are being moved to a different position, via the keyboard.
-UIState.KeyMove = class extends UIState {
+UIMode.KeyMove = class extends UIMode {
     constructor(ui) {
         super();
 
@@ -436,7 +436,7 @@ UIState.KeyMove = class extends UIState {
 };
 
 /// The UI view is being panned.
-UIState.Pan = class extends UIState {
+UIMode.Pan = class extends UIMode {
     constructor(key) {
         super();
 
@@ -454,7 +454,7 @@ UIState.Pan = class extends UIState {
 };
 
 /// The user is jumping to a cell.
-UIState.Command = class extends UIState {
+UIMode.Command = class extends UIMode {
     constructor(ui, mode) {
         super();
 
@@ -493,8 +493,8 @@ class UI {
         // The quiver identified with the UI.
         this.quiver = new Quiver();
 
-        // The UI state (e.g. whether cells are being rearranged, or connected, etc.).
-        this.state = null;
+        // The UI mode (e.g. whether cells are being rearranged, or connected, etc.).
+        this.mode = null;
 
         // The width and height of each grid cell. Defaults to `default_cell_size`.
         this.cell_width = new Map();
@@ -573,7 +573,7 @@ class UI {
     /// changing the URL history work properly.
     reset() {
         // Reset the mode.
-        this.switch_mode(UIState.default);
+        this.switch_mode(UIMode.default);
 
         // Clear the existing quiver.
         for (const cell of this.quiver.all_cells()) {
@@ -606,7 +606,7 @@ class UI {
 
     initialise() {
         this.element.class_list.add("ui");
-        this.switch_mode(UIState.default);
+        this.switch_mode(UIMode.default);
 
         // Set the grid background.
         this.initialise_grid(this.element);
@@ -895,13 +895,13 @@ class UI {
 
         // Add a move to the history.
         const commit_move_event = () => {
-            if (!this.state.previous.sub(this.state.origin).is_zero()) {
+            if (!this.mode.previous.sub(this.mode.origin).is_zero()) {
                 // We only want to commit the move event if it actually did moved things.
                 this.history.add(this, [{
                     kind: "move",
-                    displacements: Array.from(this.state.selection).map((vertex) => ({
+                    displacements: Array.from(this.mode.selection).map((vertex) => ({
                         vertex,
-                        from: vertex.position.sub(this.state.previous.sub(this.state.origin)),
+                        from: vertex.position.sub(this.mode.previous.sub(this.mode.origin)),
                         to: vertex.position,
                     })),
                 }]);
@@ -909,12 +909,12 @@ class UI {
         };
 
         document.addEventListener("pointermove", (event) => {
-            if (this.in_mode(UIState.Pan)) {
-                if (this.state.key !== null) {
+            if (this.in_mode(UIMode.Pan)) {
+                if (this.mode.key !== null) {
                     // If we're panning, but no longer holding the requisite key, stop.
                     // This can happen if we release the key when the document is not focused.
-                    if (!{ Control: event.ctrlKey, Alt: event.altKey }[this.state.key]) {
-                        this.switch_mode(UIState.default);
+                    if (!{ Control: event.ctrlKey, Alt: event.altKey }[this.mode.key]) {
+                        this.switch_mode(UIMode.default);
                     }
                 }
             }
@@ -931,9 +931,9 @@ class UI {
         const trigger_on_long_press = (event) => {
             // Long presses enable panning mode.
             this.cancel_creation();
-            this.switch_mode(new UIState.Pan(null));
+            this.switch_mode(new UIMode.Pan(null));
             const touch = event.touches[0];
-            this.state.origin = this.offset_from_event(touch).sub(this.view);
+            this.mode.origin = this.offset_from_event(touch).sub(this.view);
         };
 
         document.addEventListener("touchstart", (event) => {
@@ -942,7 +942,7 @@ class UI {
                 // Multiple touches can cause strange behaviours, because they don't follow the
                 // usual rules (e.g. two consecutive `pointerdown`s without an intervening
                 // `pointerup`.)
-                if (this.in_mode(UIState.Default)) {
+                if (this.in_mode(UIMode.Default)) {
                     this.cancel_creation();
                 }
             } else if (long_press_timer === null) {
@@ -956,7 +956,7 @@ class UI {
         // If the touch position moves, we disable the long press. We use `touchmove` instead of
         // `pointermove`, because that has some leeway around minute changes in the position.
         document.addEventListener("touchmove", () => {
-            if (!this.in_mode(UIState.Pan) && long_press_timer !== null) {
+            if (!this.in_mode(UIMode.Pan) && long_press_timer !== null) {
                 window.clearTimeout(long_press_timer);
                 long_press_timer = null;
             }
@@ -1008,8 +1008,8 @@ class UI {
         // Manually track touch end events, which do not properly trigger `pointerup` events
         // automatically.
         document.addEventListener("touchend", (event) => {
-            if (this.in_mode(UIState.Pan)) {
-                this.switch_mode(UIState.default);
+            if (this.in_mode(UIMode.Pan)) {
+                this.switch_mode(UIMode.default);
             } if (event.changedTouches.length === 1) {
                 const touch = event.changedTouches[0];
                 const touched_element = document.elementFromPoint(touch.clientX, touch.clientY);
@@ -1033,22 +1033,22 @@ class UI {
         document.addEventListener("pointerup", (event) => {
             if (event.button === 0) {
                 if (event.pointerType !== "touch") {
-                    if (this.in_mode(UIState.Pan)) {
+                    if (this.in_mode(UIMode.Pan)) {
                         // We only want to pan when the pointer is held.
-                        this.state.origin = null;
-                    } else if (this.in_mode(UIState.PointerMove)) {
+                        this.mode.origin = null;
+                    } else if (this.in_mode(UIMode.PointerMove)) {
                         commit_move_event();
-                        this.switch_mode(UIState.default);
-                    } else if (this.in_mode(UIState.Connect)) {
+                        this.switch_mode(UIMode.default);
+                    } else if (this.in_mode(UIMode.Connect)) {
                         // Stop trying to connect cells when the pointer is released outside
                         // the `<body>`.
-                        if (this.state.forged_vertex) {
+                        if (this.mode.forged_vertex) {
                             this.history.add(this, [{
                                 kind: "create",
-                                cells: new Set([this.state.source]),
+                                cells: new Set([this.mode.source]),
                             }]);
                         }
-                        this.switch_mode(UIState.default);
+                        this.switch_mode(UIMode.default);
                     }
                 }
                 this.panel.hide_if_unselected(this);
@@ -1062,11 +1062,11 @@ class UI {
                 // Usually, if `Alt` or `Control` have been held we will have already switched to
                 // the Pan mode. However, if the window is not in focus, they will not have been
                 // detected, so we switch modes on pointer click.
-                if (this.in_mode(UIState.Default)) {
+                if (this.in_mode(UIMode.Default)) {
                     if (event.altKey) {
-                        this.switch_mode(new UIState.Pan("Alt"));
+                        this.switch_mode(new UIMode.Pan("Alt"));
                     } else if (event.ctrlKey) {
-                        this.switch_mode(new UIState.Pan("Control"));
+                        this.switch_mode(new UIMode.Pan("Control"));
                     } else {
                         if (this.focus_point.class_list.contains("focused")) {
                             this.focus_point.class_list.remove("focused", "smooth");
@@ -1077,15 +1077,15 @@ class UI {
                         this.focus_point.class_list.add("revealed", "pending");
                     }
                 }
-                if (this.in_mode(UIState.Pan)) {
+                if (this.in_mode(UIMode.Pan)) {
                     // Hide the focus point if it is visible.
                     this.focus_point.class_list.remove("revealed");
                     // Record the position the pointer was pressed at, so we can pan relative
                     // to that location by dragging.
-                    this.state.origin = this.offset_from_event(event).sub(this.view);
-                } else if (this.in_mode(UIState.KeyMove)) {
-                    this.switch_mode(UIState.default);
-                } else if (!this.in_mode(UIState.Modal)) {
+                    this.mode.origin = this.offset_from_event(event).sub(this.view);
+                } else if (this.in_mode(UIMode.KeyMove)) {
+                    this.switch_mode(UIMode.default);
+                } else if (!this.in_mode(UIMode.Modal)) {
                     if (!event.shiftKey && !event.metaKey && !event.ctrlKey) {
                         // Deselect cells when the pointer is pressed (at least when the
                         // Shift/Command/Control keys are not held).
@@ -1141,7 +1141,7 @@ class UI {
         // Clicking on the focus point reveals it, after which another click adds a new node.
         this.focus_point.listen("pointerdown", (event) => {
             if (event.button === 0) {
-                if (this.in_mode(UIState.Default)) {
+                if (this.in_mode(UIMode.Default)) {
                     event.preventDefault();
                     // If we prevent the default behaviour, then the global inputs won't be blurred,
                     // so we need to do that manually.
@@ -1192,35 +1192,35 @@ class UI {
                 if (this.focus_point.class_list.contains("revealed")) {
                     // When releasing the pointer over an empty grid cell, we want to create a new
                     // cell and connect it to the source.
-                    if (this.in_mode(UIState.Connect)) {
+                    if (this.in_mode(UIMode.Connect)) {
                         event.stopImmediatePropagation();
                         // We only want to forge vertices, not edges (and thus 1-cells).
-                        if (this.state.source.is_vertex()) {
+                        if (this.mode.source.is_vertex()) {
                             // Usually this vertex will be immediately deselected, except when Shift
                             // is held, in which case we want to select the forged vertices *and*
                             // the new edge.
-                            this.state.target = create_vertex_at_focus_point(event);
-                            const created = new Set([this.state.target]);
+                            this.mode.target = create_vertex_at_focus_point(event);
+                            const created = new Set([this.mode.target]);
                             const actions = [{
                                 kind: "create",
                                 cells: created,
                             }];
 
-                            if (this.state.forged_vertex) {
-                                created.add(this.state.source);
+                            if (this.mode.forged_vertex) {
+                                created.add(this.mode.source);
                             }
 
-                            if (this.state.reconnect === null) {
+                            if (this.mode.reconnect === null) {
                                 // If we're not reconnecting an existing edge, then we need
                                 // to create a new one.
-                                const edge = this.state.connect(this, event);
+                                const edge = this.mode.connect(this, event);
                                 created.add(edge);
-                                insert_codes_before(this.state.target, edge);
+                                insert_codes_before(this.mode.target, edge);
                             } else {
                                 // Unless we're holding Shift/Command/Control (in which case we just
                                 // add the new vertex to the selection) we want to focus and select
                                 // the new vertex.
-                                const { edge, end } = this.state.reconnect;
+                                const { edge, end } = this.mode.reconnect;
                                 if (!event.shiftKey && !event.metaKey && !event.ctrlKey) {
                                     this.panel.label_input.element.select();
                                 }
@@ -1229,18 +1229,18 @@ class UI {
                                     edge,
                                     end,
                                     from: edge[end],
-                                    to: this.state.target,
+                                    to: this.mode.target,
                                 });
-                                this.state.connect(this, event);
+                                this.mode.connect(this, event);
                             }
 
                             // If we've forged a source vertex, then we select the source, which
                             // allows us to tab sequentially through the source, morphism, and
                             // target.
-                            if (this.state.forged_vertex) {
+                            if (this.mode.forged_vertex) {
                                 if (!event.shiftKey && !event.metaKey && !event.ctrlKey) {
                                     this.deselect();
-                                    this.select(this.state.source);
+                                    this.select(this.mode.source);
                                     this.panel.hide_if_unselected(this);
                                     this.panel.focus_label_input();
                                 }
@@ -1253,7 +1253,7 @@ class UI {
                                 this.selection_excluding(created),
                             );
                         }
-                        this.switch_mode(UIState.default);
+                        this.switch_mode(UIMode.default);
                     }
                 }
             }
@@ -1274,9 +1274,9 @@ class UI {
                     // a vertex and start connecting it.
                     this.focus_point.class_list.remove("active");
                     const vertex = create_vertex_at_focus_point(event);
-                    this.switch_mode(new UIState.Connect(this, vertex, true));
+                    this.switch_mode(new UIMode.Connect(this, vertex, true));
                     vertex.element.class_list.add("source");
-                } else if (!this.in_mode(UIState.Connect)) {
+                } else if (!this.in_mode(UIMode.Connect)) {
                     // If the cursor leaves the focus point and we're *not*
                     // connecting anything, then hide it.
                     this.focus_point.class_list.remove("revealed");
@@ -1286,10 +1286,10 @@ class UI {
 
         // Moving the focus point, panning, and rearranging cells.
         this.element.listen("pointermove", (event) => {
-            if (this.in_mode(UIState.Pan) && this.state.origin !== null) {
+            if (this.in_mode(UIMode.Pan) && this.mode.origin !== null) {
                 const new_offset = this.offset_from_event(event).sub(this.view);
-                this.pan_view(this.state.origin.sub(new_offset));
-                this.state.origin = new_offset;
+                this.pan_view(this.mode.origin.sub(new_offset));
+                this.mode.origin = new_offset;
             }
 
             // If we move the pointer (without releasing it) while the insertion
@@ -1307,7 +1307,7 @@ class UI {
             // otherwise we might move the focus point before the vertex has been created and
             // accidentally place the vertex in the new position of the focus point, rather than
             // the old one.
-            if (!this.in_mode(UIState.Connect) && (this.focus_point.class_list.contains("revealed")
+            if (!this.in_mode(UIMode.Connect) && (this.focus_point.class_list.contains("revealed")
                 || this.focus_point.class_list.contains("focused"))
             ) {
                 return;
@@ -1317,43 +1317,43 @@ class UI {
             // so that the focus point will be in the location we drag to.
             const position = this.reposition_focus_point(
                 this.position_from_event(event),
-                this.in_mode(UIState.Connect),
+                this.in_mode(UIMode.Connect),
             );
 
             // We want to reveal the focus point if and only if it is
             // not at the same position as an existing vertex (i.e. over an
             // empty grid cell).
-            if (this.in_mode(UIState.Connect)) {
+            if (this.in_mode(UIMode.Connect)) {
                 // We only permit the forgery of vertices, not edges.
-                if (this.state.source.is_vertex() && this.state.target === null) {
+                if (this.mode.source.is_vertex() && this.mode.target === null) {
                     this.focus_point.class_list
                         .toggle("revealed", !this.positions.has(`${position}`));
                 }
             }
 
             // Moving cells around with the pointer.
-            if (this.in_mode(UIState.PointerMove)) {
+            if (this.in_mode(UIMode.PointerMove)) {
                 // Prevent dragging from selecting random elements.
                 event.preventDefault();
 
                 const new_position = (cell) => {
-                    return cell.position.add(position).sub(this.state.previous);
+                    return cell.position.add(position).sub(this.mode.previous);
                 };
 
                 // We will only try to reposition if the new position is actually different
                 // (rather than the cursor simply having moved within the same grid cell).
                 // On top of this, we prevent vertices from being moved into grid cells that
                 // are already occupied by vertices.
-                const occupied = Array.from(this.state.selection).some((cell) => {
+                const occupied = Array.from(this.mode.selection).some((cell) => {
                     return cell.is_vertex() && this.positions.has(`${new_position(cell)}`);
                 });
 
-                if (!position.eq(this.state.previous) && !occupied) {
+                if (!position.eq(this.mode.previous) && !occupied) {
                     // We'll need to move all of the edges connected to the moved vertices,
                     // so we keep track of the root vertices in `moved.`
                     const moved = new Set();
                     // Move all the selected vertices.
-                    for (const cell of this.state.selection) {
+                    for (const cell of this.mode.selection) {
                         if (cell.is_vertex()) {
                             cell.set_position(this, new_position(cell));
                             moved.add(cell);
@@ -1364,7 +1364,7 @@ class UI {
                     // vertices.
                     if (!this.update_col_row_size(...Array.from(moved)
                         // Undo the transformation performed by `new_position`.
-                        .map((vertex) => vertex.position.sub(position).add(this.state.previous))
+                        .map((vertex) => vertex.position.sub(position).add(this.mode.previous))
                     )) {
                         // If we haven't rerendered the entire canvas due to a resize, then
                         // rerender the dependencies to make sure we move all of the edges connected
@@ -1374,7 +1374,7 @@ class UI {
                         }
                     }
 
-                    this.state.previous = position;
+                    this.mode.previous = position;
 
                     // Update the panel, so that the interface is kept in sync (e.g. the
                     // rotation of the label alignment buttons).
@@ -1382,23 +1382,23 @@ class UI {
                 }
             }
 
-            if (this.in_mode(UIState.Connect)) {
+            if (this.in_mode(UIMode.Connect)) {
                 // Prevent dragging from selecting random elements.
                 event.preventDefault();
 
                 // Update the position of the cursor.
                 const offset = this.offset_from_event(event);
-                this.state.update(this, offset);
+                this.mode.update(this, offset);
             }
         });
 
         // Add various keyboard shortcuts.
 
         this.shortcuts.add([{ key: "Enter", context: Shortcuts.SHORTCUT_PRIORITY.Always }], () => {
-            if (!this.in_mode(UIState.Modal)) {
-                if (this.in_mode(UIState.Command)) {
+            if (!this.in_mode(UIMode.Modal)) {
+                if (this.in_mode(UIMode.Command)) {
                     // Get the list of IDs to select.
-                    const mode = this.state.mode;
+                    const mode = this.mode.mode;
 
                     const codes = new Set(this.panel.label_input.element.value.split(" "));
                     if (mode === "Select") {
@@ -1433,7 +1433,7 @@ class UI {
                                     for (const edge of edges) {
                                         const source = mode === "Source" ? cell : edge.source;
                                         const target = mode === "Target" ? cell : edge.target;
-                                        const valid_connection = UIState.Connect.valid_connection(
+                                        const valid_connection = UIMode.Connect.valid_connection(
                                             this,
                                             { source: target, target: source }[end],
                                             { source, target }[end],
@@ -1454,14 +1454,14 @@ class UI {
                                 case "Create":
                                     const created = new Set();
                                     for (const source of this.selection) {
-                                        const valid_connection = UIState.Connect.valid_connection(
+                                        const valid_connection = UIMode.Connect.valid_connection(
                                             this,
                                             source,
                                             cell,
                                         );
                                         if (valid_connection) {
                                             created.add(
-                                                UIState.Connect.create_edge(this, source, cell)
+                                                UIMode.Connect.create_edge(this, source, cell)
                                             );
                                         }
                                     }
@@ -1486,7 +1486,7 @@ class UI {
                     if (actions.length > 0) {
                         this.history.add(this, actions);
                     }
-                    this.switch_mode(UIState.default);
+                    this.switch_mode(UIMode.default);
                 } else {
                     // Toggle the focus of the label input.
                     const input = this.panel.label_input.element;
@@ -1516,8 +1516,8 @@ class UI {
             // We will mostly ignore the Shift key, apart from selecting queued cells.
             { key: "Tab", shift: null, context: Shortcuts.SHORTCUT_PRIORITY.Always },
         ], (event) => {
-            if (!this.in_mode(UIState.Modal)) {
-                if (this.in_mode(UIState.Default)) {
+            if (!this.in_mode(UIMode.Modal)) {
+                if (this.in_mode(UIMode.Default)) {
                     this.panel.defocus_inputs();
                     this.cancel_creation();
                     this.focus_point.class_list.remove("focused", "smooth");
@@ -1597,7 +1597,7 @@ class UI {
                         this.panel.focus_label_input();
                     }
                 } else {
-                    this.switch_mode(UIState.default);
+                    this.switch_mode(UIMode.default);
                 }
             }
         });
@@ -1609,7 +1609,7 @@ class UI {
             { key: ";", context: Shortcuts.SHORTCUT_PRIORITY.Defer },
             { key: "'", context: Shortcuts.SHORTCUT_PRIORITY.Defer }
         ], (event) => {
-            if (this.in_mode(UIState.Default) || this.in_mode(UIState.Command)) {
+            if (this.in_mode(UIMode.Default) || this.in_mode(UIMode.Command)) {
                 if (
                     this.selection_contains_edge()
                         || this.selection.size > 0 && event.key === "/"
@@ -1623,7 +1623,7 @@ class UI {
                         ".": "Target",
                         "/": "Create",
                     }[event.key];
-                    if (this.in_mode(UIState.Default)) {
+                    if (this.in_mode(UIMode.Default)) {
                         // We use `Defer` instead of `Conservative` so that we can switch modes by
                         // pressing the various command keys (when the input will be focused), but
                         // when we are in the default mode, we don't want to trigger command mode
@@ -1634,12 +1634,12 @@ class UI {
                             // visible, in which case the following will hide it.
                             this.cancel_creation();
                             this.focus_point.class_list.remove("focused", "smooth");
-                            this.switch_mode(new UIState.Command(this, mode));
+                            this.switch_mode(new UIMode.Command(this, mode));
                         }
-                    } else if (this.state.mode !== mode) {
-                        this.state.switch_mode(this, mode);
+                    } else if (this.mode.mode !== mode) {
+                        this.mode.switch_mode(this, mode);
                     } else {
-                        this.switch_mode(UIState.default);
+                        this.switch_mode(UIMode.default);
                     }
                 }
             }
@@ -1668,8 +1668,8 @@ class UI {
                 return;
             }
 
-            if (this.in_mode(UIState.KeyMove)) {
-                this.switch_mode(UIState.default);
+            if (this.in_mode(UIMode.KeyMove)) {
+                this.switch_mode(UIMode.default);
                 return;
             }
 
@@ -1718,18 +1718,18 @@ class UI {
             { key: "Alt", context: Shortcuts.SHORTCUT_PRIORITY.Always },
             { key: "Control", context: Shortcuts.SHORTCUT_PRIORITY.Always },
         ], (event) => {
-            if (this.in_mode(UIState.Default)) {
-                this.switch_mode(new UIState.Pan(event.key));
+            if (this.in_mode(UIMode.Default)) {
+                this.switch_mode(new UIMode.Pan(event.key));
             }
         }, null, (event) => {
-            if (this.in_mode(UIState.Pan) && this.state.key === event.key) {
-                this.switch_mode(UIState.default);
+            if (this.in_mode(UIMode.Pan) && this.mode.key === event.key) {
+                this.switch_mode(UIMode.default);
             }
         });
 
         // "B" for "Bring".
         this.shortcuts.add([{ key: "B" }], () => {
-            if (this.in_mode(UIState.Default)) {
+            if (this.in_mode(UIMode.Default)) {
                 let selection_contains_vertex = this.selection_contains_vertex();
                 const cell_under_focus_point = this.cell_under_focus_point();
                 if (!selection_contains_vertex && cell_under_focus_point !== null) {
@@ -1737,16 +1737,16 @@ class UI {
                     selection_contains_vertex = true;
                 }
                 if (selection_contains_vertex) {
-                    this.switch_mode(new UIState.KeyMove(this));
+                    this.switch_mode(new UIMode.KeyMove(this));
                 }
-            } else if (this.in_mode(UIState.KeyMove)) {
-                this.switch_mode(UIState.default);
+            } else if (this.in_mode(UIMode.KeyMove)) {
+                this.switch_mode(UIMode.default);
             }
         });
 
         // "S" for "Select".
         this.shortcuts.add([{ key: "S" }], () => {
-            if (this.in_mode(UIState.Default)) {
+            if (this.in_mode(UIMode.Default)) {
                 if (this.focus_point.class_list.contains("focused")) {
                     const cell_under_focus_point = this.cell_under_focus_point();
                     if (cell_under_focus_point !== null) {
@@ -1763,7 +1763,7 @@ class UI {
 
         // Space bar.
         this.shortcuts.add([{ key: " ", shift: null, modifier: null }], (event) => {
-            if (this.in_mode(UIState.Default)) {
+            if (this.in_mode(UIMode.Default)) {
                 if (this.focus_point.class_list.contains("focused")) {
                     const selected = Array.from(this.codes)
                         .filter(([, cell]) => cell.is_vertex() && this.selection.has(cell));
@@ -1771,7 +1771,7 @@ class UI {
                         const target = create_vertex_at_focus_point(event);
                         // Connect any selected vertices to the target.
                         const edges = selected.map(([, source]) => {
-                            return UIState.Connect.create_edge(this, source, target);
+                            return UIMode.Connect.create_edge(this, source, target);
                         });
                         insert_codes_before(target, ...edges);
                         const actions = [{
@@ -1788,7 +1788,7 @@ class UI {
                             // The `target` vertex already exists, so it may already be selected.
                             // In this case, we do not want to try to connect it to itself.
                             if (source !== target) {
-                                const edge = UIState.Connect.create_edge(this, source, target);
+                                const edge = UIMode.Connect.create_edge(this, source, target);
                                 this.history.add(
                                     this,
                                     [{
@@ -1850,7 +1850,7 @@ class UI {
                     break;
             }
 
-            if (this.in_mode(UIState.Default)) {
+            if (this.in_mode(UIMode.Default)) {
                 // Reveal the focus point if it wasn't already visible.
                 if (!this.focus_point.class_list.contains("focused")) {
                     this.focus_point.class_list.remove("revealed", "pending", "active");
@@ -1948,7 +1948,7 @@ class UI {
                 partial_pan();
             }
 
-            if (this.in_mode(UIState.KeyMove)) {
+            if (this.in_mode(UIMode.KeyMove)) {
                 // Move vertices around.
                 const vertices = Array.from(this.selection).filter((cell) => cell.is_vertex());
                 if (vertices.length > 0) {
@@ -1988,25 +1988,25 @@ class UI {
         this.pan_view(Offset.diag(this.default_cell_size / 2));
     }
 
-    /// Returns whether the UI has a particular state.
-    in_mode(state) {
-        return this.state instanceof state;
+    /// Returns whether the UI is in a particular mode.
+    in_mode(mode) {
+        return this.mode instanceof mode;
     }
 
-    /// Transitions to a `UIState`.
-    switch_mode(state) {
-        if (this.state === null || this.state.constructor !== state.constructor) {
-            if (this.state !== null) {
-                // Clean up any state for which this state is responsible.
-                this.state.release(this);
-                if (this.state.name !== null) {
-                    this.element.class_list.remove(this.state.name);
+    /// Transitions to a `UIMode`.
+    switch_mode(mode) {
+        if (this.mode === null || this.mode.constructor !== mode.constructor) {
+            if (this.mode !== null) {
+                // Clean up any state for which this mode is responsible.
+                this.mode.release(this);
+                if (this.mode.name !== null) {
+                    this.element.class_list.remove(this.mode.name);
                 }
             }
-            this.state = state;
+            this.mode = mode;
             this.toolbar.update(this);
-            if (this.state.name !== null) {
-                this.element.class_list.add(this.state.name);
+            if (this.mode.name !== null) {
+                this.element.class_list.add(this.mode.name);
             }
         }
     }
@@ -2416,16 +2416,16 @@ class UI {
         let effectful = false;
 
         // Stop trying to connect cells.
-        if (this.in_mode(UIState.Connect)) {
-            if (this.state.forged_vertex) {
+        if (this.in_mode(UIMode.Connect)) {
+            if (this.mode.forged_vertex) {
                 // If we created a vertex as part of the connection, we need to record
                 // that as an action.
                 this.history.add(this, [{
                     kind: "create",
-                    cells: new Set([this.state.source]),
+                    cells: new Set([this.mode.source]),
                 }]);
             }
-            this.switch_mode(UIState.default);
+            this.switch_mode(UIMode.default);
             effectful = true;
         }
 
@@ -3287,7 +3287,7 @@ class Panel {
         // Handle label interaction: update the labels of the selected cells when
         // the input field is modified.
         this.label_input.listen("input", () => {
-            if (!ui.in_mode(UIState.Command)) {
+            if (!ui.in_mode(UIMode.Command)) {
                 this.unqueue_selected(ui);
 
                 const collapse = ["label", ui.selection];
@@ -3339,7 +3339,7 @@ class Panel {
                         .replace(/\|/g, " ");
                 replaced = replaced.slice(0, this.label_input.element.selectionStart) + "|"
                     + replaced.slice(this.label_input.element.selectionStart);
-                switch (ui.state.mode) {
+                switch (ui.mode.mode) {
                     case "Select":
                     case "Toggle":
                     case "Create":
@@ -3402,13 +3402,13 @@ class Panel {
                 this.label_input.element.setSelectionRange(caret, caret);
             }
         }).listen("blur", () => {
-            if (!ui.in_mode(UIState.Command)) {
+            if (!ui.in_mode(UIMode.Command)) {
                 // As soon as the input is blurred, treat the label modification as
                 // a discrete event, so if we modify again, we'll need to undo both
                 // modifications to completely undo the label change.
                 ui.history.permanentise();
             } else {
-                ui.switch_mode(UIState.default);
+                ui.switch_mode(UIMode.default);
             }
         });
 
@@ -3861,7 +3861,7 @@ class Panel {
             // we will simply switch the displayed export format.
             // Clicking on the same button twice closes the panel.
             if (this.export !== format) {
-                ui.switch_mode(new UIState.Modal());
+                ui.switch_mode(new UIMode.Modal());
 
                 // Get the encoding of the diagram. The output may be modified by the caller.
                 const { data, metadata } = modify(ui.quiver.export(format));
@@ -4442,7 +4442,7 @@ class Panel {
         if (this.export !== null) {
             ui.element.query_selector(".export").remove();
             this.export = null;
-            ui.switch_mode(UIState.default);
+            ui.switch_mode(UIMode.default);
             this.update(ui);
             return true;
         }
@@ -4500,14 +4500,14 @@ class Shortcuts {
                             return prevent_others;
                         };
 
-                        if (!editing_input && !ui.in_mode(UIState.Modal)
+                        if (!editing_input && !ui.in_mode(UIMode.Modal)
                             || shortcut.context === Shortcuts.SHORTCUT_PRIORITY.Always)
                         {
                             event.preventDefault();
                             if (effect()) {
                                 break;
                             }
-                        } else if (!ui.in_mode(UIState.Modal) && type === "keydown") {
+                        } else if (!ui.in_mode(UIMode.Modal) && type === "keydown") {
                             // If we were editing an input, and the keyboard shortcut doesn't
                             // trigger in that case, then if the keyboard shortcut is deemed
                             // to have had no effect on the input, we either:
@@ -4895,7 +4895,7 @@ class Toolbar {
         this.update(ui);
     }
 
-    /// Update the toolbar (e.g. enabling or disabling buttons based on UI state).
+    /// Update the toolbar (e.g. enabling or disabling buttons based on UI mode).
     update(ui) {
         if (this.element === null) {
             // During initialisation, the `UI` may call `toolbar.update` when switching modes.
@@ -4911,9 +4911,9 @@ class Toolbar {
         enable_if("Undo", ui.history.present !== 0);
         enable_if("Redo", ui.history.present < ui.history.actions.length);
         enable_if("Select all",
-            ui.in_mode(UIState.Default) && ui.selection.size < ui.quiver.all_cells().length);
-        enable_if("Deselect all", ui.in_mode(UIState.Default) && ui.selection.size > 0);
-        enable_if("Delete", ui.in_mode(UIState.Default) && ui.selection.size > 0);
+            ui.in_mode(UIMode.Default) && ui.selection.size < ui.quiver.all_cells().length);
+        enable_if("Deselect all", ui.in_mode(UIMode.Default) && ui.selection.size > 0);
+        enable_if("Delete", ui.in_mode(UIMode.Default) && ui.selection.size > 0);
         enable_if("Centre view",
             ui.element.query_selector(".focus-point.focused")
             // Technically the first condition below is subsumed by the latter, but we keep it to
@@ -4968,7 +4968,7 @@ class Cell {
         if (this.is_vertex()) {
             this.element.listen("pointerdown", (event) => {
                 if (event.button === 0) {
-                    if (ui.in_mode(UIState.Default)) {
+                    if (ui.in_mode(UIMode.Default)) {
                         event.stopPropagation();
                         ui.focus_point.class_list.remove("focused", "smooth");
                         // If the cell we're dragging is part of the existing selection,
@@ -4977,7 +4977,7 @@ class Cell {
                         // and ignore the selection.
                         const move = new Set(ui.selection.has(this) ? [...ui.selection] : [this]);
                         ui.switch_mode(
-                            new UIState.PointerMove(
+                            new UIMode.PointerMove(
                                 ui,
                                 ui.position_from_event(event),
                                 move,
@@ -5011,7 +5011,7 @@ class Cell {
             ui.focus_point.class_list.remove("revealed");
 
             if (event.button === 0) {
-                if (ui.in_mode(UIState.Default) || ui.in_mode(UIState.Command)) {
+                if (ui.in_mode(UIMode.Default) || ui.in_mode(UIMode.Command)) {
                     event.stopPropagation();
                     event.preventDefault();
 
@@ -5052,24 +5052,24 @@ class Cell {
                     // while remaining held.
                     this.element.class_list.add("pending");
                     ui.focus_point.class_list.remove("focused", "smooth");
-                } else if (ui.in_mode(UIState.KeyMove)) {
+                } else if (ui.in_mode(UIMode.KeyMove)) {
                     was_previously_selected = false;
                 }
             }
         });
 
         content_element.listen("pointerenter", () => {
-            if (ui.in_mode(UIState.Connect)) {
+            if (ui.in_mode(UIMode.Connect)) {
                 // The second part of the condition should not be necessary, because pointer events
                 // are disabled for reconnected edges, but this acts as a warranty in case this is
                 // not working.
-                if (ui.state.source !== this
-                    && (ui.state.reconnect === null || ui.state.reconnect.edge !== this)) {
+                if (ui.mode.source !== this
+                    && (ui.mode.reconnect === null || ui.mode.reconnect.edge !== this)) {
                     if (
-                        UIState.Connect.valid_connection(
-                            ui, ui.state.source, this, ui.state.reconnect)
+                        UIMode.Connect.valid_connection(
+                            ui, ui.mode.source, this, ui.mode.reconnect)
                     ) {
-                        ui.state.target = this;
+                        ui.mode.target = this;
                         this.element.class_list.add("target");
                         // Hide the focus point (e.g. if we're connecting a vertex to an edge).
                         ui.focus_point.class_list.remove("revealed", "pending", "active");
@@ -5083,18 +5083,18 @@ class Cell {
                 this.element.class_list.remove("pending");
 
                 // Start connecting the node.
-                const state = new UIState.Connect(ui, this, false);
+                const mode = new UIMode.Connect(ui, this, false);
                 if (
-                    UIState.Connect.valid_connection(ui, state.source, null, state.reconnect)
+                    UIMode.Connect.valid_connection(ui, mode.source, null, mode.reconnect)
                 ) {
-                    ui.switch_mode(state);
+                    ui.switch_mode(mode);
                     this.element.class_list.add("source");
                 }
             }
 
-            if (ui.in_mode(UIState.Connect)) {
-                if (ui.state.target === this) {
-                    ui.state.target = null;
+            if (ui.in_mode(UIMode.Connect)) {
+                if (ui.mode.target === this) {
+                    ui.mode.target = null;
                 }
                 // We may not have the "target" class, but we may attempt to remove it
                 // regardless. We might still have the "target" class even if this cell
@@ -5110,7 +5110,7 @@ class Cell {
                 // we never begin connecting the cell.
                 this.element.class_list.remove("pending");
 
-                if (ui.in_mode(UIState.Default)) {
+                if (ui.in_mode(UIMode.Default)) {
                     // Focus the input if we click on a cell that was already selected. It will
                     // automatically blur when we click on the cell again, so this allows us to
                     // toggle the focus of the input when we click on any cell.
@@ -5119,33 +5119,33 @@ class Cell {
                     }
                 }
 
-                if (ui.in_mode(UIState.Connect)) {
+                if (ui.in_mode(UIMode.Connect)) {
                     event.stopImmediatePropagation();
 
                     // Connect two cells if the source is different to the target.
-                    if (ui.state.target === this) {
+                    if (ui.mode.target === this) {
                         const actions = [];
                         const cells = new Set();
 
-                        if (ui.state.forged_vertex) {
-                            cells.add(ui.state.source);
+                        if (ui.mode.forged_vertex) {
+                            cells.add(ui.mode.source);
                         }
 
-                        if (ui.state.reconnect === null) {
+                        if (ui.mode.reconnect === null) {
                             // Create a new edge if we're not simply reconnecting an existing one.
-                            const edge = ui.state.connect(ui, event);
+                            const edge = ui.mode.connect(ui, event);
                             cells.add(edge);
                         } else {
                             // Otherwise, reconnect the existing edge.
-                            const { edge, end } = ui.state.reconnect;
+                            const { edge, end } = ui.mode.reconnect;
                             actions.push({
                                 kind: "connect",
                                 edge,
                                 end,
                                 from: edge[end],
-                                to: ui.state.target,
+                                to: ui.mode.target,
                             });
-                            ui.state.connect(ui, event);
+                            ui.mode.connect(ui, event);
                         }
 
                         // If we haven't created any cells, then we don't need to
@@ -5165,19 +5165,19 @@ class Cell {
                         if (actions.length > 0) {
                             ui.history.add(ui, actions, false, ui.selection_excluding(cells));
                         }
-                    } else if (ui.state.source === this && ui.state.target === null) {
+                    } else if (ui.mode.source === this && ui.mode.target === null) {
                         // Here, we released the pointer on the source vertex, but may have forged a
                         // vertex when we began dragging, so we need to add a history event to
                         // record it.
-                        if (ui.state.forged_vertex) {
+                        if (ui.mode.forged_vertex) {
                             ui.history.add(ui, [{
                                 kind: "create",
-                                cells: new Set([ui.state.source]),
+                                cells: new Set([ui.mode.source]),
                             }]);
                         }
                     }
 
-                    ui.switch_mode(UIState.default);
+                    ui.switch_mode(UIMode.default);
                 }
             }
         });
@@ -5417,7 +5417,7 @@ class Edge extends Cell {
             ui.focus_point.class_list.remove("focused", "smooth");
 
             const fixed = { source: this.target, target: this.source }[end];
-            ui.switch_mode(new UIState.Connect(ui, fixed, false, {
+            ui.switch_mode(new UIMode.Connect(ui, fixed, false, {
                 end,
                 edge: this,
             }));
@@ -5443,14 +5443,14 @@ class Edge extends Cell {
         // which is being dragged) depending on the pointer position.
         let fixed_endpoints = true;
         if (pointer_offset !== null) {
-            if (ui.state.target !== null) {
+            if (ui.mode.target !== null) {
                 // In this case, we're hovering over another cell.
-                this.arrow[ui.state.reconnect.end] = ui.state.target.shape;
+                this.arrow[ui.mode.reconnect.end] = ui.mode.target.shape;
             } else {
                 // In this case, we're not hovering over another cell.
                 // Usually we offset edge endpoints from the cells to which they are connected,
                 // but when we are dragging an endpoint, we want to draw it right up to the pointer.
-                this.arrow[ui.state.reconnect.end] = new Shape.Endpoint(pointer_offset);
+                this.arrow[ui.mode.reconnect.end] = new Shape.Endpoint(pointer_offset);
                 fixed_endpoints = false;
             }
         }
@@ -5492,7 +5492,7 @@ class Edge extends Cell {
                 // source or target (whichever is not being changed right now), so the edges
                 // connected to this one don't move around, despite not looking like they're
                 // attached to anything, when this edge is not displayed.
-                const end = { source: "target", target: "source" }[ui.state.reconnect.end];
+                const end = { source: "target", target: "source" }[ui.mode.reconnect.end];
                 this.shape.origin = this.arrow[end].origin.add(
                     new Point(0, this.arrow.style.shift).rotate(this.arrow.angle()),
                 );
