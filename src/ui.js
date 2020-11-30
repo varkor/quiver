@@ -491,6 +491,19 @@ UIMode.Command = class extends UIMode {
     }
 };
 
+// Older versions of Safari are problematic because they're essentially tied to the macOS version,
+// and may not have support for pointer events. In this case, we simply replace them with mouse
+// events instead.
+// This should behave acceptably, because we don't access many pointer-specific properties in the
+// pointer events, and for those that we do, `undefined` will behave as expected.
+function pointer_event(name) {
+    if (`onpointer${name}` in document.documentElement) {
+        return `pointer${name}`;
+    } else {
+        return `mouse${name}`;
+    }
+}
+
 /// The object responsible for controlling all aspects of the user interface.
 class UI {
     constructor(element) {
@@ -637,7 +650,7 @@ class UI {
 
         // Prevent the label input being dismissed when clicked on in command mode, when no cells
         // are selected.
-        this.panel.label_input.parent.listen("pointerup", (event) => {
+        this.panel.label_input.parent.listen(pointer_event("up"), (event) => {
             if (event.button === 0 && event.pointerType !== "touch") {
                 event.stopPropagation();
             }
@@ -849,7 +862,7 @@ class UI {
             this.element.add(pane);
 
             // Prevent propagation of pointer events when interacting with the pane.
-            pane.listen("pointerdown", (event) => {
+            pane.listen(pointer_event("down"), (event) => {
                 if (event.button === 0) {
                     event.stopImmediatePropagation();
                 }
@@ -912,7 +925,7 @@ class UI {
             }
         };
 
-        document.addEventListener("pointermove", (event) => {
+        document.addEventListener(pointer_event("move"), (event) => {
             if (this.in_mode(UIMode.Pan)) {
                 if (this.mode.key !== null) {
                     // If we're panning, but no longer holding the requisite key, stop.
@@ -987,7 +1000,7 @@ class UI {
         // We have to track touch enter and touch leave events manually, since this is not directly
         // available. One might imagine that the `touchmove` event would be ideal for this, but
         // this appears not to trigger for small movements, whereas `pointermove` does.
-        document.addEventListener("pointermove", (event) => {
+        document.addEventListener(pointer_event("move"), (event) => {
             if (event.pointerType === "touch") {
                 const prev_touched_element = touched_element;
                 touched_element = document.elementFromPoint(event.clientX, event.clientY);
@@ -1000,14 +1013,14 @@ class UI {
                             && prev_touched_element.contains(touched_element);
                             if (!prev_element_contains_next) {
                                 prev_touched_element.dispatchEvent(
-                                    new Event("pointerleave", { bubbles: true })
+                                    new Event(pointer_event("leave"), { bubbles: true })
                                 );
                             }
                     }
                     // Trigger a `pointerenter` event on the element we are now touching.
                     if (touched_element !== null) {
                         touched_element.dispatchEvent(
-                            new Event("pointerenter", { bubbles: true })
+                            new Event(pointer_event("enter"), { bubbles: true })
                         );
                     }
                 }
@@ -1023,7 +1036,7 @@ class UI {
                 const touch = event.changedTouches[0];
                 const touched_element = document.elementFromPoint(touch.clientX, touch.clientY);
                 if (touched_element !== null) {
-                    const pointer_event = new Event("pointerup", { bubbles: true });
+                    const pointer_event = new Event(pointer_event("up"), { bubbles: true });
                     // We overwrite some properties that are necessary for `pointerup` listeners.
                     pointer_event.button = 0;
                     pointer_event.pageX = touch.pageX;
@@ -1039,7 +1052,7 @@ class UI {
             touched_element = null;
         });
 
-        document.addEventListener("pointerup", (event) => {
+        document.addEventListener(pointer_event("up"), (event) => {
             if (event.button === 0) {
                 if (event.pointerType !== "touch") {
                     if (this.in_mode(UIMode.Pan)) {
@@ -1066,7 +1079,7 @@ class UI {
 
         this.reposition_focus_point(Position.zero());
 
-        this.element.listen("pointerdown", (event) => {
+        this.element.listen(pointer_event("down"), (event) => {
             if (event.button === 0) {
                 // Usually, if `Alt` or `Control` have been held we will have already switched to
                 // the Pan mode. However, if the window is not in focus, they will not have been
@@ -1148,7 +1161,7 @@ class UI {
         };
 
         // Clicking on the focus point reveals it, after which another click adds a new node.
-        this.focus_point.listen("pointerdown", (event) => {
+        this.focus_point.listen(pointer_event("down"), (event) => {
             if (event.button === 0) {
                 if (this.in_mode(UIMode.Default)) {
                     event.preventDefault();
@@ -1190,7 +1203,7 @@ class UI {
         // focus point being exactly the same size as a grid cell (there is some padding for
         // aesthetic purposes) or the focus point being covered by other elements (like edge
         // endpoints).
-        this.container.listen("pointerup", (event) => {
+        this.container.listen(pointer_event("up"), (event) => {
             if (event.button === 0 && event.pointerType !== "touch") {
                 // Handle pointer releases without having moved the cursor from the initial cell.
                 this.focus_point.class_list.remove("pending", "active");
@@ -1278,7 +1291,7 @@ class UI {
         // be `"active"` and we create a new vertex and immediately start
         // connecting it to something (possibly an empty grid cell, which will
         // create a new vertex and connect them both).
-        this.focus_point.listen("pointerleave", (event) => {
+        this.focus_point.listen(pointer_event("leave"), (event) => {
             if (event.pointerType !== "touch") {
                 this.focus_point.class_list.remove("pending");
 
@@ -1298,7 +1311,7 @@ class UI {
         });
 
         // Moving the focus point, panning, and rearranging cells.
-        this.element.listen("pointermove", (event) => {
+        this.element.listen(pointer_event("move"), (event) => {
             if (this.in_mode(UIMode.Pan) && this.mode.origin !== null) {
                 const new_offset = this.offset_from_event(event).sub(this.view);
                 this.pan_view(this.mode.origin.sub(new_offset));
@@ -3262,7 +3275,7 @@ class Panel {
         this.element = new DOM.Element("div", { class: "side panel hidden" });
 
         // Prevent propagation of pointer events when interacting with the panel.
-        this.element.listen("pointerdown", (event) => {
+        this.element.listen(pointer_event("down"), (event) => {
             if (event.button === 0) {
                 event.stopImmediatePropagation();
             }
@@ -3285,7 +3298,7 @@ class Panel {
         });
 
         // Prevent propagation of pointer events when interacting with the label input.
-        this.label_input.listen("pointerdown", (event) => {
+        this.label_input.listen(pointer_event("down"), (event) => {
             if (event.button === 0) {
                 event.stopImmediatePropagation();
             }
@@ -3996,7 +4009,7 @@ class Panel {
         );
 
         // Prevent propagation of pointer events when interacting with the global options.
-        this.global.listen("pointerdown", (event) => {
+        this.global.listen(pointer_event("down"), (event) => {
             if (event.button === 0) {
                 event.stopImmediatePropagation();
             }
@@ -4687,7 +4700,7 @@ class Toolbar {
 
     initialise(ui) {
         this.element = new DOM.Element("div", { class: "toolbar" })
-            .listen("pointerdown", (event) => {
+            .listen(pointer_event("down"), (event) => {
                 if (event.button === 0) {
                     event.stopImmediatePropagation();
                 }
@@ -4704,7 +4717,7 @@ class Toolbar {
                 ))
                 .add(new DOM.Element("span", { class: "name" }).add(name))
                 .add(new DOM.Element("span", { class: "shortcut" }).add(shortcut_name))
-                .listen("pointerdown", (event) => {
+                .listen(pointer_event("down"), (event) => {
                     if (event.button === 0) {
                         event.stopImmediatePropagation();
                     }
@@ -4973,7 +4986,7 @@ class Cell {
         // We allow vertices to be moved by dragging its `element` (which contains its
         // `content_element`, the element with the actual cell content).
         if (this.is_vertex()) {
-            this.element.listen("pointerdown", (event) => {
+            this.element.listen(pointer_event("down"), (event) => {
                 if (event.button === 0) {
                     if (ui.in_mode(UIMode.Default)) {
                         event.stopPropagation();
@@ -5013,7 +5026,7 @@ class Cell {
         // as the input field would capture it.
         let was_previously_selected = true;
 
-        content_element.listen("pointerdown", (event) => {
+        content_element.listen(pointer_event("down"), (event) => {
             // The focus point will have already been removed on a device with a cursor, but on
             // touch devices, we may encounter a `pointerdown` without a corresponding
             // `pointerleave`.
@@ -5067,7 +5080,7 @@ class Cell {
             }
         });
 
-        content_element.listen("pointerenter", () => {
+        content_element.listen(pointer_event("enter"), () => {
             if (ui.in_mode(UIMode.Connect)) {
                 // The second part of the condition should not be necessary, because pointer events
                 // are disabled for reconnected edges, but this acts as a warranty in case this is
@@ -5087,7 +5100,7 @@ class Cell {
             }
         });
 
-        content_element.listen("pointerleave", (event) => {
+        content_element.listen(pointer_event("leave"), (event) => {
             if (event.pointerType !== "touch") {
                 if (this.element.class_list.contains("pending")) {
                     this.element.class_list.remove("pending");
@@ -5115,7 +5128,7 @@ class Cell {
             }
         });
 
-        content_element.listen("pointerup", (event) => {
+        content_element.listen(pointer_event("up"), (event) => {
             if (event.button === 0 && event.pointerType !== "touch") {
                 // If we release the pointer without ever dragging, then
                 // we never begin connecting the cell.
@@ -5437,7 +5450,7 @@ class Edge extends Cell {
         // Set up the endpoint handle interaction events.
         for (const end of ["source", "target"]) {
             const handle = this.arrow.element.query_selector(`.arrow-endpoint.${end}`);
-            handle.listen("pointerdown", (event) => {
+            handle.listen(pointer_event("down"), (event) => {
                 if (event.button === 0) {
                     reconnect(event, end);
                 }
