@@ -2851,8 +2851,9 @@ class UI {
 
     /// Load macros from a string, which will be used in all LaTeX labels.
     load_macros(definitions) {
-        // Currently, only macros without arguments are supported.
-        const newcommand = /^\\newcommand\{\\([a-zA-Z]+)\}(?:\[(\d)\])?\{(.*)\}$/;
+        // Here, we ignore `{` and `}` around the command name, but later we check that
+        // the brackets at least match.
+        const newcommand = /^\\newcommand\{?\\([a-zA-Z]+)\}?(?:\[(\d)\])?\{(.*)\}$/;
 
         const macros = new Map();
         for (let line of definitions.split("\n")) {
@@ -2862,7 +2863,9 @@ class UI {
                 continue;
             }
             const match = line.match(newcommand);
-            if (match !== null) {
+            // Check we either have ``{\commandname}` or `\commandname`, but not mismatched
+            // brackets.
+            if (match !== null && /^\\newcommand(\{\\[a-zA-Z]+\}|\\[a-zA-Z]+[^\}])/.test(line)) {
                 const [, command, arity = 0, definition] = match;
                 macros.set(`\\${command}`, {
                     definition,
