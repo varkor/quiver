@@ -4375,17 +4375,22 @@ class Panel {
                         slider.element.value = value !== null ? value : 0;
                         break;
                     default:
-                        if (value === null) {
-                            // Uncheck any checked input for which there are
-                            // multiple selected values.
-                            this.element.query_selector_all(
-                                `input[name="${name}"]:checked`
-                            ).forEach((input) => input.element.checked = false);
-                        } else {
+                        this.element.query_selector_all(
+                            `input[name="${name}"]:checked`
+                        ).forEach((input) => input.element.checked = false);
+                        // If there are multiple selected values, we don't check any input.
+                        if (value !== null) {
                             // Check any input for which there is a canonical choice of value.
-                            this.element.query_selector(
+                            const selected_input = this.element.query_selector(
                                 `input[name="${name}"][value="${value}"]`
-                            ).element.checked = true;
+                            );
+                            // `selected_input` will never be `null`, unless we have loaded a
+                            // diagram with an option we do not support in the current version of
+                            // quiver. This ought not to happen in practice, as users will typically
+                            // be using the latest version of quiver.
+                            if (selected_input !== null) {
+                                selected_input.element.checked = true;
+                            }
                         }
                         break;
                 }
