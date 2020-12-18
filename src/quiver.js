@@ -885,6 +885,7 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
 
         // If the quiver is now nonempty, some toolbar actions will be available.
         ui.toolbar.update(ui);
+        ui.update_focus_tooltip();
 
         if (errors.length > 0) {
             // Just throw the first error.
