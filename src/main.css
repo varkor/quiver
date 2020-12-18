@@ -758,11 +758,11 @@ input[type="radio"].short + input[type="radio"]:not(.short) {
     border-color: var(--ui-blue);
 }
 
-.panel input[type="range"]:active:not(.focused)::-webkit-slider-thumb {
+.panel input[type="range"]:active:not(:disabled):not(.focused)::-webkit-slider-thumb {
     background: hsl(0, 0%, 30%);
 }
 
-.panel input[type="range"]:active:not(.focused)::-moz-range-thumb {
+.panel input[type="range"]:active:not(:disabled):not(.focused)::-moz-range-thumb {
     background: hsl(0, 0%, 30%);
 }
 
