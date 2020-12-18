@@ -3297,6 +3297,12 @@ class Panel {
             disabled: true,
         });
 
+        // Prevent propagation of scrolling when the cursor is over the label input.
+        // This allows the user to scroll the label input text when not all the content fits.
+        this.label_input.listen("wheel", (event) => {
+            event.stopImmediatePropagation();
+        }, { passive: true });
+
         // Prevent propagation of pointer events when interacting with the label input.
         this.label_input.listen(pointer_event("down"), (event) => {
             if (event.button === 0) {
