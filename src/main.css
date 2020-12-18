@@ -657,7 +657,7 @@ input[type="radio"].short + input[type="radio"]:not(.short) {
     margin-top: -4px;
 }
 
-.panel input[type="radio"]:hover:not(:disabled) {
+.panel input[type="radio"]:hover:not(:disabled):not(:active):not(:checked) {
     background-color: var(--ui-hover);
 }
 
