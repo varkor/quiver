@@ -3,7 +3,7 @@
 /// Various parameters.
 Object.assign(CONSTANTS, {
     /// The current quiver version.
-    VERSION: "1.0.1",
+    VERSION: "1.1.0",
     /// We currently only support 0-cells, 1-cells, 2-cells, and 3-cells. This is due to
     /// a restriction with tikz-cd, which does not support n-cells greater than n = 2 (though it has
     /// issues even then), and also for usability: a user is unlikely to want to draw a higher cell.
