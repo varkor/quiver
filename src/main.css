@@ -517,7 +517,7 @@ being. */
 
     font-size: inherit;
     font-family: monospace;
-    color: hsl(0, 0%, 96%);
+    color: var(--ui-white);
 }
 
 .panel input[type="text"]::placeholder {
@@ -1200,7 +1200,7 @@ button.flash {
     background: hsla(50, 100%, 70%, 1);
 }
 
-.export .tip.hidden, .export .warning.hidden {
+.export .hidden {
     display: none;
 }
 
@@ -1208,6 +1208,59 @@ button.flash {
     margin: 4pt 0;
 
     list-style-type: circle;
+}
+
+.export .options {
+    margin-bottom: 8pt;
+    padding: 6pt 4pt;
+
+    background: var(--ui-black);
+    border-radius: 2px;
+
+    color: var(--ui-white);
+
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.export .options label {
+    position: relative;
+    top: 1px;
+}
+
+.export .options label kbd.hint {
+    /* Leave some space for the checkbox itself. */
+    transform: translate(-50%, -50%);
+}
+
+.export .options label input[type="checkbox"] {
+    margin-top: -1px;
+    margin-right: 6pt;
+    width: 12pt;
+    height: 12pt;
+    vertical-align: middle;
+
+    -webkit-appearance: none;
+    appearance: none;
+    background: var(--ui-white);
+    border-radius: 2px;
+    outline: none;
+}
+
+.export .options label input[type="checkbox"]:hover {
+    background: hsl(0, 0%, 80%);
+}
+
+.export .options label input[type="checkbox"]:checked {
+    background: var(--ui-focus);
+
+    text-align: center;
+}
+
+.export .options label input[type="checkbox"]:checked::before {
+    content: "✓";
+
+    color: var(--ui-black);
 }
 
 .export .code {

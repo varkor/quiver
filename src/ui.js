@@ -584,6 +584,9 @@ class UI {
 
         // The URL from which the macros have been fetched (if at all).
         this.macro_url = null;
+
+        // The user settings, which are stored persistently across sessions in `localStorage`.
+        this.settings = new Settings();
     }
 
     /// Reset most of the UI. We don't bother resetting current zoom, etc.: just enough to make
@@ -3257,6 +3260,35 @@ History.State = class {
     }
 };
 
+class Settings {
+    constructor() {
+        this.data = {
+            // Whether to wrap the `tikz-cd` output in `\[ \]`.
+            "export.centre_diagram": true,
+        };
+        try {
+            // Try to update the default values with the saved settings.
+            this.data = Object.assign(
+                this.data,
+                JSON.parse(window.localStorage.getItem("settings"))
+            );
+        } catch (_) {
+            // The JSON stored in `settings` was malformed.
+        }
+    }
+
+    /// Returns a saved user setting, or the default value if a setting has not been modified yet.
+    get(setting) {
+        return this.data[setting];
+    }
+
+    /// Saves a user setting.
+    set(setting, value) {
+        this.data[setting] = value;
+        window.localStorage.setItem("settings", JSON.stringify(this.data));
+    }
+}
+
 /// A panel for editing cell data.
 class Panel {
     constructor() {
@@ -3889,13 +3921,31 @@ class Panel {
             // If the user clicks on two different exports in a row
             // we will simply switch the displayed export format.
             // Clicking on the same button twice closes the panel.
-            if (this.export !== format) {
+            if (this.export === null || this.export.format !== format) {
                 ui.switch_mode(new UIMode.Modal());
 
                 // Get the encoding of the diagram. The output may be modified by the caller.
-                const { data, metadata } = modify(ui.quiver.export(format));
+                const { data, metadata } = modify(ui.quiver.export(format, ui.settings));
 
-                let export_pane, tip, warning, list, content;
+                let export_pane, tip, warning, list, options, content;
+
+                const update_output = (data) => {
+                    // At present, the data is always a string.
+                    content.clear().add(data);
+                    // Select the code for easy copying.
+                    const select_output = () => {
+                        const selection = window.getSelection();
+                        const range = document.createRange();
+                        range.selectNodeContents(content.element);
+                        selection.removeAllRanges();
+                        selection.addRange(range);
+                    };
+                    select_output();
+                    // Safari seems to occasionally fail to select the text immediately, so we
+                    // also select it after a delay to ensure the text is selected.
+                    UI.delay(select_output);
+                };
+
                 if (this.export === null) {
                     // Create the export pane.
                     export_pane = new DOM.Element("div", { class: "export" });
@@ -3930,14 +3980,48 @@ class Panel {
                             "appear in this diagram:")
                         .add(list = new DOM.Element("ul"))
                         .add_to(export_pane);
+
+                    const checkbox = new DOM.Element("input", { type: "checkbox" });
+                    options = new DOM.Element("div", { class: "options hidden" })
+                        .add(new DOM.Element("label")
+                            .add(checkbox)
+                            .add("Centre diagram")
+                        )
+                        .add_to(export_pane);
+
+                    // When the shortcut is active, we will always be displaying the modal pane,
+                    // so the shortcut is always valid.
+                    const shortcut = { key: "C", context: Shortcuts.SHORTCUT_PRIORITY.Always };
+                    new DOM.Element("kbd", { class: "hint button" })
+                        .add(Shortcuts.name([shortcut])).add_to(checkbox.parent);
+                    const shortcuts = [ui.shortcuts.add([shortcut], () => {
+                        if (!options.class_list.contains("hidden")) {
+                            checkbox.element.checked = !checkbox.element.checked;
+                            checkbox.dispatch(new Event("change"));
+                        }
+                    })];
+
+                    checkbox.listen("change", () => {
+                        ui.settings.set("export.centre_diagram", checkbox.element.checked);
+                        // Update the output. We ignore `metadata`, which currently does not change
+                        // in response to the settings.
+                        const { data } = modify(ui.quiver.export(format, ui.settings));
+                        update_output(data);
+                    });
+                    // Prevent the highlighted output from being deselected when changing a setting.
+                    checkbox.listen(pointer_event("up"), (event) => event.preventDefault());
+
                     content = new DOM.Element("div", { class: "code" }).add_to(export_pane);
                     ui.element.add(export_pane);
+
+                    this.export = { shortcuts };
                 } else {
                     // Find the existing export pane.
                     export_pane = ui.element.query_selector(".export");
                     tip = export_pane.query_selector(".tip");
                     warning = export_pane.query_selector(".warning");
                     list = export_pane.query_selector("ul");
+                    options = export_pane.query_selector(".options");
                     content = export_pane.query_selector(".code");
                 }
                 // Display a warning if necessary.
@@ -3951,18 +4035,18 @@ class Panel {
                 }
                 tip.class_list.toggle("hidden", format !== "tikz-cd");
                 warning.class_list.toggle("hidden", unsupported_items.length === 0);
+                options.class_list.toggle("hidden", format !== "tikz-cd");
 
-                // At present, the data is always a string.
-                content.clear().add(data);
+                const centre_checkbox = options.query_selector('input[type="checkbox"]');
+                if (ui.settings.get("export.centre_diagram")) {
+                    centre_checkbox.set_attributes({ checked: "" });
+                } else {
+                    centre_checkbox.remove_attributes("checked");
+                }
 
-                this.export = format;
+                this.export.format = format;
 
-                // Select the code for easy copying.
-                const selection = window.getSelection();
-                const range = document.createRange();
-                range.selectNodeContents(content.element);
-                selection.removeAllRanges();
-                selection.addRange(range);
+                update_output(data);
                 // Disable cell data editing while the export pane is visible.
                 this.update(ui);
             } else {
@@ -4475,6 +4559,9 @@ class Panel {
     dismiss_export_pane(ui) {
         if (this.export !== null) {
             ui.element.query_selector(".export").remove();
+            for (const id of this.export.shortcuts) {
+                ui.shortcuts.remove(id);
+            }
             this.export = null;
             ui.switch_mode(UIMode.default);
             this.update(ui);
@@ -4490,6 +4577,9 @@ class Shortcuts {
     constructor(ui) {
         // A map from keys to the shortcuts to which they correspond.
         this.shortcuts = new Map();
+
+        // An identifier for shortcuts, used to allow the caller to delete shortcuts.
+        this.next_id = 0;
 
         // Handle global key presses (such as, but not exclusively limited to, keyboard shortcuts).
         const handle_shortcut = (type, event) => {
@@ -4592,6 +4682,7 @@ class Shortcuts {
                 this.shortcuts.set(key, []);
             }
             this.shortcuts.get(key).push({
+                id: this.next_id,
                 // `null` means we don't care about whether the modifier key
                 // is pressed or not, so we need to special case it.
                 modifier: shortcut.modifier !== null ? (shortcut.modifier || false) : null,
@@ -4603,6 +4694,14 @@ class Shortcuts {
                 context: shortcut.context || Shortcuts.SHORTCUT_PRIORITY.Conservative,
                 button,
             });
+        }
+        return this.next_id++;
+    }
+
+    // Remove all actions associated to a shortcut ID.
+    remove(id) {
+        for (const [key, shortcuts] of this.shortcuts) {
+            this.shortcuts.set(key, shortcuts.filter((shortcut) => shortcut.id !== id));
         }
     }
 

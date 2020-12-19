@@ -122,6 +122,11 @@ DOM.Element = class {
     bounding_rect() {
         return this.element.getBoundingClientRect();
     }
+
+    dispatch(event) {
+        this.element.dispatchEvent(event);
+        return this;
+    }
 };
 
 /// A class for conveniently dealing with SVGs.
