@@ -4430,6 +4430,10 @@ class Panel {
                 }
             }
 
+            const get_input = (name, value) => {
+                return this.element.query_selector(`input[name="${name}"][value="${value}"]`);
+            };
+
             // Fill the consistent values for the inputs, checking and unchecking
             // radio buttons as relevant.
             for (const [name, value] of values) {
@@ -4465,9 +4469,7 @@ class Panel {
                         // If there are multiple selected values, we don't check any input.
                         if (value !== null) {
                             // Check any input for which there is a canonical choice of value.
-                            const selected_input = this.element.query_selector(
-                                `input[name="${name}"][value="${value}"]`
-                            );
+                            const selected_input = get_input(name, value);
                             // `selected_input` will never be `null`, unless we have loaded a
                             // diagram with an option we do not support in the current version of
                             // quiver. This ought not to happen in practice, as users will typically
@@ -4478,6 +4480,16 @@ class Panel {
                         }
                         break;
                 }
+            }
+
+            // If the arrow edge type isn't selected, we select the (disabled) default tail, body,
+            // and head styles. This means that when the arrow edge type option is selected, the
+            // default arrow style will be selected, rather than whatever was last selected by the
+            // user.
+            if (!get_input("edge-type", "arrow").element.checked) {
+                get_input("tail-type", "none").element.checked = true;
+                get_input("body-type", "solid").element.checked = true;
+                get_input("head-type", "arrowhead").element.checked = true;
             }
 
             // Update the actual `value` attribute for the offset, curve, length, and level sliders
