@@ -759,6 +759,10 @@ class UI {
                 ["Toggle help", (td) => Shortcuts.element(td, [{
                     key: "H", modifier: true, shift: true
                 }])]
+            ]))
+            .add(new DOM.Element("h2").add("Export"))
+            .add(new DOM.Table([
+                ["Toggle diagram centring", (td) => Shortcuts.element(td, [{ key: "C" }])]
             ])));
 
         // Set up the "About" pane.
