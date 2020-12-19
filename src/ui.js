@@ -2823,6 +2823,13 @@ class UI {
                 style.heads = CONSTANTS.ARROW_HEAD_STYLE.NONE;
                 style.tails = CONSTANTS.ARROW_HEAD_STYLE.CORNER;
                 break;
+
+            // Pullback/pushout corner.
+            case "corner-inverse":
+                style.body_style = CONSTANTS.ARROW_BODY_STYLE.NONE;
+                style.heads = CONSTANTS.ARROW_HEAD_STYLE.NONE;
+                style.tails = CONSTANTS.ARROW_HEAD_STYLE.CORNER_INVERSE;
+                break;
         }
 
         return style;
@@ -2851,7 +2858,7 @@ class UI {
             const value = parseInt(slider.element.value);
             const step = parseInt(slider.element.step);
             slider.element.value = value + step * delta;
-            slider.element.dispatchEvent(new Event("input"));
+            slider.dispatch(new Event("input"));
         }
         return focused_sliders.length > 0;
     }
@@ -3269,6 +3276,8 @@ class Settings {
         this.data = {
             // Whether to wrap the `tikz-cd` output in `\[ \]`.
             "export.centre_diagram": true,
+            // Which variant of the corner to use for pullbacks/pushouts.
+            "diagram.var_corner": false,
         };
         try {
             // Try to update the default values with the saved settings.
@@ -3814,6 +3823,7 @@ class Panel {
                 ["arrow", "Arrow", Edge.default_options().style, "a"],
                 ["adjunction", "Adjunction", { name: "adjunction" }, "j"],
                 ["corner", "Pullback / pushout", { name: "corner" }, "p"],
+                ["corner-inverse", "Pullback / pushout", { name: "corner-inverse" }, "p"],
             ],
             "edge-type",
             ["large"],
@@ -3860,7 +3870,7 @@ class Panel {
                     // we get the expected style, rather than the default style.
                     if (data.name === "arrow") {
                         ui.element.query_selector_all('.arrow-style input[type="radio"]:checked')
-                            .forEach((input) => input.element.dispatchEvent(new Event("change")))
+                            .forEach((input) => input.dispatch(new Event("change")))
                     } else {
                         this.defocus_inputs();
                     }
@@ -3871,6 +3881,59 @@ class Panel {
                 options: Edge.default_options(null, data),
             }),
         );
+
+        const corner_button = this.element
+            .query_selector(`input[name="edge-type"][value="corner"]`);
+        const corner_inverse_button = this.element
+            .query_selector(`input[name="edge-type"][value="corner-inverse"]`);
+        corner_inverse_button.class_list.add("hidden");
+
+        // When the user clicks on the corner button, it alternates between `corner` and
+        // `corner-inverse`.
+        const alternate_buttons = [corner_button, corner_inverse_button];
+        for (let i = 0; i < alternate_buttons.length; ++i) {
+            const button = alternate_buttons[i];
+            const next_button = alternate_buttons[(i + 1) % alternate_buttons.length];
+            button.listen(pointer_event("up"), () => {
+                if (button.element.checked) {
+                    button.element.disabled = true;
+                    next_button.element.disabled = false;
+                    next_button.element.checked = true;
+                    const event = new Event("change");
+                    // We're abusing `triggered_by_shortcut` a little here.
+                    event.triggered_by_shortcut = true;
+                    next_button.dispatch(event);
+                    UI.delay(() => button.element.disabled = false);
+                }
+            });
+            // The `change` event just triggers when a radio button is checked.
+            button.listen("change", () => {
+                if (next_button.class_list.contains("hidden")) {
+                    // Allow the next button to receive keyboard events if we've just selected this
+                    // body style. When either corner style is selected, then neither button is
+                    // disabled to allow us to toggle between them by pressing `P`.
+                    next_button.element.disabled = false;
+                }
+                next_button.class_list.add("hidden");
+                button.class_list.remove("hidden");
+                // Save the user's preference.
+                ui.settings.set("diagram.var_corner", button === corner_inverse_button);
+            });
+        }
+
+        // When any non-corner edge type is selected, we disable the edge type that is hidden, so
+        // that the correct corner style will receive the keyboard event. A similar thing happens
+        // in `Panel.update`.
+        for (const edge_type_button of this.element.query_selector_all('input[name="edge-type"]')) {
+            if (!alternate_buttons.find((button) => button.element === edge_type_button.element)) {
+                edge_type_button.listen("change", () => {
+                    for (const corner_button of alternate_buttons) {
+                        corner_button.element.disabled
+                            = corner_button.class_list.contains("hidden");
+                    }
+                });
+            }
+        }
 
         progress_style_selection = () => {
             const elements = [head_styles, body_styles, tail_styles];
@@ -4183,10 +4246,12 @@ class Panel {
             let { length, options, draw_label } = properties(data);
 
             // We use a custom pre-drawn SVG for the pullback/pushout button.
-            if (options.style.name === "corner") {
+            if (options.style.name.startsWith("corner")) {
                 button.set_style({
                     "background-image": ["", "un"].map((prefix) => {
-                        return `url("icons/pullback-${prefix}checked.svg")`;
+                        return `url("icons/${
+                            options.style.name.endsWith("inverse") ? "var-" : ""
+                        }pullback-${prefix}checked.svg")`;
                     }).join(", ")
                 });
                 return button;
@@ -4261,7 +4326,7 @@ class Panel {
                                 event.triggered_by_shortcut = true;
                                 event.idempotent = option.element.checked;
                                 option.element.checked = true;
-                                option.element.dispatchEvent(event);
+                                option.dispatch(event);
                                 Shortcuts.flash(option);
                                 // Prevent other elements from being triggered by the same key
                                 // press.
@@ -4273,6 +4338,13 @@ class Panel {
                 });
                 // JavaScript's scoping is messed up.
                 UI.delay(((i) => (() => {
+                    if (option.class_list.contains("hidden")) {
+                        // Currently only one option is hidden: that for the inverse corner style.
+                        // It uses the same keyboard shortcut as the default corner style, so we
+                        // don't need to display a shortcut for it.
+                        return;
+                    }
+
                     const left = options_list.class_list.contains("vertical")
                         ? ((i % 2 === 0 && classes.includes("short"))
                             ? option.element.offsetWidth : 0)
@@ -4386,6 +4458,8 @@ class Panel {
                 }
             };
 
+            let [corners, inverse_corners] = [0, 0];
+
             // Collect the consistent and varying input values.
             for (const cell of ui.selection) {
                 // Options applying to all cells.
@@ -4430,6 +4504,12 @@ class Panel {
                         }
                     } else {
                         all_edges_are_arrows = false;
+                        if (cell.options.style.name === "corner") {
+                            ++corners;
+                        }
+                        if (cell.options.style.name === "corner-inverse") {
+                            ++inverse_corners;
+                        }
                     }
                 }
             }
@@ -4495,6 +4575,30 @@ class Panel {
                 get_input("body-type", "solid").element.checked = true;
                 get_input("head-type", "arrowhead").element.checked = true;
             }
+
+            // Display the relevant pullback/pushout button.
+            const corner_button = this.element
+                .query_selector(`input[name="edge-type"][value="corner"]`);
+            const corner_inverse_button = this.element
+                .query_selector(`input[name="edge-type"][value="corner-inverse"]`);
+            let [reveal, hide] = [corner_button, corner_inverse_button];
+            if (
+                inverse_corners > corners
+                    || inverse_corners >= corners
+                        // Pick the user's preference if there isn't a clear choice.
+                        && ui.settings.get("diagram.var_corner")
+            ) {
+                [reveal, hide] = [corner_inverse_button, corner_button];
+            }
+            reveal.class_list.remove("hidden");
+            hide.class_list.add("hidden");
+            reveal.element.disabled = false;
+            // When we press `P` when neither corner style is selected, we want to select the
+            // style that is currently visible. However, both have event listeners and so the
+            // default style will take priority, unless we disable it initially. It is only
+            // disabled while neither style is selected (because the hidden inputs must
+            // receive keyboard events to toggle between the two styles).
+            hide.element.disabled = !reveal.element.checked;
 
             // Update the actual `value` attribute for the offset, curve, length, and level sliders
             // so that we can reference it in the CSS.
