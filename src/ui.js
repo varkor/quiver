@@ -2597,14 +2597,6 @@ class UI {
             }
         }
 
-        if (cell.is_vertex()) {
-            // 1-cells take account of the dimensions of the cell label to be drawn snugly,
-            // so if the label is resized, the edges need to be redrawn.
-            for (const edge of this.quiver.transitive_dependencies([cell], true)) {
-                edge.render(this);
-            }
-        }
-
         return [label.offsetWidth, label.offsetHeight];
     }
 
@@ -4390,6 +4382,12 @@ class Panel {
                 cell.render(ui);
             } else {
                 cell.resize_content(ui, ui.resize_label(cell, label.element));
+
+                // 1-cells take account of the dimensions of the cell label to be drawn snugly,
+                // so if the label is resized, the edges need to be redrawn.
+                for (const edge of ui.quiver.transitive_dependencies([cell], true)) {
+                    edge.render(ui);
+                }
             }
         };
 
