@@ -587,6 +587,10 @@ input[type="text"].flash {
     border-color: var(--ui-focus);
 }
 
+.panel input.hidden {
+    display: none;
+}
+
 .panel .vertical {
     display: inline-block;
     width: calc(100% - (20% + 4px) * 2);

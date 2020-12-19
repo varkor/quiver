@@ -90,6 +90,8 @@ const CONSTANTS = {
         HOOK_BOTTOM: ["hook-bottom"],
         /// The corner of a square, used for pullbacks and pushouts.
         CORNER: ["corner"],
+        /// The corner of a square, used for an alternate style for pullbacks and pushouts.
+        CORNER_INVERSE: ["corner-inverse"],
     },
     /// The various label alignment options.
     LABEL_ALIGNMENT: new Enum(
@@ -1073,6 +1075,8 @@ class Arrow {
                 switch (heads[i]) {
                     case "epi":
                     case "corner":
+                    case "corner-inverse":
+                    // FIXME: corner-inverse.
                         [margin_left, margin_right, margin_begin] = [0, head_width, 0];
                         break;
                     case "mono":
@@ -1158,11 +1162,14 @@ class Arrow {
 
                     // The corner symbol used for pullbacks and pushouts.
                     case "corner":
+                    case "corner-inverse":
+                        const is_inverse = head_style.endsWith("-inverse");
                         const LENGTH = 12;
                         const base_2 = LENGTH / (2 ** 0.5);
                         const base_point
-                            = bezier.point(t_after_length(arclen_to_head + base_2 * start_sign))
-                                .add(offset);
+                            = bezier.point(t_after_length(
+                                arclen_to_head + (is_inverse ? 0 : base_2 * start_sign)
+                            )).add(offset);
 
                         // Draw the two halves of the head.
                         for (const side_sign of [-1, 1]) {
@@ -1173,7 +1180,8 @@ class Arrow {
                             const PI_4 = Math.PI / 4;
                             const direction = this.target.origin.sub(this.source.origin).angle();
                             const corner_angle
-                                = Math.PI + PI_4 * Math.round(4 * direction / Math.PI) - direction;
+                                = (is_inverse ? 0 : Math.PI)
+                                    + PI_4 * Math.round(4 * direction / Math.PI) - direction;
 
                             path.line_by(Point.lendir(
                                 LENGTH,

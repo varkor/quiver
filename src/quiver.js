@@ -526,6 +526,7 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
 
                     case "adjunction":
                     case "corner":
+                    case "corner-inverse":
                         parameters.push("phantom");
 
                         let angle;
@@ -537,7 +538,9 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                                 angle = -Math.round(edge.angle() * 180 / Math.PI);
                                 break;
                             case "corner":
-                                label = "\"\\lrcorner\"";
+                            case "corner-inverse":
+                                label = edge.options.style.name.endsWith("-inverse") ?
+                                    "\"\\ulcorner\"" : "\"\\lrcorner\"";
                                 label_parameters.push("very near start");
                                 // Round the angle to the nearest 45º, so that the corner always
                                 // appears aligned with horizontal, vertical or diagonal lines.
@@ -545,7 +548,9 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                                 break;
                         }
 
-                        label_parameters.push(`rotate=${angle}`);
+                        if (angle !== 0) {
+                            label_parameters.push(`rotate=${angle}`);
+                        }
 
                         // We allow these sorts of edges to have labels attached,
                         // even though it's a little unusual.
