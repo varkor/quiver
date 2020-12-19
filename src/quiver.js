@@ -174,12 +174,12 @@ class Quiver {
     /// Currently, the supported formats are:
     /// - "tikz-cd"
     /// - "base64"
-    export(format) {
+    export(format, settings) {
         switch (format) {
             case "tikz-cd":
-                return QuiverExport.tikz_cd.export(this);
+                return QuiverExport.tikz_cd.export(this, settings);
             case "base64":
-                return QuiverImportExport.base64.export(this);
+                return QuiverImportExport.base64.export(this, settings);
             default:
                 throw new Error(`unknown export format \`${format}\``);
         }
@@ -199,18 +199,21 @@ class QuiverImportExport extends QuiverExport {
 }
 
 QuiverExport.tikz_cd = new class extends QuiverExport {
-    export(quiver) {
+    export(quiver, settings) {
         let output = "";
 
         // Wrap tikz-cd code with `\begin{tikzcd} ... \end{tikzcd}`.
         // We also add custom TikZ styles if required, e.g. for drawing fixed-height curves, which
         // improve upon the build-in `bend` option.
         const wrap_boilerplate = (output) => {
-            const tikzcd = `\\[\\begin{tikzcd}\n${
+            let tikzcd = `\\begin{tikzcd}\n${
                 output.length > 0 ? `${
                     output.split("\n").map(line => `\t${line}`).join("\n")
                 }\n` : ""
-            }\\end{tikzcd}\\]`;
+            }\\end{tikzcd}`;
+            if (settings.get("export.centre_diagram")) {
+                tikzcd = `\\[${tikzcd}\\]`;
+            }
             return `% ${QuiverImportExport.base64.export(quiver).data}\n${tikzcd}`;
         };
 
