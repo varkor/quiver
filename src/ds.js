@@ -166,3 +166,7 @@ class Path {
         return this;
     }
 }
+
+function clamp(min, x, max) {
+    return Math.max(min, Math.min(x, max));
+}

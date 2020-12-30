@@ -875,7 +875,7 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
         // two cells, we prefer the top/leftmost cell.
         ui.focus_point.class_list.remove("smooth");
         ui.reposition_focus_point(ui.position_from_offset(ui.view.sub(Point.diag(0.5))));
-        UI.delay(() => ui.focus_point.class_list.add("smooth"));
+        delay(() => ui.focus_point.class_list.add("smooth"));
 
         // When cells are created, they are usually queued. We don't want any cells that have been
         // imported to be queued.
@@ -884,7 +884,7 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
         }
 
         // Update all the affected columns and rows.
-        UI.delay(() => ui.update_col_row_size(
+        delay(() => ui.update_col_row_size(
             ...indices.filter((cell) => cell.is_vertex()).map((vertex) => vertex.position)
         ));
 

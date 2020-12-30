@@ -675,98 +675,73 @@ input[type="radio"].short + input[type="radio"]:not(.short) {
     border-color: var(--ui-blue);
 }
 
-.panel input[type="range"] {
-    -webkit-appearance: none;
-    vertical-align: middle;
-    width: 75%;
-
-    background: transparent;
-    outline: none;
-
-    font: inherit;
-    color: inherit;
+.panel label {
+    position: relative;
 }
 
-.panel input[type="range"]::after {
-    content: attr(value);
+/* A non-native range input, supporting multiple thumbs. */
+.panel div.slider {
     display: inline-block;
-    width: 48px;
-
-    text-align: right;
+    vertical-align: middle;
+    position: absolute;
+    width: 55%;
+    left: 56px;
 }
 
-.panel .percentage input[type="range"]::after {
-    content: attr(value) "%";
+.panel .slider-value {
+    display: inline-block;
+    position: absolute;
+    right: 0;
 }
 
-.panel input[type="range"]::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    width: 20px; height: 20px;
-    margin-top: calc(-4px);
+.panel .percentage .slider-value::after {
+    content: "%";
+}
+
+.panel .slider .thumb {
+    display: inline-block;
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    margin-top: -3px;
+    top: 0;
+    transform: translateX(-50%);
+    z-index: 1;
 
     background: hsl(0, 0%, 10%);
     border: var(--ui-border) solid 1px;
     border-radius: 20px;
+
+    pointer-events: none;
 }
 
-.panel input[type="range"].focused::-webkit-slider-thumb {
+.panel .slider.focused .thumb {
     background: var(--ui-blue);
     border-color: var(--ui-blue);
 }
 
-.panel input[type="range"]::-moz-range-thumb {
-    width: 20px; height: 20px;
-    margin-top: calc(-4px);
-
-    background: hsl(0, 0%, 10%);
-    border: var(--ui-border) solid 1px;
-    border-radius: 20px;
-}
-
-.panel input[type="range"].focused::-moz-range-thumb {
-    background: var(--ui-blue);
-    border-color: var(--ui-blue);
-}
-
-.panel input[type="range"]:hover:not(:disabled):not(.focused)::-webkit-slider-thumb {
+.panel .slider:not(.disabled):not(.focused) .thumb.hover {
     background: hsl(0, 0%, 20%);
 }
 
-.panel input[type="range"]:hover:not(:disabled):not(.focused)::-moz-range-thumb {
-    background: hsl(0, 0%, 20%);
-}
-
-.panel input[type="range"]::-webkit-slider-runnable-track {
-    width: 100%; height: 14px;
+.panel .slider .track {
+    display: inline-block;
+    vertical-align: middle;
+    width: 100%;
+    height: 14px;
+    position: absolute;
 
     background: var(--ui-background);
     border: var(--ui-border) solid 1px;
     border-radius: 14px;
 }
 
-.panel input[type="range"].focused::-webkit-slider-runnable-track {
+.panel .slider.focused .track {
     background: var(--ui-white);
     border-color: var(--ui-blue);
 }
 
-.panel input[type="range"]::-moz-range-track {
-    width: 100%; height: 14px;
-
-    background: var(--ui-background);
-    border: var(--ui-border) solid 1px;
-    border-radius: 14px;
-}
-
-.panel input[type="range"].focused::-moz-range-track {
-    background: white;
-    border-color: var(--ui-blue);
-}
-
-.panel input[type="range"]:active:not(:disabled):not(.focused)::-webkit-slider-thumb {
-    background: hsl(0, 0%, 30%);
-}
-
-.panel input[type="range"]:active:not(:disabled):not(.focused)::-moz-range-thumb {
+.panel .slider:not(.disabled):not(.focused) .thumb.active {
     background: hsl(0, 0%, 30%);
 }
 
@@ -853,8 +828,8 @@ kbd.hint.button, kbd.hint.input {
 }
 
 kbd.hint.slider {
-    right: 0;
-    transform: translateX(-25%);
+    left: calc(56px + 55%); top: 0;
+    transform: translate(-25%, -75%);
 }
 
 .ui.command .cell kbd.hint {

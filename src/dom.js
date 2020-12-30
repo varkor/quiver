@@ -1,5 +1,23 @@
 "use strict";
 
+/// A helper method to trigger later in the event queue.
+function delay(f, duration = 0) {
+    setTimeout(f, duration);
+}
+
+// Older versions of Safari are problematic because they're essentially tied to the macOS version,
+// and may not have support for pointer events. In this case, we simply replace them with mouse
+// events instead.
+// This should behave acceptably, because we don't access many pointer-specific properties in the
+// pointer events, and for those that we do, `undefined` will behave as expected.
+function pointer_event(name) {
+    if (`onpointer${name}` in document.documentElement) {
+        return `pointer${name}`;
+    } else {
+        return `mouse${name}`;
+    }
+}
+
 /// A helper object for dealing with the DOM.
 const DOM = {};
 
@@ -73,6 +91,11 @@ DOM.Element = class {
             this.element.firstChild.remove();
         }
         return this;
+    }
+
+    /// Shorthand for `clear().add(...)`.
+    replace(value) {
+        return this.clear().add(value);
     }
 
     query_selector(selector) {
@@ -208,3 +231,150 @@ DOM.Link = class extends DOM.Element {
         this.add(content);
     }
 };
+
+// A custom `input[type="range"]` that permits multiple thumbs.
+DOM.Multislider = class extends DOM.Element {
+    constructor(name, min, max, step = 1, attributes = {}, style = {}) {
+        // The slider element, containing the track and thumbs.
+        super("div", attributes, style);
+        this.class_list.add("slider");
+
+        this.min = min;
+        this.max = max;
+        this.step = step;
+
+        // The track, in which the thumbs are placed.
+        const track = new DOM.Element("div", { class: "track" }).add_to(this);
+
+        // The thumbs, which may be dragged by the user.
+        this.thumbs = [new DOM.Multislider.Thumb(this, this.min)];
+
+        if (this.thumbs.length > 0) {
+            track.listen(pointer_event("move"), (event) => {
+                if (DOM.Multislider.active_thumb === null) {
+                    // Find the closest thumb to the cursor.
+                    const thumb_proximities = this.thumbs.map((thumb) => {
+                        // Functional programmers, please avert your eyes.
+                        thumb.class_list.remove("hover");
+
+                        const thumb_rect = thumb.bounding_rect();
+                        return [event.clientX - thumb_rect.left + thumb_rect.width / 2, thumb];
+                    });
+                    thumb_proximities.sort(([prox1,], [prox2,]) => prox1 - prox2);
+                    // We're "hovering" over the closest thumb.
+                    const [, closest_thumb] = thumb_proximities[0];
+                    closest_thumb.class_list.add("hover");
+                }
+            });
+
+            track.listen(pointer_event("down"), (event) => {
+                const hovered_thumb = this.thumbs.find((thumb) => {
+                    return thumb.class_list.contains("hover");
+                });
+                if (!this.class_list.contains("disabled") && typeof hovered_thumb !== "undefined") {
+                    // Display the currently-dragged thumb above any other. This is important where
+                    // there are multiple thumbs, which can overlap.
+                    this.thumbs.forEach((thumb) => thumb.set_style({ "z-index": 1 }));
+                    hovered_thumb.class_list.add("active");
+                    hovered_thumb.move_to_pointer(event);
+                    DOM.Multislider.active_thumb = hovered_thumb;
+                    hovered_thumb.set_style({ "z-index": 2 });
+                }
+            });
+
+            track.listen(pointer_event("leave"), () => {
+                this.query_selector_all(".thumb.hover").forEach((thumb) => {
+                    thumb.class_list.remove("hover");
+                });
+            });
+        }
+
+        // The label containing both the slider, and the slider value.
+        this.label = new DOM.Element("label")
+            .add(`${name}: `)
+            .add(this)
+            .add(new DOM.Element("span", { class: "slider-value" }));
+    }
+};
+
+// A draggable thumb on a slider.
+DOM.Multislider.Thumb = class extends DOM.Element {
+    constructor(slider, attributes = {}, style = {}) {
+        super("div", Object.assign({
+            class: `thumb ${(attributes.class || "")}`.trim(),
+        }, attributes), style);
+        this.slider = slider.add(this);
+        // We don't want to update the `value` until the slider has been added to the DOM, so we can
+        // query element sizes. For this reason, we set `value` to `null` to begin with, and rely on
+        // the caller to `set_value` manually.
+        this.value = null;
+    }
+
+    /// Move the thumb to the location of the pointer `event`.
+    move_to_pointer(event) {
+        const slider_rect = this.slider.bounding_rect();
+        const thumb_width = this.bounding_rect().width;
+        const x = clamp(
+            thumb_width / 2,
+            event.clientX - slider_rect.left,
+            slider_rect.width - thumb_width / 2,
+        );
+        const value = this.slider.min + Math.round(
+            (x - thumb_width / 2) / (slider_rect.width - thumb_width)
+                * (this.slider.max - this.slider.min) / this.slider.step
+        ) * this.slider.step;
+        this.set_value(value, true);
+    }
+
+    /// We use a setter, which allows us to update the position of the thumb as well as the value of
+    /// `this.value`.
+    /// Returns whether the thumb value was changed (i.e. whether the given `value` was valid and
+    // different to the current value).
+    set_value(value, user_triggered = false) {
+        value = clamp(this.slider.min, value, this.slider.max);
+
+        if (value !== this.value) {
+            this.value = value;
+
+            // Trigger a `input` event on the slider.
+            if (user_triggered) {
+                this.slider.dispatch(new Event("input"));
+            }
+
+            const slider_rect = this.slider.bounding_rect();
+            const thumb_rect = this.bounding_rect();
+            this.set_style({
+                left: `${
+                    thumb_rect.width / 2
+                        + (value - this.slider.min) / (this.slider.max - this.slider.min)
+                            * (slider_rect.width - thumb_rect.width)
+                }px`,
+            });
+            if (this.slider.thumbs.length === 1) {
+                this.slider.label.query_selector(".slider-value").replace(`${this.value}`);
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+}
+
+// The `DOM.Multislider.Thumb` currently being dragged, or `null` if none is.
+DOM.Multislider.active_thumb = null;
+
+// Handle dragging slider thumbs.
+window.addEventListener(pointer_event("move"), (event) => {
+    if (DOM.Multislider.active_thumb !== null) {
+        DOM.Multislider.active_thumb.move_to_pointer(event);
+    }
+});
+
+// Handle the release of slider thumbs.
+window.addEventListener(pointer_event("up"), () => {
+    if (DOM.Multislider.active_thumb !== null) {
+        DOM.Multislider.active_thumb.class_list.remove("active");
+        DOM.Multislider.active_thumb = null;
+    }
+});

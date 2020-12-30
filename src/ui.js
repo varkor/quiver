@@ -487,22 +487,9 @@ UIMode.Command = class extends UIMode {
 
     switch_mode(ui, mode) {
         this.mode = mode;
-        ui.element.query_selector(".input-mode").clear().add(this.mode);
+        ui.element.query_selector(".input-mode").replace(this.mode);
     }
 };
-
-// Older versions of Safari are problematic because they're essentially tied to the macOS version,
-// and may not have support for pointer events. In this case, we simply replace them with mouse
-// events instead.
-// This should behave acceptably, because we don't access many pointer-specific properties in the
-// pointer events, and for those that we do, `undefined` will behave as expected.
-function pointer_event(name) {
-    if (`onpointer${name}` in document.documentElement) {
-        return `pointer${name}`;
-    } else {
-        return `mouse${name}`;
-    }
-}
 
 /// The object responsible for controlling all aspects of the user interface.
 class UI {
@@ -618,7 +605,7 @@ class UI {
         this.toolbar.update(this);
         // While the following does work without a delay, it currently experiences some stutters.
         // Using a delay makes the transition much smoother.
-        UI.delay(() => {
+        delay(() => {
             this.panel.hide();
             this.panel.label_input.parent.class_list.add("hidden");
         });
@@ -645,7 +632,7 @@ class UI {
                 .add(new DOM.Element("div", { class: "input-mode" }))
                 .add(this.panel.label_input)
         );
-        UI.delay(() => {
+        delay(() => {
             this.panel.label_input.parent.add(
                 new DOM.Element("kbd", { class: "hint input" }).add("↵")
             );
@@ -1609,7 +1596,7 @@ class UI {
                         // Display the queue.
                         this.element.class_list.add("show-queue");
                         this.toolbar.element.query_selector('.action[data-name="Show queue"] .name')
-                            .clear().add("Hide queue");
+                            .replace("Hide queue");
                         // Bring up the label input and select the text.
                         this.panel.focus_label_input();
                     } else if (document.activeElement === this.panel.label_input.element) {
@@ -1837,7 +1824,7 @@ class UI {
                     this.reposition_focus_point(this.focus_position);
                     this.focus_point.class_list.remove("revealed", "pending", "active");
                     this.focus_point.class_list.add("focused");
-                    UI.delay(() => this.focus_point.class_list.add("smooth"));
+                    delay(() => this.focus_point.class_list.add("smooth"));
                 }
             }
         });
@@ -1857,7 +1844,7 @@ class UI {
             if (event.key === "ArrowRight") {
                 ++delta;
             }
-            if (UI.modify_sliders(this, delta)) {
+            if (this.panel.modify_sliders(delta)) {
                 // If there were any focused sliders, don't move selected vertices.
                 return;
             }
@@ -1886,7 +1873,7 @@ class UI {
                     // We first reposition to the correct location, then add the delta after adding
                     // the `smooth` class (directly below), so that it animates to the new position.
                     this.reposition_focus_point(this.focus_position);
-                    UI.delay(() => {
+                    delay(() => {
                         this.focus_point.class_list.add("smooth");
                         this.reposition_focus_point(this.focus_position.add(position_delta));
                     });
@@ -2231,7 +2218,7 @@ class UI {
                     // Don't animate the size change, which should happen instantaneously.
                     this.focus_point.class_list.remove("smooth");
                     this.reposition_focus_point(this.focus_position);
-                    UI.delay(() => this.focus_point.class_list.add("smooth"));
+                    delay(() => this.focus_point.class_list.add("smooth"));
                 }
             }
         }
@@ -2351,11 +2338,6 @@ class UI {
             selection.delete(cell);
         }
         return selection;
-    }
-
-    /// A helper method to trigger a UI event immediately, but later in the event queue.
-    static delay(f, duration = 0) {
-        setTimeout(f, duration);
     }
 
     /// Selects specific `cells`. Note that this does *not* deselect any cells that were
@@ -2629,7 +2611,7 @@ class UI {
             }
             body.add(error);
             // Animate the banner's entry.
-            UI.delay(() => error.class_list.remove("hidden"));
+            delay(() => error.class_list.remove("hidden"));
         }
     }
 
@@ -2841,18 +2823,6 @@ class UI {
                 over: CONSTANTS.LABEL_ALIGNMENT.OVER,
             }[options.label_alignment];
         }
-    }
-
-    /// Adjust the value of any selected sliders.
-    static modify_sliders(ui, delta) {
-        const focused_sliders = ui.element.query_selector_all('input[type="range"].focused');
-        for (const slider of focused_sliders) {
-            const value = parseInt(slider.element.value);
-            const step = parseInt(slider.element.step);
-            slider.element.value = value + step * delta;
-            slider.dispatch(new Event("input"));
-        }
-        return focused_sliders.length > 0;
     }
 
     /// Load macros from a string, which will be used in all LaTeX labels.
@@ -3297,17 +3267,22 @@ class Settings {
 /// A panel for editing cell data.
 class Panel {
     constructor() {
-        /// The panel element.
+        // The panel element.
         this.element = null;
 
-        /// The label input element.
+        // The label input element.
         this.label_input = null;
 
-        /// Buttons and options affecting the entire diagram (e.g. export, macros).
+        // Buttons and options affecting the entire diagram (e.g. export, macros).
         this.global = null;
 
-        /// The displayed export format (`null` if not currently shown).
+        // The displayed export format (`null` if not currently shown).
         this.export = null;
+
+        // The various sliders. We store them in a variable, rather than finding them with
+        // `query_selector` as we usually do, because we need access to the `DOM.Multislider`
+        // objects, rather than the `DOM.Element`s.
+        this.sliders = new Map();
     }
 
     /// Set up the panel interface elements.
@@ -3549,21 +3524,21 @@ class Panel {
             },
         );
 
+        // We'd rather use `input[type="range"]`, but unfortunately these do not support multiple
+        // thumbs, which are necessary for the length slider. Therefore, we roll our own. (We could
+        // just use a custom slider for multi-thumb settings, but by using them for all settings, we
+        // ensure consistency of behaviour and styling.)
         const create_option_slider = (name, property, key, range) => {
-            const slider = new DOM.Element(
-                "input",
-                {
-                    type: "range",
-                    name: property,
-                    min: range.min,
-                    value: range.value,
-                    max: range.max,
-                    step: range.step || 1,
-                    disabled: true,
-                },
-            ).listen("input", (_, slider) => {
+            const { min, max, step = 1 } = range;
+            const slider = new DOM.Multislider(name, min, max, step, {
+                class: "disabled",
+                "data-name": property,
+            });
+
+            slider.listen("input", () => {
+                const value = slider.thumbs[0].value;
+                // Enact the effect of the slider.
                 this.unqueue_selected(ui);
-                const value = parseInt(slider.value);
                 const collapse = [property, ui.selection];
                 const actions = ui.history.get_collapsible_actions(collapse);
                 if (actions !== null) {
@@ -3604,9 +3579,14 @@ class Panel {
                 }
             });
 
+            this.sliders.set(property, slider);
+
             // Allow sliders to be focused via the keyboard.
             ui.shortcuts.add([{ key }], () => {
-                if (!this.element.class_list.contains("hidden")) {
+                if (
+                    !this.element.class_list.contains("hidden")
+                    && !slider.class_list.contains("disabled")
+                ) {
                     if (slider.class_list.contains("focused")) {
                         slider.class_list.remove("focused");
                     } else {
@@ -3616,26 +3596,23 @@ class Panel {
                 }
             });
 
-            const label = new DOM.Element("label").add(`${name}: `).add(slider);
-
-            UI.delay(() => {
-                wrapper.add(new DOM.Element("kbd", { class: "hint slider" }, {
-                    top: `${slider.element.offsetTop}px`,
-                }).add(key.toUpperCase()));
+            delay(() => {
+                slider.label
+                    .add(new DOM.Element("kbd", { class: "hint slider" }).add(key.toUpperCase()));
             });
 
-            return label.add_to(wrapper);
+            return slider.label.add_to(wrapper);
         };
 
         // The offset slider.
-        create_option_slider("Offset", "offset", "o", { min: -5, value: 0, max: 5 });
+        create_option_slider("Offset", "offset", "o", { min: -5, max: 5 });
 
         // The curve slider.
-        create_option_slider("Curve", "curve", "k", { min: -5, value: 0, max: 5 })
+        create_option_slider("Curve", "curve", "k", { min: -5, max: 5 })
             .class_list.add("arrow-style");
 
         // The length slider, which affects `shorten`.
-        create_option_slider("Length", "length", "l", { min: 20, value: 100, max: 100, step: 10 })
+        create_option_slider("Length", "length", "l", { min: 20, max: 100, step: 10 })
             .class_list.add("arrow-style", "percentage");
 
         // The level slider. We limit to 3 for now because there are issues with pixel perfection
@@ -3643,7 +3620,7 @@ class Panel {
         // and 3 seems a more consistent setting number with the other settings.. Besides, it's
         // unlikely people will want to draw diagrams involving 4- or 5-cells.
         const level_slider
-            = create_option_slider("Level", "level", "m", { min: 1, value: 1, max: 3 });
+            = create_option_slider("Level", "level", "m", { min: 1, max: 3 });
         level_slider.class_list.add("arrow-style");
 
         // The list of tail styles.
@@ -3832,15 +3809,9 @@ class Panel {
                             edge.options.level = 1;
                             edge.options.length = 100;
                         } else if (edge.options.style.name !== "arrow") {
-                            edge.options.curve = parseInt(
-                                ui.element.query_selector('input[name="curve"]').element.value
-                            );
-                            edge.options.level = parseInt(
-                                ui.element.query_selector('input[name="level"]').element.value
-                            );
-                            edge.options.length = parseInt(
-                                ui.element.query_selector('input[name="length"]').element.value
-                            );
+                            for (const property of ["curve", "level", "length"]) {
+                                edge.options[property] = this.sliders.get(property).thumbs[0].value;
+                            }
                         }
                         // Update the edge style.
                         if (data.name !== "arrow" || edge.options.style.name !== "arrow") {
@@ -3853,9 +3824,13 @@ class Panel {
                         }
                     }
 
-                    // Enable/disable the arrow style buttons and curve, length, and level sliders.
+                    // Enable/disable the arrow style buttons.
                     ui.element.query_selector_all(".arrow-style input")
                         .forEach((input) => input.element.disabled = data.name !== "arrow");
+                    // Enable/disable the the curve, length, and level sliders.
+                    for (const slider of ui.element.query_selector_all(".arrow-style .slider")) {
+                        slider.class_list.toggle("disabled", data.name !== "arrow");
+                    }
 
                     // If we've selected the `"arrow"` style, then we need to trigger the
                     // currently-checked buttons and the curve, length, and level sliders so that
@@ -3895,7 +3870,7 @@ class Panel {
                     // We're abusing `triggered_by_shortcut` a little here.
                     event.triggered_by_shortcut = true;
                     next_button.dispatch(event);
-                    UI.delay(() => button.element.disabled = false);
+                    delay(() => button.element.disabled = false);
                 }
             });
             // The `change` event just triggers when a radio button is checked.
@@ -3966,7 +3941,7 @@ class Panel {
             }
         });
 
-        UI.delay(() => {
+        delay(() => {
             for (const styles of [head_styles, body_styles, tail_styles]) {
                 new DOM.Element("kbd", { class: "hint button triggers-focus" })
                     .add("D")
@@ -3990,7 +3965,7 @@ class Panel {
 
                 const update_output = (data) => {
                     // At present, the data is always a string.
-                    content.clear().add(data);
+                    content.replace(data);
                     // Select the code for easy copying.
                     const select_output = () => {
                         const selection = window.getSelection();
@@ -4002,7 +3977,7 @@ class Panel {
                     select_output();
                     // Safari seems to occasionally fail to select the text immediately, so we
                     // also select it after a delay to ensure the text is selected.
-                    UI.delay(select_output);
+                    delay(select_output);
                 };
 
                 if (this.export === null) {
@@ -4152,7 +4127,7 @@ class Panel {
                                 input.blur();
                             }
                         }).listen("paste", (_, input) => {
-                            UI.delay(() => ui.load_macros_from_url(input.value));
+                            delay(() => ui.load_macros_from_url(input.value));
                         })
                     ).add(
                         new DOM.Element("div", { class: "success-indicator" })
@@ -4179,7 +4154,7 @@ class Panel {
                 Shortcuts.flash(button);
             }
         });
-        UI.delay(() => {
+        delay(() => {
             button.add(
                 new DOM.Element("kbd", { class: "hint button" }).add(Shortcuts.name([shortcut]))
             );
@@ -4329,7 +4304,7 @@ class Panel {
                     return false;
                 });
                 // JavaScript's scoping is messed up.
-                UI.delay(((i) => (() => {
+                delay(((i) => (() => {
                     if (option.class_list.contains("hidden")) {
                         // Currently only one option is hidden: that for the inverse corner style.
                         // It uses the same keyboard shortcut as the default corner style, so we
@@ -4410,7 +4385,6 @@ class Panel {
     /// Update the panel state (i.e. enable/disable fields as relevant).
     update(ui) {
         const label_alignments = this.element.query_selector_all('input[name="label-alignment"]');
-        const sliders = this.element.query_selector_all('input[type="range"]');
 
         // Modifying cells is not permitted when the export pane is visible.
         if (this.export === null) {
@@ -4418,9 +4392,18 @@ class Panel {
             // for inputs that display their state even when disabled.
             if (ui.selection.size === 0) {
                 this.label_input.element.value = "";
-                sliders.forEach((slider) => {
-                    return slider.element.value = slider.element.name !== "length" ? 0 : 100;
-                });
+                for (const [property, slider] of this.sliders) {
+                    let value = 0;
+                    switch (property) {
+                        case "length":
+                            value = 100;
+                            break;
+                        case "level":
+                            value = 1;
+                            break;
+                    }
+                    slider.thumbs[0].set_value(value);
+                }
             }
 
             // Multiple selection is always permitted, so the following code must provide sensible
@@ -4430,6 +4413,9 @@ class Panel {
             // Enable all the inputs iff we've selected at least one edge.
             this.element.query_selector_all('input:not([type="text"]), button')
                 .forEach((input) => input.element.disabled = !selection_contains_edge);
+            this.element.query_selector_all(".slider").forEach((slider) => {
+                slider.class_list.toggle("disabled", !selection_contains_edge);
+            });
 
             // Enable the label input if at least one cell has been selected.
             this.label_input.element.disabled = ui.selection.size === 0;
@@ -4541,8 +4527,7 @@ class Panel {
                     case "{length}":
                     case "{level}":
                         const property = name.slice(1, -1);
-                        const slider = this.element.query_selector(`input[name="${property}"]`);
-                        slider.element.value = value !== null ? value : 0;
+                        this.sliders.get(property).thumbs[0].set_value(value !== null ? value : 0);
                         break;
                     default:
                         this.element.query_selector_all(
@@ -4598,13 +4583,13 @@ class Panel {
             // receive keyboard events to toggle between the two styles).
             hide.element.disabled = !reveal.element.checked;
 
-            // Update the actual `value` attribute for the offset, curve, length, and level sliders
-            // so that we can reference it in the CSS.
-            sliders.forEach((slider) => slider.set_attributes({ "value": slider.element.value }));
-
-            // Disable/enable the arrow style buttons and the curve, length, and level sliders.
-            for (const option of this.element.query_selector_all(".arrow-style input")) {
-                option.element.disabled = !all_edges_are_arrows;
+            // Enable/disable the arrow style buttons.
+            for (const input of this.element.query_selector_all(".arrow-style input")) {
+                input.element.disabled = !all_edges_are_arrows;
+            }
+            // Enable/disable the the curve, length, and level sliders.
+            for (const slider of this.element.query_selector_all(".arrow-style .slider")) {
+                slider.class_list.toggle("disabled", !all_edges_are_arrows);
             }
 
             // Enable all inputs in the global section of the panel.
@@ -4686,6 +4671,18 @@ class Panel {
             return true;
         }
         return false;
+    }
+
+    /// Adjust the value of any selected sliders.
+    modify_sliders(delta) {
+        let any_focused = false;
+        for (const slider of this.sliders.values()) {
+            if (slider.class_list.contains("focused")) {
+                slider.thumbs[0].set_value(slider.thumbs[0].value + slider.step * delta, true);
+                any_focused = true;
+            }
+        }
+        return any_focused;
     }
 }
 
@@ -5079,7 +5076,7 @@ class Toolbar {
             function () {
                 ui.grid.class_list.toggle("hidden");
                 const hidden = ui.grid.class_list.contains("hidden");
-                this.query_selector(".name").clear().add(
+                this.query_selector(".name").replace(
                     (hidden ? "Show" : "Hide") + " grid"
                 );
             },
@@ -5093,7 +5090,7 @@ class Toolbar {
             function () {
                 ui.element.class_list.toggle("show-hints");
                 const hidden = !ui.element.class_list.contains("show-hints");
-                this.query_selector(".name").clear().add(
+                this.query_selector(".name").replace(
                     (hidden ? "Show" : "Hide") + " hints"
                 );
             },
@@ -5105,7 +5102,7 @@ class Toolbar {
             function () {
                 ui.element.class_list.toggle("show-queue");
                 const hidden = !ui.element.class_list.contains("show-queue");
-                this.query_selector(".name").clear().add(
+                this.query_selector(".name").replace(
                     (hidden ? "Show" : "Hide") + " queue"
                 );
             },
