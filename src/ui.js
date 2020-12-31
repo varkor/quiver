@@ -4479,7 +4479,16 @@ class Panel {
             let all_edges_are_arrows = selection_contains_edge;
 
             const consider = (name, value) => {
-                if (values.has(name) && values.get(name) !== value) {
+                const values_equal = (a, b) => {
+                    if (typeof a === "object" && typeof b === "object") {
+                        // This is good enough for our purposes. So far, the only object value is
+                        // that for `length`.
+                        return JSON.stringify(a) === JSON.stringify(b);
+                    } else {
+                        return a === b;
+                    }
+                }
+                if (values.has(name) && !values_equal(values.get(name), value)) {
                     values.set(name, null);
                 } else {
                     values.set(name, value);
