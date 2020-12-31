@@ -852,8 +852,13 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
                     if (options.hasOwnProperty("length")) {
                         assert_kind(options.length, "natural");
                         assert(options.length >= 0 && options.length <= 100, "invalid length");
-                        const shorten = 100 - options.length;
-                        options.shorten = { source: shorten / 2, target: shorten / 2 };
+                        // If both `length` and `shorten` are present (which should not happen for
+                        // diagrams exported by quiver), `shorten` takes priority.
+                        if (!options.hasOwnProperty("shorten")) {
+                            const shorten = 100 - options.length;
+                            options.shorten = { source: shorten / 2, target: shorten / 2 };
+                        }
+                        delete options.length;
                     }
 
                     // In previous versions of quiver, `level` was only valid for some arrows, and
