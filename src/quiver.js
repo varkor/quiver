@@ -381,14 +381,21 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                     );
                 }
 
-                if (edge.options.length !== 100) {
-                    const shorten = Math.round(edge.arrow.style.shorten * multiplier);
+                // Shortened edges.
+                if (edge.options.shorten.source !== 0) {
+                    const shorten = Math.round(edge.arrow.style.shorten.tail * multiplier);
                     parameters.push(`shorten <=${shorten}pt`);
-                    parameters.push(`shorten >=${shorten}pt`);
                     if (edge.options.curve !== 0) {
                         // It should be possible to do this using a custom style, but for now we
                         // simply warn the user that the result will not look quite as good as it
                         // does in quiver.
+                        tikz_incompatibilities.add("shortened curved arrows");
+                    }
+                }
+                if (edge.options.shorten.target !== 0) {
+                    const shorten = Math.round(edge.arrow.style.shorten.head * multiplier);
+                    parameters.push(`shorten >=${shorten}pt`);
+                    if (edge.options.curve !== 0) {
                         tikz_incompatibilities.add("shortened curved arrows");
                     }
                 }
@@ -839,6 +846,15 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
                     let level = Math.max(indices[source].level, indices[target].level) + 1;
                     const { style = {} } = options;
                     delete options.style;
+
+                    // In previous versions of quiver, there was a single `length` parameter, rather
+                    // than two `shorten` parameters. We convert from `length` into `shorten` here.
+                    if (options.hasOwnProperty("length")) {
+                        assert_kind(options.length, "natural");
+                        assert(options.length >= 0 && options.length <= 100, "invalid length");
+                        const shorten = 100 - options.length;
+                        options.shorten = { source: shorten / 2, target: shorten / 2 };
+                    }
 
                     // In previous versions of quiver, `level` was only valid for some arrows, and
                     // was recorded in the body style, rather than as a property of the edge itself.

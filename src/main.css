@@ -688,14 +688,21 @@ input[type="radio"].short + input[type="radio"]:not(.short) {
     left: 56px;
 }
 
-.panel .slider-value {
+.panel .slider-values {
     display: inline-block;
     position: absolute;
     right: 0;
+
+    pointer-events: none;
 }
 
-.panel .percentage .slider-value::after {
-    content: "%";
+.panel .slider-values .slider-value {
+    display: inline-block;
+    /* Try to keep each value fixed-width. This will technically be font-dependent, but it's simpler
+       to pick a fixed width manually. */
+    min-width: 24px;
+
+    text-align: right;
 }
 
 .panel .slider .thumb {
@@ -716,12 +723,22 @@ input[type="radio"].short + input[type="radio"]:not(.short) {
 }
 
 .panel .slider.focused .thumb {
-    background: var(--ui-blue);
+    background: var(--ui-white);
     border-color: var(--ui-blue);
 }
 
-.panel .slider:not(.disabled):not(.focused) .thumb.hover {
+.panel .slider .thumb.focused, .panel .slider.symmetric.focused .thumb {
+    background: var(--ui-blue);
+}
+
+.panel .slider:not(.disabled):not(.focused) .thumb.hover,
+.panel .slider.symmetric:not(.disabled):not(.focused):hover .thumb {
     background: hsl(0, 0%, 20%);
+}
+
+.panel .slider:not(.disabled):not(.focused) .thumb.active,
+.panel .slider.symmetric:not(.disabled):not(.focused).active .thumb {
+    background: hsl(0, 0%, 30%);
 }
 
 .panel .slider .track {
@@ -739,10 +756,6 @@ input[type="radio"].short + input[type="radio"]:not(.short) {
 .panel .slider.focused .track {
     background: var(--ui-white);
     border-color: var(--ui-blue);
-}
-
-.panel .slider:not(.disabled):not(.focused) .thumb.active {
-    background: hsl(0, 0%, 30%);
 }
 
 .panel button, .pane button {

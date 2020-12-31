@@ -25,8 +25,10 @@ Object.assign(CONSTANTS, {
     /// How much padding to try to keep around the focus point when moving it via the keyboard
     /// (in pixels).
     VIEW_PADDING: 128,
-    /// How long the user has to hold down on a touchscreen  to trigger panning.
+    /// How long the user has to hold down on a touchscreen to trigger panning.
     LONG_PRESS_DURATION: 800,
+    /// How much to shorten edges connected to edges by (in %), by default.
+    EDGE_EDGE_PADDING: 20,
 });
 
 /// Various states for the UI (e.g. whether cells are being rearranged, or connected, etc.).
@@ -104,7 +106,7 @@ UIMode.Connect = class extends UIMode {
             this.target = null;
         }
         // If we're connecting from an focus point, then we need to hide it again.
-        ui.element.query_selector(".focus-point").class_list.remove("revealed");
+        ui.focus_point.class_list.remove("revealed");
         if (this.reconnect === null) {
             this.overlay.remove();
             this.arrow = null;
@@ -142,7 +144,10 @@ UIMode.Connect = class extends UIMode {
                 this.arrow,
                 Edge.default_options({
                     level,
-                    length: level === 1 ? 100 : 70,
+                    shorten: {
+                        source: this.source.level === 0 ? 0 : CONSTANTS.EDGE_EDGE_PADDING,
+                        target: target.level === 0 ? 0 : CONSTANTS.EDGE_EDGE_PADDING,
+                    }
                 }),
             );
             this.arrow.redraw();
@@ -226,7 +231,10 @@ UIMode.Connect = class extends UIMode {
         // default offset (0).
         const options = {
             // By default, 2-cells and above have a little padding for aesthetic purposes.
-            length: Math.max(source.level, target.level) === 0 ? 100 : 70,
+            shorten: {
+                source: source.level === 0 ? 0 : CONSTANTS.EDGE_EDGE_PADDING,
+                target: target.level === 0 ? 0 : CONSTANTS.EDGE_EDGE_PADDING,
+            },
             // We will guess the label alignment below, but in case there's no selected label
             // alignment, we default to "left".
             label_alignment: "left",
@@ -716,7 +724,13 @@ class UI {
                 ["Over-align labels", (td) => Shortcuts.element(td, [{ key: "X" }])],
                 ["Modify offset", (td) => Shortcuts.element(td, [{ key: "O" }])],
                 ["Modify curve", (td) => Shortcuts.element(td, [{ key: "K" }])],
-                ["Modify length", (td) => Shortcuts.element(td, [{ key: "L" }])],
+                ["Modify length", (td) => {
+                    Shortcuts.element(td, [{ key: "L" }]);
+                    td.add(" (hold ");
+                    // The `span` here is to avoid a CSS `margin-left` rule.
+                    Shortcuts.element(td.add(new DOM.Element("span")), [{ key: "Shift" }]);
+                    td.add(" to shorten symmetrically)");
+                }],
                 ["Modify level", (td) => Shortcuts.element(td, [{ key: "M" }])],
                 ["Modify style", (td) => Shortcuts.element(td, [{ key: "D" }])],
                 ["Display as arrow", (td) => Shortcuts.element(td, [{ key: "A" }])],
@@ -2716,9 +2730,8 @@ class UI {
                 try {
                     const [start, end] = arrow.find_endpoints();
                     const arc_length = bezier.arc_length(end.t) - bezier.arc_length(start.t);
-                    // We halve `shorten` (`100 - options.length`), because it takes effect at both
-                    // ends.
-                    style.shorten = arc_length * (100 - options.length) / 200;
+                    style.shorten.tail = arc_length * options.shorten.source / 100;
+                    style.shorten.head = arc_length * options.shorten.target / 100;
                 } catch (_) {
                     // If we can't find the endpoints, the arrow isn't being drawn, so we don't
                     // need to bother trying to shorten it.
@@ -3102,7 +3115,8 @@ class History {
                     break;
                 case "length":
                     for (const length of action.lengths) {
-                        length.edge.options.length = length[to];
+                        const [source, target] = length[to];
+                        length.edge.options.shorten = { source, target: 100 - target };
                         cells.add(length.edge);
                     }
                     update_panel = true;
@@ -3179,6 +3193,7 @@ class History {
             ui.deselect();
             const state = this.states[this.present];
             ui.select(...state.selection);
+            ui.focus_point.class_list.remove("revealed");
             ui.reposition_focus_point(state.focus_position);
             if (update_panel) {
                 ui.panel.update(ui);
@@ -3206,6 +3221,7 @@ class History {
                 ui.deselect();
                 const state = this.states[this.present];
                 ui.select(...state.selection);
+                ui.focus_point.class_list.remove("revealed");
                 ui.reposition_focus_point(state.focus_position);
             }
             if (update_panel) {
@@ -3529,14 +3545,14 @@ class Panel {
         // just use a custom slider for multi-thumb settings, but by using them for all settings, we
         // ensure consistency of behaviour and styling.)
         const create_option_slider = (name, property, key, range) => {
-            const { min, max, step = 1 } = range;
-            const slider = new DOM.Multislider(name, min, max, step, {
+            const { min, max, step = 1, thumbs = 1, spacing = 0 } = range;
+            const slider = new DOM.Multislider(name, min, max, step, thumbs, spacing, {
                 class: "disabled",
                 "data-name": property,
             });
 
             slider.listen("input", () => {
-                const value = slider.thumbs[0].value;
+                const value = slider.values();
                 // Enact the effect of the slider.
                 this.unqueue_selected(ui);
                 const collapse = [property, ui.selection];
@@ -3572,7 +3588,11 @@ class Panel {
                             .filter(cell => cell.is_edge())
                             .map((edge) => ({
                                 edge,
-                                from: edge.options[property],
+                                from: property !== "length" ? edge.options[property]
+                                    : [
+                                        edge.options.shorten.source,
+                                        100 - edge.options.shorten.target
+                                    ],
                                 to: value,
                             })),
                     }], true);
@@ -3588,10 +3608,18 @@ class Panel {
                     && !slider.class_list.contains("disabled")
                 ) {
                     if (slider.class_list.contains("focused")) {
-                        slider.class_list.remove("focused");
+                        // Step through each of the thumbs until the last.
+                        const next_thumb = slider.query_selector(".thumb.focused + .thumb");
+                        slider.query_selector(".thumb.focused").class_list.remove("focused");
+                        if (next_thumb !== null) {
+                            next_thumb.class_list.add("focused");
+                        } else {
+                            slider.class_list.remove("focused");
+                        }
                     } else {
                         this.defocus_inputs();
                         slider.class_list.add("focused");
+                        slider.query_selector(".thumb").class_list.add("focused");
                     }
                 }
             });
@@ -3612,8 +3640,20 @@ class Panel {
             .class_list.add("arrow-style");
 
         // The length slider, which affects `shorten`.
-        create_option_slider("Length", "length", "l", { min: 20, max: 100, step: 10 })
-            .class_list.add("arrow-style", "percentage");
+        create_option_slider("Length", "length", "l", {
+            min: 0,
+            max: 100,
+            step: 10,
+            thumbs: 2,
+            spacing: 20,
+        }).class_list.add("arrow-style");
+
+        // Allow edges to be shortened symmetrically by holding shift.
+        ui.shortcuts.add([{ key: "Shift", context: Shortcuts.SHORTCUT_PRIORITY.Always }], () => {
+            this.sliders.get("length").class_list.add("symmetric");
+        }, null, () => {
+            this.sliders.get("length").class_list.remove("symmetric");
+        });
 
         // The level slider. We limit to 3 for now because there are issues with pixel perfection
         // (especially for squiggly arrows, e.g. with their interaction with hooked tails) after 4,
@@ -3807,11 +3847,13 @@ class Panel {
                         if (data.name !== "arrow") {
                             edge.options.curve = 0;
                             edge.options.level = 1;
-                            edge.options.length = 100;
+                            edge.options.shorten = { source: 0, target: 0 };
                         } else if (edge.options.style.name !== "arrow") {
-                            for (const property of ["curve", "level", "length"]) {
-                                edge.options[property] = this.sliders.get(property).thumbs[0].value;
+                            for (const property of ["curve", "level"]) {
+                                edge.options[property] = this.sliders.get(property).values();
                             }
+                            const [source, target] = this.sliders.get("length").values();
+                            edge.options.shorten = { source, target: 100 - target };
                         }
                         // Update the edge style.
                         if (data.name !== "arrow" || edge.options.style.name !== "arrow") {
@@ -4393,16 +4435,18 @@ class Panel {
             if (ui.selection.size === 0) {
                 this.label_input.element.value = "";
                 for (const [property, slider] of this.sliders) {
-                    let value = 0;
+                    let values = [0];
                     switch (property) {
                         case "length":
-                            value = 100;
+                            values = [0, 100];
                             break;
                         case "level":
-                            value = 1;
+                            values = [1];
                             break;
                     }
-                    slider.thumbs[0].set_value(value);
+                    slider.thumbs.forEach((thumb, i) => {
+                        thumb.set_value(values[i]);
+                    });
                 }
             }
 
@@ -4458,7 +4502,7 @@ class Panel {
                     consider("{angle}", cell.angle());
                     consider("{offset}", cell.options.offset);
                     consider("{curve}", cell.options.curve);
-                    consider("{length}", cell.options.length);
+                    consider("{length}", cell.options.shorten);
                     consider("{level}", cell.options.level);
                     consider("edge-type", cell.options.style.name);
 
@@ -4524,10 +4568,14 @@ class Panel {
                         break;
                     case "{offset}":
                     case "{curve}":
-                    case "{length}":
                     case "{level}":
                         const property = name.slice(1, -1);
                         this.sliders.get(property).thumbs[0].set_value(value !== null ? value : 0);
+                        break;
+                    case "{length}":
+                        const thumbs = this.sliders.get("length").thumbs;
+                        thumbs[0].set_value(value !== null ? value.source : 0);
+                        thumbs[1].set_value(value !== null ? 100 - value.target : 100);
                         break;
                     default:
                         this.element.query_selector_all(
@@ -4678,7 +4726,11 @@ class Panel {
         let any_focused = false;
         for (const slider of this.sliders.values()) {
             if (slider.class_list.contains("focused")) {
-                slider.thumbs[0].set_value(slider.thumbs[0].value + slider.step * delta, true);
+                const thumb = slider.thumbs.find((thumb) => thumb.class_list.contains("focused"));
+                thumb.set_value(thumb.value + slider.step * delta, true);
+                if (slider.class_list.contains("symmetric")) {
+                    thumb.symmetrise();
+                }
                 any_focused = true;
             }
         }
@@ -4710,7 +4762,8 @@ class Shortcuts {
             if (this.shortcuts.has(key)) {
                 for (const shortcut of this.shortcuts.get(key)) {
                     if (
-                        (shortcut.shift === null || event.shiftKey === shortcut.shift)
+                        (shortcut.shift === null || event.shiftKey === shortcut.shift
+                            || (key === "shift" && event.shiftKey === (type === "keydown")))
                             && (shortcut.modifier === null
                                 || (event.metaKey || event.ctrlKey) === shortcut.modifier
                                 || ["control", "meta"].includes(key))
@@ -4848,6 +4901,7 @@ class Shortcuts {
                 Backspace: "⌫",
                 Tab: "⇥",
                 Enter: "↵",
+                Shift: "⇧",
                 Escape: "esc",
                 " ": "        ",
                 ArrowLeft: "←",
@@ -5624,8 +5678,14 @@ class Edge extends Cell {
             label_alignment: "left",
             offset: 0,
             curve: 0,
-            length: 100,
+            shorten: { source: 0, target: 0 },
             level: 1,
+            // For historical reasons, the following options are in a `style` subobject. Originally,
+            // these were those pertaining to the edge style. However, options such as `curve` and
+            // `level` also pertain to the edge style (and can only be set for arrows), but are not
+            // placed in `style`. It would be possible to refactor this data structure, but it's
+            // inconvenient, as we would still need to maintain support for the old data structure
+            // anyway.
             style: {
                 name: "arrow",
                 tail: { name: "none" },
@@ -5786,8 +5846,8 @@ class Edge extends Cell {
         }
     }
 
-    /// Flips the edge. If `flip_arrow` is true, this includes offset and head/tail style. Otherwise
-    /// it only flips the label alignment.
+    /// Flips the edge, so that what was on the left is now on the right. If `flip_arrow` is true,
+    /// this includes offset and head/tail style. Otherwise it only flips the label alignment.
     flip(ui, flip_arrow, skip_dependencies = false) {
         this.options.label_alignment = {
             left: "right",

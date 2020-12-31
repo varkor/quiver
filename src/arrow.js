@@ -117,7 +117,7 @@ class ArrowStyle {
         // The offset of the curve (in pixels). May be positive or negative.
         this.shift = 0;
         // How much to offset the head and tail of the edge from their endpoints.
-        this.shorten = 0;
+        this.shorten = { tail: 0, head: 0 };
         // The various styles for the head, body, and tail.
         this.body_style = CONSTANTS.ARROW_BODY_STYLE.LINE;
         this.dash_style = CONSTANTS.ARROW_DASH_STYLE.SOLID;
@@ -599,7 +599,7 @@ class Arrow {
 
         // Check that the arrow length is actually nonnegative.
         if (arclen_to_end - arclen_to_start
-            - this.style.shorten * 2
+            - this.style.shorten.tail - this.style.shorten.head
             - shorten.start - shorten.end
             - dash_padding.start - dash_padding.end
             - constants.total_width_of_tails - constants.total_width_of_heads
@@ -657,10 +657,10 @@ class Arrow {
             stroke: "black",
             "stroke-width": edge_width + CONSTANTS.BACKGROUND_PADDING * 2,
             "stroke-dasharray": `${
-                arclen_to_start + this.style.shorten + shorten.start + ENDPOINT_PADDING} ${
-                arclen_to_end - (arclen_to_start + shorten.start
-                        + (this.style.shorten + ENDPOINT_PADDING) * 2 + shorten.end)
-            } ${arclen - arclen_to_end + this.style.shorten + shorten.end + ENDPOINT_PADDING}`,
+                arclen_to_start + this.style.shorten.tail + shorten.start + ENDPOINT_PADDING} ${
+                arclen_to_end - (arclen_to_start + shorten.start + this.style.shorten.tail
+                    + ENDPOINT_PADDING * 2 + this.style.shorten.head + shorten.end)
+            } ${arclen - arclen_to_end + this.style.shorten.head + shorten.end + ENDPOINT_PADDING}`,
         }).add_to(clipping_mask);
         draw_heads(this.style.tails, start, true, true);
         draw_heads(this.style.heads, end, false, true);
@@ -703,9 +703,9 @@ class Arrow {
             bezier, start, end, length, shorten, t_after_length, dash_padding, total_width_of_tails,
             total_width_of_heads, offset,
         } = constants;
-        let arclen_to_start = bezier.arc_length(start.t) + (this.style.shorten + shorten.start)
+        let arclen_to_start = bezier.arc_length(start.t) + (this.style.shorten.tail + shorten.start)
             - dash_padding.start;
-        let arclen_to_end = bezier.arc_length(end.t) - (this.style.shorten + shorten.end)
+        let arclen_to_end = bezier.arc_length(end.t) - (this.style.shorten.head + shorten.end)
             + dash_padding.end;
         let arclen = bezier.arc_length(1);
 
@@ -981,7 +981,10 @@ class Arrow {
         let total_width = 0;
 
         const arclen_to_endpoint = bezier.arc_length(endpoint.t)
-            + (this.style.shorten + (is_start ? shorten.start : shorten.end)) * start_sign;
+            + (is_start ?
+                shorten.start + this.style.shorten.tail :
+                shorten.end + this.style.shorten.head
+            ) * start_sign;
 
         if (includes_any(heads, "harpoon-top", "harpoon-bottom")) {
             // For 1-cells, it would arguably be more aesthetically-pleasing to centre harpoons on

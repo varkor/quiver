@@ -234,7 +234,7 @@ DOM.Link = class extends DOM.Element {
 
 // A custom `input[type="range"]` that permits multiple thumbs.
 DOM.Multislider = class extends DOM.Element {
-    constructor(name, min, max, step = 1, attributes = {}, style = {}) {
+    constructor(name, min, max, step = 1, thumbs = 1, spacing = 0, attributes = {}, style = {}) {
         // The slider element, containing the track and thumbs.
         super("div", attributes, style);
         this.class_list.add("slider");
@@ -242,12 +242,17 @@ DOM.Multislider = class extends DOM.Element {
         this.min = min;
         this.max = max;
         this.step = step;
+        // By how much to keep thumbs separated. This is only relevant when `thumbs > 1`.
+        this.spacing = spacing;
 
         // The track, in which the thumbs are placed.
         const track = new DOM.Element("div", { class: "track" }).add_to(this);
 
         // The thumbs, which may be dragged by the user.
-        this.thumbs = [new DOM.Multislider.Thumb(this, this.min)];
+        this.thumbs = [];
+        for (let i = 0; i < thumbs; ++i) {
+            new DOM.Multislider.Thumb(this);
+        }
 
         if (this.thumbs.length > 0) {
             track.listen(pointer_event("move"), (event) => {
@@ -258,7 +263,10 @@ DOM.Multislider = class extends DOM.Element {
                         thumb.class_list.remove("hover");
 
                         const thumb_rect = thumb.bounding_rect();
-                        return [event.clientX - thumb_rect.left + thumb_rect.width / 2, thumb];
+                        return [
+                            Math.abs(event.clientX - thumb_rect.left - thumb_rect.width / 2),
+                            thumb
+                        ];
                     });
                     thumb_proximities.sort(([prox1,], [prox2,]) => prox1 - prox2);
                     // We're "hovering" over the closest thumb.
@@ -275,6 +283,7 @@ DOM.Multislider = class extends DOM.Element {
                     // Display the currently-dragged thumb above any other. This is important where
                     // there are multiple thumbs, which can overlap.
                     this.thumbs.forEach((thumb) => thumb.set_style({ "z-index": 1 }));
+                    this.class_list.add("active");
                     hovered_thumb.class_list.add("active");
                     hovered_thumb.move_to_pointer(event);
                     DOM.Multislider.active_thumb = hovered_thumb;
@@ -293,7 +302,17 @@ DOM.Multislider = class extends DOM.Element {
         this.label = new DOM.Element("label")
             .add(`${name}: `)
             .add(this)
-            .add(new DOM.Element("span", { class: "slider-value" }));
+            .add(new DOM.Element("span", { class: "slider-values" }));
+    }
+
+    // Returns an array of the values of each of the thumbs, or the sole value if there is only one
+    // thumb.
+    values() {
+        const values = this.thumbs.map((thumb) => thumb.value);
+        if (values.length === 1) {
+            return values[0];
+        }
+        return values;
     }
 };
 
@@ -304,6 +323,7 @@ DOM.Multislider.Thumb = class extends DOM.Element {
             class: `thumb ${(attributes.class || "")}`.trim(),
         }, attributes), style);
         this.slider = slider.add(this);
+        this.index = this.slider.thumbs.push(this) - 1;
         // We don't want to update the `value` until the slider has been added to the DOM, so we can
         // query element sizes. For this reason, we set `value` to `null` to begin with, and rely on
         // the caller to `set_value` manually.
@@ -324,6 +344,20 @@ DOM.Multislider.Thumb = class extends DOM.Element {
                 * (this.slider.max - this.slider.min) / this.slider.step
         ) * this.slider.step;
         this.set_value(value, true);
+
+        if (this.slider.class_list.contains("symmetric")) {
+            this.symmetrise();
+        }
+    }
+
+    /// Update this thumb's pair value to make the two symmetric.
+    symmetrise() {
+        this.slider.thumbs[this.slider.thumbs.length - (this.index + 1)].set_value(
+            this.index < this.slider.thumbs.length / 2 ?
+                this.slider.max - (this.value - this.slider.min) :
+                this.slider.min + (this.slider.max - this.value),
+            true,
+        );
     }
 
     /// We use a setter, which allows us to update the position of the thumb as well as the value of
@@ -331,14 +365,41 @@ DOM.Multislider.Thumb = class extends DOM.Element {
     /// Returns whether the thumb value was changed (i.e. whether the given `value` was valid and
     // different to the current value).
     set_value(value, user_triggered = false) {
-        value = clamp(this.slider.min, value, this.slider.max);
+        // Though we clamp the value to `min` and `max`, we permit non-`step` values (though in
+        // practice, this will not be possible when `user_triggered` is true). `relative_min` and
+        // `relative_max` is the minimum/maximum for this thumb taking into account the
+        // previous/next thumb, and `spacing`.
+        let relative_min = this.index > 0 ?
+            this.slider.thumbs[this.index - 1].value + this.slider.spacing : this.slider.min;
+        let relative_max = this.index + 1 < this.slider.thumbs.length ?
+            this.slider.thumbs[this.index + 1].value - this.slider.spacing : this.slider.max;
+        // If the slider is symmetric, then we need to make sure we don't set the thumb to a value
+        // too close to the centre, where there won't be enough space for the thumb's pair.
+        if (this.slider.class_list.contains("symmetric")) {
+            if (this.index < this.slider.thumbs.length / 2) {
+                relative_max = Math.min(
+                    (this.slider.min + this.slider.max - this.slider.spacing) / 2,
+                    relative_max
+                );
+            } else {
+                relative_min = Math.max(
+                    (this.slider.min + this.slider.max + this.slider.spacing) / 2,
+                    relative_min
+                );
+            }
+        }
+        value = clamp(
+            Math.max(relative_min, this.slider.min),
+            value,
+            Math.min(relative_max, this.slider.max),
+        );
 
         if (value !== this.value) {
             this.value = value;
 
-            // Trigger a `input` event on the slider.
+            // Trigger a `input` event on the thumb (which will bubble up to the slider).
             if (user_triggered) {
-                this.slider.dispatch(new Event("input"));
+                this.dispatch(new Event("input", { bubbles: true }));
             }
 
             const slider_rect = this.slider.bounding_rect();
@@ -350,9 +411,15 @@ DOM.Multislider.Thumb = class extends DOM.Element {
                             * (slider_rect.width - thumb_rect.width)
                 }px`,
             });
-            if (this.slider.thumbs.length === 1) {
-                this.slider.label.query_selector(".slider-value").replace(`${this.value}`);
-            }
+
+            const slider_values = this.slider.label.query_selector(".slider-values").clear();
+            this.slider.thumbs.forEach((thumb, i) => {
+                slider_values.add(new DOM.Element("span", { class: "slider-value" })
+                    .add(`${thumb.value}`));
+                if (i + 1 < this.slider.thumbs.length) {
+                    slider_values.add(" \u2013 ");
+                }
+            });
 
             return true;
         }
@@ -374,6 +441,7 @@ window.addEventListener(pointer_event("move"), (event) => {
 // Handle the release of slider thumbs.
 window.addEventListener(pointer_event("up"), () => {
     if (DOM.Multislider.active_thumb !== null) {
+        DOM.Multislider.active_thumb.slider.class_list.remove("active");
         DOM.Multislider.active_thumb.class_list.remove("active");
         DOM.Multislider.active_thumb = null;
     }
