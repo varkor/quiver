@@ -5,6 +5,7 @@
 
 # Build KaTeX.
 all:
+	set -e
 	git submodule update --init --recursive
 	cd src/KaTeX
 	yarn
@@ -12,12 +13,14 @@ all:
 
 # Update the `dev` branch from `master`.
 dev:
+	set -e
 	git checkout dev
 	git rebase master
 	git checkout @{-1}
 
 # Update the `release` branch from `dev`.
 release:
+	set -e
 	git checkout release
 	git rebase dev
 	git checkout @{-1}
@@ -28,63 +31,87 @@ gh-pages:
 	# - `master`: Main development branch.
 	# - `release`: The branch that is used for hosting on GitHub Pages.
 	# - `dev`: The branch that is hosted under /dev on GitHub Pages.
+	# - `squash`: A temporary branch containing squashed versions of `release` and `dev`.
 	# - `gh-pages`: The branch that is actually hosted directly. This includes `release` and `dev`.
 
+	# Terminate if there are any errors. We may have to do some manual cleanup in this case, but
+	# it's better than trying to push a broken version of quiver.
+	set -e
+	# It's too error-prone to clone KaTeX from the origin each time we want to push quiver, so we
+	# instead copy it from an existing directory, typically the one in `src/KaTeX`, which must be
+	# stored in the `$KATEX` environment variable.
+	if [ ! -d "$$KATEX" ]; then
+		exit "KATEX must be set to a directory."
+	fi
+	# Store the name of the current branch, to return to it after completing this process.
+	CURRENT=$$(git rev-parse --abbrev-ref HEAD)
 	# Checkout the release branch.
 	git checkout release
+	# Get the initial commit ID, which will be used for squashing history.
+	TAIL=$$(git rev-list --max-parents=0 HEAD)
+	# Copy the release branch on to a new branch, for squashing purposes.
+	git checkout -b squashed
+	# Squash all the history (excluding the fixed, initial commit). This will improve performance
+	# for `subtree split` later, which has to iterate through the entire history of the branch.
+	git reset $$TAIL
+	git add -A
+	git rm -r --cached src/KaTeX
+	git commit -m "Add release branch"
 	# Split off the `src/` directory into its own branch.
 	RELEASE=$$(git subtree split --prefix=src)
-	# Checkout the development branch.
+	# Checkout the development branch, squash it, and split it off, just like `release`.
 	git checkout dev
-	# Split off the `src/` directory into its own branch.
+	git branch -D squashed
+	git checkout -b squashed
+	git reset $$TAIL
+	git add -A
+	git rm -r --cached src/KaTeX
+	git commit -m "Add dev branch"
 	DEV=$$(git subtree split --prefix=src)
 
-	# Checkout the GitHub pages branch in a new worktree. We use a new worktree because the branch
+	# Checkout the GitHub Pages branch in a new worktree. We use a new worktree because the branch
 	# is essentially incomparable with the other branches and we don't want to get any git conflicts
 	# from switching incompatible branches.
 	git worktree add ../quiver-worktree gh-pages
 	cd ../quiver-worktree
-	# Reset the GitHub Pages branch to contain the release source code.
+	# Reset the GitHub Pages branch so that it contains the release source code.
 	git reset --hard $$RELEASE
 
-	# Build the dependencies in the release version. Note that this will always use the latest
-	# version of KaTeX. Hopefully this will not come back and bite us later.
-	git submodule update --init --recursive
+	# Clone the existing version of KaTeX into the worktree.
+	git clone $$KATEX KaTeX
+	# We are assuming KaTeX has already been built.
+	# Remove `.git` and associated files, so KaTeX is no longer recognised as a git repository.
 	cd KaTeX
-	yarn && yarn build
-	# We need to be able to commit the dependencies, so we have to unregister KaTeX as a submodule.
-	# Remove ignored files, apart from `dist/`, which is important as it contains things like fonts.
-	git clean -dfX --exclude="!/dist/"
-	find . -type f -name '.git' -delete
+	rm -rf .git
+	rm .gitignore
+	rm .gitmodules
+	# We need to be able to commit KaTeX as a plain directory, so we have to unregister it as a
+	# submodule. The cloned repository by default won't contain any `.gitignore`d files, but we
+	# actually want the `dist/`, directory, which contains various resources, e.g. fonts, so we copy
+	# it across ourselves.
+	cp -r $$KATEX/dist .
 	cd ../
-	git rm -r --cached KaTeX
-	git rm .gitmodules
-	git add KaTeX
-	git add KaTeX/dist -f
-	git commit -m "Build dependencies"
+	git add -A
+	git commit -m "Add KaTeX"
 
-	# Merge the development branch into a `dev/`.
+	# Merge the development branch into the `dev/` directory.
 	git merge -s ours --no-commit $$DEV
 	git read-tree --prefix=dev -u $$DEV
-	# We have already built KaTeX, so don't need to do so again: we can just copy it across and make
-	# sure it's not treated as a submodule.
-	cd dev
-	git rm -rf KaTeX
-	git rm -f .gitmodules
-	cd ../
+	# We have already cloned KaTeX and stripped it of git repository information, so don't need to
+	# do so again: we can just copy it across.
 	cp -r KaTeX dev
+	git add -A
+	git commit -m "Merge dev as subdirectory of release"
 
-	git add dev/KaTeX
-	git add dev/KaTeX/dist -f
-	git commit -m "Add the dev branch"
-
-	# Push to the remote `gh-pages` branch.
+	# Push to the remote `gh-pages` branch. We do need to force push at some point, to overwrite the
+	# existing branch content. However, this will not suffice to rebuild on GitHub Pages, so we then
+	# perform another (non-`--force`) push immediately afterwards.
 	git push --force
-	# Set the CNAME. It is convenient to do so here, because GitHub Pages will not rebuild in
-	# response to a force push, so we have to push a commit to force a rebuild.
+	# Set the `CNAME`. It is convenient to do so now, because we have to push a commit anyway to
+	# force a rebuild, and we need to set the `CNAME` eventually.
 	printf "q.uiver.app" > CNAME
 	git add CNAME
-	git commit -m 'Create CNAME'
+	git commit -m "Create CNAME"
 	git push
 
 	# Navigate back to the main working tree.
@@ -92,5 +119,6 @@ gh-pages:
 	# Remove the temporary worktree.
 	git worktree remove ../quiver-worktree -f
 	# Checkout the original branch.
-	git checkout @{-2}
-
+	git checkout $$CURRENT
+	# Delete the temporary `squashed` branch.
+	git branch -D squashed
