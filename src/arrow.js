@@ -112,6 +112,8 @@ class ArrowStyle {
     constructor() {
         // The "n" in "n-cell". Must be a positive integer.
         this.level = 1;
+        // The position of the label (from 0 to 1) along the arrow.
+        this.label_position = 0.5;
         // The height of the curve (in pixels). May be positive or negative.
         this.curve = 0;
         // The offset of the curve (in pixels). May be positive or negative.
@@ -1247,7 +1249,7 @@ class Arrow {
         const { length, angle, edge_width, start, end } = constants;
 
         const bezier = new Bezier(Point.zero(), length, this.style.curve, angle);
-        const centre = bezier.point((start.t + end.t) / 2);
+        const centre = bezier.point(start.t + (end.t - start.t) * this.style.label_position);
 
         // The angle we will try to push the label so that it no longer intersects the curve. This
         // will be set by the following switch block if we do not return by the end of the block.

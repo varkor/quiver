@@ -350,6 +350,10 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                     }
                 }
 
+                if (edge.options.label_position !== 50) {
+                    parameters.push(`pos=${edge.options.label_position / 100}`);
+                }
+
                 if (edge.options.offset !== 0) {
                     const side = edge.options.offset > 0 ? "right" : "left";
                     parameters.push(`shift ${side}=${Math.abs(edge.options.offset)}`);
@@ -850,6 +854,10 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
                     delete options.style;
 
                     // Validate `options`.
+                    if (options.hasOwnProperty("label_position")) {
+                        assert_kind(options.label_position, "natural");
+                        assert(options.label_position <= 100, "invalid label position");
+                    }
                     if (options.hasOwnProperty("offset")) {
                         assert_kind(options.offset, "integer");
                     }

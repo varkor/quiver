@@ -241,7 +241,7 @@ UIMode.Connect = class extends UIMode {
             // The default settings for the other options are fine.
         };
         const selected_alignment
-            = ui.panel.element.query_selector('input[name="label-alignment"]:checked');
+            = ui.panel.element.query_selector('input[name="label_alignment"]:checked');
         if (selected_alignment !== null) {
             // If multiple edges are selected and not all selected edges have the same label
             // alignment, there will be no checked input.
@@ -722,6 +722,7 @@ class UI {
                 ["Left-align labels", (td) => Shortcuts.element(td, [{ key: "V" }])],
                 ["Centre-align labels", (td) => Shortcuts.element(td, [{ key: "C" }])],
                 ["Over-align labels", (td) => Shortcuts.element(td, [{ key: "X" }])],
+                ["Modify label position", (td) => Shortcuts.element(td, [{ key: "I" }])],
                 ["Modify offset", (td) => Shortcuts.element(td, [{ key: "O" }])],
                 ["Modify curve", (td) => Shortcuts.element(td, [{ key: "K" }])],
                 ["Modify length", (td) => {
@@ -2723,7 +2724,8 @@ class UI {
         // By default, `ArrowStyle` have minimal styling.
         const style = new ArrowStyle();
 
-        // All arrow styles support shifting.
+        // All arrow styles support labels and shifting.
+        style.label_position = options.label_position / 100;
         style.shift = options.offset * CONSTANTS.EDGE_OFFSET_DISTANCE;
 
         switch (options.style.name) {
@@ -3097,10 +3099,17 @@ class History {
                     }
                     update_panel = true;
                     break;
-                case "label-alignment":
+                case "label_alignment":
                     for (const alignment of action.alignments) {
                         alignment.edge.options.label_alignment = alignment[to];
                         alignment.edge.render(ui);
+                    }
+                    update_panel = true;
+                    break;
+                case "label_position":
+                    for (const label_position of action.label_positions) {
+                        label_position.edge.options.label_position = label_position[to];
+                        label_position.edge.render(ui);
                     }
                     update_panel = true;
                     break;
@@ -3518,12 +3527,12 @@ class Panel {
                 ["over", "Centre align label (over)", "over", "x"],
                 ["right", "Right align label", "right"]
             ],
-            "label-alignment",
+            "label_alignment",
             [],
             false, // `disabled`
             (edges, value) => {
                 ui.history.add(ui, [{
-                    kind: "label-alignment",
+                    kind: "label_alignment",
                     alignments: Array.from(ui.selection)
                         .filter(cell => cell.is_edge())
                         .map((edge) => ({
@@ -3636,6 +3645,9 @@ class Panel {
 
             return slider.label.add_to(wrapper);
         };
+
+        // The label position (along the edge) slider.
+        create_option_slider("Position", "label_position", "i", { min: 0, max: 100, step: 10 });
 
         // The offset slider.
         create_option_slider("Offset", "offset", "o", { min: -5, max: 5 });
@@ -4431,7 +4443,7 @@ class Panel {
 
     /// Update the panel state (i.e. enable/disable fields as relevant).
     update(ui) {
-        const label_alignments = this.element.query_selector_all('input[name="label-alignment"]');
+        const label_alignments = this.element.query_selector_all('input[name="label_alignment"]');
 
         // Modifying cells is not permitted when the export pane is visible.
         if (this.export === null) {
@@ -4509,11 +4521,12 @@ class Panel {
 
                 // Edge-specific options.
                 if (cell.is_edge()) {
-                    consider("label-alignment", cell.options.label_alignment);
+                    consider("label_alignment", cell.options.label_alignment);
                     // The label alignment buttons are rotated to reflect the direction of the arrow
                     // when all arrows have the same direction (at least to the nearest multiple of
                     // 90°). Otherwise, rotation defaults to 0°.
                     consider("{angle}", cell.angle());
+                    consider("{label_position}", cell.options.label_position);
                     consider("{offset}", cell.options.offset);
                     consider("{curve}", cell.options.curve);
                     consider("{length}", cell.options.shorten);
@@ -4580,6 +4593,7 @@ class Panel {
                             });
                         }
                         break;
+                    case "{label_position}":
                     case "{offset}":
                     case "{curve}":
                     case "{level}":
@@ -5691,6 +5705,7 @@ class Edge extends Cell {
     static default_options(properties = null, style = null) {
         const options = {
             label_alignment: "left",
+            label_position: 50,
             offset: 0,
             curve: 0,
             shorten: { source: 0, target: 0 },
