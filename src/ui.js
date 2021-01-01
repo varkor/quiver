@@ -2018,8 +2018,13 @@ class UI {
     }
 
     /// Returns whether the UI is in a particular mode.
-    in_mode(mode) {
-        return this.mode instanceof mode;
+    in_mode(...modes) {
+        for (const mode of modes) {
+            if (this.mode instanceof mode) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /// Transitions to a `UIMode`.
@@ -5219,8 +5224,9 @@ class Toolbar {
             element.disabled = !condition;
         };
 
-        enable_if("Undo", ui.history.present !== 0);
-        enable_if("Redo", ui.history.present < ui.history.actions.length);
+        enable_if("Undo", ui.in_mode(UIMode.Default, UIMode.KeyMove) && ui.history.present !== 0);
+        enable_if("Redo", ui.in_mode(UIMode.Default, UIMode.KeyMove)
+            && ui.history.present < ui.history.actions.length);
         enable_if("Select all",
             ui.in_mode(UIMode.Default) && ui.selection.size < ui.quiver.all_cells().length);
         enable_if("Deselect all", ui.in_mode(UIMode.Default) && ui.selection.size > 0);
