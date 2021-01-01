@@ -838,14 +838,36 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
                     assert(alignment <= 3, "invalid label alignment");
                     assert_kind(options, "object");
 
-                    // We currently don't validate `options` further than being an object.
-                    // This is because it is likely that `options` will be extended in the future,
-                    // and this permits a limited form of backwards compatibility. We never access
-                    // prototype properties on `options`, so this should not be amenable to
-                    // injection.
+                    // We don't restrict the keys on `options`, because it is likely that `options`
+                    // will be extended in the future, and this permits a limited form of backwards
+                    // compatibility. We never access prototype properties on `options`, so this
+                    // should not be amenable to injection. However, for those properties we do
+                    // expect to exist, we do check they have the correct type (and in some cases,
+                    // range), below.
+
                     let level = Math.max(indices[source].level, indices[target].level) + 1;
                     const { style = {} } = options;
                     delete options.style;
+
+                    // Validate `options`.
+                    if (options.hasOwnProperty("offset")) {
+                        assert_kind(options.offset, "integer");
+                    }
+                    if (options.hasOwnProperty("curve")) {
+                        assert_kind(options.curve, "integer");
+                    }
+                    if (options.hasOwnProperty("shorten")) {
+                        let shorten = { source: 0, target: 0 };
+                        if (options.shorten.hasOwnProperty("source")) {
+                            assert_kind(options.shorten.source, "natural");
+                            shorten.source = options.shorten.source;
+                        }
+                        if (options.shorten.hasOwnProperty("target")) {
+                            assert_kind(options.shorten.target, "natural");
+                            shorten.target = options.shorten.target;
+                        }
+                        assert(shorten.source + shorten.target <= 100, "invalid shorten");
+                    }
 
                     // In previous versions of quiver, there was a single `length` parameter, rather
                     // than two `shorten` parameters. We convert from `length` into `shorten` here.
