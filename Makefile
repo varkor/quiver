@@ -6,10 +6,10 @@
 # Build KaTeX.
 all:
 	set -e
-	git submodule update --init --recursive
-	cd src/KaTeX
-	yarn
-	yarn build
+	curl -L -O "https://github.com/KaTeX/KaTeX/releases/download/v0.12.0/katex.zip"
+	unzip katex.zip
+	rm katex.zip
+	mv katex src/KaTeX
 
 # Update the `dev` branch from `master`.
 dev:
@@ -55,7 +55,6 @@ gh-pages:
 	# for `subtree split` later, which has to iterate through the entire history of the branch.
 	git reset $$TAIL
 	git add -A
-	git rm -r --cached src/KaTeX
 	git commit -m "Add release branch"
 	# Split off the `src/` directory into its own branch.
 	RELEASE=$$(git subtree split --prefix=src)
@@ -65,7 +64,6 @@ gh-pages:
 	git checkout -b squashed
 	git reset $$TAIL
 	git add -A
-	git rm -r --cached src/KaTeX
 	git commit -m "Add dev branch"
 	DEV=$$(git subtree split --prefix=src)
 
@@ -76,23 +74,6 @@ gh-pages:
 	cd ../quiver-worktree
 	# Reset the GitHub Pages branch so that it contains the release source code.
 	git reset --hard $$RELEASE
-
-	# Clone the existing version of KaTeX into the worktree.
-	git clone $$KATEX KaTeX
-	# We are assuming KaTeX has already been built.
-	# Remove `.git` and associated files, so KaTeX is no longer recognised as a git repository.
-	cd KaTeX
-	rm -rf .git
-	rm .gitignore
-	rm .gitmodules
-	# We need to be able to commit KaTeX as a plain directory, so we have to unregister it as a
-	# submodule. The cloned repository by default won't contain any `.gitignore`d files, but we
-	# actually want the `dist/`, directory, which contains various resources, e.g. fonts, so we copy
-	# it across ourselves.
-	cp -r $$KATEX/dist .
-	cd ../
-	git add -A
-	git commit -m "Add KaTeX"
 
 	# Merge the development branch into the `dev/` directory.
 	git merge -s ours --no-commit $$DEV

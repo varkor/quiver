@@ -1,4 +1,0 @@
-[submodule "src/KaTeX"]
-	path = src/KaTeX
-	url = https://github.com/KaTeX/KaTeX.git
-	shallow = true

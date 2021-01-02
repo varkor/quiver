@@ -6595,7 +6595,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Immediately load the KaTeX library.
    const rendering_library = new DOM.Element("script", {
         type: "text/javascript",
-        src: "KaTeX/dist/katex.js",
+        src: "KaTeX/katex.min.js",
     }).listen("error", () => {
         // Handle KaTeX not loading (somewhat) gracefully.
         UI.display_error(`KaTeX failed to load.`)
@@ -6614,14 +6614,14 @@ document.addEventListener("DOMContentLoaded", () => {
     // Load the style sheet needed for KaTeX.
     document.head.appendChild(new DOM.Element("link", {
         rel: "stylesheet",
-        href: "KaTeX/dist/katex.css",
+        href: "KaTeX/katex.css",
     }).element);
     // Preload various fonts to avoid flashes of unformatted text.
     const preload_fonts = ["Main-Regular", "Math-Italic"];
     for (const font of preload_fonts) {
         const attributes = {
             rel: "preload",
-            href: `KaTeX/dist/fonts/KaTeX_${font}.woff2`,
+            href: `KaTeX/fonts/KaTeX_${font}.woff2`,
             as: "font"
         };
         if (window.location.hostname !== "") {
