@@ -82,21 +82,12 @@ Currently, macros may be defined using `\newcommand`, and colours may be defined
 `\definecolor` (using the colour modes: `rgb`, `RGB` or `gray`).
 
 ## Building
-Make sure you have [installed yarn](https://yarnpkg.com/lang/en/docs/install/) and have a version of
-Make that supports `.ONESHELL` (e.g. GNU Make 3.82).
+Run `make` from the command land, and then open `src/index.html` in your favourite web browser.
 
-Clone the repository, and run
-```shell
-make
-```
-which will build KaTeX. Then simply open `src/index.html` in your favourite web browser.
-
-**Note for macOS users:** the default version of Make on macOS is GNU Make 3.81, which does not
-contain support for `.ONESHELL`. You may need to update Make to run the Makefile.
-
-**Note for Ubuntu users:** the cmdtest package that comes with Ubuntu conflicts with the yarn
-installation. You may need to [uninstall cmdtest](https://github.com/varkor/quiver/issues/48) to
-install yarn.
+If this fails, you might be using an incompatible version of Make or Bash. In this case, you can
+manually download the [latest release](https://github.com/KaTeX/KaTeX/releases) of KaTeX and place
+it under `src/` as `src/KaTeX/`. Then open `src/index.html` in your favourite web browser. If KaTeX
+has not been given the correct path, you will get an error telling you that KaTeX failed to load.
 
 If you have any other problems building **quiver**, [open an
 issue](https://github.com/varkor/quiver/issues/new) detailing the problem and I'll try to help.
