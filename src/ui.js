@@ -736,7 +736,10 @@ class UI {
                 ["Modify style", (td) => Shortcuts.element(td, [{ key: "D" }])],
                 ["Display as arrow", (td) => Shortcuts.element(td, [{ key: "A" }])],
                 ["Display as adjunction", (td) => Shortcuts.element(td, [{ key: "J" }])],
-                ["Display as pullback/pushout", (td) => Shortcuts.element(td, [{ key: "P" }])]
+                ["Display as pullback/pushout", (td) => {
+                    Shortcuts.element(td, [{ key: "P" }]);
+                    td.add(" (press again to switch corner style)");
+                }],
             ]))
             .add(new DOM.Element("h2").add("Toolbar"))
             .add(new DOM.Table([
