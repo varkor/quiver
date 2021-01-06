@@ -27,7 +27,10 @@ DOM.Element = class {
     /// `from` has two forms: a plain string, in which case it is used as a `tagName` for a new
     /// element, or an existing element, in which case it is wrapped in a `DOM.Element`.
     constructor(from, attributes = {}, style = {}, namespace = null) {
-        if (typeof from !== "string") {
+        if (from instanceof DOM.Element) {
+            // Used when we want to convert between different subclasses of `DOM.Element`.
+            this.element = from.element;
+        } else if (typeof from !== "string") {
             this.element = from;
         } else if (namespace !== null) {
             this.element = document.createElementNS(namespace, from);
@@ -166,9 +169,13 @@ DOM.Canvas = class extends DOM.Element {
         super(from || "canvas", attributes, style);
         this.context = this.element.getContext("2d");
         if (from === null) {
+            if (typeof width === "undefined" || typeof height === "undefined") {
+                console.error("`canvas` must have a defined `width` and `height`.");
+            }
             this.resize(width, height);
+            const dpr = window.devicePixelRatio;
+            this.context.setTransform(dpr, 0, 0, dpr, 0, 0);
         }
-        this.context.setTransform(window.devicePixelRatio, 0, 0, window.devicePixelRatio, 0, 0);
     }
 
     /// Resizes and clears the canvas.
@@ -182,8 +189,13 @@ DOM.Canvas = class extends DOM.Element {
             this.element.style.height = `${height}px`;
             this.context.setTransform(dpr, 0, 0, dpr, 0, 0);
         } else {
-            this.context.clearRect(0, 0, width, height);
+            this.clear();
         }
+    }
+
+    /// Clears the canvas.
+    clear() {
+        this.context.clearRect(0, 0, this.element.width, this.element.height);
     }
 }
 
@@ -280,6 +292,7 @@ DOM.Multislider = class extends DOM.Element {
                     return thumb.class_list.contains("hover");
                 });
                 if (!this.class_list.contains("disabled") && typeof hovered_thumb !== "undefined") {
+                    event.stopPropagation();
                     // Display the currently-dragged thumb above any other. This is important where
                     // there are multiple thumbs, which can overlap.
                     this.thumbs.forEach((thumb) => thumb.set_style({ "z-index": 1 }));

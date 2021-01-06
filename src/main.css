@@ -403,7 +403,7 @@ being. */
     white-space: nowrap;
 }
 
-.panel .wrapper {
+.panel > .wrapper {
     position: absolute;
     left: 0;
     width: 100%;
@@ -451,6 +451,7 @@ being. */
 .label-input {
     width: 100%; height: 32px;
     padding: 4px 6px;
+    padding-right: calc(24px + 6px);
 
     background: transparent;
     border: none;
@@ -505,6 +506,15 @@ being. */
 
 .label-input::selection {
     background-color: white;
+}
+
+.label-input-container .colour-indicator {
+    position: absolute;
+    top: 50%;
+    right: 4px;
+    width: 24px;
+    transform: translateY(-50%);
+    border-radius: 4px;
 }
 
 .panel input[type="text"] {
@@ -680,15 +690,18 @@ input[type="radio"].short + input[type="radio"]:not(.short) {
 }
 
 /* A non-native range input, supporting multiple thumbs. */
-.panel div.slider {
+div.slider {
     display: inline-block;
     vertical-align: middle;
     position: absolute;
+}
+
+.panel div.slider {
     width: 55%;
     left: 56px;
 }
 
-.panel .slider-values {
+.slider-values {
     display: inline-block;
     position: absolute;
     right: 0;
@@ -696,7 +709,7 @@ input[type="radio"].short + input[type="radio"]:not(.short) {
     pointer-events: none;
 }
 
-.panel .slider-values .slider-value {
+.slider-values .slider-value {
     display: inline-block;
     /* Try to keep each value fixed-width. This will technically be font-dependent, but it's simpler
        to pick a fixed width manually. */
@@ -705,7 +718,7 @@ input[type="radio"].short + input[type="radio"]:not(.short) {
     text-align: right;
 }
 
-.panel .slider .thumb {
+.slider .thumb {
     display: inline-block;
     position: absolute;
     width: 20px;
@@ -719,29 +732,36 @@ input[type="radio"].short + input[type="radio"]:not(.short) {
     border: var(--ui-border) solid 1px;
     border-radius: 20px;
 
+    transition: left 0.1s;
+
     pointer-events: none;
 }
 
-.panel .slider.focused .thumb {
+/* Disable transitions when the user is dragging the thumb. */
+.thumb.active {
+    transition: none;
+}
+
+.slider.focused .thumb {
     background: var(--ui-white);
     border-color: var(--ui-blue);
 }
 
-.panel .slider .thumb.focused, .panel .slider.symmetric.focused .thumb {
+.slider .thumb.focused, .slider.symmetric.focused .thumb {
     background: var(--ui-blue);
 }
 
-.panel .slider:not(.disabled):not(.focused) .thumb.hover,
-.panel .slider.symmetric:not(.disabled):not(.focused):hover .thumb {
+.slider:not(.disabled):not(.focused) .thumb.hover,
+.slider.symmetric:not(.disabled):not(.focused):hover .thumb {
     background: hsl(0, 0%, 20%);
 }
 
-.panel .slider:not(.disabled):not(.focused) .thumb.active,
-.panel .slider.symmetric:not(.disabled):not(.focused).active .thumb {
+.slider:not(.disabled):not(.focused) .thumb.active,
+.slider.symmetric:not(.disabled):not(.focused).active .thumb {
     background: hsl(0, 0%, 30%);
 }
 
-.panel .slider .track {
+.slider .track {
     display: inline-block;
     vertical-align: middle;
     width: 100%;
@@ -753,7 +773,7 @@ input[type="radio"].short + input[type="radio"]:not(.short) {
     border-radius: 14px;
 }
 
-.panel .slider.focused .track {
+.slider.focused .track {
     background: var(--ui-white);
     border-color: var(--ui-blue);
 }
@@ -809,6 +829,19 @@ kbd.hint {
     pointer-events: none;
 }
 
+.colour-indicator {
+    display: inline-block;
+    vertical-align: middle;
+    position: relative;
+    width: 48px;
+    height: 24px;
+
+    border: var(--ui-border) solid 1px;
+    border-radius: 2px;
+
+    cursor: pointer;
+}
+
 /* Highlight the hints when their codes are (partially) typed. */
 kbd.hint.focused, kbd.hint .focused {
     color: var(--ui-white);
@@ -837,6 +870,22 @@ kbd.hint.focused, kbd.hint .focused {
 
 kbd.hint.button, kbd.hint.input {
     left: 0; top: 0;
+    transform: translate(-25%, -25%);
+}
+
+.label-input-container kbd.hint.colour {
+    right: 0; top: 0;
+    transform: translate(25%, -25%);
+}
+
+/* Hide the keyboard shortcut for changing colour when the user is typing, as it's irrelevant. We
+   don't do this for every keyboard shortcut, but the one in the label input is particularly
+   prominent. */
+.label-input-container .label-input:focus ~ kbd.hint.colour {
+    display: none;
+}
+
+kbd.hint.colour {
     transform: translate(-25%, -25%);
 }
 
@@ -926,6 +975,81 @@ user has already pressed semicolon, placing us in command mode. */
 
 .panel .success-indicator.failure::before {
     content: "✕";
+}
+
+/* The colour picker */
+
+.colour-panel {
+    position: fixed;
+    width: calc(16px * 20);
+    height: 256px;
+    padding: 8px 16px;
+
+    background: var(--ui-black);
+    border-radius: 16px;
+
+    font: 14px Arial, sans-serif;
+    color: var(--ui-text);
+
+    transition: opacity 0.2s;
+    /* transition: opacity 0.2s, transform 0.2s; */
+}
+
+.colour-panel.target-label {
+    bottom: calc(8px + 46px + 32px + 8px);
+    right: calc(50% - 20%);
+}
+
+.colour-panel.target-edge {
+    top: 50%;
+    right: calc(16px * 20);
+    transform: translateY(-50%);
+}
+
+.colour-panel.hidden {
+    opacity: 0;
+
+    pointer-events: none;
+
+    transition: opacity 0.1s;
+}
+
+.colour-wheel {
+    position: absolute;
+    left: 50%; top: 16px;
+    transform: translateX(-50%);
+
+    border-radius: 50%;
+}
+
+.colour-picker {
+    position: absolute;
+    width: 32px; height: 32px;
+    transform: translate(-50%, -50%);
+
+    background: var(--ui-black);
+    border: var(--ui-black) 2px solid;
+    border-radius: 50%;
+
+    transition: background 0.1s, left 0.1s, top 0.1s;
+
+    pointer-events: none;
+}
+
+.colour-panel.active .colour-picker, .colour-panel.active .thumb {
+    transition: none;
+}
+
+.colour-panel > .wrapper {
+    position: absolute;
+    left: 16px;
+    right: 16px;
+    bottom: 12px;
+}
+
+.colour-panel div.slider {
+    width: 55%;
+    left: 80px;
 }
 
 /* The toolbar */

@@ -431,8 +431,9 @@ UIMode.KeyMove = class extends UIMode {
                 .add(" to finish moving.");
 
         // Hide various inputs and panels.
-        ui.panel.hide();
+        ui.panel.hide(ui);
         ui.panel.label_input.parent.class_list.add("hidden");
+        ui.colour_picker.close();
         ui.focus_point.class_list.remove("focused", "smooth");
         // Add the tooltip.
         ui.element.add(this.tooltip);
@@ -571,6 +572,9 @@ class UI {
         // The panel for viewing and editing cell data.
         this.panel = new Panel();
 
+        // The colour picker.
+        this.colour_picker = new ColourPicker();
+
         // The toolbar.
         this.toolbar = new Toolbar();
 
@@ -614,8 +618,9 @@ class UI {
         // While the following does work without a delay, it currently experiences some stutters.
         // Using a delay makes the transition much smoother.
         delay(() => {
-            this.panel.hide();
+            this.panel.hide(this);
             this.panel.label_input.parent.class_list.add("hidden");
+            this.colour_picker.close();
         });
     }
 
@@ -633,16 +638,38 @@ class UI {
         // Set up the panel for viewing and editing cell data.
         this.panel.initialise(this);
         this.element.add(this.panel.element);
+        this.colour_picker.initialise(this);
+        this.element.add(this.colour_picker.element);
         this.panel.update_position();
         this.element.add(this.panel.global);
+
+        // The label colour picker.
+        const shortcut = { key: "Y" };
+        const action = () => {
+            this.colour_picker.open_or_close(ColourPicker.TARGET.Label);
+            this.colour_picker.set_colour(this, this.panel.label_colour);
+        };
+        const colour_indicator = new DOM.Element("div", { class: "colour-indicator" })
+            .listen("click", action);
+        this.shortcuts.add([shortcut], (event) => {
+            if (!colour_indicator.class_list.contains("disabled")) {
+                action(event);
+            }
+        });
         this.element.add(
             new DOM.Element("div", { class: "label-input-container hidden" })
                 .add(new DOM.Element("div", { class: "input-mode" }))
                 .add(this.panel.label_input)
+                .add(colour_indicator)
+                .listen(pointer_event("down"), (event) => event.stopPropagation())
         );
         delay(() => {
             this.panel.label_input.parent.add(
-                new DOM.Element("kbd", { class: "hint input" }).add("↵")
+                new DOM.Element("kbd", { class: "hint input" })
+                    .add(Shortcuts.name([{ key: "Enter" }]))
+            );
+            this.panel.label_input.parent.add(
+                new DOM.Element("kbd", { class: "hint colour" }).add(Shortcuts.name([shortcut]))
             );
         });
 
@@ -714,7 +741,7 @@ class UI {
                 ["Change target", (td) => Shortcuts.element(td, [{ key: "." }])],
                 ["Create arrows from selection", (td) => Shortcuts.element(td, [{ key: "/" }])],
             ]))
-            .add(new DOM.Element("h2").add("Arrow styling"))
+            .add(new DOM.Element("h2").add("Styling"))
             .add(new DOM.Table([
                 ["Reverse arrows", (td) => Shortcuts.element(td, [{ key: "R" }])],
                 ["Flip arrows", (td) => Shortcuts.element(td, [{ key: "E" }])],
@@ -740,6 +767,8 @@ class UI {
                     Shortcuts.element(td, [{ key: "P" }]);
                     td.add(" (press again to switch corner style)");
                 }],
+                ["Modify label colour", (td) => Shortcuts.element(td, [{ key: "Y" }])],
+                ["Modify arrow colour", (td) => Shortcuts.element(td, [{ key: "U" }])]
             ]))
             .add(new DOM.Element("h2").add("Toolbar"))
             .add(new DOM.Table([
@@ -1727,8 +1756,9 @@ class UI {
             // Defocus selected cells.
             if (this.element.query_selector(".cell.selected")) {
                 this.deselect();
-                this.panel.hide();
+                this.panel.hide(this);
                 this.panel.label_input.parent.class_list.add("hidden");
+                this.colour_picker.close();
                 return;
             }
 
@@ -2727,9 +2757,10 @@ class UI {
         // By default, `ArrowStyle` have minimal styling.
         const style = new ArrowStyle();
 
-        // All arrow styles support labels and shifting.
+        // All arrow styles support labels, shifting, and colour.
         style.label_position = options.label_position / 100;
         style.shift = options.offset * CONSTANTS.EDGE_OFFSET_DISTANCE;
+        style.colour = ColourPicker.hsla_to_css(options.colour);
 
         switch (options.style.name) {
             case "arrow":
@@ -3017,6 +3048,40 @@ class History {
         }
     }
 
+    /// Adds a new history event, or collapses it into the previous event if the two match.
+    add_or_modify_previous(ui, collapse, kind, value, cells) {
+        const actions = this.get_collapsible_actions(collapse);
+        if (actions !== null) {
+            // If the previous history event was to modify the property `kind`, then we're just
+            // going to modify that event rather than add a new one.
+            let unchanged = true;
+            for (const action of actions) {
+                // This ought always to be true.
+                if (action.kind === kind) {
+                    // Modify the `to` field of each property modification.
+                    action[`${kind}s`].forEach((modification) => {
+                        modification.to = value;
+                        if (modification.to !== modification.from) {
+                            unchanged = false;
+                        }
+                    });
+                }
+            }
+            // Invoke the new property changes immediately.
+            this.effect(ui, actions, false);
+            if (unchanged) {
+                this.pop(ui);
+            }
+        } else {
+            // If this is the start of our property modification, we need to add a new history
+            // event.
+            this.add_collapsible(ui, collapse, [{
+                kind,
+                [`${kind}s`]: cells,
+            }], true);
+        }
+    }
+
     /// Make the last action permanent, preventing it from being collapsed.
     permanentise() {
         this.collapse = null;
@@ -3102,6 +3167,15 @@ class History {
                     }
                     update_panel = true;
                     break;
+                case "label_colour":
+                    for (const label_colour of action.label_colours) {
+                        label_colour.cell.label_colour = label_colour[to];
+                        label_colour.cell.element.query_selector(".label").set_style({
+                            color: ColourPicker.hsla_to_css(label_colour.cell.label_colour),
+                        });
+                    }
+                    update_panel = true;
+                    break;
                 case "label_alignment":
                     for (const alignment of action.alignments) {
                         alignment.edge.options.label_alignment = alignment[to];
@@ -3182,6 +3256,13 @@ class History {
                         target: [action.edge.source, action[to]],
                     }[action.end];
                     action.edge.reconnect(ui, source, target);
+                    update_panel = true;
+                    break;
+                case "colour":
+                    for (const colour of action.colours) {
+                        colour.edge.options.colour = colour[to];
+                        cells.add(colour.edge);
+                    }
                     update_panel = true;
                     break;
             }
@@ -3316,6 +3397,13 @@ class Panel {
         // `query_selector` as we usually do, because we need access to the `DOM.Multislider`
         // objects, rather than the `DOM.Element`s.
         this.sliders = new Map();
+
+        // The current label colour. This may be different to the colour in the colour picker
+        // (likewise for `colour` below).
+        this.label_colour = Colour.black();
+
+        // The current edge colour selected in the panel.
+        this.colour = Colour.black();
     }
 
     /// Set up the panel interface elements.
@@ -3363,44 +3451,17 @@ class Panel {
         this.label_input.listen("input", () => {
             if (!ui.in_mode(UIMode.Command)) {
                 this.unqueue_selected(ui);
-
-                const collapse = ["label", ui.selection];
-                const actions = ui.history.get_collapsible_actions(collapse);
-                if (actions !== null) {
-                    // If the previous history event was to modify the label, then
-                    // we're just going to modify that event rather than add a new
-                    // one. This means we won't have to undo every single character
-                    // change: we'll undo the entire label change.
-                    let unchanged = true;
-                    for (const action of actions) {
-                        // This ought always to be true.
-                        if (action.kind === "label") {
-                            // Modify the `to` field of each label.
-                            action.labels.forEach((label) => {
-                                label.to = this.label_input.element.value;
-                                if (label.to !== label.from) {
-                                    unchanged = false;
-                                }
-                            });
-                        }
-                    }
-                    // Invoke the new label changes immediately.
-                    ui.history.effect(ui, actions, false);
-                    if (unchanged) {
-                        ui.history.pop(ui);
-                    }
-                } else {
-                    // If this is the start of our label modification,
-                    // we need to add a new history event.
-                    ui.history.add_collapsible(ui, collapse, [{
-                        kind: "label",
-                        labels: Array.from(ui.selection).map((cell) => ({
-                            cell,
-                            from: cell.label,
-                            to: this.label_input.element.value,
-                        })),
-                    }], true);
-                }
+                ui.history.add_or_modify_previous(
+                    ui,
+                    ["label", ui.selection],
+                    "label",
+                    this.label_input.element.value,
+                    Array.from(ui.selection).map((cell) => ({
+                        cell,
+                        from: cell.label,
+                        to: this.label_input.element.value,
+                    })),
+                );
             } else {
                 // We are jumping to a cell with the entered ID.
                 let replaced
@@ -3475,6 +3536,9 @@ class Panel {
                 this.label_input.element.value = replaced;
                 this.label_input.element.setSelectionRange(caret, caret);
             }
+        }).listen("focus", () => {
+            // Close the colour picker.
+            ui.colour_picker.close();
         }).listen("blur", () => {
             if (!ui.in_mode(UIMode.Command)) {
                 // As soon as the input is blurred, treat the label modification as
@@ -3572,48 +3636,23 @@ class Panel {
                 const value = slider.values();
                 // Enact the effect of the slider.
                 this.unqueue_selected(ui);
-                const collapse = [property, ui.selection];
-                const actions = ui.history.get_collapsible_actions(collapse);
-                if (actions !== null) {
-                    // If the previous history event was to modify the property, then
-                    // we're just going to modify that event rather than add a new
-                    // one, as with the label input.
-                    let unchanged = true;
-                    for (const action of actions) {
-                        // This ought always to be true.
-                        if (action.kind === property) {
-                            // Modify the `to` field of each property modification.
-                            action[`${property}s`].forEach((modification) => {
-                                modification.to = value;
-                                if (modification.to !== modification.from) {
-                                    unchanged = false;
-                                }
-                            });
-                        }
-                    }
-                    // Invoke the new property changes immediately.
-                    ui.history.effect(ui, actions, false);
-                    if (unchanged) {
-                        ui.history.pop(ui);
-                    }
-                } else {
-                    // If this is the start of our property modification,
-                    // we need to add a new history event.
-                    ui.history.add_collapsible(ui, collapse, [{
-                        kind: property,
-                        [`${property}s`]: Array.from(ui.selection)
-                            .filter(cell => cell.is_edge())
-                            .map((edge) => ({
-                                edge,
-                                from: property !== "length" ? edge.options[property]
-                                    : [
-                                        edge.options.shorten.source,
-                                        100 - edge.options.shorten.target
-                                    ],
-                                to: value,
-                            })),
-                    }], true);
-                }
+                ui.history.add_or_modify_previous(
+                    ui,
+                    [property, ui.selection],
+                    property,
+                    value,
+                    Array.from(ui.selection)
+                        .filter(cell => cell.is_edge())
+                        .map((edge) => ({
+                            edge,
+                            from: property !== "length" ? edge.options[property]
+                                : [
+                                    edge.options.shorten.source,
+                                    100 - edge.options.shorten.target
+                                ],
+                            to: value,
+                        })),
+                );
             });
 
             this.sliders.set(property, slider);
@@ -4011,6 +4050,23 @@ class Panel {
             }
             tail_styles.class_list.add("next-to-focus");
         });
+
+        // The colour indicator. Users can click on the indicator to open the colour picker.
+        const shortcut = { key: "U" };
+        const action = () => {
+            ui.colour_picker.open_or_close(ColourPicker.TARGET.Edge);
+            ui.colour_picker.set_colour(ui, this.colour);
+        };
+        const colour_indicator = new DOM.Element("div", { class: "colour-indicator" })
+            .listen("click", action);
+        ui.shortcuts.add([shortcut], (event) => {
+            if (!colour_indicator.class_list.contains("disabled")) {
+                action(event);
+            }
+        });
+        new DOM.Element("label").add("Colour: ").add(colour_indicator).add(
+            new DOM.Element("kbd", { class: "hint colour" }).add(Shortcuts.name([shortcut]))
+        ).add_to(wrapper);
 
         const display_export_pane = (format, modify = (output) => output) => {
             // Handle export button interaction: export the quiver.
@@ -4448,15 +4504,25 @@ class Panel {
     update(ui) {
         const label_alignments = this.element.query_selector_all('input[name="label_alignment"]');
 
+        // Multiple selection is always permitted, so the following code must provide sensible
+        // behaviour for both single and multiple selections (including empty selections).
+        const selection_contains_edge = ui.selection_contains_edge();
+
         // Modifying cells is not permitted when the export pane is visible.
         if (this.export === null) {
-            // Default options (for when no cells are selected). We only need to provide defaults
-            // for inputs that display their state even when disabled.
-            if (ui.selection.size === 0) {
+            // Default options (for when no edges/cells are selected). We only need to provide
+            // defaults for inputs that display their state even when disabled.
+            if (!selection_contains_edge) {
                 this.label_input.element.value = "";
+                this.element.query_selector(".colour-indicator").set_style({
+                    background: ColourPicker.hsla_to_css(Colour.black()),
+                });
                 for (const [property, slider] of this.sliders) {
                     let values = [0];
                     switch (property) {
+                        case "label_position":
+                            values = [50];
+                            break;
                         case "length":
                             values = [0, 100];
                             break;
@@ -4468,18 +4534,23 @@ class Panel {
                         thumb.set_value(values[i]);
                     });
                 }
+                if (ui.selection.size === 0) {
+                    ui.element.query_selector(".label-input-container .colour-indicator")
+                        .set_style({
+                            background: ColourPicker.hsla_to_css(Colour.black()),
+                        });
+                    ui.colour_picker.close();
+                }
             }
-
-            // Multiple selection is always permitted, so the following code must provide sensible
-            // behaviour for both single and multiple selections (including empty selections).
-            const selection_contains_edge = ui.selection_contains_edge();
 
             // Enable all the inputs iff we've selected at least one edge.
             this.element.query_selector_all('input:not([type="text"]), button')
                 .forEach((input) => input.element.disabled = !selection_contains_edge);
-            this.element.query_selector_all(".slider").forEach((slider) => {
-                slider.class_list.toggle("disabled", !selection_contains_edge);
+            this.element.query_selector_all(".slider, .colour-indicator").forEach((element) => {
+                element.class_list.toggle("disabled", !selection_contains_edge);
             });
+            ui.element.query_selector(".label-input-container .colour-indicator")
+                .class_list.toggle("disabled", ui.selection.size === 0);
 
             // Enable the label input if at least one cell has been selected.
             this.label_input.element.disabled = ui.selection.size === 0;
@@ -4519,8 +4590,12 @@ class Panel {
 
             // Collect the consistent and varying input values.
             for (const cell of ui.selection) {
-                // Options applying to all cells.
+                // Options applying to all cells. Technically, these are no longer under the
+                // jurisdiction of `Panel` (though they were at one point). However, since we want
+                // to use the same logic for these options as edge-specific options, it's convenient
+                // to include them here.
                 consider("{label}", cell.label);
+                consider("{label_colour}", cell.label_colour);
 
                 // Edge-specific options.
                 if (cell.is_edge()) {
@@ -4535,6 +4610,7 @@ class Panel {
                     consider("{length}", cell.options.shorten);
                     consider("{level}", cell.options.level);
                     consider("edge-type", cell.options.style.name);
+                    consider("{colour}", cell.options.colour);
 
                     // Arrow-specific options.
                     if (cell.options.style.name === "arrow") {
@@ -4579,6 +4655,7 @@ class Panel {
             // Fill the consistent values for the inputs, checking and unchecking
             // radio buttons as relevant.
             for (const [name, value] of values) {
+                const property = name.slice(1, -1);
                 switch (name) {
                     case "{label}":
                         if (value === null || this.label_input.element.value !== value) {
@@ -4586,6 +4663,21 @@ class Panel {
                             // nicely. However, Safari will reset the caret to the end of the input,
                             // so we need to guard on the value actually changing.
                             this.label_input.element.value = value !== null ? value : "";
+                        }
+                        break;
+                    case "{label_colour}":
+                        // Default to black.
+                        this.label_colour = value || Colour.black();
+                        // If we're currently picking a colour, then changing the selection should
+                        // update the colour picker value; otherwise, we just update the colour
+                        // indicator in the panel.
+                        if (ui.colour_picker.is_targeting(ColourPicker.TARGET.Label)) {
+                            ui.colour_picker.set_colour(ui, this.label_colour);
+                        } else {
+                            ui.element.query_selector(".label-input-container .colour-indicator")
+                                .set_style({
+                                    background: ColourPicker.hsla_to_css(this.label_colour),
+                                });
                         }
                         break;
                     case "{angle}":
@@ -4597,16 +4689,32 @@ class Panel {
                         }
                         break;
                     case "{label_position}":
+                        this.sliders.get(property).thumbs[0].set_value(value !== null ? value : 50);
+                        break;
                     case "{offset}":
                     case "{curve}":
                     case "{level}":
-                        const property = name.slice(1, -1);
                         this.sliders.get(property).thumbs[0].set_value(value !== null ? value : 0);
                         break;
                     case "{length}":
                         const thumbs = this.sliders.get("length").thumbs;
                         thumbs[0].set_value(value !== null ? value.source : 0);
                         thumbs[1].set_value(value !== null ? 100 - value.target : 100);
+                        break;
+                    case "{colour}":
+                        // This case is analagous to `"{label_colour}"` above.
+                        // Default to black.
+                        this.colour = value || Colour.black();
+                        // If we're currently picking a colour, then changing the selection should
+                        // update the colour picker value; otherwise, we just update the colour
+                        // indicator in the panel.
+                        if (ui.colour_picker.is_targeting(ColourPicker.TARGET.Edge)) {
+                            ui.colour_picker.set_colour(ui, this.colour);
+                        } else {
+                            this.element.query_selector(".colour-indicator").set_style({
+                                background: ColourPicker.hsla_to_css(this.colour),
+                            });
+                        }
                         break;
                     default:
                         this.element.query_selector_all(
@@ -4686,7 +4794,10 @@ class Panel {
     }
 
     /// Hide the panel off-screen.
-    hide() {
+    hide(ui) {
+        if (ui.colour_picker.is_targeting(ColourPicker.TARGET.Edge)) {
+            ui.colour_picker.close();
+        }
         this.element.class_list.add("hidden");
         this.defocus_inputs();
     }
@@ -4694,10 +4805,11 @@ class Panel {
     /// Hide the panel and label input if no relevant cells are selected.
     hide_if_unselected(ui) {
         if (!ui.selection_contains_edge()) {
-            this.hide();
+            this.hide(ui);
         }
         if (ui.selection.size === 0) {
             this.label_input.parent.class_list.add("hidden");
+            ui.colour_picker.close();
         }
     }
 
@@ -5092,8 +5204,9 @@ class Toolbar {
             [{ key: "A", modifier: true, shift: true, context: Shortcuts.SHORTCUT_PRIORITY.Defer }],
             () => {
                 ui.deselect();
-                ui.panel.hide();
+                ui.panel.hide(ui);
                 ui.panel.label_input.parent.class_list.add("hidden");
+                ui.colour_picker.close();
             },
         );
 
@@ -5264,15 +5377,239 @@ class Toolbar {
     }
 }
 
+/// The colour wheel and colour picker.
+class ColourPicker {
+    constructor() {
+        // The pop up colour panel, with the colour wheel and colour picker.
+        this.element = null;
+
+        // The current colour displayed by the colour wheel.
+        this.colour = Colour.black();
+
+        // Whether we are selecting a colour for a `ColourPicker.TARGET`.
+        this.target = null;
+
+        // We memoise the colour wheel images (for each lightness level), so we don't have to
+        // continually recompute them. There may be more efficient ways to do this with a little
+        // more thought about the HSL and RGB colour models, but this is a simple solution for now.
+        this.colour_wheels = new Map();
+
+        // The sliders, which we store in a map so we retain access to the `DOM.Multislider`
+        // elements, similarly to in `Panel`.
+        this.sliders = new Map();
+    }
+
+    initialise(ui) {
+        this.element = new DOM.Element("div", { class: "colour-panel hidden" })
+            .listen(pointer_event("down"), (event) => event.stopPropagation());
+
+        // The colour wheel.
+        const size = 192;
+        const canvas = new DOM.Canvas(null, size, size, { class: "colour-wheel" })
+            .add_to(this.element);
+        // The colour picker, which the user can move around by clicking on the colour wheel.
+        new DOM.Element("div", { class: "colour-picker" }).add_to(this.element);
+
+        // Update the colours of the selected cells.
+        const set_selection_colour = (colour) => {
+            switch (this.target) {
+                case ColourPicker.TARGET.Label:
+                    ui.history.add_or_modify_previous(
+                        ui,
+                        ["label_colour", ui.selection],
+                        "label_colour",
+                        colour,
+                        Array.from(ui.selection).map((cell) => ({
+                            cell,
+                            from: cell.label_colour,
+                            to: colour,
+                        })),
+                    );
+                    break;
+                case ColourPicker.TARGET.Edge:
+                    ui.history.add_or_modify_previous(
+                        ui,
+                        ["colour", ui.selection],
+                        "colour",
+                        colour,
+                        Array.from(ui.selection).filter(cell => cell.is_edge()).map((edge) => ({
+                            edge,
+                            from: edge.options.colour,
+                            to: colour,
+                        })),
+                    );
+                    break;
+            }
+        };
+
+        // Update the position of the colour picker based on a pointer `event`.
+        const update_colour_picker = (event) => {
+            const rect = canvas.bounding_rect();
+            const [x, y] = [event.clientX - rect.left, event.clientY - rect.top];
+            const radius = Math.min(Math.hypot(x - size / 2, y - size / 2), size / 2);
+            const angle = Math.atan2(y - size / 2, x - size / 2) + Math.PI;
+            let [h, s, l, a] = this.colour.hsla();
+            [h, s] = [Math.round(rad_to_deg(angle)), Math.round(2 * radius / size * 100)];
+            set_selection_colour(new Colour(h, s, l, a));
+        };
+
+        let is_colour_picking = false;
+        canvas.listen(pointer_event("down"), (event) => {
+            is_colour_picking = true;
+            event.stopPropagation();
+            update_colour_picker(event);
+        });
+
+        document.addEventListener(pointer_event("move"), (event) => {
+            if (is_colour_picking) {
+                event.stopPropagation();
+                // While the `active` class is present, transitions will be disabled.
+                this.element.class_list.add("active");
+                update_colour_picker(event);
+            }
+        });
+
+        document.addEventListener(pointer_event("up"), (event) => {
+            if (is_colour_picking) {
+                event.stopPropagation();
+                is_colour_picking = false;
+                this.element.class_list.remove("active");
+            }
+        });
+
+        // The lightness slider.
+        const slider = new DOM.Multislider("Lightness", 0, 100, 1).listen("input", () => {
+            const [h, s, /* l */, a] = this.colour.hsla();
+            this.element.class_list.add("active");
+            set_selection_colour(new Colour(h, s, parseInt(slider.values()), a));
+            delay(() => this.element.class_list.remove("active"));
+        });
+        this.sliders.set("lightness", slider);
+        slider.label.add_to(new DOM.Element("div", { class: "wrapper" }).add_to(this.element));
+    }
+
+    /// Open the colour picker with a specified `target` if the colour picker is hidden; change it
+    /// its target if it does not match `target` but is currently open; or close it otherwise.
+    open_or_close(target) {
+        if (!this.element.class_list.contains("hidden") && this.target === target) {
+            this.close();
+            return;
+        }
+
+        this.target = target;
+        this.element.class_list.add("active");
+        this.element.class_list.remove("target-label", "target-edge");
+        switch (this.target) {
+            case ColourPicker.TARGET.Label:
+                this.element.class_list.add("target-label");
+                break;
+            case ColourPicker.TARGET.Edge:
+                this.element.class_list.add("target-edge");
+                break;
+        }
+        this.element.class_list.remove("hidden");
+        delay(() => this.element.class_list.remove("active"));
+    }
+
+    /// Close the colour picker.
+    close() {
+        this.element.class_list.add("hidden");
+        this.target = null;
+    }
+
+    /// Set the colour of the colour picker to a given `[hue, saturation, lightness, alpha]`.
+    set_colour(ui, colour) {
+        this.colour = colour;
+        // Alpha is currently not in use.
+        const [hue, saturation, lightness, /* alpha */] = colour.hsla();
+
+        const canvas = new DOM.Canvas(this.element.query_selector(".colour-wheel"));
+        const context = canvas.context;
+        const { width, height } = canvas.element;
+
+        // If we have not previously, we need to render the colour wheel with the given lightness.
+        if (!this.colour_wheels.has(lightness)) {
+            const image = context.createImageData(width, height);
+            const data = image.data;
+            for (let x = 0; x < width; ++x) {
+                for (let y = 0; y < height; ++y) {
+                    const i = x + y * width;
+                    const radius = Math.hypot(x - width / 2, y - height / 2);
+                    const angle = Math.atan2(y - height / 2, x - width / 2) + Math.PI;
+                    // We're assuming that `width` = `height`.
+                    const [r, g, b] = hsl_to_rgb(
+                        rad_to_deg(angle),
+                        Math.min(1, 2 * radius / width),
+                        lightness / 100,
+                    );
+                    const j = 4 * i;
+                    [data[j], data[j + 1], data[j + 2], data[j + 3]] = [r, g, b, 255];
+                }
+            }
+            this.colour_wheels.set(lightness, image);
+        }
+        // Update the colour wheel.
+        context.putImageData(this.colour_wheels.get(lightness), 0, 0);
+
+        const css_colour = ColourPicker.hsla_to_css(colour);
+        const angle = deg_to_rad(hue);
+        const size = width / window.devicePixelRatio / 2;
+        const radius = saturation / 100 * size;
+        const picker = this.element.query_selector(".colour-picker");
+        picker.set_style({
+            left: `${canvas.element.offsetLeft - Math.cos(angle) * radius}px`,
+            top: `${canvas.element.offsetTop + size - Math.sin(angle) * radius}px`,
+            background: css_colour,
+            "border-color": lightness >= 50 ? "var(--ui-black)" : "var(--ui-white)",
+        });
+        this.sliders.get("lightness").thumbs[0].set_value(lightness);
+        switch (this.target) {
+            case ColourPicker.TARGET.Label:
+                ui.panel.label_colour = colour;
+                ui.element.query_selector(".label-input-container .colour-indicator").set_style({
+                    background: css_colour,
+                });
+                break;
+            case ColourPicker.TARGET.Edge:
+                ui.panel.colour = colour;
+                ui.panel.element.query_selector(".colour-indicator").set_style({
+                    background: css_colour,
+                });
+                break;
+        }
+    }
+
+    is_targeting(target) {
+        return !this.element.class_list.contains("hidden") && this.target === target;
+    }
+
+    static hsla_to_css(colour) {
+        const [h, s, l, a] = colour.hsla();
+        return `hsla(${h}, ${s}%, ${l}%, ${a})`;
+    }
+}
+
+/// What property is the focus of the colour picker.
+ColourPicker.TARGET = new Enum(
+    "TARGET",
+    // The cell label.
+    "Label",
+    // The edge label.
+    "Edge",
+);
+
 /// An k-cell (such as a vertex or edge). This object represents both the
 /// abstract properties of the cell as well as their HTML representation.
 class Cell {
-    constructor(quiver, level, label = "") {
+    constructor(quiver, level, label = "", label_colour = Colour.black()) {
         // The k for which this cell is an k-cell.
         this.level = level;
 
         // The label with which the vertex or edge is annotated.
         this.label = label;
+
+        // The colour of the label (hue, saturation, lightness, alpha).
+        this.label_colour = label_colour;
 
         // An ID used to allow the user to jump to this cell via the keyboard.
         this.code = "";
@@ -5293,6 +5630,13 @@ class Cell {
         this.element.class_list.add("cell");
 
         const content_element = this.content_element;
+
+        // Set the label colour.
+        if (this.label_colour.is_not_black()) {
+            this.element.query_selector(".label").set_style({
+                color: ColourPicker.hsla_to_css(this.label_colour),
+            });
+        }
 
         // For cells with a separate `content_element`, we allow the cell to be moved
         // by dragging its `element` (under the assumption it doesn't totally overlap
@@ -5563,8 +5907,8 @@ Cell.NEXT_ID = 0;
 
 /// 0-cells, or vertices. This is primarily specialised in its set up of HTML elements.
 class Vertex extends Cell {
-    constructor(ui, label = "", position) {
-        super(ui.quiver, 0, label);
+    constructor(ui, label, position, label_colour = Colour.black()) {
+        super(ui.quiver, 0, label, label_colour);
 
         this.position = position;
         // The shape data is going to be overwritten immediately, so really this information is
@@ -5687,8 +6031,8 @@ class Vertex extends Cell {
 
 /// k-cells (for k > 0), or edges. This is primarily specialised in its set up of HTML elements.
 class Edge extends Cell {
-    constructor(ui, label = "", source, target, options) {
-        super(ui.quiver, Math.max(source.level, target.level) + 1, label);
+    constructor(ui, label = "", source, target, options, label_colour) {
+        super(ui.quiver, Math.max(source.level, target.level) + 1, label, label_colour);
 
         this.options = Edge.default_options(Object.assign({ level: this.level }, options));
 
@@ -5713,6 +6057,7 @@ class Edge extends Cell {
             curve: 0,
             shorten: { source: 0, target: 0 },
             level: 1,
+            colour: Colour.black(),
             // For historical reasons, the following options are in a `style` subobject. Originally,
             // these were those pertaining to the edge style. However, options such as `curve` and
             // `level` also pertain to the edge style (and can only be set for arrows), but are not
