@@ -127,6 +127,11 @@ function rad_to_deg(rad) {
     return rad * 180 / Math.PI;
 }
 
+/// Convert degrees to radians.
+function deg_to_rad(deg) {
+    return deg * Math.PI / 180;
+}
+
 /// A class for conveniently generating and manipulating SVG paths.
 class Path {
     constructor() {
@@ -169,4 +174,66 @@ class Path {
 
 function clamp(min, x, max) {
     return Math.max(min, Math.min(x, max));
+}
+
+// `h` ranges from `0` to `360`.
+// `s` ranges from `0` to `1`.
+// `l` ranges from `0` to `1`.
+function hsl_to_rgb(h, s, l) {
+    // Algorithm source: https://en.wikipedia.org/wiki/HSL_and_HSV#HSL_to_RGB_alternative.
+    const a = s * Math.min(l, 1 - l);
+    const f = (n) => {
+        const k = (n + h / 30) % 12;
+        return l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+    }
+    return [f(0) * 255, f(8) * 255, f(4) * 255];
+}
+
+function arrays_equal(array1, array2) {
+    if (array1.length !== array2.length) {
+        return false;
+    }
+
+    for (let i = 0; i < array1.length; ++i) {
+        if (array1[i] !== array2[i]) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+// A type with custom JSON encoding.
+class Encodable {
+    eq(/* other */) {
+        console.error("`eq` must be implemented for each subclass.");
+    }
+}
+
+class Colour extends Encodable {
+    constructor(h, s, l, a) {
+        super();
+        [this.h, this.s, this.l, this.a] = [h, s, l, a];
+    }
+
+    static black() {
+        return new Colour(0, 0, 0, 1);
+    }
+
+    hsla() {
+        return [this.h, this.s, this.l, this.a];
+    }
+
+    toJSON() {
+        return this.hsla();
+    }
+
+    eq(other) {
+        return this.h === other.h && this.s === other.s && this.l === other.l && this.a === other.a
+            || this.l === 0 && other.l === 0 || this.l === 100 && other.l === 100;
+    }
+
+    is_not_black() {
+        return this.l > 0;
+    }
 }

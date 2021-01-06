@@ -225,6 +225,29 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
             };
         }
 
+        // Returns the LaTeX code corresponding to a HSL colour.
+        const latex_colour = (colour) => {
+            // Alpha is currently not supported.
+            const [h, s, l, /* a */] = colour.hsla();
+            const [r, g, b] = hsl_to_rgb(h, s / 100, l / 100).map((x) => Math.round(x));
+            let colour_code = `rgb,255:red,${r};green,${g};blue,${b}`;
+            switch (`${r}, ${g}, ${b}`) {
+                case "255, 255, 255":
+                    colour_code = "white";
+                    break;
+                case "255, 0, 0":
+                    colour_code = "red";
+                    break;
+                case "0, 255, 0":
+                    colour_code = "green";
+                    break;
+                case "0, 0, 255":
+                    colour_code = "blue";
+                    break;
+            }
+            return `{${colour_code}}`;
+        };
+
         // We handle the export in two stages: vertices and edges. These are fundamentally handled
         // differently in tikz-cd, so it makes sense to separate them in this way. We have a bit of
         // flexibility in the format in which we output (e.g. edges relative to nodes, or with
@@ -258,13 +281,17 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                 output += ` ${"\\\\\n".repeat(y - prev.y)}`;
             }
             // This variable is really unnecessary, but it allows us to remove
-            //  a leading space on a line, which makes things prettier.
+            // a leading space on a line, which makes things prettier.
             let first_in_row = true;
             for (const [x, vertex] of Array.from(row).sort(([x1,], [x2,]) => x1 - x2)) {
                 if (x - prev.x > 0) {
                     output += `${!first_in_row ? " " : ""}${"&".repeat(x - prev.x)} `;
                 }
-                output += `{${vertex.label}}`;
+                if (vertex.label_colour.is_not_black()) {
+                    output += `\\textcolor${latex_colour(vertex.label_colour)}{${vertex.label}}`;
+                } else {
+                    output += `{${vertex.label}}`;
+                }
                 prev.x = x;
                 first_in_row = false;
             }
@@ -357,6 +384,15 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                 if (edge.options.offset !== 0) {
                     const side = edge.options.offset > 0 ? "right" : "left";
                     parameters.push(`shift ${side}=${Math.abs(edge.options.offset)}`);
+                }
+
+                // The arrow colour. This will also set the text colour, but we override that below.
+                if (edge.options.colour.is_not_black()) {
+                    parameters.push(`color=${latex_colour(edge.options.colour)}`);
+                }
+                // The label colour.
+                if (!edge.options.colour.eq(edge.label_colour)) {
+                    label_parameters.push(`color=${latex_colour(edge.label_colour)}`);
                 }
 
                 // For curves and shortening, we need to try to convert proportional measurements
@@ -623,9 +659,16 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
     //   change.
     // - `|vertices|` is the length of the array `vertices`.
     // - `vertices` is an array of vertices of the form:
-    //      `[x: integer, y: integer, label: string]`
+    //      `[x: integer, y: integer, label: string, label_colour: [h, s, l, a]]`
+    //      + `label` is optional (if not present, it will default to `""`), though it must be
+    //         present if any later option is.
+    //      + `label_colour` is optional (if not present, it will default to `[0, 0, 0, 1]`).
+    //          + `h` is an integer from `0` to `360`
+    //          + `s` is an integer from `0` to `100`
+    //          + `l` is an integer from `0` to `100`
+    //          + `a` is a floating-point number from `0` to `1`
     // - `edges` is an array of edges of the form:
-    //      `[source: index, target: index, label: string, alignment, options]`
+    //      `[source: index, target: index, label: string, alignment, options, label_colour]`
     //      + (label) `alignment` is an enum comprising the following options:
     //          * `0`: left
     //          * `1`: centre
@@ -637,6 +680,7 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
     //      + `options` is an object containing the delta of the options from the defaults.
     //         This is the only parameter that is not encoded simply as an array, as the
     //         most likely parameter to be changed in the future.
+    //      + `label_colour` is stored in the same manner as for vertices.
     //
     // Notes:
     // - An `index` is an integer indexing into the array `[...vertices, ...edges]`.
@@ -665,20 +709,25 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
             offset = offset.min(vertex.position);
         }
         for (const vertex of quiver.cells[0]) {
-            const { label } = vertex;
+            const { label, label_colour } = vertex;
             indices.set(vertex, cells.length);
             const position = vertex.position.sub(offset).toArray();
             const cell = [...position];
-            // In the name of efficiency, we omit any parameter that is not necessary.
+            // In the name of efficiency, we omit any parameter that is not necessary, and for which
+            // no later parameter is necessary.
             if (label !== "") {
                 cell.push(label);
+            }
+            if (label !== "" && label_colour.is_not_black()) {
+                // Even if the colour is not black, it's irrelevant if there is no label.
+                cell.push(label_colour.hsla());
             }
             cells.push(cell);
         }
 
         for (let level = 1; level < quiver.cells.length; ++level) {
             for (const edge of quiver.cells[level]) {
-                const { label, options: { label_alignment, ...options } } = edge;
+                const { label, label_colour, options: { label_alignment, ...options } } = edge;
                 const [source, target] = [indices.get(edge.source), indices.get(edge.target)];
                 indices.set(edge, cells.length);
                 const cell = [source, target];
@@ -692,6 +741,11 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
                 // of this situation.
                 const end = [];
 
+                if (label !== "" && label_colour.is_not_black()) {
+                    // Even if the colour is not black, it's irrelevant if there is no label.
+                    end.push(label_colour.hsla());
+                }
+
                 // We compute a delta of the edge options compared
                 // to the default, so we encode a minimum of data.
                 const default_options = Edge.default_options({ level });
@@ -701,12 +755,16 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
                     const delta = {};
                     for (const [key, value] of Object.entries(object)) {
                         const default_value = base[key];
-                        if (typeof default_value === "object" && typeof value === "object") {
+                        if (default_value instanceof Encodable && value instanceof Encodable) {
+                            if (!default_value.eq(value)) {
+                                delta[key] = value;
+                            }
+                        } else if (typeof default_value === "object" && typeof value === "object") {
                             const subdelta = probe(value, default_value);
                             if (Object.keys(subdelta).length > 0) {
                                 delta[key] = subdelta;
                             }
-                        } else if (base[key] !== value) {
+                        } else if (default_value !== value) {
                             delta[key] = value;
                         }
                     }
@@ -714,7 +772,7 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
                 };
 
                 const delta = probe(options, default_options);
-                if (Object.keys(delta).length > 0) {
+                if (end.length > 0 || Object.keys(delta).length > 0) {
                     end.push(delta);
                 }
 
@@ -725,7 +783,7 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
                 };
 
                 const variant = { left: 0, centre: 1, right: 2, over: 3 }[label_alignment];
-                // It's only necessary to encode the label alignment is the label is not blank.
+                // It's only necessary to encode the label alignment if the label is not blank.
                 push_if_necessary(variant, 0, label !== "");
                 push_if_necessary(label, "");
 
@@ -771,20 +829,36 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
         const assert_kind = (object, kind) => {
             switch (kind) {
                 case "array":
-                    assert(Array.isArray(object), `expected array`);
+                    assert(Array.isArray(object), "expected array");
                     break;
                 case "integer":
                 case "natural":
-                    assert(Number.isInteger(object), `expected integer`);
+                    assert(Number.isInteger(object), "expected integer");
                     if (kind === "natural") {
-                        assert(object >= 0, `expected non-negative integer`);
+                        assert(object >= 0, "expected non-negative integer");
                     }
                     break;
+                case "float":
+                    assert(typeof object === "number", "expected floating-point number");
+                    break;
                 case "string":
-                    assert(typeof object === "string", `expected string`);
+                    assert(typeof object === "string", "expected string");
                     break;
                 case "object":
-                    assert(typeof object === "object", `expected object`);
+                    assert(typeof object === "object", "expected object");
+                    break;
+                case "colour":
+                    assert_kind(object, "array");
+                    assert(object.length === 4, "invalid colour format");
+                    const [h, s, l, a] = object;
+                    assert_kind(h, "natural");
+                    assert(h <= 360, "invalid hue");
+                    assert_kind(s, "natural");
+                    assert(s <= 100, "invalid saturation");
+                    assert_kind(l, "natural");
+                    assert(l <= 100, "invalid lightness");
+                    assert_kind(a, "float");
+                    assert(a >= 0 && a <= 1, "invalid alpha");
                     break;
                 default:
                     throw new Error(`unknown parameter kind \`${kind}\``);
@@ -819,20 +893,28 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
                 if (indices.length < vertices) {
                     // This cell is a vertex.
 
-                    assert(cell.length >= 2 && cell.length <= 3, "invalid vertex format");
-                    const [x, y, label = ""] = cell;
+                    assert(cell.length >= 2 && cell.length <= 4, "invalid vertex format");
+                    const [x, y, label = "", label_colour = Colour.black().hsla()] = cell;
                     assert_kind(x, "natural");
                     assert_kind(y, "natural");
                     assert_kind(label, "string");
+                    assert_kind(label_colour, "colour");
 
-                    const vertex = new Vertex(ui, label, new Position(x, y));
+                    const vertex = new Vertex(
+                        ui,
+                        label,
+                        new Position(x, y),
+                        new Colour(...label_colour),
+                    );
                     indices.push(vertex);
                 } else {
                     // This cell is an edge.
 
-                    assert(cell.length >= 2 && cell.length <= 5, "invalid edge format");
-                    const [source, target, label = "", alignment = 0, options = {}]
-                        = cell;
+                    assert(cell.length >= 2 && cell.length <= 6, "invalid edge format");
+                    const [
+                        source, target, label = "", alignment = 0, options = {},
+                        label_colour = Colour.black().hsla()
+                    ] = cell;
                     for (const [endpoint, name] of [[source, "source"], [target, "target"]]) {
                         assert_kind(endpoint, "natural");
                         assert(endpoint < indices.length, `invalid ${name} index`);
@@ -841,6 +923,7 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
                     assert_kind(alignment, "natural");
                     assert(alignment <= 3, "invalid label alignment");
                     assert_kind(options, "object");
+                    assert_kind(label_colour, "colour");
 
                     // We don't restrict the keys on `options`, because it is likely that `options`
                     // will be extended in the future, and this permits a limited form of backwards
@@ -875,6 +958,11 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
                             shorten.target = options.shorten.target;
                         }
                         assert(shorten.source + shorten.target <= 100, "invalid shorten");
+                    }
+                    if (options.hasOwnProperty("colour")) {
+                        assert_kind(options.colour, "colour");
+                        // Colour is encoded as an array, so we have to convert it to a `Colour`.
+                        options.colour = new Colour(...options.colour);
                     }
 
                     // In previous versions of quiver, there was a single `length` parameter, rather
@@ -911,6 +999,7 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
                             label_alignment: ["left", "centre", "right", "over"][alignment],
                             ...options,
                         }, style),
+                        new Colour(...label_colour),
                     );
                     indices.push(edge);
                 }
