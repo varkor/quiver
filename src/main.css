@@ -517,6 +517,10 @@ being. */
     border-radius: 4px;
 }
 
+.command .label-input-container .colour-indicator {
+    display: none;
+}
+
 .panel input[type="text"] {
     padding: 2px 4px;
 
