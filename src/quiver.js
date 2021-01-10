@@ -307,13 +307,13 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                 const parameters = [];
                 const label_parameters = [];
                 let align = "";
-                const nonempty_label = edge.label.trim();
+                const nonempty_label = edge.label.trim() !== "";
 
                 // We only need to give edges names if they're depended on by another edge.
                 if (quiver.dependencies_of(edge).size > 0) {
                     label_parameters.push(`name=${index}`);
                     names.set(edge, index++);
-                    // tikz-cd has a bug where parameters affect the edge style even the label
+                    // tikz-cd has a bug where parameters affect the edge style even when the label
                     // is empty, so we only emit parameters when the label is nonempty.
                     if (nonempty_label) {
                         // In this case, because we have a parameter list, we have to also change
@@ -364,13 +364,26 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                     parameters.push(`shift ${side}=${Math.abs(edge.options.offset)}`);
                 }
 
-                // The arrow colour. This will also set the text colour, but we override that below.
-                if (edge.options.colour.is_not_black()) {
-                    parameters.push(`color=${edge.options.colour.latex(definitions.colours)}`);
-                }
-                // The label colour.
-                if (!edge.options.colour.eq(edge.label_colour)) {
-                    parameters.push(`text=${edge.label_colour.latex(definitions.colours)}`);
+                // This is the simplest case, because we can set a single attribute for both the
+                // label and edge colours.
+                if (edge.options.colour.eq(edge.label_colour) && edge.label_colour.is_not_black()) {
+                    parameters.push(`color=${edge.label_colour.latex(definitions.colours)}`);
+                } else {
+                    // The edge colour. An arrow is drawn only for the `arrow` style, so we don't
+                    // need to emit `draw` in another case.
+                    if (edge.options.colour.is_not_black() && edge.options.style.name === "arrow") {
+                        parameters.push(`draw=${edge.options.colour.latex(definitions.colours)}`);
+                    }
+                    // The label colour.
+                    if (nonempty_label && edge.label_colour.is_not_black()) {
+                        parameters.push(`text=${edge.label_colour.latex(definitions.colours)}`);
+                    }
+                    // The colour for non-`arrow` edges, which is drawn using a label.
+                    if (edge.options.style.name !== "arrow") {
+                        label_parameters.push(`text=${
+                            edge.options.colour.latex(definitions.colours)
+                        }`);
+                    }
                 }
 
                 // For curves and shortening, we need to try to convert proportional measurements
@@ -419,10 +432,10 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                 }
 
                 let style = "";
-                let label = nonempty_label !== "" ? `"{${edge.label}}"${align}` : "";
+                let label = nonempty_label ? `"{${edge.label}}"${align}` : "";
                 // If we eventually support multiple labels natively, we can use an array of labels,
-                // but for now it is simpler to special-cased barred arrows.
-                let barred = false;
+                // but for now it is simpler to special-case barred arrows.
+                let bar = "";
 
                 // Edge styles.
                 switch (edge.options.style.name) {
@@ -458,7 +471,11 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                                 break;
 
                             case "barred":
-                                barred = true;
+                                bar = `"\\shortmid"{marking${
+                                    edge.options.colour.is_not_black() ?
+                                        `, text=${edge.options.colour.latex(definitions.colours)}`
+                                        : ""
+                                }}, `;
                                 break;
 
                             case "none":
@@ -579,7 +596,7 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
 
                         // We allow these sorts of edges to have labels attached,
                         // even though it's a little unusual.
-                        if (edge.label.trim() !== "") {
+                        if (nonempty_label) {
                             let anchor = "";
                             switch (edge.options.label_alignment) {
                                 case "left":
@@ -605,7 +622,7 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                     (label !== "" || label_parameters.length > 0 ? `${label || "\"\""}${
                         label_parameters.length > 0 ? `{${label_parameters.join(", ")}}` : ""
                     }, ` : "") +
-                    (barred ? `"\\shortmid" marking, ` : "") +
+                    bar +
                     `from=${cell_reference(edge.source)}, ` +
                     `to=${cell_reference(edge.target)}` +
                     (parameters.length > 0 ? `, ${parameters.join(", ")}` : "") +
