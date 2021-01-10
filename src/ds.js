@@ -295,6 +295,10 @@ class Colour extends Encodable {
         }
     }
 
+    toString() {
+        return `${this.h},${this.s},${this.l},${this.a}`;
+    }
+
     css() {
         return `hsla(${this.h}, ${this.s}%, ${this.l}%, ${this.a})`;
     }
