@@ -5580,14 +5580,14 @@ class ColourPicker {
             name: "Preset",
             colours: [
                 Colour.black(),
-                new Colour(0, 100, 50),
-                new Colour(30, 100, 50),
-                new Colour(60, 100, 50),
-                new Colour(120, 100, 50),
-                new Colour(180, 100, 50),
-                new Colour(240, 100, 50),
-                new Colour(270, 100, 50),
-                new Colour(300, 100, 50),
+                new Colour(0, 60, 60),
+                new Colour(30, 60, 60),
+                new Colour(60, 60, 60),
+                new Colour(120, 60, 60),
+                new Colour(180, 60, 60),
+                new Colour(240, 60, 60),
+                new Colour(270, 60, 60),
+                new Colour(300, 60, 60),
                 new Colour(0, 0, 100)
             ]
         }, {
