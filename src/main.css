@@ -999,6 +999,7 @@ user has already pressed semicolon, placing us in command mode. */
     right: calc(50% - 20%);
 }
 
+/* The colour panel position when selecting a colour for an edge. */
 .colour-panel.target-edge {
     top: 50%;
     right: calc(16px * 20);
@@ -1052,11 +1053,22 @@ user has already pressed semicolon, placing us in command mode. */
     margin: 8px 0;
 }
 
+.palette label {
+    display: block;
+    margin: 4px 0;
+}
+
+.palette label .empty {
+    margin-left: 4px;
+
+	opacity: 0.6;
+}
+
 .palette .colour {
     display: inline-block;
     vertical-align: middle;
     width: 20px; height: 20px;
-    margin: 0 2px;
+    margin: 2px 2px;
 
     border: var(--ui-border) solid 1px;
     border-radius: 2px;

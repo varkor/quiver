@@ -5490,18 +5490,31 @@ class ColourPicker {
 
         // The colour palette.
         const palette = new DOM.Element("div", { class: "palette" }).add_to(wrapper);
+
+        // Add each of the palette colour groups.
         const groups = [{
-            name: "Preset colours",
+            name: "Preset",
             colours: [
                 Colour.black(),
                 new Colour(0, 100, 50, 1),
+                new Colour(30, 100, 50, 1),
+                new Colour(60, 100, 50, 1),
                 new Colour(120, 100, 50, 1),
+                new Colour(180, 100, 50, 1),
                 new Colour(240, 100, 50, 1),
+                new Colour(270, 100, 50, 1),
+                new Colour(300, 100, 50, 1),
                 new Colour(0, 0, 100, 1)
-            ],
+            ]
+        }, {
+            name: "LaTeX",
+            colours: [],
         }];
         for (const { name, colours } of groups) {
             const label = new DOM.Element("label").add(`${name}:`).add_to(palette);
+            if (colours.length === 0) {
+                label.add(new DOM.Element("span", { class: "empty" }).add("(None)"));
+            }
             for (const colour of colours) {
                 new DOM.Element("div", { class: "colour", title: colour.name }, {
                     background: ColourPicker.colour_css(colour),
