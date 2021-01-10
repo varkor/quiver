@@ -209,7 +209,7 @@ class Colour extends Encodable {
     }
 
     /// Returns a standard colour name associated to the `[h, s, l, a]` value, or `null` if none
-    /// exists.
+    /// exists. Currently, this is only used to associate tooltips to colours swatches in the UI.
     static colour_name(hsla) {
         const [h, s, l, a] = hsla;
         if (a === 0) {
@@ -221,8 +221,10 @@ class Colour extends Encodable {
         if (a === 1 && l === 100) {
             return "white";
         }
-        // Colours with (*) next to them do not match the CSS colour name.
+
         switch (`${h}, ${s}, ${l}, ${a}`) {
+            // Most of the following colours match the CSS colour names. Those that do not have (*)
+            // next to them.
             case "0, 100, 50, 1":
                 return "red";
             case "30, 100, 50, 1":
@@ -239,6 +241,23 @@ class Colour extends Encodable {
                 return "purple";
             case "300, 100, 50, 1":
                 return "magenta";
+            // The following do not match CSS colour names.
+            case "0, 60, 60, 1":
+                return "red chalk";
+            case "30, 60, 60, 1":
+                return "orange chalk";
+            case "60, 60, 60, 1":
+                return "yellow chalk";
+            case "120, 60, 60, 1":
+                return "green chalk";
+            case "180, 60, 60, 1":
+                return "aqua chalk";
+            case "240, 60, 60, 1":
+                return "blue chalk";
+            case "270, 60, 60, 1":
+                return "purple chalk";
+            case "300, 60, 60, 1":
+                return "magenta chalk";
         }
         return null;
     }
