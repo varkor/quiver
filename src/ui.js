@@ -655,7 +655,7 @@ class UI {
         // The label colour picker.
         const shortcut = { key: "Y" };
         const action = () => {
-            this.colour_picker.open_or_close(ColourPicker.TARGET.Label);
+            this.colour_picker.open_or_close(this, ColourPicker.TARGET.Label);
             this.colour_picker.set_colour(this, this.panel.label_colour);
         };
         const colour_indicator = new DOM.Element("div", { class: "colour-indicator" })
@@ -3111,22 +3111,25 @@ class History {
     }
 
     /// Adds a new history event, or collapses it into the previous event if the two match.
-    add_or_modify_previous(ui, collapse, kind, value, cells) {
+    add_or_modify_previous(ui, collapse, new_actions) {
         const actions = this.get_collapsible_actions(collapse);
         if (actions !== null) {
             // If the previous history event was to modify the property `kind`, then we're just
             // going to modify that event rather than add a new one.
             let unchanged = true;
-            for (const action of actions) {
-                // This ought always to be true.
-                if (action.kind === kind) {
-                    // Modify the `to` field of each property modification.
-                    action[`${kind}s`].forEach((modification) => {
-                        modification.to = value;
-                        if (modification.to !== modification.from) {
-                            unchanged = false;
-                        }
-                    });
+            outer: for (const action of actions) {
+                // We require that each `kind` in `new_actions` is unique.
+                for (const new_action of new_actions) {
+                    if (action.kind === new_action.kind) {
+                        // Modify the `to` field of each property modification.
+                        action[`${new_action.kind}s`].forEach((modification) => {
+                            modification.to = new_action.value;
+                            if (modification.to !== modification.from) {
+                                unchanged = false;
+                            }
+                        });
+                        continue outer;
+                    }
                 }
             }
             // Invoke the new property changes immediately.
@@ -3137,10 +3140,10 @@ class History {
         } else {
             // If this is the start of our property modification, we need to add a new history
             // event.
-            this.add_collapsible(ui, collapse, [{
-                kind,
-                [`${kind}s`]: cells,
-            }], true);
+            this.add_collapsible(ui, collapse, new_actions.map((new_action) => ({
+                kind: new_action.kind,
+                [`${new_action.kind}s`]: new_action.cells,
+            })), true);
         }
     }
 
@@ -3516,13 +3519,15 @@ class Panel {
                 ui.history.add_or_modify_previous(
                     ui,
                     ["label", ui.selection],
-                    "label",
-                    this.label_input.element.value,
-                    Array.from(ui.selection).map((cell) => ({
-                        cell,
-                        from: cell.label,
-                        to: this.label_input.element.value,
-                    })),
+                    [{
+                        kind: "label",
+                        value: this.label_input.element.value,
+                        cells: Array.from(ui.selection).map((cell) => ({
+                            cell,
+                            from: cell.label,
+                            to: this.label_input.element.value,
+                        })),
+                    }],
                 );
             } else {
                 // We are jumping to a cell with the entered ID.
@@ -3701,19 +3706,21 @@ class Panel {
                 ui.history.add_or_modify_previous(
                     ui,
                     [property, ui.selection],
-                    property,
-                    value,
-                    Array.from(ui.selection)
-                        .filter(cell => cell.is_edge())
-                        .map((edge) => ({
-                            edge,
-                            from: property !== "length" ? edge.options[property]
-                                : [
-                                    edge.options.shorten.source,
-                                    100 - edge.options.shorten.target
-                                ],
-                            to: value,
-                        })),
+                    [{
+                        kind: property,
+                        value,
+                        cells: Array.from(ui.selection)
+                            .filter(cell => cell.is_edge())
+                            .map((edge) => ({
+                                edge,
+                                from: property !== "length" ? edge.options[property]
+                                    : [
+                                        edge.options.shorten.source,
+                                        100 - edge.options.shorten.target
+                                    ],
+                                to: value,
+                            })),
+                    }],
                 );
             });
 
@@ -4116,7 +4123,7 @@ class Panel {
         // The colour indicator. Users can click on the indicator to open the colour picker.
         const shortcut = { key: "U" };
         const action = () => {
-            ui.colour_picker.open_or_close(ColourPicker.TARGET.Edge);
+            ui.colour_picker.open_or_close(ui, ColourPicker.TARGET.Edge);
             ui.colour_picker.set_colour(ui, this.colour);
         };
         const colour_indicator = new DOM.Element("div", { class: "colour-indicator" })
@@ -5530,6 +5537,25 @@ class ColourPicker {
         this.sliders.set("lightness", slider);
         slider.label.add_to(wrapper);
 
+        // The checkbox allowing the label and edge colours to remain in sync.
+        new DOM.Element("label")
+            .add("Sync label/edge colours:")
+            .add(new DOM.Element("input", { type: "checkbox", checked: "" })
+                .listen("change", (_, element) => {
+                    if (element.checked) {
+                        // If there are any selected edges whose label colour does not match their
+                        // edge colour, make them the same.
+                        if (Array.from(ui.selection).some((cell) => {
+                            return cell.is_edge() && !cell.label_colour.eq(cell.options.colour);
+                        })) {
+                            // This isn't idempotent, because now the checkbox is checked and so
+                            // both labels and edges will be updated.
+                            this.set_selection_colour(ui, this.colour);
+                        }
+                    }
+                })
+            ).add_to(wrapper);
+
         // The colour palette.
         const palette = new DOM.Element("div", { class: "palette" }).add_to(wrapper);
 
@@ -5562,7 +5588,7 @@ class ColourPicker {
 
     /// Open the colour picker with a specified `target` if the colour picker is hidden; change it
     /// its target if it does not match `target` but is currently open; or close it otherwise.
-    open_or_close(target) {
+    open_or_close(ui, target) {
         if (!this.element.class_list.contains("hidden") && this.target === target) {
             this.close();
             return;
@@ -5579,6 +5605,12 @@ class ColourPicker {
                 this.element.class_list.add("target-edge");
                 break;
         }
+        // If every edge colour matches the label colour, we check the "Sync label/edge colours"
+        // button; otherwise, we uncheck it.
+        this.element.query_selector('input[type="checkbox"]').element.checked =
+            Array.from(ui.selection).every((cell) => {
+                return cell.is_vertex() || cell.label_colour.eq(cell.options.colour);
+            });
         this.element.class_list.remove("hidden");
         this.element.element.scrollTop = 0;
         delay(() => this.element.class_list.remove("active"));
@@ -5592,31 +5624,53 @@ class ColourPicker {
 
     /// Sets the colour of the selected labels or edges to the given colour.
     set_selection_colour(ui, colour) {
+        // Whether to sync setting label and edge colour.
+        const sync_targets = this.element.query_selector('input[type="checkbox"]').element.checked;
+
+        const label_colour_change = {
+            kind: "label_colour",
+            value: colour,
+            cells: Array.from(ui.selection).map((cell) => ({
+                cell,
+                from: cell.label_colour,
+                to: colour,
+            })),
+        };
+        const colour_change = {
+            kind: "colour",
+            value: colour,
+            cells: Array.from(ui.selection).filter(cell => cell.is_edge())
+                .map((edge) => ({
+                    edge,
+                    from: edge.options.colour,
+                    to: colour,
+                })),
+        };
+
+        let changes;
         switch (this.target) {
             case ColourPicker.TARGET.Label:
+                changes = [label_colour_change];
+                if (sync_targets) {
+                    changes.push(colour_change);
+                }
                 ui.history.add_or_modify_previous(
                     ui,
-                    ["label_colour", ui.selection],
-                    "label_colour",
-                    colour,
-                    Array.from(ui.selection).map((cell) => ({
-                        cell,
-                        from: cell.label_colour,
-                        to: colour,
-                    })),
+                    // `this.colour === colour` only when we have just clicked the checkbox to make
+                    // the label and edge colours the same.
+                    ["label_colour", ui.selection, sync_targets, this.colour === colour],
+                    changes,
                 );
                 break;
             case ColourPicker.TARGET.Edge:
+                changes = [colour_change];
+                if (sync_targets) {
+                    changes.push(label_colour_change);
+                }
                 ui.history.add_or_modify_previous(
                     ui,
-                    ["colour", ui.selection],
-                    "colour",
-                    colour,
-                    Array.from(ui.selection).filter(cell => cell.is_edge()).map((edge) => ({
-                        edge,
-                        from: edge.options.colour,
-                        to: colour,
-                    })),
+                    ["colour", ui.selection, sync_targets, this.colour === colour],
+                    changes,
                 );
                 break;
         }
