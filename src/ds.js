@@ -308,6 +308,10 @@ class Colour extends Encodable {
         if (["black", "red", "green", "blue", "white"].includes(name)) {
             latex_name = name;
         } else {
+            // We currently eagerly pick whichever LaTeX colour matches this one. This means that if
+            // there are multiple names for the same colour, we may not pick the correct one. It
+            // would be possible to correct this by saving colour names, rather than just colour
+            // values.
             for (const [name, colour] of latex_colours) {
                 if (colour.eq(this)) {
                     latex_name = name;

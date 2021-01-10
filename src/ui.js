@@ -2940,7 +2940,7 @@ class UI {
                         break;
                     case "gray":
                         if (values.length === 1 && values[0] <= 1) {
-                            colour = new Colour(0, 0, values[0] * 100);
+                            colour = new Colour(0, 0, Math.round(values[0] * 100));
                         }
                         break;
                     default:
@@ -5474,6 +5474,7 @@ class ColourPicker {
 
     initialise(ui) {
         this.element = new DOM.Element("div", { class: "colour-panel hidden" })
+            .listen("wheel", (event) => event.stopImmediatePropagation(), { passive: true })
             .listen(pointer_event("down"), (event) => event.stopPropagation());
 
         // The colour wheel.
@@ -5579,6 +5580,7 @@ class ColourPicker {
                 break;
         }
         this.element.class_list.remove("hidden");
+        this.element.element.scrollTop = 0;
         delay(() => this.element.class_list.remove("active"));
     }
 
