@@ -427,8 +427,14 @@ DOM.Multislider.Thumb = class extends DOM.Element {
 
             const slider_values = this.slider.label.query_selector(".slider-values").clear();
             this.slider.thumbs.forEach((thumb, i) => {
+                let value = `${thumb.value}`;
+                if (typeof thumb.value === "number" && !Number.isInteger(thumb.value)) {
+                    // If we're displaying a floating-point number, cap the number of decimal
+                    // places to 2.
+                    value = thumb.value.toFixed(2);
+                }
                 slider_values.add(new DOM.Element("span", { class: "slider-value" })
-                    .add(`${thumb.value}`));
+                    .add(`${value}`));
                 if (i + 1 < this.slider.thumbs.length) {
                     slider_values.add(" \u2013 ");
                 }

@@ -984,6 +984,8 @@ user has already pressed semicolon, placing us in command mode. */
     width: calc(16px * 20);
     padding: 4px 16px;
     padding-top: calc(192px + 16px * 2);
+    max-height: calc(100% - (8px + 46px + 32px) * 2 - 16px * 2);
+	overflow-y: auto;
 
     background: var(--ui-black);
     border-radius: 16px;
