@@ -982,8 +982,8 @@ user has already pressed semicolon, placing us in command mode. */
 .colour-panel {
     position: fixed;
     width: calc(16px * 20);
-    height: 256px;
     padding: 8px 16px;
+    padding-top: calc(192px + 16px * 2);
 
     background: var(--ui-black);
     border-radius: 16px;
@@ -992,7 +992,6 @@ user has already pressed semicolon, placing us in command mode. */
     color: var(--ui-text);
 
     transition: opacity 0.2s;
-    /* transition: opacity 0.2s, transform 0.2s; */
 }
 
 .colour-panel.target-label {
@@ -1041,15 +1040,32 @@ user has already pressed semicolon, placing us in command mode. */
 }
 
 .colour-panel > .wrapper {
-    position: absolute;
-    left: 16px;
-    right: 16px;
-    bottom: 12px;
+    position: relative;
 }
 
 .colour-panel div.slider {
     width: 55%;
     left: 80px;
+}
+
+.palette {
+    margin: 8px 0;
+}
+
+.palette .colour {
+    display: inline-block;
+    vertical-align: middle;
+    width: 20px; height: 20px;
+    margin: 0 2px;
+
+    border: var(--ui-border) solid 1px;
+    border-radius: 2px;
+
+	cursor: pointer;
+}
+
+.palette label .colour:first-of-type {
+    margin-left: 4px;
 }
 
 /* The toolbar */

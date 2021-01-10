@@ -211,13 +211,38 @@ class Encodable {
 }
 
 class Colour extends Encodable {
-    constructor(h, s, l, a) {
+    constructor(h, s, l, a, name = Colour.colour_name([h, s, l, a])) {
         super();
         [this.h, this.s, this.l, this.a] = [h, s, l, a];
+        this.name = name;
     }
 
     static black() {
         return new Colour(0, 0, 0, 1);
+    }
+
+    /// Returns a standard colour name associated to the `[h, s, l, a]` value, or `null` if none
+    /// exists.
+    static colour_name(hsla) {
+        const [h, s, l, a] = hsla;
+        if (a === 0) {
+            return "transparent";
+        }
+        if (a === 1 && l === 0) {
+            return "black";
+        }
+        if (a === 1 && l === 100) {
+            return "white";
+        }
+        switch (`${h}, ${s}, ${l}, ${a}`) {
+            case "0, 100, 50, 1":
+                return "red";
+            case "120, 100, 50, 1":
+                return "green";
+            case "240, 100, 50, 1":
+                return "blue";
+        }
+        return null;
     }
 
     hsla() {
@@ -228,6 +253,7 @@ class Colour extends Encodable {
         return this.hsla();
     }
 
+    /// Returns whether two colours are equal, ignoring names.
     eq(other) {
         return this.h === other.h && this.s === other.s && this.l === other.l && this.a === other.a
             || this.l === 0 && other.l === 0 || this.l === 100 && other.l === 100;
