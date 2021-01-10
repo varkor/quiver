@@ -174,12 +174,12 @@ class Quiver {
     /// Currently, the supported formats are:
     /// - "tikz-cd"
     /// - "base64"
-    export(format, settings) {
+    export(format, settings, definitions) {
         switch (format) {
             case "tikz-cd":
-                return QuiverExport.tikz_cd.export(this, settings);
+                return QuiverExport.tikz_cd.export(this, settings, definitions);
             case "base64":
-                return QuiverImportExport.base64.export(this, settings);
+                return QuiverImportExport.base64.export(this, settings, definitions);
             default:
                 throw new Error(`unknown export format \`${format}\``);
         }
@@ -199,7 +199,7 @@ class QuiverImportExport extends QuiverExport {
 }
 
 QuiverExport.tikz_cd = new class extends QuiverExport {
-    export(quiver, settings) {
+    export(quiver, settings, definitions) {
         let output = "";
 
         // Wrap tikz-cd code with `\begin{tikzcd} ... \end{tikzcd}`.
@@ -224,35 +224,6 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                 metadata: { tikz_incompatibilities: new Set() },
             };
         }
-
-        // Returns the LaTeX code corresponding to a HSL colour.
-        const latex_colour = (colour, parenthesise) => {
-            // Alpha is currently not supported.
-            const [h, s, l, /* a */] = colour.hsla();
-            const [r, g, b] = hsl_to_rgb(h, s / 100, l / 100).map((x) => Math.round(x));
-            let colour_code = `{rgb,255:red,${r};green,${g};blue,${b}}`;
-            switch (`${r}, ${g}, ${b}`) {
-                case "0, 0, 0":
-                    // This case is useful when the edge colour is not black, but the label is.
-                    colour_code = "black";
-                    break;
-                case "255, 255, 255":
-                    colour_code = "white";
-                    break;
-                case "255, 0, 0":
-                    colour_code = "red";
-                    break;
-                case "0, 255, 0":
-                    colour_code = "green";
-                    break;
-                case "0, 0, 255":
-                    colour_code = "blue";
-                    break;
-                default:
-                    return `${colour_code}`;
-            }
-            return parenthesise ? `{${colour_code}}` : colour_code;
-        };
 
         // We handle the export in two stages: vertices and edges. These are fundamentally handled
         // differently in tikz-cd, so it makes sense to separate them in this way. We have a bit of
@@ -295,7 +266,7 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                 }
                 if (vertex.label_colour.is_not_black()) {
                     output += `\\textcolor${
-                        latex_colour(vertex.label_colour, true)}{${vertex.label}}`;
+                        vertex.label_colour.latex(definitions.colours, true)}{${vertex.label}}`;
                 } else {
                     output += `{${vertex.label}}`;
                 }
@@ -395,11 +366,11 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
 
                 // The arrow colour. This will also set the text colour, but we override that below.
                 if (edge.options.colour.is_not_black()) {
-                    parameters.push(`color=${latex_colour(edge.options.colour, false)}`);
+                    parameters.push(`color=${edge.options.colour.latex(definitions.colours)}`);
                 }
                 // The label colour.
                 if (!edge.options.colour.eq(edge.label_colour)) {
-                    parameters.push(`text=${latex_colour(edge.label_colour, false)}`);
+                    parameters.push(`text=${edge.label_colour.latex(definitions.colours)}`);
                 }
 
                 // For curves and shortening, we need to try to convert proportional measurements

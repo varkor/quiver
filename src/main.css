@@ -982,7 +982,7 @@ user has already pressed semicolon, placing us in command mode. */
 .colour-panel {
     position: fixed;
     width: calc(16px * 20);
-    padding: 8px 16px;
+    padding: 4px 16px;
     padding-top: calc(192px + 16px * 2);
 
     background: var(--ui-black);
