@@ -2469,6 +2469,7 @@ class UI {
             this.positions.set(`${cell.position}`, cell);
             cell.recalculate_size(this);
         }
+        this.colour_picker.update_diagram_colours(this);
     }
 
     /// Removes a cell.
@@ -2486,6 +2487,7 @@ class UI {
             removed.element.remove();
         }
         this.update_col_row_size(...update_positions);
+        this.colour_picker.update_diagram_colours(this);
     }
 
     /// Cancel the creation of a new vertex or edge via clicking or dragging.
@@ -3177,7 +3179,10 @@ class History {
             order.reverse();
         }
 
+        // Whether to call `Panel.update` after triggering the events.
         let update_panel = false;
+        // Whether to call `ColourPicker.update_diagram_colours` after triggering the events.
+        let update_colours = false;
 
         for (const action of order) {
             let kind = action.kind;
@@ -3220,8 +3225,8 @@ class History {
                     break;
                 case "create":
                     for (const cell of action.cells) {
-                        ui.add_cell(cell);
                         ui.quiver.add(cell);
+                        ui.add_cell(cell);
                     }
                     update_panel = true;
                     break;
@@ -3246,6 +3251,7 @@ class History {
                         });
                     }
                     update_panel = true;
+                    update_colours = true;
                     break;
                 case "label_alignment":
                     for (const alignment of action.alignments) {
@@ -3335,6 +3341,7 @@ class History {
                         cells.add(colour.edge);
                     }
                     update_panel = true;
+                    update_colours = true;
                     break;
             }
             for (const cell of ui.quiver.transitive_dependencies(cells)) {
@@ -3345,6 +3352,9 @@ class History {
         if (update_panel) {
             ui.panel.update(ui);
             ui.panel.hide_if_unselected(ui);
+        }
+        if (update_colours) {
+            ui.colour_picker.update_diagram_colours(ui);
         }
         // Though we have already updated the `panel` if `update_panel`, `undo` and
         // `redo` may want to update the panel again, if they change which cells are
@@ -5583,6 +5593,9 @@ class ColourPicker {
         }, {
             name: "LaTeX",
             colours: [],
+        }, {
+            name: "Diagram",
+            colours: [],
         }];
         for (const { name, colours } of groups) {
             const group = new DOM.Element("label", {
@@ -5770,6 +5783,27 @@ class ColourPicker {
     update_latex_colours(ui) {
         const group = this.element.query_selector(`label[data-group="LaTeX"]`);
         this.set_colours_in_palette_group(ui, group, Array.from(ui.colours.values()));
+    }
+
+    /// Update the diagram colour palette group.
+    update_diagram_colours(ui) {
+        // Rather than keep track of the current colours in the diagram, which would be most
+        // efficient, but also involve a fair deal of book-keeping, we instead simply iterate
+        // through all the cells and collect their colours every time that the diagram changes (i.e.
+        // whenever a cell is added or removed, or a colour is changed). Even for large diagrams,
+        // this ought to be fast.
+        const colours = new Set();
+        for (const cell of ui.quiver.all_cells()) {
+            colours.add(`${cell.label_colour}`);
+            if (cell.is_edge()) {
+                colours.add(`${cell.options.colour}`);
+            }
+        }
+        const group = this.element.query_selector(`label[data-group="Diagram"]`);
+        this.set_colours_in_palette_group(ui, group, Array.from(colours).map((string) => {
+            const [h, s, l, a] = string.split(",");
+            return new Colour(parseInt(h), parseInt(s), parseInt(l), parseFloat(a));
+        }));
     }
 }
 
