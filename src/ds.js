@@ -176,19 +176,6 @@ function clamp(min, x, max) {
     return Math.max(min, Math.min(x, max));
 }
 
-// `h` ranges from `0` to `360`.
-// `s` ranges from `0` to `1`.
-// `l` ranges from `0` to `1`.
-function hsl_to_rgb(h, s, l) {
-    // Algorithm source: https://en.wikipedia.org/wiki/HSL_and_HSV#HSL_to_RGB_alternative.
-    const a = s * Math.min(l, 1 - l);
-    const f = (n) => {
-        const k = (n + h / 30) % 12;
-        return l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
-    }
-    return [f(0) * 255, f(8) * 255, f(4) * 255];
-}
-
 function arrays_equal(array1, array2) {
     if (array1.length !== array2.length) {
         return false;
@@ -211,14 +198,14 @@ class Encodable {
 }
 
 class Colour extends Encodable {
-    constructor(h, s, l, a, name = Colour.colour_name([h, s, l, a])) {
+    constructor(h, s, l, a = 1, name = Colour.colour_name([h, s, l, a])) {
         super();
         [this.h, this.s, this.l, this.a] = [h, s, l, a];
         this.name = name;
     }
 
     static black() {
-        return new Colour(0, 0, 0, 1);
+        return new Colour(0, 0, 0);
     }
 
     /// Returns a standard colour name associated to the `[h, s, l, a]` value, or `null` if none
@@ -260,8 +247,76 @@ class Colour extends Encodable {
         return [this.h, this.s, this.l, this.a];
     }
 
+    rgba() {
+        // Algorithm source: https://en.wikipedia.org/wiki/HSL_and_HSV#HSL_to_RGB_alternative.
+        const [h, s, l] = [this.h, this.s / 100, this.l / 100];
+        const a = s * Math.min(l, 1 - l);
+        const f = (n) => {
+            const k = (n + h / 30) % 12;
+            return l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+        }
+        return [f(0) * 255, f(8) * 255, f(4) * 255, this.a].map((x) => Math.round(x));
+    }
+
+    /// `r`, `g`, `b` are expected to take values in `0` to `255`.
+    static from_rgba(r, g, b, a = 1) {
+        // Algorithm source: https://en.wikipedia.org/wiki/HSL_and_HSV#Formal_derivation
+        [r, g, b] = [r, g, b].map((x) => x / 255);
+        const max = Math.max(r, g, b);
+        const min = Math.min(r, g, b);
+        const range = max - min;
+        let h = 0; // Default hue (if undefined).
+        if (range !== 0) {
+            switch (max) {
+                case r:
+                    h = ((g - b) / range) % 6;
+                    break;
+                case g:
+                    h = ((b - r) / range) + 2;
+                    break;
+                case b:
+                    h = ((r - g) / range) + 4;
+                    break;
+            }
+        }
+        const l = (max + min) / 2;
+        const s = l === 0 || l === 1 ? 0 : range / (1 - Math.abs(2 * l - 1));
+
+        return new Colour(...[h * 60, s * 100, l * 100].map((x) => Math.round(x)), a);
+    }
+
     toJSON() {
         return this.hsla();
+    }
+
+    css() {
+        return `hsla(${this.h}, ${this.s}%, ${this.l}%, ${this.a})`;
+    }
+
+    /// Returns the LaTeX code corresponding to a HSL colour.
+    latex(latex_colours, parenthesise = false) {
+        // If the colour has a specific name in LaTeX (e.g. because it is predefined, or has been
+        // imported), use that.
+        let latex_name = null;
+        const name = Colour.colour_name(this.hsla());
+        if (["black", "red", "green", "blue", "white"].includes(name)) {
+            latex_name = name;
+        } else {
+            for (const [name, colour] of latex_colours) {
+                if (colour.eq(this)) {
+                    latex_name = name;
+                    break;
+                }
+            }
+        }
+        if (latex_name !== null) {
+            return parenthesise ? `{${latex_name}}` : latex_name;
+        }
+
+        // Otherwise, fall back to a colour code.
+        // Alpha is currently not supported.
+        const [r, g, b, /* a */] = this.rgba();
+        return `{rgb,255:red,${r};green,${g};blue,${b}}`;
     }
 
     /// Returns whether two colours are equal, ignoring names.

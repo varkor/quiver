@@ -581,6 +581,9 @@ class UI {
         // LaTeX macro definitions.
         this.macros = new Map();
 
+        // LaTeX colour definitions.
+        this.colours = new Map();
+
         // The URL from which the macros have been fetched (if at all).
         this.macro_url = null;
 
@@ -622,6 +625,12 @@ class UI {
             this.panel.label_input.parent.class_list.add("hidden");
             this.colour_picker.close();
         });
+    }
+
+    /// Returns definitions of macros and colours that are recognised by LaTeX.
+    definitions() {
+        const { macros, colours } = this;
+        return { macros, colours };
     }
 
     initialise() {
@@ -2760,7 +2769,7 @@ class UI {
         // All arrow styles support labels, shifting, and colour.
         style.label_position = options.label_position / 100;
         style.shift = options.offset * CONSTANTS.EDGE_OFFSET_DISTANCE;
-        style.colour = ColourPicker.colour_css(options.colour);
+        style.colour = options.colour.css();
 
         switch (options.style.name) {
             case "arrow":
@@ -2879,20 +2888,27 @@ class UI {
         }
     }
 
-    /// Load macros from a string, which will be used in all LaTeX labels.
+    /// Load macros and colours from a string. Macros will be expanded in any LaTeX label, whilst
+    /// colours appear as a palette group in the colour panel.
     load_macros(definitions) {
         // Here, we ignore `{` and `}` around the command name, but later we check that
         // the brackets at least match.
         const newcommand = /^\\newcommand\{?\\([a-zA-Z]+)\}?(?:\[(\d)\])?\{(.*)\}$/;
+        // It's not clear exactly what the rules for colour names is, so we accept a sensible
+        // subset. We don't accept `cymk` for now. We don't validate values in the regex.
+        const definecolor = /^\\definecolor\{([a-zA-Z0-9\-]+)\}\{(rgb|RGB|gray)\}\{((?:\d+(?:\.\d+)?)(?:,(?:\d+(?:\.\d+)?))*)\}$/;
 
         const macros = new Map();
+        const colours = new Map();
+
         for (let line of definitions.split("\n")) {
             line = line.trim();
             if (line === "" || line.startsWith("%")) {
                 // Skip empty lines and comments.
                 continue;
             }
-            const match = line.match(newcommand);
+
+            let match = line.match(newcommand);
             // Check we either have ``{\commandname}` or `\commandname`, but not mismatched
             // brackets.
             if (match !== null && /^\\newcommand(\{\\[a-zA-Z]+\}|\\[a-zA-Z]+[^\}])/.test(line)) {
@@ -2901,16 +2917,58 @@ class UI {
                     definition,
                     arity,
                 });
-            } else {
-                console.warn(`Ignoring unrecognised macro definition: \`${line}\``);
+                continue;
             }
+
+            match = line.replace(/\s/g, "").match(definecolor);
+            if (match !== null) {
+                const [, name, model] = match;
+                const values = match[3].split(",").map((x) => parseFloat(x));
+                let colour = null;
+                switch (model) {
+                    case "rgb":
+                        if (values.length === 3 && values.every((x) => x <= 1)) {
+                            colour = Colour.from_rgba(...values.map((x) => Math.round(x * 255)));
+                        }
+                        break;
+                    case "RGB":
+                        if (values.length === 3 && values.every((x) => {
+                            return x <= 255 && Number.isInteger(x);
+                        })) {
+                            colour = Colour.from_rgba(...values);
+                        }
+                        break;
+                    case "gray":
+                        if (values.length === 1 && values[0] <= 1) {
+                            colour = new Colour(0, 0, values[0] * 100);
+                        }
+                        break;
+                    default:
+                        console.warn(`Encountered unrecognised colour model: \`${model}\``);
+                        continue;
+                }
+                if (colour !== null) {
+                    colour.name = name;
+                    colours.set(name, colour);
+                } else {
+                    console.warn(`Ignoring invalid colour specification for \`${name}\``);
+                }
+                continue;
+            }
+
+            // We should have hit a `continue` by now, unless we couldn't parse the line.
+            console.warn(`Ignoring unrecognised definition: \`${line}\``);
         }
         this.macros = macros;
+        this.colours = colours;
 
         // Rerender all the existing labels with the new macro definitions.
         for (const cell of this.quiver.all_cells()) {
             this.panel.render_tex(this, cell);
         }
+
+        // Update the LaTeX colour palette group.
+        this.colour_picker.update_latex_colours(this);
     }
 
     /// Load macros from a URL.
@@ -2967,14 +3025,18 @@ class UI {
             };
             attempt_to_fetch_macros(url);
         } else {
-            // If the URL is empty, we simply reset all macro definitions (as if the user had never
-            // loaded any macros).
+            // If the URL is empty, we simply reset all macro and colour definitions (as if the user
+            // had never loaded any macros or colours).
             this.macros = new Map();
+            this.colours = new Map();
 
             // Rerender all the existing labels without the new macro definitions.
             for (const cell of this.quiver.all_cells()) {
                 this.panel.render_tex(this, cell);
             }
+
+            // Update the LaTeX colour palette group.
+            this.colour_picker.update_latex_colours(this);
         }
     }
 }
@@ -3171,7 +3233,7 @@ class History {
                     for (const label_colour of action.label_colours) {
                         label_colour.cell.label_colour = label_colour[to];
                         label_colour.cell.element.query_selector(".label").set_style({
-                            color: ColourPicker.colour_css(label_colour.cell.label_colour),
+                            color: label_colour.cell.label_colour.css(),
                         });
                     }
                     update_panel = true;
@@ -4077,7 +4139,11 @@ class Panel {
                 ui.switch_mode(new UIMode.Modal());
 
                 // Get the encoding of the diagram. The output may be modified by the caller.
-                const { data, metadata } = modify(ui.quiver.export(format, ui.settings));
+                const { data, metadata } = modify(ui.quiver.export(
+                    format,
+                    ui.settings,
+                    ui.definitions(),
+                ));
 
                 let export_pane, tip, warning, list, options, content;
 
@@ -4157,7 +4223,11 @@ class Panel {
                         ui.settings.set("export.centre_diagram", checkbox.element.checked);
                         // Update the output. We ignore `metadata`, which currently does not change
                         // in response to the settings.
-                        const { data } = modify(ui.quiver.export(format, ui.settings));
+                        const { data } = modify(ui.quiver.export(
+                            format,
+                            ui.settings,
+                            ui.definitions(),
+                        ));
                         update_output(data);
                     });
                     // Prevent the highlighted output from being deselected when changing a setting.
@@ -4239,8 +4309,11 @@ class Panel {
                         new DOM.Element("input", {
                             type: "text",
                             placeholder: "Paste URL here",
-                        }).listen("keydown", (event, input) => {
+                        }).listen("wheel", (event) => {
+                            event.stopImmediatePropagation();
+                        }, { passive: true }).listen("keydown", (event, input) => {
                             if (event.key === "Enter") {
+                                event.stopPropagation();
                                 ui.load_macros_from_url(input.value);
                                 input.blur();
                             }
@@ -4515,7 +4588,7 @@ class Panel {
             if (!selection_contains_edge) {
                 this.label_input.element.value = "";
                 this.element.query_selector(".colour-indicator").set_style({
-                    background: ColourPicker.colour_css(Colour.black()),
+                    background: Colour.black().css(),
                 });
                 for (const [property, slider] of this.sliders) {
                     let values = [0];
@@ -4537,7 +4610,7 @@ class Panel {
                 if (ui.selection.size === 0) {
                     ui.element.query_selector(".label-input-container .colour-indicator")
                         .set_style({
-                            background: ColourPicker.colour_css(Colour.black()),
+                            background: Colour.black().css(),
                         });
                     ui.colour_picker.close();
                 }
@@ -4676,7 +4749,7 @@ class Panel {
                         } else {
                             ui.element.query_selector(".label-input-container .colour-indicator")
                                 .set_style({
-                                    background: ColourPicker.colour_css(this.label_colour),
+                                    background: this.label_colour.css(),
                                 });
                         }
                         break;
@@ -4712,7 +4785,7 @@ class Panel {
                             ui.colour_picker.set_colour(ui, this.colour);
                         } else {
                             this.element.query_selector(".colour-indicator").set_style({
-                                background: ColourPicker.colour_css(this.colour),
+                                background: this.colour.css(),
                             });
                         }
                         break;
@@ -5169,7 +5242,7 @@ class Toolbar {
             [{ key: "S", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always }],
             () => {
                 // For now, we do not include macro information in the URL.
-                const { data } = ui.quiver.export("base64");
+                const { data } = ui.quiver.export("base64", ui.settings, ui.definitions());
                 // `data` is the new URL.
                 history.pushState({}, "", data);
             },
@@ -5410,38 +5483,6 @@ class ColourPicker {
         // The colour picker, which the user can move around by clicking on the colour wheel.
         new DOM.Element("div", { class: "colour-picker" }).add_to(this.element);
 
-        // Update the colours of the selected cells.
-        const set_selection_colour = (colour) => {
-            switch (this.target) {
-                case ColourPicker.TARGET.Label:
-                    ui.history.add_or_modify_previous(
-                        ui,
-                        ["label_colour", ui.selection],
-                        "label_colour",
-                        colour,
-                        Array.from(ui.selection).map((cell) => ({
-                            cell,
-                            from: cell.label_colour,
-                            to: colour,
-                        })),
-                    );
-                    break;
-                case ColourPicker.TARGET.Edge:
-                    ui.history.add_or_modify_previous(
-                        ui,
-                        ["colour", ui.selection],
-                        "colour",
-                        colour,
-                        Array.from(ui.selection).filter(cell => cell.is_edge()).map((edge) => ({
-                            edge,
-                            from: edge.options.colour,
-                            to: colour,
-                        })),
-                    );
-                    break;
-            }
-        };
-
         // Update the position of the colour picker based on a pointer `event`.
         const update_colour_picker = (event) => {
             const rect = canvas.bounding_rect();
@@ -5450,7 +5491,7 @@ class ColourPicker {
             const angle = Math.atan2(y - size / 2, x - size / 2) + Math.PI;
             let [h, s, l, a] = this.colour.hsla();
             [h, s] = [Math.round(rad_to_deg(angle)), Math.round(2 * radius / size * 100)];
-            set_selection_colour(new Colour(h, s, l, a));
+            this.set_selection_colour(ui, new Colour(h, s, l, a));
         };
 
         let is_colour_picking = false;
@@ -5482,7 +5523,7 @@ class ColourPicker {
         const slider = new DOM.Multislider("Lightness", 0, 100, 1).listen("input", () => {
             const [h, s, /* l */, a] = this.colour.hsla();
             this.element.class_list.add("active");
-            set_selection_colour(new Colour(h, s, parseInt(slider.values()), a));
+            this.set_selection_colour(ui, new Colour(h, s, parseInt(slider.values()), a));
             delay(() => this.element.class_list.remove("active"));
         });
         this.sliders.set("lightness", slider);
@@ -5496,32 +5537,25 @@ class ColourPicker {
             name: "Preset",
             colours: [
                 Colour.black(),
-                new Colour(0, 100, 50, 1),
-                new Colour(30, 100, 50, 1),
-                new Colour(60, 100, 50, 1),
-                new Colour(120, 100, 50, 1),
-                new Colour(180, 100, 50, 1),
-                new Colour(240, 100, 50, 1),
-                new Colour(270, 100, 50, 1),
-                new Colour(300, 100, 50, 1),
-                new Colour(0, 0, 100, 1)
+                new Colour(0, 100, 50),
+                new Colour(30, 100, 50),
+                new Colour(60, 100, 50),
+                new Colour(120, 100, 50),
+                new Colour(180, 100, 50),
+                new Colour(240, 100, 50),
+                new Colour(270, 100, 50),
+                new Colour(300, 100, 50),
+                new Colour(0, 0, 100)
             ]
         }, {
             name: "LaTeX",
             colours: [],
         }];
         for (const { name, colours } of groups) {
-            const label = new DOM.Element("label").add(`${name}:`).add_to(palette);
-            if (colours.length === 0) {
-                label.add(new DOM.Element("span", { class: "empty" }).add("(None)"));
-            }
-            for (const colour of colours) {
-                new DOM.Element("div", { class: "colour", title: colour.name }, {
-                    background: ColourPicker.colour_css(colour),
-                }).listen("click", () => {
-                    set_selection_colour(colour);
-                }).add_to(label);
-            }
+            const group = new DOM.Element("label", {
+                "data-group": name,
+            }).add(`${name}:`).add_to(palette);
+            this.set_colours_in_palette_group(ui, group, colours);
         }
     }
 
@@ -5554,7 +5588,39 @@ class ColourPicker {
         this.target = null;
     }
 
-    /// Set the colour of the colour picker to a given `[hue, saturation, lightness, alpha]`.
+    /// Sets the colour of the selected labels or edges to the given colour.
+    set_selection_colour(ui, colour) {
+        switch (this.target) {
+            case ColourPicker.TARGET.Label:
+                ui.history.add_or_modify_previous(
+                    ui,
+                    ["label_colour", ui.selection],
+                    "label_colour",
+                    colour,
+                    Array.from(ui.selection).map((cell) => ({
+                        cell,
+                        from: cell.label_colour,
+                        to: colour,
+                    })),
+                );
+                break;
+            case ColourPicker.TARGET.Edge:
+                ui.history.add_or_modify_previous(
+                    ui,
+                    ["colour", ui.selection],
+                    "colour",
+                    colour,
+                    Array.from(ui.selection).filter(cell => cell.is_edge()).map((edge) => ({
+                        edge,
+                        from: edge.options.colour,
+                        to: colour,
+                    })),
+                );
+                break;
+        }
+    }
+
+    /// Set the colour of the colour picker to a given colour.
     set_colour(ui, colour) {
         this.colour = colour;
         // Alpha is currently not in use.
@@ -5574,11 +5640,12 @@ class ColourPicker {
                     const radius = Math.hypot(x - width / 2, y - height / 2);
                     const angle = Math.atan2(y - height / 2, x - width / 2) + Math.PI;
                     // We're assuming that `width` = `height`.
-                    const [r, g, b] = hsl_to_rgb(
+                    const [r, g, b, /* a */] = new Colour(
                         rad_to_deg(angle),
-                        Math.min(1, 2 * radius / width),
-                        lightness / 100,
-                    );
+                        Math.min(1, 2 * radius / width) * 100,
+                        lightness,
+                        1
+                    ).rgba();
                     const j = 4 * i;
                     [data[j], data[j + 1], data[j + 2], data[j + 3]] = [r, g, b, 255];
                 }
@@ -5588,7 +5655,6 @@ class ColourPicker {
         // Update the colour wheel.
         context.putImageData(this.colour_wheels.get(lightness), 0, 0);
 
-        const css_colour = ColourPicker.colour_css(colour);
         const angle = deg_to_rad(hue);
         const size = width / window.devicePixelRatio / 2;
         const radius = saturation / 100 * size;
@@ -5596,7 +5662,7 @@ class ColourPicker {
         picker.set_style({
             left: `${canvas.element.offsetLeft - Math.cos(angle) * radius}px`,
             top: `${canvas.element.offsetTop + size - Math.sin(angle) * radius}px`,
-            background: css_colour,
+            background: colour.css(),
             "border-color": lightness >= 50 ? "var(--ui-black)" : "var(--ui-white)",
         });
         this.sliders.get("lightness").thumbs[0].set_value(lightness);
@@ -5604,13 +5670,13 @@ class ColourPicker {
             case ColourPicker.TARGET.Label:
                 ui.panel.label_colour = colour;
                 ui.element.query_selector(".label-input-container .colour-indicator").set_style({
-                    background: css_colour,
+                    background: colour.css(),
                 });
                 break;
             case ColourPicker.TARGET.Edge:
                 ui.panel.colour = colour;
                 ui.panel.element.query_selector(".colour-indicator").set_style({
-                    background: css_colour,
+                    background: colour.css(),
                 });
                 break;
         }
@@ -5620,9 +5686,28 @@ class ColourPicker {
         return !this.element.class_list.contains("hidden") && this.target === target;
     }
 
-    static colour_css(colour) {
-        const [h, s, l, a] = colour.hsla();
-        return `hsla(${h}, ${s}%, ${l}%, ${a})`;
+    set_colours_in_palette_group(ui, group, colours) {
+        // Remove any existing colours.
+        group.query_selector_all(".empty, .colour").forEach((element) => element.remove());
+
+        // Explicitly state if there are no colours in the group.
+        if (colours.length === 0) {
+            group.add(new DOM.Element("span", { class: "empty" }).add("(None)"));
+        }
+        // Add colour swatches to the group that may be clicked to set the current colour.
+        for (const colour of colours) {
+            new DOM.Element("div", { class: "colour", title: colour.name }, {
+                background: colour.css(),
+            }).listen("click", () => {
+                this.set_selection_colour(ui, colour);
+            }).add_to(group);
+        }
+    }
+
+    /// Update the LaTeX colour palette group from `UI.colours`.
+    update_latex_colours(ui) {
+        const group = this.element.query_selector(`label[data-group="LaTeX"]`);
+        this.set_colours_in_palette_group(ui, group, Array.from(ui.colours.values()));
     }
 }
 
@@ -5671,7 +5756,7 @@ class Cell {
         // Set the label colour.
         if (this.label_colour.is_not_black()) {
             this.element.query_selector(".label").set_style({
-                color: ColourPicker.colour_css(this.label_colour),
+                color: this.label_colour.css(),
             });
         }
 
