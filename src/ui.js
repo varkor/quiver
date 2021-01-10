@@ -1762,6 +1762,12 @@ class UI {
                 return;
             }
 
+            // Close the colour picker.
+            if (!this.colour_picker.element.class_list.contains("hidden")) {
+                this.colour_picker.close();
+                return;
+            }
+
             // Defocus selected cells.
             if (this.element.query_selector(".cell.selected")) {
                 this.deselect();
