@@ -234,13 +234,24 @@ class Colour extends Encodable {
         if (a === 1 && l === 100) {
             return "white";
         }
+        // Colours with (*) next to them do not match the CSS colour name.
         switch (`${h}, ${s}, ${l}, ${a}`) {
             case "0, 100, 50, 1":
                 return "red";
+            case "30, 100, 50, 1":
+                return "orange"; // (*)
+            case "60, 100, 50, 1":
+                return "yellow";
             case "120, 100, 50, 1":
                 return "green";
+            case "180, 100, 50, 1":
+                return "aqua";
             case "240, 100, 50, 1":
                 return "blue";
+            case "270, 100, 50, 1": // (*)
+                return "purple";
+            case "300, 100, 50, 1":
+                return "magenta";
         }
         return null;
     }
