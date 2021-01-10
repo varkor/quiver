@@ -2760,7 +2760,7 @@ class UI {
         // All arrow styles support labels, shifting, and colour.
         style.label_position = options.label_position / 100;
         style.shift = options.offset * CONSTANTS.EDGE_OFFSET_DISTANCE;
-        style.colour = ColourPicker.hsla_to_css(options.colour);
+        style.colour = ColourPicker.colour_css(options.colour);
 
         switch (options.style.name) {
             case "arrow":
@@ -3171,7 +3171,7 @@ class History {
                     for (const label_colour of action.label_colours) {
                         label_colour.cell.label_colour = label_colour[to];
                         label_colour.cell.element.query_selector(".label").set_style({
-                            color: ColourPicker.hsla_to_css(label_colour.cell.label_colour),
+                            color: ColourPicker.colour_css(label_colour.cell.label_colour),
                         });
                     }
                     update_panel = true;
@@ -4515,7 +4515,7 @@ class Panel {
             if (!selection_contains_edge) {
                 this.label_input.element.value = "";
                 this.element.query_selector(".colour-indicator").set_style({
-                    background: ColourPicker.hsla_to_css(Colour.black()),
+                    background: ColourPicker.colour_css(Colour.black()),
                 });
                 for (const [property, slider] of this.sliders) {
                     let values = [0];
@@ -4537,7 +4537,7 @@ class Panel {
                 if (ui.selection.size === 0) {
                     ui.element.query_selector(".label-input-container .colour-indicator")
                         .set_style({
-                            background: ColourPicker.hsla_to_css(Colour.black()),
+                            background: ColourPicker.colour_css(Colour.black()),
                         });
                     ui.colour_picker.close();
                 }
@@ -4676,7 +4676,7 @@ class Panel {
                         } else {
                             ui.element.query_selector(".label-input-container .colour-indicator")
                                 .set_style({
-                                    background: ColourPicker.hsla_to_css(this.label_colour),
+                                    background: ColourPicker.colour_css(this.label_colour),
                                 });
                         }
                         break;
@@ -4712,7 +4712,7 @@ class Panel {
                             ui.colour_picker.set_colour(ui, this.colour);
                         } else {
                             this.element.query_selector(".colour-indicator").set_style({
-                                background: ColourPicker.hsla_to_css(this.colour),
+                                background: ColourPicker.colour_css(this.colour),
                             });
                         }
                         break;
@@ -5478,6 +5478,7 @@ class ColourPicker {
         });
 
         // The lightness slider.
+        const wrapper = new DOM.Element("div", { class: "wrapper" }).add_to(this.element);
         const slider = new DOM.Multislider("Lightness", 0, 100, 1).listen("input", () => {
             const [h, s, /* l */, a] = this.colour.hsla();
             this.element.class_list.add("active");
@@ -5485,7 +5486,30 @@ class ColourPicker {
             delay(() => this.element.class_list.remove("active"));
         });
         this.sliders.set("lightness", slider);
-        slider.label.add_to(new DOM.Element("div", { class: "wrapper" }).add_to(this.element));
+        slider.label.add_to(wrapper);
+
+        // The colour palette.
+        const palette = new DOM.Element("div", { class: "palette" }).add_to(wrapper);
+        const groups = [{
+            name: "Preset colours",
+            colours: [
+                Colour.black(),
+                new Colour(0, 100, 50, 1),
+                new Colour(120, 100, 50, 1),
+                new Colour(240, 100, 50, 1),
+                new Colour(0, 0, 100, 1)
+            ],
+        }];
+        for (const { name, colours } of groups) {
+            const label = new DOM.Element("label").add(`${name}:`).add_to(palette);
+            for (const colour of colours) {
+                new DOM.Element("div", { class: "colour", title: colour.name }, {
+                    background: ColourPicker.colour_css(colour),
+                }).listen("click", () => {
+                    set_selection_colour(colour);
+                }).add_to(label);
+            }
+        }
     }
 
     /// Open the colour picker with a specified `target` if the colour picker is hidden; change it
@@ -5551,7 +5575,7 @@ class ColourPicker {
         // Update the colour wheel.
         context.putImageData(this.colour_wheels.get(lightness), 0, 0);
 
-        const css_colour = ColourPicker.hsla_to_css(colour);
+        const css_colour = ColourPicker.colour_css(colour);
         const angle = deg_to_rad(hue);
         const size = width / window.devicePixelRatio / 2;
         const radius = saturation / 100 * size;
@@ -5583,7 +5607,7 @@ class ColourPicker {
         return !this.element.class_list.contains("hidden") && this.target === target;
     }
 
-    static hsla_to_css(colour) {
+    static colour_css(colour) {
         const [h, s, l, a] = colour.hsla();
         return `hsla(${h}, ${s}%, ${l}%, ${a})`;
     }
@@ -5634,7 +5658,7 @@ class Cell {
         // Set the label colour.
         if (this.label_colour.is_not_black()) {
             this.element.query_selector(".label").set_style({
-                color: ColourPicker.hsla_to_css(this.label_colour),
+                color: ColourPicker.colour_css(this.label_colour),
             });
         }
 
