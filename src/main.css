@@ -982,7 +982,7 @@ user has already pressed semicolon, placing us in command mode. */
 .colour-panel {
     position: fixed;
     width: calc(16px * 20);
-    padding: 4px 16px;
+    padding: 8px 16px;
     padding-top: calc(192px + 16px * 2);
     max-height: calc(100% - (8px + 46px + 32px) * 2 - 16px * 2);
 	overflow-y: auto;
@@ -1051,12 +1051,16 @@ user has already pressed semicolon, placing us in command mode. */
     left: 80px;
 }
 
-.palette {
+.colour-panel label {
+    display: block;
     margin: 8px 0;
 }
 
+.palette {
+    margin-top: -2px;
+}
+
 .palette label {
-    display: block;
     margin: 4px 0;
 }
 
@@ -1379,7 +1383,7 @@ button.flash {
     transform: translate(-50%, -50%);
 }
 
-.export .options label input[type="checkbox"] {
+label input[type="checkbox"] {
     margin-top: -1px;
     margin-right: 6pt;
     width: 12pt;
@@ -1393,17 +1397,17 @@ button.flash {
     outline: none;
 }
 
-.export .options label input[type="checkbox"]:hover {
+label input[type="checkbox"]:hover {
     background: hsl(0, 0%, 80%);
 }
 
-.export .options label input[type="checkbox"]:checked {
+label input[type="checkbox"]:checked {
     background: var(--ui-focus);
 
     text-align: center;
 }
 
-.export .options label input[type="checkbox"]:checked::before {
+label input[type="checkbox"]:checked::before {
     content: "✓";
 
     color: var(--ui-black);
