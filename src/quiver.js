@@ -719,8 +719,8 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
                 // of this situation.
                 const end = [];
 
+                // Even if the colour is not black, it's irrelevant if there is no label.
                 if (label !== "" && label_colour.is_not_black()) {
-                    // Even if the colour is not black, it's irrelevant if there is no label.
                     end.push(label_colour.hsla());
                 }
 
@@ -827,8 +827,8 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
                     break;
                 case "colour":
                     assert_kind(object, "array");
-                    assert(object.length === 4, "invalid colour format");
-                    const [h, s, l, a] = object;
+                    assert(object.length >= 3 && object.length <= 4, "invalid colour format");
+                    const [h, s, l, a = 1] = object;
                     assert_kind(h, "natural");
                     assert(h <= 360, "invalid hue");
                     assert_kind(s, "natural");

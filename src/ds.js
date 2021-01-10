@@ -286,7 +286,13 @@ class Colour extends Encodable {
     }
 
     toJSON() {
-        return this.hsla();
+        if (this.a === 1) {
+            // For now, every colour has no transparency; even in the future, most
+            // arrows will be fully opaque, so no point encoding the `1` every time.
+            return [this.h, this.s, this.l];
+        } else {
+            return this.hsla();
+        }
     }
 
     css() {
