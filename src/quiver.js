@@ -226,12 +226,16 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
         }
 
         // Returns the LaTeX code corresponding to a HSL colour.
-        const latex_colour = (colour) => {
+        const latex_colour = (colour, parenthesise) => {
             // Alpha is currently not supported.
             const [h, s, l, /* a */] = colour.hsla();
             const [r, g, b] = hsl_to_rgb(h, s / 100, l / 100).map((x) => Math.round(x));
-            let colour_code = `rgb,255:red,${r};green,${g};blue,${b}`;
+            let colour_code = `{rgb,255:red,${r};green,${g};blue,${b}}`;
             switch (`${r}, ${g}, ${b}`) {
+                case "0, 0, 0":
+                    // This case is useful when the edge colour is not black, but the label is.
+                    colour_code = "black";
+                    break;
                 case "255, 255, 255":
                     colour_code = "white";
                     break;
@@ -244,8 +248,10 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                 case "0, 0, 255":
                     colour_code = "blue";
                     break;
+                default:
+                    return `${colour_code}`;
             }
-            return `{${colour_code}}`;
+            return parenthesise ? `{${colour_code}}` : colour_code;
         };
 
         // We handle the export in two stages: vertices and edges. These are fundamentally handled
@@ -288,7 +294,8 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                     output += `${!first_in_row ? " " : ""}${"&".repeat(x - prev.x)} `;
                 }
                 if (vertex.label_colour.is_not_black()) {
-                    output += `\\textcolor${latex_colour(vertex.label_colour)}{${vertex.label}}`;
+                    output += `\\textcolor${
+                        latex_colour(vertex.label_colour, true)}{${vertex.label}}`;
                 } else {
                     output += `{${vertex.label}}`;
                 }
@@ -388,11 +395,11 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
 
                 // The arrow colour. This will also set the text colour, but we override that below.
                 if (edge.options.colour.is_not_black()) {
-                    parameters.push(`color=${latex_colour(edge.options.colour)}`);
+                    parameters.push(`color=${latex_colour(edge.options.colour, false)}`);
                 }
                 // The label colour.
                 if (!edge.options.colour.eq(edge.label_colour)) {
-                    label_parameters.push(`color=${latex_colour(edge.label_colour)}`);
+                    parameters.push(`text=${latex_colour(edge.label_colour, false)}`);
                 }
 
                 // For curves and shortening, we need to try to convert proportional measurements
