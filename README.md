@@ -62,6 +62,25 @@ to return to it later if you decide it needs to be modified, or to share it with
 - Panning and zooming, for large diagrams.
 - Smart label alignment and edge offset.
 
+## Importing macros and colours
+
+To use custom macros and colours in **quiver**, create a file containing the definitions, like the
+following.
+
+```latex
+\newcommand{\cat}{\mathscr}
+\newcommand{\psh}{\widehat}
+\newcommand{\smcat}{\mathbb}
+\newcommand{\yo}{よ}
+```
+
+Upload the file to a publicly accessible URL (for instance,
+[gist.github.com](https://gist.github.com/)), and paste the URL for the raw text into the "Macros"
+input at the bottom of **quiver**.
+
+Currently, macros may be defined using `\newcommand`, and colours may be defined using
+`\definecolor` (using the colour modes: `rgb`, `RGB` or `gray`).
+
 ## Building
 Make sure you have [installed yarn](https://yarnpkg.com/lang/en/docs/install/) and have a version of
 Make that supports `.ONESHELL` (e.g. GNU Make 3.82).
