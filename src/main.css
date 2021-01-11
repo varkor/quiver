@@ -1384,6 +1384,18 @@ button.flash {
     color: var(--ui-white);
 }
 
+.export .tip .update {
+    padding: 0pt 4pt;
+    padding-bottom: 1pt;
+    margin-left: 4pt;
+
+    background: var(--ui-blue);
+    border-radius: 2px;
+
+    font-variant: small-caps;
+	font-size: 10pt;
+}
+
 .export .warning {
     background: hsla(50, 100%, 70%, 1);
 }

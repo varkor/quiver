@@ -4,6 +4,8 @@
 Object.assign(CONSTANTS, {
     /// The current quiver version.
     VERSION: "1.1.0",
+    /// When the `quiver.sty` package was last modified.
+    PACKAGE_VERSION: "2021/01/11",
     /// We currently only support 0-cells, 1-cells, 2-cells, and 3-cells. This is due to
     /// a restriction with tikz-cd, which does not support n-cells greater than n = 2 (though it has
     /// issues even then), and also for usability: a user is unlikely to want to draw a higher cell.
@@ -4200,19 +4202,44 @@ class Panel {
                         event.stopImmediatePropagation();
                     }, { passive: true });
 
+                    tip = new DOM.Element("span", { class: "tip hidden" });
+
                     // Create message regarding, and linking to, `quiver.sty`.
-                    tip = new DOM.Element("span", { class: "tip hidden" })
-                        .add("Remember to include ")
+                    const update_package_previous_download = () => {
+                        window.localStorage.setItem(
+                            "package-previous-download",
+                            CONSTANTS.PACKAGE_VERSION,
+                        );
+                        const update = tip.query_selector(".update");
+                        if (update !== null) {
+                            update.remove();
+                        }
+                    };
+
+                    tip.add("Remember to include ")
                         .add(new DOM.Element("code").add("\\usepackage{quiver}"))
                         .add(" in your LaTeX preamble. You can ")
                         .add(
                             new DOM.Element("a", { href: "quiver.sty", download: "quiver.sty" })
+                                .listen("click", update_package_previous_download)
                                 .add("download ")
                                 .add(new DOM.Element("code").add("quiver.sty"))
-                        )
-                        .add(", or ")
+                        );
+                    // Display an "updated" message if `quiver.sty` has been updated since the last
+                    // time the user downloaded or opened it.
+                    const package_previous_download = window.localStorage
+                        .getItem("package-previous-download");
+                    if (
+                        !package_previous_download ||
+                        package_previous_download !== CONSTANTS.PACKAGE_VERSION
+                    ) {
+                        tip.add(new DOM.Element("span", { class: "update" }).add("updated"));
+                    }
+
+                    tip.add(", or ")
                         .add(
                             new DOM.Element("a", { href: "quiver.sty", target: "_blank" })
+                                .listen("click", update_package_previous_download)
                                 .add("open it in a new tab")
                         )
                         .add(" to copy-and-paste.")
