@@ -65,9 +65,20 @@
         // We do this in a `<script>` tag here to make sure that it loads immediately.
         const query_string = window.location.href.match(/\?(.*)$/);
         if (query_string !== null) {
+            // Prevent keyboard events effected during loading from taking place after loading
+            // has completed.
+            document.addEventListener("keydown", cancel);
+            document.addEventListener("keyup", cancel);
+
             const loading_screen = new DOM.Div({ class: "loading-screen" })
                 .add(new DOM.Element("img", { src: "quiver-blue.svg", class: "logo" }))
                 .add(new DOM.Element("span").add("Loading diagram..."))
+                // Prevent pointer events effected during loading from taking place after loading
+                // has completed.
+                .listen(pointer_event("down"), cancel)
+                .listen(pointer_event("move"), cancel)
+                .listen(pointer_event("up"), cancel)
+                .listen("wheel", cancel, { passive: true });
             document.body.appendChild(loading_screen.element);
         }
     </script>

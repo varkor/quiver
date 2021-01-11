@@ -6527,9 +6527,16 @@ document.addEventListener("DOMContentLoaded", () => {
                     if (query_data.has("macro_url")) {
                         ui.load_macros_from_url(decodeURIComponent(query_data.get("macro_url")));
                     }
-                    // Dismiss the loading screen. We don't actually remove it, because JavaScript's
-                    // timing can be a bit inconsistent under load.
-                    ui.element.query_selector(".loading-screen").class_list.add("hidden");
+                    // Dismiss the loading screen. We do this after a `delay` so that the loading
+                    // screen captures any keyboard and pointer events that occurred during loading
+                    // (since they are queued up while the diagram loading code is processing). We
+                    // don't actually remove it, because JavaScript's timing can be a bit
+                    // inconsistent under load.
+                    delay(() => {
+                        document.removeEventListener("keydown", cancel);
+                        document.removeEventListener("keyup", cancel);
+                        ui.element.query_selector(".loading-screen").class_list.add("hidden");
+                    });
                 }
             } catch (error) {
                 if (ui.quiver.is_empty()) {

@@ -5,6 +5,13 @@ function delay(f, duration = 0) {
     setTimeout(f, duration);
 }
 
+/// A helper method to cancel the default behaviour of an event.
+function cancel(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+}
+
 // Older versions of Safari are problematic because they're essentially tied to the macOS version,
 // and may not have support for pointer events. In this case, we simply replace them with mouse
 // events instead.
