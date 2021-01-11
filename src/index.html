@@ -14,8 +14,10 @@
     <meta property="og:image" content="icon.png">
     <meta property="og:type" content="website">
     <meta property="og:locale" content="en_GB">
-    <!-- Style sheets and scrips -->
+    <!-- Viewport -->
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- Style sheets and scrips -->
+    <link rel="preload" href="quiver-blue.svg" as="image">
     <link rel="stylesheet" type="text/css" media="screen" href="main.css">
     <script type="text/javascript" src="ds.js"></script>
     <script type="text/javascript" src="dom.js"></script>
@@ -42,5 +44,16 @@
         <img src="quiver.svg" class="logo">
     </a>
     <noscript>JavaScript must be enabled to use quiver.</noscript>
+    <script>
+        // If we are loading a diagram, display a loading screen to prevent a flash of empty canvas.
+        // We do this in a `<script>` tag here to make sure that it loads immediately.
+        const query_string = window.location.href.match(/\?(.*)$/);
+        if (query_string !== null) {
+            const loading_screen = new DOM.Div({ class: "loading-screen" })
+                .add(new DOM.Element("img", { src: "quiver-blue.svg", class: "logo" }))
+                .add(new DOM.Element("span").add("Loading diagram..."))
+            document.body.appendChild(loading_screen.element);
+        }
+    </script>
 </body>
 </html>

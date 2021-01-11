@@ -155,6 +155,12 @@ DOM.Element = class {
     }
 };
 
+DOM.Div = class extends DOM.Element {
+    constructor(attributes = {}, style = {}) {
+        super("div", attributes, style);
+    }
+};
+
 /// A class for conveniently dealing with SVGs.
 DOM.SVGElement = class extends DOM.Element {
     constructor(tag_name, attributes = {}, style = {}) {
@@ -258,7 +264,7 @@ DOM.Multislider = class extends DOM.Element {
         this.spacing = spacing;
 
         // The track, in which the thumbs are placed.
-        const track = new DOM.Element("div", { class: "track" }).add_to(this);
+        const track = new DOM.Div({ class: "track" }).add_to(this);
 
         // The thumbs, which may be dragged by the user.
         this.thumbs = [];

@@ -87,7 +87,7 @@ UIMode.Connect = class extends UIMode {
 
         if (this.reconnect === null) {
             // The overlay for drawing an edge between the source and the cursor.
-            this.overlay = new DOM.Element("div", { class: "overlay" });
+            this.overlay = new DOM.Div({ class: "overlay" });
             this.arrow = new Arrow(
                 new Shape.Endpoint(Point.zero()),
                 new Shape.Endpoint(Point.zero()),
@@ -421,7 +421,7 @@ UIMode.KeyMove = class extends UIMode {
 
         this.name = "key-move";
 
-        this.tooltip = new DOM.Element("div", { class: "tooltip" })
+        this.tooltip = new DOM.Div({ class: "tooltip" })
                 .add("Move the selected objects with the arrow keys.")
                 .add(new DOM.Element("br"))
                 .add("Press ")
@@ -641,8 +641,8 @@ class UI {
         this.initialise_grid(this.element);
 
         // Set up the element containing all the cells.
-        this.container = new DOM.Element("div", { class: "container" }).add_to(this.element);
-        this.canvas = new DOM.Element("div", { class: "canvas" }).add_to(this.container);
+        this.container = new DOM.Div({ class: "container" }).add_to(this.element);
+        this.canvas = new DOM.Div({ class: "canvas" }).add_to(this.container);
 
         // Set up the panel for viewing and editing cell data.
         this.panel.initialise(this);
@@ -658,7 +658,7 @@ class UI {
             this.colour_picker.open_or_close(this, ColourPicker.TARGET.Label);
             this.colour_picker.set_colour(this, this.panel.label_colour);
         };
-        const colour_indicator = new DOM.Element("div", { class: "colour-indicator" })
+        const colour_indicator = new DOM.Div({ class: "colour-indicator" })
             .listen("click", action);
         this.shortcuts.add([shortcut], (event) => {
             if (!colour_indicator.class_list.contains("disabled")) {
@@ -666,8 +666,8 @@ class UI {
             }
         });
         this.element.add(
-            new DOM.Element("div", { class: "label-input-container hidden" })
-                .add(new DOM.Element("div", { class: "input-mode" }))
+            new DOM.Div({ class: "label-input-container hidden" })
+                .add(new DOM.Div({ class: "input-mode" }))
                 .add(this.panel.label_input)
                 .add(colour_indicator)
                 .listen(pointer_event("down"), (event) => event.stopPropagation())
@@ -699,7 +699,7 @@ class UI {
 
         // Set up the keyboard shortcuts pane.
         // For now, we simply keep this in sync with the various keyboard shortcuts manually.
-        panes.push(new DOM.Element("div", { id: "keyboard-shortcuts-pane", class: "pane hidden" })
+        panes.push(new DOM.Div({ id: "keyboard-shortcuts-pane", class: "pane hidden" })
             .add(
                 new DOM.Element("h1")
                     .add("Keyboard shortcuts")
@@ -809,7 +809,7 @@ class UI {
             ])));
 
         // Set up the "About" pane.
-        panes.push(new DOM.Element("div", { id: "about-pane", class: "pane hidden" })
+        panes.push(new DOM.Div({ id: "about-pane", class: "pane hidden" })
             .add(new DOM.Element("h1").add("About"))
             .add(new DOM.Element("p").add(new DOM.Element("b").add("quiver")).add(
                 " is a modern, graphical editor for commutative and pasting " +
@@ -875,7 +875,7 @@ class UI {
         }
 
         // Set up the welcome pane.
-        const welcome_pane = new DOM.Element("div", {
+        const welcome_pane = new DOM.Div({
             id: "welcome-pane",
             // We only display the welcome pane the first time the user visits quiver.
             class: "pane" + (version_previous_use ? " hidden" : "")
@@ -932,8 +932,8 @@ class UI {
         ).add(`Version ${CONSTANTS.VERSION}`));
 
         // Add the focus point for new nodes.
-        this.focus_point = new DOM.Element("div", { class: "focus-point focused smooth" })
-            .add(new DOM.Element("div", { class: "tooltip" }))
+        this.focus_point = new DOM.Div({ class: "focus-point focused smooth" })
+            .add(new DOM.Div({ class: "tooltip" }))
             .add_to(this.canvas);
         this.update_focus_tooltip();
 
@@ -2670,7 +2670,7 @@ class UI {
         // If there's already an error, it's not unlikely that subsequent errors will be triggered.
         // Thus, we don't display an error banner if one is already displayed.
         if (body.query_selector(".error-banner:not(.hidden)") === null) {
-            const error = new DOM.Element("div", { class: "error-banner hidden" })
+            const error = new DOM.Div({ class: "error-banner hidden" })
                 .add(message)
                 .add(
                     new DOM.Element("button", { class: "close" })
@@ -3489,7 +3489,7 @@ class Panel {
 
     /// Set up the panel interface elements.
     initialise(ui) {
-        this.element = new DOM.Element("div", { class: "side panel hidden" });
+        this.element = new DOM.Div({ class: "side panel hidden" });
 
         // Prevent propagation of pointer events when interacting with the panel.
         this.element.listen(pointer_event("down"), (event) => {
@@ -3505,7 +3505,7 @@ class Panel {
         }, { passive: true });
 
         // Local options, such as vertex and edge actions.
-        const wrapper = new DOM.Element("div", { class: "wrapper" }).add_to(this.element);
+        const wrapper = new DOM.Div({ class: "wrapper" }).add_to(this.element);
 
         // The label.
         this.label_input = new DOM.Element("input", {
@@ -4142,7 +4142,7 @@ class Panel {
             ui.colour_picker.open_or_close(ui, ColourPicker.TARGET.Edge);
             ui.colour_picker.set_colour(ui, this.colour);
         };
-        const colour_indicator = new DOM.Element("div", { class: "colour-indicator" })
+        const colour_indicator = new DOM.Div({ class: "colour-indicator" })
             .listen("click", action);
         ui.shortcuts.add([shortcut], (event) => {
             if (!colour_indicator.class_list.contains("disabled")) {
@@ -4189,7 +4189,7 @@ class Panel {
 
                 if (this.export === null) {
                     // Create the export pane.
-                    export_pane = new DOM.Element("div", { class: "export" });
+                    export_pane = new DOM.Div({ class: "export" });
 
                     // Prevent propagation of scrolling when the cursor is over the export pane.
                     // This allows the user to scroll the pane when not all the text fits on it.
@@ -4223,7 +4223,7 @@ class Panel {
                         .add_to(export_pane);
 
                     const checkbox = new DOM.Element("input", { type: "checkbox" });
-                    options = new DOM.Element("div", { class: "options hidden" })
+                    options = new DOM.Div({ class: "options hidden" })
                         .add(new DOM.Element("label")
                             .add(checkbox)
                             .add("Centre diagram")
@@ -4256,7 +4256,7 @@ class Panel {
                     // Prevent the highlighted output from being deselected when changing a setting.
                     checkbox.listen(pointer_event("up"), (event) => event.preventDefault());
 
-                    content = new DOM.Element("div", { class: "code" }).add_to(export_pane);
+                    content = new DOM.Div({ class: "code" }).add_to(export_pane);
                     ui.element.add(export_pane);
 
                     this.export = { shortcuts };
@@ -4308,7 +4308,7 @@ class Panel {
             () => display_export_pane("tikz-cd"),
         );
 
-        this.global = new DOM.Element("div", { class: "panel global" }).add(
+        this.global = new DOM.Div({ class: "panel global" }).add(
             // The shareable link button.
             new DOM.Element("button").add("Get shareable link")
                 .listen("click", () => {
@@ -4326,7 +4326,7 @@ class Panel {
                 })
         ).add(export_to_latex)
         .add(
-            new DOM.Element("div", { class: "indicator-container" }).add(
+            new DOM.Div({ class: "indicator-container" }).add(
                 new DOM.Element("label").add("Macros: ")
                     .add(
                         new DOM.Element("input", {
@@ -4344,7 +4344,7 @@ class Panel {
                             delay(() => ui.load_macros_from_url(input.value));
                         })
                     ).add(
-                        new DOM.Element("div", { class: "success-indicator" })
+                        new DOM.Div({ class: "success-indicator" })
                     )
             )
         );
@@ -4389,7 +4389,7 @@ class Panel {
         on_check,
         properties,
     ) {
-        const options_list = new DOM.Element("div", { class: "options" });
+        const options_list = new DOM.Div({ class: "options" });
         options_list.class_list.add(...classes);
 
         const create_option = (value, tooltip, data) => {
@@ -5220,7 +5220,7 @@ class Toolbar {
     }
 
     initialise(ui) {
-        this.element = new DOM.Element("div", { class: "toolbar" })
+        this.element = new DOM.Div({ class: "toolbar" })
             .listen(pointer_event("down"), (event) => {
                 if (event.button === 0) {
                     event.stopImmediatePropagation();
@@ -5496,7 +5496,7 @@ class ColourPicker {
     }
 
     initialise(ui) {
-        this.element = new DOM.Element("div", { class: "colour-panel hidden" })
+        this.element = new DOM.Div({ class: "colour-panel hidden" })
             .listen("wheel", (event) => event.stopImmediatePropagation(), { passive: true })
             .listen(pointer_event("down"), (event) => event.stopPropagation());
 
@@ -5505,7 +5505,7 @@ class ColourPicker {
         const canvas = new DOM.Canvas(null, size, size, { class: "colour-wheel" })
             .add_to(this.element);
         // The colour picker, which the user can move around by clicking on the colour wheel.
-        new DOM.Element("div", { class: "colour-picker" }).add_to(this.element);
+        new DOM.Div({ class: "colour-picker" }).add_to(this.element);
 
         // Update the position of the colour picker based on a pointer `event`.
         const update_colour_picker = (event) => {
@@ -5543,7 +5543,7 @@ class ColourPicker {
         });
 
         // The lightness slider.
-        const wrapper = new DOM.Element("div", { class: "wrapper" }).add_to(this.element);
+        const wrapper = new DOM.Div({ class: "wrapper" }).add_to(this.element);
         const slider = new DOM.Multislider("Lightness", 0, 100, 1).listen("input", () => {
             const [h, s, /* l */, a] = this.colour.hsla();
             this.element.class_list.add("active");
@@ -5573,7 +5573,7 @@ class ColourPicker {
             ).add_to(wrapper);
 
         // The colour palette.
-        const palette = new DOM.Element("div", { class: "palette" }).add_to(wrapper);
+        const palette = new DOM.Div({ class: "palette" }).add_to(wrapper);
 
         // Add each of the palette colour groups.
         const groups = [{
@@ -5771,7 +5771,7 @@ class ColourPicker {
         }
         // Add colour swatches to the group that may be clicked to set the current colour.
         for (const colour of colours) {
-            new DOM.Element("div", { class: "colour", title: colour.name }, {
+            new DOM.Div({ class: "colour", title: colour.name }, {
                 background: colour.css(),
             }).listen("click", () => {
                 this.set_selection_colour(ui, colour);
@@ -6164,7 +6164,7 @@ class Vertex extends Cell {
 
         // The container for the cell.
         if (construct) {
-            this.element = new DOM.Element("div");
+            this.element = new DOM.Div();
         }
 
         // Position the vertex.
@@ -6190,8 +6190,8 @@ class Vertex extends Cell {
 
             ui.codes.set(this.code, this);
             // The cell content (containing the label).
-            new DOM.Element("div", { class: "content" })
-                .add(new DOM.Element("div", { class: "label" }))
+            new DOM.Div({ class: "content" })
+                .add(new DOM.Div({ class: "label" }))
                 // The identifier that notifies the user how to jump to this cell.
                 .add(new DOM.Element("kbd", {
                     "data-code": this.code,
@@ -6527,6 +6527,9 @@ document.addEventListener("DOMContentLoaded", () => {
                     if (query_data.has("macro_url")) {
                         ui.load_macros_from_url(decodeURIComponent(query_data.get("macro_url")));
                     }
+                    // Dismiss the loading screen. We don't actually remove it, because JavaScript's
+                    // timing can be a bit inconsistent under load.
+                    ui.element.query_selector(".loading-screen").class_list.add("hidden");
                 }
             } catch (error) {
                 if (ui.quiver.is_empty()) {

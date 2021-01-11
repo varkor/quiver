@@ -111,7 +111,7 @@ noscript {
     content: "×";
 }
 
-.logo {
+a > .logo {
     position: fixed;
     left: 16px; top: 16px;
     width: 100px;
@@ -120,7 +120,7 @@ noscript {
     opacity: 0.8;
 }
 
-.logo:hover {
+a > .logo:hover {
     opacity: 1;
 }
 
@@ -178,6 +178,40 @@ kbd {
 
 .tooltip kbd + kbd, .pane kbd + kbd {
     margin-left: 4px;
+}
+
+.loading-screen {
+    position: fixed;
+    left: 0; right: 0;
+    top: 0; bottom: 0;
+    z-index: 400;
+
+    background: hsl(0, 0%, 10%);
+
+    transition: opacity 0.6s;
+}
+
+.loading-screen.hidden {
+    opacity: 0;
+
+    pointer-events: none;
+}
+
+.loading-screen .logo {
+    position: fixed;
+    left: 50%; top: 50%;
+    width: 288px;
+    transform: translate(-50%, -50%);
+}
+
+.loading-screen span {
+    display: inline-block;
+    position: fixed;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    margin-left: 20px; margin-top: 32px;
+
+    color: var(--ui-blue);
 }
 
 /* The canvas of cells */

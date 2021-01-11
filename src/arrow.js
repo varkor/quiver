@@ -167,7 +167,7 @@ class Arrow {
 
         // We need to have unique `id`s for each arrow, to assign masks and clipping paths.
         this.id = Arrow.NEXT_ID++;
-        this.element = new DOM.Element("div", { class: "arrow" });
+        this.element = new DOM.Div({ class: "arrow" });
         // The background to the edge, with which the user may interact.
         this.background = new DOM.SVGElement("svg").add_to(this.element);
         // The SVG containing the edge itself, including the arrow head and tail.
@@ -687,7 +687,7 @@ class Arrow {
             label.set_attributes({ class: "arrow-label" });
             // Add a generic content container, which makes it more convenient to manipulate.
             // If we previously had content, we reuse that.
-            this.label.element = (label_content || new DOM.Element("div", {
+            this.label.element = (label_content || new DOM.Div({
                 xmlns: "http://www.w3.org/1999/xhtml",
                 class: "label",
             })).add_to(label);
