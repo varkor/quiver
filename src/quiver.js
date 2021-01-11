@@ -225,6 +225,11 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
             };
         }
 
+        // If a label is particularly simple (containing no special symbols), we do not need to
+        // surround it in curly brackets. This is preferable, because simpler output is more
+        // readable.
+        const simple_label = /^[a-zA-Z0-9\\]+$/;
+
         // We handle the export in two stages: vertices and edges. These are fundamentally handled
         // differently in tikz-cd, so it makes sense to separate them in this way. We have a bit of
         // flexibility in the format in which we output (e.g. edges relative to nodes, or with
@@ -264,11 +269,11 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                 if (x - prev.x > 0) {
                     output += `${!first_in_row ? " " : ""}${"&".repeat(x - prev.x)} `;
                 }
-                if (vertex.label_colour.is_not_black()) {
+                if (vertex.label !== "" && vertex.label_colour.is_not_black()) {
                     output += `\\textcolor${
                         vertex.label_colour.latex(definitions.colours, true)}{${vertex.label}}`;
                 } else {
-                    output += `{${vertex.label}}`;
+                    output += !simple_label.test(vertex.label) ? `{${vertex.label}}` : vertex.label;
                 }
                 prev.x = x;
                 first_in_row = false;
@@ -304,85 +309,88 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
             }
 
             for (const edge of quiver.cells[level]) {
-                const parameters = [];
-                const label_parameters = [];
-                let align = "";
-                const nonempty_label = edge.label.trim() !== "";
+                // The parameters pertinent to the entire arrow. TikZ is quite flexible in
+                // where it allows various parameters to appear. E.g. `text` can appear in the
+                // general parameter list, or as a parameter specific to a label. For specific
+                // parameters, we always attach it to the label to which it is relevant. This helps
+                // us avoid accidentally affecting the properties of other labels.
+                const parameters = {};
+                // The primary label (i.e. the one the user edits directly).
+                const label = { content: edge.label };
+                // A label used for the edge style, e.g. a bar, corner, or adjunction symbol.
+                const decoration = {};
+                // All the labels for this edge, including the primary label, a placeholder label if
+                // any edges are attached to this one, and labels for non-arrow edge styles, or the
+                // bar on a barred arrow.
+                const labels = [label];
+                // We can skip applying various properties if the edge is invisible.
+                const edge_is_empty = edge.options.style.name === "arrow"
+                    && edge.options.style.head.name === "none"
+                    && edge.options.style.body.name === "none"
+                    && edge.options.style.tail.name === "none";
 
                 // We only need to give edges names if they're depended on by another edge.
                 if (quiver.dependencies_of(edge).size > 0) {
-                    label_parameters.push(`name=${index}`);
+                    // We create a placeholder label that is used as a source/target for other
+                    // edges. It's more convenient to create a placeholder label so that we have
+                    // fine-grained control of positioning independent of the actual label
+                    // position.
+                    labels.unshift({
+                        name: index,
+                        // The placeholder labels should have zero size. The following properties
+                        // heuristically gave the best results for this purpose.
+                        anchor: "center",
+                        "inner sep": 0,
+                    });
                     names.set(edge, index++);
-                    // tikz-cd has a bug where parameters affect the edge style even when the label
-                    // is empty, so we only emit parameters when the label is nonempty.
-                    if (nonempty_label) {
-                        // In this case, because we have a parameter list, we have to also change
-                        // the syntax for alignment (technically, we can always use the quotation
-                        // mark for swap, but it's simpler to be consistent with `description`).
-                        switch (edge.options.label_alignment) {
-                            case "centre":
-                                label_parameters.push("description");
-                                break;
-                            case "over":
-                                label_parameters.push("marking");
-                                break;
-                            case "right":
-                                label_parameters.push("swap");
-                                break;
-                        }
-                    } else {
-                        // If the label is empty, we remove the padding so that it doesn't take up
-                        // extra space.
-                        label_parameters.push("inner sep=0");
-                    }
-                } else {
-                    if (nonempty_label) {
-                        switch (edge.options.label_alignment) {
-                            case "centre":
-                                // Centring is done by using the `description` style.
-                                align = " description";
-                                break;
-                            case "over":
-                                // Centring without clearing is done by using the `marking` style.
-                                align = " marking";
-                                break;
-                            case "right":
-                                // We can flip the side of the edge on which the label is drawn
-                                // by appending a quotation mark to the label as an edge option.
-                                align = "'";
-                                break;
-                        }
-                    }
+                }
+
+                switch (edge.options.label_alignment) {
+                    case "centre":
+                        // Centring is done by using the `description` style.
+                        label.description = "";
+                        break;
+                    case "over":
+                        // Centring without clearing is done by using the `marking` style.
+                        label.marking = "";
+                        break;
+                    case "right":
+                        // By default, the label is drawn on the left side of the edge; `swap`
+                        // flips the side.
+                        label.swap = "";
+                        break;
                 }
 
                 if (edge.options.label_position !== 50) {
-                    parameters.push(`pos=${edge.options.label_position / 100}`);
+                    label.pos = edge.options.label_position / 100;
                 }
 
                 if (edge.options.offset !== 0) {
                     const side = edge.options.offset > 0 ? "right" : "left";
-                    parameters.push(`shift ${side}=${Math.abs(edge.options.offset)}`);
+                    parameters[`shift ${side}`] = Math.abs(edge.options.offset);
                 }
 
                 // This is the simplest case, because we can set a single attribute for both the
-                // label and edge colours.
+                // label and edge colours (which also affects the other labels, e.g. those for
+                // pullbacks and adjunctions).
                 if (edge.options.colour.eq(edge.label_colour) && edge.label_colour.is_not_black()) {
-                    parameters.push(`color=${edge.label_colour.latex(definitions.colours)}`);
+                    parameters.color = edge.label_colour.latex(definitions.colours);
                 } else {
                     // The edge colour. An arrow is drawn only for the `arrow` style, so we don't
                     // need to emit `draw` in another case.
-                    if (edge.options.colour.is_not_black() && edge.options.style.name === "arrow") {
-                        parameters.push(`draw=${edge.options.colour.latex(definitions.colours)}`);
+                    if (
+                        !edge_is_empty && edge.options.colour.is_not_black()
+                        && edge.options.style.name === "arrow"
+                    ) {
+                        parameters.draw = edge.options.colour.latex(definitions.colours);
                     }
                     // The label colour.
-                    if (nonempty_label && edge.label_colour.is_not_black()) {
-                        parameters.push(`text=${edge.label_colour.latex(definitions.colours)}`);
+                    if (edge.label_colour.is_not_black()) {
+                        label.text = edge.label_colour.latex(definitions.colours);
                     }
                     // The colour for non-`arrow` edges, which is drawn using a label.
-                    if (edge.options.style.name !== "arrow") {
-                        label_parameters.push(`text=${
-                            edge.options.colour.latex(definitions.colours)
-                        }`);
+                    if (edge.options.style.name !== "arrow" && edge.options.colour.is_not_black()) {
+                        decoration.text = edge.options.colour.latex(definitions.colours);
                     }
                 }
 
@@ -403,19 +411,20 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                     + TIKZ_VERTICAL_MULTIPLIER ** 2 * Math.cos(edge.angle()) ** 2) ** 0.5);
 
                 if (edge.options.curve !== 0) {
-                    parameters.push(
-                        `curve={height=${
-                            // Using a fixed multiplier for curves of any angle tends to work better
-                            // in the examples I tested.
-                            edge.options.curve * CONSTANTS.CURVE_HEIGHT * TIKZ_HORIZONTAL_MULTIPLIER
-                        }pt}`
-                    );
+                    parameters.curve = `{height=${
+                        // Using a fixed multiplier for curves of any angle tends to work better
+                        // in the examples I tested.
+                        edge.options.curve * CONSTANTS.CURVE_HEIGHT * TIKZ_HORIZONTAL_MULTIPLIER
+                    }pt}`;
                 }
 
-                // Shortened edges.
-                if (edge.options.shorten.source !== 0) {
+                // Shortened edges. This may only be set for the `arrow` style.
+                const tail_is_empty = edge.options.style.name === "arrow"
+                    && edge.options.style.body.name === "none"
+                    && edge.options.style.tail.name === "none";
+                if (!tail_is_empty && edge.options.shorten.source !== 0) {
                     const shorten = Math.round(edge.arrow.style.shorten.tail * multiplier);
-                    parameters.push(`shorten <=${shorten}pt`);
+                    parameters["shorten <"] = `${shorten}pt`;
                     if (edge.options.curve !== 0) {
                         // It should be possible to do this using a custom style, but for now we
                         // simply warn the user that the result will not look quite as good as it
@@ -423,19 +432,16 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                         tikz_incompatibilities.add("shortened curved arrows");
                     }
                 }
-                if (edge.options.shorten.target !== 0) {
+                const head_is_empty = edge.options.style.name === "arrow"
+                    && edge.options.style.head.name === "none"
+                    && edge.options.style.body.name === "none";
+                if (!head_is_empty && edge.options.shorten.target !== 0) {
                     const shorten = Math.round(edge.arrow.style.shorten.head * multiplier);
-                    parameters.push(`shorten >=${shorten}pt`);
+                    parameters["shorten >"] = `${shorten}pt`;
                     if (edge.options.curve !== 0) {
                         tikz_incompatibilities.add("shortened curved arrows");
                     }
                 }
-
-                let style = "";
-                let label = nonempty_label ? `"{${edge.label}}"${align}` : "";
-                // If we eventually support multiple labels natively, we can use an array of labels,
-                // but for now it is simpler to special-case barred arrows.
-                let bar = "";
 
                 // Edge styles.
                 switch (edge.options.style.name) {
@@ -445,7 +451,7 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                         // we only special-case 2-cells. Everything else is
                         // drawn as if it is a 1-cell.
                         if (edge.options.level === 2) {
-                            style = "Rightarrow, ";
+                            parameters.Rightarrow = "";
                         } else if (edge.options.level > 2) {
                             // TikZ has no built-in support for n-ary arrows, and I have not
                             // been able to find any custom styles that are suitable yet.
@@ -459,58 +465,60 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                                 break;
 
                             case "dashed":
-                                parameters.push("dashed");
+                                parameters.dashed = "";
                                 break;
 
                             case "dotted":
-                                parameters.push("dotted");
+                                parameters.dotted = "";
                                 break;
 
                             case "squiggly":
-                                parameters.push("squiggly");
+                                parameters.squiggly = "";
                                 break;
 
                             case "barred":
-                                bar = `"\\shortmid"{marking${
-                                    edge.options.colour.is_not_black() ?
-                                        `, text=${edge.options.colour.latex(definitions.colours)}`
-                                        : ""
-                                }}, `;
+                                labels.push(decoration);
+                                decoration.content = "\\shortmid";
+                                decoration.marking = "";
+                                if (edge.options.colour.is_not_black()) {
+                                    decoration.text
+                                        = edge.options.colour.latex(definitions.colours);
+                                }
                                 break;
 
                             case "none":
-                                parameters.push("phantom");
+                                parameters["no body"] = "";
                                 break;
                         }
 
                         // Tail styles.
                         switch (edge.options.style.tail.name) {
                             case "maps to":
-                                parameters.push("maps to");
+                                parameters["maps to"] = "";
                                 break;
 
                             case "mono":
                                 switch (edge.options.level) {
                                     case 1:
-                                        parameters.push("tail");
+                                        parameters.tail = "";
                                         break;
                                     case 2:
-                                        parameters.push("2tail");
+                                        parameters["2tail"] = "";
                                         break;
                                     default:
                                         // We've already reported an issue with triple arrows and
                                         // higher in tikz-cd, so we don't emit another one. Triple
                                         // cells are currently exported as normal arrows, so we add
                                         // the correct tail for 1-cells.
-                                        parameters.push("tail");
+                                        parameters.tail = "";
                                         break;
                                 }
                                 break;
 
                             case "hook":
-                                parameters.push(`hook${
+                                parameters[`hook${
                                     edge.options.style.tail.side === "top" ? "" : "'"
-                                }`);
+                                }`] = "";
                                 if (edge.options.level > 1) {
                                     tikz_incompatibilities.add(
                                         "double arrows or higher with hook tails"
@@ -521,30 +529,34 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                             case "arrowhead":
                                 switch (edge.options.level) {
                                     case 1:
-                                        parameters.push("tail reversed");
+                                        parameters["tail reversed"] = "";
                                         break;
                                     case 2:
-                                        parameters.push("2tail reversed");
+                                        parameters["2tail reversed"] = "";
                                         break;
                                     default:
                                         // We've already reported an issue with triple arrows and
                                         // higher in tikz-cd, so we don't emit another one. Triple
                                         // cells are currently exported as normal arrows, so we add
                                         // the correct tail for 1-cells.
-                                        parameters.push("tail reversed");
+                                        parameters["tail reversed"] = "";
                                         break;
                                 }
+                                break;
+
+                            case "none":
+                                // This is the default in tikz-cd.
                                 break;
                         }
 
                         // Head styles.
                         switch (edge.options.style.head.name) {
                             case "none":
-                                parameters.push("no head");
+                                parameters["no head"] = "";
                                 break;
 
                             case "epi":
-                                parameters.push("two heads");
+                                parameters["two heads"] = "";
                                 if (edge.options.level > 1) {
                                     tikz_incompatibilities.add(
                                         "double arrows or higher with multiple heads"
@@ -553,9 +565,9 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                                 break;
 
                             case "harpoon":
-                                parameters.push(`harpoon${
+                                parameters[`harpoon${
                                     edge.options.style.head.side === "top" ? "" : "'"
-                                }`);
+                                }`] = "";
                                 if (edge.options.level > 1) {
                                     tikz_incompatibilities.add(
                                         "double arrows or higher with harpoon heads"
@@ -569,21 +581,24 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                     case "adjunction":
                     case "corner":
                     case "corner-inverse":
-                        parameters.push("phantom");
+                        labels.push(decoration);
+
+                        parameters.draw = "none";
+                        decoration.anchor = "center";
 
                         let angle;
 
                         switch (edge.options.style.name) {
                             case "adjunction":
-                                label = "\"\\dashv\"";
+                                decoration.content = "\\dashv";
                                 // Adjunction symbols should point in the direction of the arrow.
                                 angle = -Math.round(edge.angle() * 180 / Math.PI);
                                 break;
                             case "corner":
                             case "corner-inverse":
-                                label = edge.options.style.name.endsWith("-inverse") ?
-                                    "\"\\ulcorner\"" : "\"\\lrcorner\"";
-                                label_parameters.push("very near start");
+                                decoration.content = edge.options.style.name.endsWith("-inverse") ?
+                                    "\\ulcorner" : "\\lrcorner";
+                                decoration.pos = "0.125";
                                 // Round the angle to the nearest 45º, so that the corner always
                                 // appears aligned with horizontal, vertical or diagonal lines.
                                 angle = 45 - 45 * Math.round(4 * edge.angle() / Math.PI);
@@ -591,42 +606,40 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                         }
 
                         if (angle !== 0) {
-                            label_parameters.push(`rotate=${angle}`);
-                        }
-
-                        // We allow these sorts of edges to have labels attached,
-                        // even though it's a little unusual.
-                        if (nonempty_label) {
-                            let anchor = "";
-                            switch (edge.options.label_alignment) {
-                                case "left":
-                                    anchor = "anchor=west, ";
-                                    break;
-                                case "centre":
-                                    anchor = "description, ";
-                                    break;
-                                case "over":
-                                    anchor = "marking, ";
-                                    break;
-                                case "right":
-                                    anchor = "anchor=east, ";
-                                    break;
-                            }
-                            parameters.push(`"{${edge.label}}"{${anchor}inner sep=1.5mm}`);
+                            decoration.rotate = angle;
                         }
 
                         break;
                 }
 
-                output += `\\arrow[${style}` +
-                    (label !== "" || label_parameters.length > 0 ? `${label || "\"\""}${
-                        label_parameters.length > 0 ? `{${label_parameters.join(", ")}}` : ""
-                    }, ` : "") +
-                    bar +
-                    `from=${cell_reference(edge.source)}, ` +
-                    `to=${cell_reference(edge.target)}` +
-                    (parameters.length > 0 ? `, ${parameters.join(", ")}` : "") +
-                    "]\n";
+                parameters.from = cell_reference(edge.source);
+                parameters.to = cell_reference(edge.target);
+
+                const object_to_list = (object) => {
+                    return Object.entries(object).map(([key, value]) => {
+                        return value !== "" ? `${key}=${value}` : key;
+                    });
+                };
+
+                output += `\\arrow[${
+                    // Ignore any labels that are empty (and aren't playing an important role as a
+                    // placeholder).
+                    labels.filter((label) => label.hasOwnProperty("name") || label.content !== "")
+                        .map((label) => {
+                            const content = label.content || "";
+                            delete label.content;
+                            const swap = label.hasOwnProperty("swap");
+                            delete label.swap;
+                            const parameters = object_to_list(label);
+                            return `"${content !== "" ? (
+                                    !simple_label.test(content) ? `{${content}}` : `${content}`
+                                ) : ""}"${swap ? "'" : ""}${
+                                parameters.length > 0 ? `{${parameters.join(", ")}}` : ""
+                            }`;
+                        })
+                        .concat(object_to_list(parameters))
+                        .join(", ")
+                }]\n`;
             }
             // Remove any trailing whitespace.
             output = output.trim();
