@@ -936,6 +936,7 @@ class UI {
             .add(new DOM.Div({ class: "tooltip" }))
             .add_to(this.canvas);
         this.update_focus_tooltip();
+        this.toolbar.update(this);
 
         // Handle panning via scrolling.
         window.addEventListener("wheel", (event) => {
@@ -1887,6 +1888,7 @@ class UI {
                     this.reposition_focus_point(this.focus_position);
                     this.focus_point.class_list.remove("revealed", "pending", "active");
                     this.focus_point.class_list.add("focused");
+                    this.toolbar.update(this);
                     delay(() => this.focus_point.class_list.add("smooth"));
                 }
             }
@@ -1933,6 +1935,7 @@ class UI {
                 if (!this.focus_point.class_list.contains("focused")) {
                     this.focus_point.class_list.remove("revealed", "pending", "active");
                     this.focus_point.class_list.add("focused");
+                    this.toolbar.update(this);
                     // We first reposition to the correct location, then add the delta after adding
                     // the `smooth` class (directly below), so that it animates to the new position.
                     this.reposition_focus_point(this.focus_position);
