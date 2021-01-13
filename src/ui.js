@@ -4277,7 +4277,7 @@ class Panel {
                         // Update the output. We ignore `metadata`, which currently does not change
                         // in response to the settings.
                         const { data } = modify(ui.quiver.export(
-                            format,
+                            "tikz-cd",
                             ui.settings,
                             ui.definitions(),
                         ));
