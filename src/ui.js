@@ -6405,7 +6405,9 @@ class Edge extends Cell {
         // consistently and cleanly across browsers, but Safari is _wrong_ and deserves to
         // be treated like the subpar implementation that it is.
         if (/^((?!chrome|android).)*safari/i.test(navigator.userAgent)) {
-            const [x, y, angle] = this.arrow.label.element.parent.get_attribute("transform")
+            // The `transform` attribute has the form `translate(x, y) rotate(angle x y)` for
+            // every label alignment but `OVER`, in which the `rotate` command is omitted.
+            const [x, y, angle = 0] = this.arrow.label.element.parent.get_attribute("transform")
                 .replace(/\s+/g, " ").match(/-?\d+(\.\d+)?/g);
             const katex_element = this.arrow.label.element.query_selector(".katex, .katex-error");
             if (katex_element !== null) {
