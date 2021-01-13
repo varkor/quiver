@@ -6547,34 +6547,35 @@ document.addEventListener("DOMContentLoaded", () => {
     ui.initialise();
 
     const load_quiver_from_query_string = () => {
-        // Get the query string (i.e. the part of the URL after the "?").
-        const query_string = window.location.href.match(/\?(.*)$/);
-        if (query_string !== null) {
-            // If there is a query string, try to decode it as a diagram.
+        // If there is `q` parameter in the query string, try to decode it as a diagram.
+        const query_data = query_parameters();
+        if (query_data.has("q")) {
+            const dismiss_loading_screen = () => {
+                // Dismiss the loading screen. We do this after a `delay` so that the loading
+                // screen captures any keyboard and pointer events that occurred during loading
+                // (since they are queued up while the diagram loading code is processing). We
+                // don't actually remove it, because JavaScript's timing can be a bit
+                // inconsistent under load.
+                delay(() => {
+                    document.removeEventListener("keydown", cancel);
+                    document.removeEventListener("keyup", cancel);
+                    ui.element.query_selector(".loading-screen").class_list.add("hidden");
+                });
+            };
+
             try {
-                const query_segs = query_string[1].split("&");
-                const query_data = new Map(query_segs.map(segment => segment.split("=")));
-                if (query_data.has("q")) {
-                    // Decode the diagram.
-                    QuiverImportExport.base64.import(ui, query_data.get("q"));
-                    // If there is a `macro_url`, load the macros from it.
-                    if (query_data.has("macro_url")) {
-                        ui.load_macros_from_url(decodeURIComponent(query_data.get("macro_url")));
-                    }
-                    // Dismiss the loading screen. We do this after a `delay` so that the loading
-                    // screen captures any keyboard and pointer events that occurred during loading
-                    // (since they are queued up while the diagram loading code is processing). We
-                    // don't actually remove it, because JavaScript's timing can be a bit
-                    // inconsistent under load.
-                    delay(() => {
-                        document.removeEventListener("keydown", cancel);
-                        document.removeEventListener("keyup", cancel);
-                        ui.element.query_selector(".loading-screen").class_list.add("hidden");
-                    });
+                // Decode the diagram.
+                QuiverImportExport.base64.import(ui, query_data.get("q"));
+                // If there is a `macro_url`, load the macros from it.
+                if (query_data.has("macro_url")) {
+                    ui.load_macros_from_url(decodeURIComponent(query_data.get("macro_url")));
                 }
+                dismiss_loading_screen();
             } catch (error) {
                 if (ui.quiver.is_empty()) {
-                    UI.display_error("The saved diagram was malformed and could not be loaded.");
+                    UI.display_error(
+                        "The saved diagram was malformed and could not be loaded."
+                    );
                 } else {
                     // The importer will try to recover from errors, so we may have been mostly
                     // successful.
@@ -6582,7 +6583,8 @@ document.addEventListener("DOMContentLoaded", () => {
                         "The saved diagram was malformed and may have been loaded incorrectly."
                     );
                 }
-                // Rethrow the error so that it can be reported.
+                dismiss_loading_screen();
+                // Rethrow the error so that it can be reported in the console.
                 throw error;
             }
         }

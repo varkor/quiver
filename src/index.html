@@ -63,8 +63,8 @@
     <script>
         // If we are loading a diagram, display a loading screen to prevent a flash of empty canvas.
         // We do this in a `<script>` tag here to make sure that it loads immediately.
-        const query_string = window.location.href.match(/\?(.*)$/);
-        if (query_string !== null) {
+        const query_data = query_parameters();
+        if (query_data.has("q")) {
             // Prevent keyboard events effected during loading from taking place after loading
             // has completed.
             document.addEventListener("keydown", cancel);
