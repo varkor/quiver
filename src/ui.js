@@ -5654,12 +5654,16 @@ class ColourPicker {
                 this.element.class_list.add("target-edge");
                 break;
         }
-        // If every edge colour matches the label colour, we check the "Sync label/edge colours"
-        // button; otherwise, we uncheck it.
-        this.element.query_selector('input[type="checkbox"]').element.checked =
-            Array.from(ui.selection).every((cell) => {
-                return cell.is_vertex() || cell.label_colour.eq(cell.options.colour);
-            });
+        if (this.element.class_list.contains("hidden")) {
+            // If every edge colour matches the label colour, we check the "Sync label/edge colours"
+            // button; otherwise, we uncheck it. We only do this if we're opening the colour picker,
+            // rather than switching between the label/edge targets, as it's confusing for the
+            // checkbox state to change in that case.
+            this.element.query_selector('input[type="checkbox"]').element.checked =
+                Array.from(ui.selection).every((cell) => {
+                    return cell.is_vertex() || cell.label_colour.eq(cell.options.colour);
+                });
+        }
         this.element.class_list.remove("hidden");
         this.element.element.scrollTop = 0;
         delay(() => this.element.class_list.remove("active"));
