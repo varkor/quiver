@@ -74,6 +74,8 @@ gh-pages:
 	cd ../quiver-worktree
 	# Reset the GitHub Pages branch so that it contains the release source code.
 	git reset --hard $$RELEASE
+	# Copy KaTeX into the main release directory.
+	cp -r $$KATEX .
 
 	# Merge the development branch into the `dev/` directory.
 	git merge -s ours --no-commit $$DEV
