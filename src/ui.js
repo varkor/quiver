@@ -3246,7 +3246,6 @@ class History {
                         label.cell.label = label[to];
                         ui.panel.render_tex(ui, label.cell);
                     }
-                    update_panel = true;
                     break;
                 case "label_colour":
                     for (const label_colour of action.label_colours) {
