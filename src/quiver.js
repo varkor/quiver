@@ -115,7 +115,7 @@ class Quiver {
 
     /// Returns a collection of all the cells in the quiver.
     all_cells() {
-        return Array.from(this.dependencies.keys()).filter(cell => !this.deleted.has(cell));
+        return Array.from(this.dependencies.keys()).filter((cell) => !this.deleted.has(cell));
     }
 
     /// Returns whether a cell exists in the quiver (i.e. hasn't been deleted).
@@ -126,9 +126,16 @@ class Quiver {
     /// Rerender the entire quiver. This is expensive, so should only be used when more
     /// conservative rerenderings are inappropriate (e.g. when the grid has been resized).
     rerender(ui) {
-        for (const cell of this.all_cells()) {
+        // We don't want rendering to change the grid size.
+        const buffer_updates = ui.buffer_updates;
+        ui.buffer_updates = true;
+        const cells = this.all_cells();
+        // Sort by level, so that the cells on which others depend are rendered first.
+        cells.sort((a, b) => a.level - b.level);
+        for (const cell of cells) {
             cell.render(ui);
         }
+        ui.buffer_updates = buffer_updates;
     }
 
     /// Returns whether the quiver is empty.
