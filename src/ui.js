@@ -1371,9 +1371,9 @@ class UI {
                 this.mode.origin = new_offset;
             }
 
-            // If we move the pointer (without releasing it) while the insertion
+            // If we move the pointer (without releasing it) while the focus
             // point is revealed, it will transition from a `"pending"` state
-            // to an `"active"` state. Moving the pointer off the insertion
+            // to an `"active"` state. Moving the pointer off the focus
             // point in this state will create a new vertex and trigger the
             // connection mode.
             if (this.focus_point.class_list.contains("pending")) {
@@ -2284,16 +2284,6 @@ class UI {
                 view_offset = view_offset.sub(offset);
                 rerender = true;
             }
-
-            if (this.focus_position.x === position.x || this.focus_position.y === position.y) {
-                // Resize the focus point if necessary.
-                if (this.focus_point.class_list.contains("focused")) {
-                    // Don't animate the size change, which should happen instantaneously.
-                    this.focus_point.class_list.remove("smooth");
-                    this.reposition_focus_point(this.focus_position);
-                    delay(() => this.focus_point.class_list.add("smooth"));
-                }
-            }
         }
 
         if (rerender) {
@@ -2302,6 +2292,13 @@ class UI {
             this.pan_view(view_offset);
             // Then, we rerender all of the cells, which will have changed position.
             this.quiver.rerender(this);
+            // Similarly, the focus point may have changed position.
+            if (this.focus_point.class_list.contains("focused")) {
+                // Don't animate the size change, which should happen instantaneously.
+                this.focus_point.class_list.remove("smooth");
+                this.reposition_focus_point(this.focus_position);
+                delay(() => this.focus_point.class_list.add("smooth"));
+            }
         }
 
         return rerender;
