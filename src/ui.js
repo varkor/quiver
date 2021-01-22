@@ -4621,7 +4621,13 @@ class Panel {
                     macros: ui.latex_macros(),
                 },
             );
-            update_label_transformation();
+            // KaTeX loads fonts as it needs them. After we call `render`, it will load the fonts it
+            // needs if they haven't already been loaded, then render the LaTeX asynchronously. If
+            // we calculate the label size immediately and the necessary fonts have not been loaded,
+            // the calculated dimensions will be incorrect. Therefore, we need to wait until all
+            // the fonts used in the document (i.e. the KaTeX-specific ones, which are the only
+            // ones that may not have been loaded yet) have been loaded.
+            document.fonts.ready.then(update_label_transformation);
         });
     };
 
@@ -6560,7 +6566,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 delay(() => {
                     document.removeEventListener("keydown", cancel);
                     document.removeEventListener("keyup", cancel);
-                    ui.element.query_selector(".loading-screen").class_list.add("hidden");
+                    // We only hide the loading screen after all the (KaTeX) fonts have been loaded.
+                    // This ensures that the diagram will have been rendered correctly by the time
+                    // we reveal it.
+                    document.fonts.ready.then(() => {
+                        ui.element.query_selector(".loading-screen").class_list.add("hidden");
+                    });
                 });
             };
 
@@ -6615,20 +6626,6 @@ document.addEventListener("DOMContentLoaded", () => {
         rel: "stylesheet",
         href: "KaTeX/katex.css",
     }).element);
-    // Preload various fonts to avoid flashes of unformatted text.
-    const preload_fonts = ["Main-Regular", "Math-Italic"];
-    for (const font of preload_fonts) {
-        const attributes = {
-            rel: "preload",
-            href: `KaTeX/fonts/KaTeX_${font}.woff2`,
-            as: "font"
-        };
-        if (window.location.hostname !== "") {
-            // Fonts always need to be fetched using `crossorigin`.
-            attributes.crossorigin = "";
-        }
-        document.head.appendChild(new DOM.Element("link", attributes).element);
-    }
 
     // Trigger the script load.
     document.head.appendChild(rendering_library.element);
