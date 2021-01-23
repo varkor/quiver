@@ -465,6 +465,14 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                             tikz_incompatibilities.add("triple arrows or higher");
                         }
 
+                        // We special-case arrows with no head, body, nor tail. This is because the
+                        // `no body` style has some graphical issues in some versions of TikZ, so
+                        // we prefer to avoid this style if possible.
+                        if (edge_is_empty) {
+                            parameters.draw = "none";
+                            break;
+                        }
+
                         // Body styles.
                         switch (edge.options.style.body.name) {
                             case "cell":
