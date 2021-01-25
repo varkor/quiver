@@ -126,16 +126,12 @@ class Quiver {
     /// Rerender the entire quiver. This is expensive, so should only be used when more
     /// conservative rerenderings are inappropriate (e.g. when the grid has been resized).
     rerender(ui) {
-        // We don't want rendering to change the grid size.
-        const buffer_updates = ui.buffer_updates;
-        ui.buffer_updates = true;
         const cells = this.all_cells();
         // Sort by level, so that the cells on which others depend are rendered first.
         cells.sort((a, b) => a.level - b.level);
         for (const cell of cells) {
             cell.render(ui);
         }
-        ui.buffer_updates = buffer_updates;
     }
 
     /// Returns whether the quiver is empty.
