@@ -504,14 +504,14 @@ UIMode.Command = class extends UIMode {
 
 // We are viewing a diagram embedded in another page.
 UIMode.Embed = class extends UIMode {
-  constructor(ui) {
-    super();
+    constructor(ui) {
+        super();
 
-    this.name = "embed";
+        this.name = "embed";
 
-    ui.grid.class_list.toggle("hidden");
-    ui.pan_view(Offset.zero(), -1.0);
-  }
+        ui.grid.class_list.toggle("hidden");
+        ui.pan_view(Offset.zero(), -1.0);
+    }
 }
 
 /// The object responsible for controlling all aspects of the user interface.
@@ -6586,7 +6586,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // If there is `e` in the query string, we want to treat the UI as running in embedded mode.
         if (query_data.has("e")) {
-          ui.switch_mode(new UIMode.Embed(ui));
+            ui.switch_mode(new UIMode.Embed(ui));
         }
 
         // If there is `q` parameter in the query string, try to decode it as a diagram.

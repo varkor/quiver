@@ -1536,11 +1536,6 @@ label input[type="checkbox"]:checked::before {
 
 /* Embed */
 
-.ui.embed {
-    border-radius: 5px;
-    overflow: hidden;
-}
-
 .ui.embed .panel {
     visibility: hidden;
 }
