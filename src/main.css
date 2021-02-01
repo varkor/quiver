@@ -424,7 +424,7 @@ being. */
     bottom: 0;
     transform: translateX(-50%);
     width: 40%;
-    min-width: 560px;
+    min-width: 1100px;
     height: 46px;
     padding: 8px;
     /* Display above the export pane. */
@@ -1532,4 +1532,35 @@ label input[type="checkbox"]:checked::before {
 
 .arrow .katex, .arrow .katex-error {
     font-size: 1em;
+}
+
+/* Embed */
+
+.ui.embed {
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+.ui.embed .panel {
+    visibility: hidden;
+}
+
+.ui.embed .toolbar {
+    visibility: hidden;
+}
+
+.ui.embed .focus-point {
+    visibility: hidden;
+}
+
+.ui.embed .arrow:not(.target):not(.selected) > svg:first-child:hover {
+    visibility: hidden;
+}
+
+.ui.embed a > .logo {
+    transform: scale(0.75);
+    left: auto;
+    top: auto;
+    left: 12px;
+    bottom: 12px;
 }

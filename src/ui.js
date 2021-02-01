@@ -502,6 +502,18 @@ UIMode.Command = class extends UIMode {
     }
 };
 
+// We are viewing a diagram embedded in another page.
+UIMode.Embed = class extends UIMode {
+  constructor(ui) {
+    super();
+
+    this.name = "embed";
+
+    ui.grid.class_list.toggle("hidden");
+    ui.pan_view(Offset.zero(), -1.0);
+  }
+}
+
 /// The object responsible for controlling all aspects of the user interface.
 class UI {
     constructor(element) {
@@ -4350,6 +4362,25 @@ class Panel {
                         return output;
                     });
                 })
+        ).add(
+          // The embed button.
+          new DOM.Element("button").add("Get embed code")
+              .listen("click", () => {
+                  display_export_pane("base64", (output) => {
+                      const URL_prefix = window.location.href
+                          .replace(/(\/index\.html)?\?.*$/, "")
+                      return {
+                          data: `<!-- ${URL_prefix} -->
+<div class="quiver-embed">
+    <iframe src="${output.data}&macro_url=${
+        encodeURIComponent(ui.macro_url)
+    }&e=" width="400" height="400"></iframe>
+</div>
+<script type="text/javascript" src="${URL_prefix}/embed.js"><script>`,
+                          metadata: output.metadata,
+                      };
+                  });
+              })
         ).add(export_to_latex)
         .add(
             new DOM.Div({ class: "indicator-container" }).add(
@@ -6551,8 +6582,14 @@ document.addEventListener("DOMContentLoaded", () => {
     ui.initialise();
 
     const load_quiver_from_query_string = () => {
-        // If there is `q` parameter in the query string, try to decode it as a diagram.
         const query_data = query_parameters();
+
+        // If there is `e` in the query string, we want to treat the UI as running in embedded mode.
+        if (query_data.has("e")) {
+          ui.switch_mode(new UIMode.Embed(ui));
+        }
+
+        // If there is `q` parameter in the query string, try to decode it as a diagram.
         if (query_data.has("q")) {
             const dismiss_loading_screen = () => {
                 // Dismiss the loading screen. We do this after a `delay` so that the loading
