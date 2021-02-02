@@ -56,7 +56,7 @@
     </script>
 </head>
 <body>
-    <a href="https://github.com/varkor/quiver" target="_blank">
+    <a id="logo-link" href="https://github.com/varkor/quiver" target="_blank">
         <img src="quiver.svg" class="logo">
     </a>
     <noscript>JavaScript must be enabled to use quiver.</noscript>
@@ -70,7 +70,10 @@
             document.addEventListener("keydown", cancel);
             document.addEventListener("keyup", cancel);
 
-            const loading_screen = new DOM.Div({ class: "loading-screen" })
+            // Conditionally add `embed` to the class list so that we can alter the loading screen
+            // style defaults in an embedded view.
+            const class_list = `loading-screen ${query_data.has("embed") ? "embed" : ""}`;
+            const loading_screen = new DOM.Div({ class: class_list })
                 .add(new DOM.Element("img", { src: "quiver-blue.svg", class: "logo" }))
                 .add(new DOM.Element("span").add("Loading diagram..."))
                 // Prevent pointer events effected during loading from taking place after loading
@@ -80,6 +83,15 @@
                 .listen(pointer_event("up"), cancel)
                 .listen("wheel", cancel, { passive: true });
             document.body.appendChild(loading_screen.element);
+        }
+
+        // If we're running in embedded view, update the logo so that clicking it opens the
+        // the current diagram in the app.
+        if (query_data.has("embed")) {
+            document.querySelector("#logo-link").href = reconstruct_URL(query_data, [
+                "embed",
+                "scale",
+            ]);
         }
     </script>
 </body>

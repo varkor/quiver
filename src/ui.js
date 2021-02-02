@@ -503,14 +503,13 @@ UIMode.Command = class extends UIMode {
 };
 
 // We are viewing a diagram embedded in another page.
-UIMode.Embed = class extends UIMode {
+UIMode.Embedded = class extends UIMode {
     constructor(ui) {
         super();
 
-        this.name = "embed";
+        this.name = "embedded";
 
         ui.grid.class_list.toggle("hidden");
-        ui.pan_view(Offset.zero(), -1.0);
     }
 }
 
@@ -954,6 +953,11 @@ class UI {
 
         // Handle panning via scrolling.
         window.addEventListener("wheel", (event) => {
+            // We don't want to scroll anything at all in embedded mode.
+            if (this.in_mode(UIMode.Embedded)) {
+                return;
+            }
+
             // We don't want to scroll the page while using the mouse wheel.
             event.preventDefault();
 
@@ -4346,21 +4350,24 @@ class Panel {
             () => display_export_pane("tikz-cd"),
         );
 
+        // Helper for including the macro URL in base64 encoded URLs so long as its non-null.
+        const include_macro_url = (output) => {
+            if (ui.macro_url !== null) {
+                return {
+                    data: `${output.data}&macro_url=${
+                        encodeURIComponent(ui.macro_url)
+                    }`,
+                    metadata: output.metadata,
+                };
+            }
+            return output;
+        };
+
         this.global = new DOM.Div({ class: "panel global" }).add(
             // The shareable link button.
             new DOM.Element("button").add("Get shareable link")
                 .listen("click", () => {
-                    display_export_pane("base64", (output) => {
-                        if (ui.macro_url !== null) {
-                            return {
-                                data: `${output.data}&macro_url=${
-                                    encodeURIComponent(ui.macro_url)
-                                }`,
-                                metadata: output.metadata,
-                            };
-                        }
-                        return output;
-                    });
+                    display_export_pane("base64", include_macro_url);
                 })
         ).add(
           // The embed button.
@@ -4368,15 +4375,13 @@ class Panel {
               .listen("click", () => {
                   display_export_pane("base64", (output) => {
                       const URL_prefix = window.location.href
-                          .replace(/(\/index\.html)?\?.*$/, "")
+                          .replace(/(\/index\.html)?\?.*$/, "");
                       return {
                           data: `<!-- ${URL_prefix} -->
-<div class="quiver-embed">
-    <iframe src="${output.data}&macro_url=${
-        encodeURIComponent(ui.macro_url)
-    }&e=" width="400" height="400"></iframe>
-</div>
-<script type="text/javascript" src="${URL_prefix}/embed.js"><script>`,
+<iframe class="quiver-embed"\
+src="${include_macro_url(output).data}&scale=${encodeURIComponent(-0.75)}&embed="\
+width="400" height="400" style="border-radius: 8px; border: none;">\
+</iframe>`,
                           metadata: output.metadata,
                       };
                   });
@@ -5052,6 +5057,11 @@ class Shortcuts {
 
         // Handle global key presses (such as, but not exclusively limited to, keyboard shortcuts).
         const handle_shortcut = (type, event) => {
+            // Ignore everything in embedded mode.
+            if (ui.in_mode(UIMode.Embedded)) {
+                return;
+            }
+
             // Many keyboard shortcuts are only relevant when we're not midway
             // through typing in an input, which should capture key presses.
             const editing_input = ui.input_is_active();
@@ -6584,9 +6594,18 @@ document.addEventListener("DOMContentLoaded", () => {
     const load_quiver_from_query_string = () => {
         const query_data = query_parameters();
 
-        // If there is `e` in the query string, we want to treat the UI as running in embedded mode.
-        if (query_data.has("e")) {
-            ui.switch_mode(new UIMode.Embed(ui));
+        // Set the initial zoom level based on the `scale` parameter.
+        if (query_data.has("scale")) {
+            const scale = parseFloat(decodeURIComponent(query_data.get("scale")));
+            if (!isNaN(scale)) {
+                ui.pan_view(Offset.zero(), scale);
+            }
+        }
+
+        // A parameter `embed` in the query string means we want to treat the UI as running in embedded mode
+        // (i.e. disable all interaction).
+        if (query_data.has("embed")) {
+            ui.switch_mode(new UIMode.Embedded(ui))
         }
 
         // If there is `q` parameter in the query string, try to decode it as a diagram.

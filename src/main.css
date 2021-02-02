@@ -191,6 +191,10 @@ kbd {
     transition: opacity 0.6s;
 }
 
+.loading-screen.embed {
+    background: white;
+}
+
 .loading-screen.hidden {
     opacity: 0;
 
@@ -1534,25 +1538,25 @@ label input[type="checkbox"]:checked::before {
     font-size: 1em;
 }
 
-/* Embed */
+/* Embedded view */
 
-.ui.embed .panel {
+.ui.embedded .panel {
     visibility: hidden;
 }
 
-.ui.embed .toolbar {
+.ui.embedded .toolbar {
     visibility: hidden;
 }
 
-.ui.embed .focus-point {
+.ui.embedded .focus-point {
     visibility: hidden;
 }
 
-.ui.embed .arrow:not(.target):not(.selected) > svg:first-child:hover {
+.ui.embedded .arrow:not(.target):not(.selected) > svg:first-child:hover {
     visibility: hidden;
 }
 
-.ui.embed a > .logo {
+.ui.embedded a > .logo {
     transform: scale(0.75);
     left: auto;
     top: auto;
