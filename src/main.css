@@ -427,8 +427,8 @@ being. */
     left: 50%;
     bottom: 0;
     transform: translateX(-50%);
-    width: 40%;
-    min-width: 1100px;
+    width: 35%;
+    min-width: 820px;
     height: 46px;
     padding: 8px;
     /* Display above the export pane. */
@@ -837,7 +837,8 @@ div.slider {
 
 .global button {
     display: inline-block;
-    width: calc(25% - 4px);
+    width: calc(15% - 4px);
+    min-width: auto;
     margin: 0;
 }
 

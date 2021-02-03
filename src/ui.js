@@ -4344,8 +4344,8 @@ class Panel {
         // The export button.
         const export_to_latex = Panel.create_button_with_shortcut(
             ui,
-            "Export to LaTeX",
-            "Export to LaTeX",
+            "LaTeX",
+            "LaTeX",
             { key: "E", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always },
             () => display_export_pane("tikz-cd"),
         );
@@ -4364,14 +4364,16 @@ class Panel {
         };
 
         this.global = new DOM.Div({ class: "panel global" }).add(
+            new DOM.Element("label").add("Export: ")
+        ).add(
             // The shareable link button.
-            new DOM.Element("button").add("Get shareable link")
+            new DOM.Element("button").add("Shareable link")
                 .listen("click", () => {
                     display_export_pane("base64", include_macro_url);
                 })
         ).add(
           // The embed button.
-          new DOM.Element("button").add("Get embed code")
+          new DOM.Element("button").add("Embed code")
               .listen("click", () => {
                   display_export_pane("base64", (output) => {
                       const URL_prefix = window.location.href
