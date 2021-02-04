@@ -33,6 +33,8 @@ Object.assign(CONSTANTS, {
     EDGE_EDGE_PADDING: 20,
     /// Assumed pixel dimensions of an HTML embedded diagram until users specifies otherwise.
     DEFAULT_EMBED_DIMENSION: 400,
+    /// How many pixels to leave around the border of an embedded diagram.
+    EMBED_PADDING: 50,
 });
 
 /// Various states for the UI (e.g. whether cells are being rearranged, or connected, etc.).
@@ -2425,15 +2427,11 @@ class UI {
     /// Scales the diagram such that it fills the available window size.
     scale_to_fit() {
         // Get the window size.
-        const width = document.body.clientWidth;
-        const height = document.body.clientHeight;
+        const width = Math.max(0.1, document.body.clientWidth - 2 * CONSTANTS.EMBED_PADDING);
+        const height = Math.max(0.1, document.body.clientHeight - 2 * CONSTANTS.EMBED_PADDING);
         // Compute the size of the diagram.
         const diagram_size = this.diagram_size();
-        // Split on whether the diagram is wider than it is tall (or vice versa)
-        // and compute scale factor.
-        const scale_factor = width >= height
-            ? height / diagram_size[1]
-            : width / diagram_size[0];
+        const scale_factor = Math.min(width / diagram_size[0], height / diagram_size[1]);
         this.pan_view(Offset.zero(), Math.log(scale_factor) / Math.log(2));
     }
 
