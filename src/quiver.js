@@ -191,12 +191,15 @@ class Quiver {
     /// Currently, the supported formats are:
     /// - "tikz-cd"
     /// - "base64"
+    /// - "html-embed"
     export(format, settings, definitions) {
         switch (format) {
             case "tikz-cd":
                 return QuiverExport.tikz_cd.export(this, settings, definitions);
             case "base64":
                 return QuiverImportExport.base64.export(this, settings, definitions);
+            case "html-embed":
+                return QuiverExport.html_embed.export(this, settings, definitions);
             default:
                 throw new Error(`unknown export format \`${format}\``);
         }
@@ -231,7 +234,7 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
             if (settings.get("export.centre_diagram")) {
                 tikzcd = `\\[${tikzcd}\\]`;
             }
-            return `% ${QuiverImportExport.base64.export(quiver).data}\n${tikzcd}`;
+            return `% ${QuiverImportExport.base64.export(quiver, settings).data}\n${tikzcd}`;
         };
 
         // Early exit for empty quivers.
@@ -719,7 +722,7 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
     // - An `index` is an integer indexing into the array `[...vertices, ...edges]`.
     // - Arrays may be truncated if the values of the elements are the default values.
 
-    export(quiver) {
+    export(quiver, settings) {
         // Remove the query string from the current URL and use that as a base.
         const URL_prefix = window.location.href.replace(/\?.*$/, "");
 
@@ -829,9 +832,16 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
         const VERSION = 0;
         const output = [VERSION, quiver.cells[0].size, ...cells];
 
+        // URL encode the macro URL if it's not null.
+        const macro_data = settings.get("latex.macro_url") !== null
+            ? `&macro_url=${encodeURIComponent(settings.get("latex.macro_url"))}`
+            : "";
+
         return {
             // We use this `unescape`-`encodeURIComponent` trick to encode non-ASCII characters.
-            data: `${URL_prefix}?q=${btoa(unescape(encodeURIComponent(JSON.stringify(output))))}`,
+            data: `${URL_prefix}?q=${
+              btoa(unescape(encodeURIComponent(JSON.stringify(output))))
+            }${macro_data}`,
             metadata: {},
         };
     }
@@ -1076,3 +1086,17 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
         return quiver;
     }
 };
+
+QuiverExport.html_embed = new class extends QuiverExport {
+    export (quiver, settings, definitions) {
+        const URL_prefix = window.location.href.replace(/\?.*$/, "");
+        return {
+            data: `<!-- ${URL_prefix} -->
+<iframe class="quiver-embed"\
+src="${QuiverImportExport.base64.export(quiver, settings).data}&scale=${encodeURIComponent(-0.75)}&embed="\
+width="400" height="400" style="border-radius: 8px; border: none;">\
+</iframe>`,
+            metadata: {},
+        };
+    }
+}

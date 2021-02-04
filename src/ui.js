@@ -597,9 +597,6 @@ class UI {
         // LaTeX colour definitions.
         this.colours = new Map();
 
-        // The URL from which the macros have been fetched (if at all).
-        this.macro_url = null;
-
         // The user settings, which are stored persistently across sessions in `localStorage`.
         this.settings = new Settings();
     }
@@ -2407,24 +2404,23 @@ class UI {
         }
     }
 
-    // Computes the size of the diagram.
+    /// Computes the size of the diagram.
     diagram_size() {
         let width = 0;
         let height = 0;
-
+        // Compute the extrema of the diagram.
         const bounding_rect = this.quiver.bounding_rect();
-
+        // Sum to compute with and height.
         for (let x = bounding_rect[0]; x <= bounding_rect[1]; ++x) {
             width += this.cell_size(this.cell_width, x);
         }
-
         for (let y = bounding_rect[2]; y <= bounding_rect[3]; ++y) {
             height += this.cell_size(this.cell_height, y);
         }
-
         return [width, height];
     }
 
+    /// Scales the diagram such that it fills the available window size.
     scale_to_fit() {
         // Get the window size.
         const width = document.body.clientWidth;
@@ -3032,9 +3028,9 @@ class UI {
     /// Load macros from a URL.
     load_macros_from_url(url) {
         // Reset the stored macro URL. We don't want to store outdated URLs, but we also don't
-        // want to store invalid URLs, so we'll set `macro_url` when we succeed in fetching the
+        // want to store invalid URLs, so we'll set `latex.macro_url` when we succeed in fetching the
         // definitions.
-        this.macro_url = null;
+        this.settings.set("latex.macro_url", null);
 
         const macro_input = this.panel.global.query_selector("input");
         url = url.trim();
@@ -3061,7 +3057,7 @@ class UI {
                     .then((response) => response.text())
                     .then((text) => {
                         this.load_macros(text);
-                        this.macro_url = url;
+                        this.settings.set("latex.macro_url", url);
                         success_indicator.class_list.remove("unknown");
                         success_indicator.class_list.add("success");
                         macro_input.element.blur();
@@ -3484,6 +3480,8 @@ class Settings {
             "export.centre_diagram": true,
             // Which variant of the corner to use for pullbacks/pushouts.
             "diagram.var_corner": false,
+            // The URL from which our LaTeX macros are loaded.
+            "latex.macro_url": null,
         };
         try {
             // Try to update the default values with the saved settings.
@@ -4382,43 +4380,19 @@ class Panel {
             () => display_export_pane("tikz-cd"),
         );
 
-        // Helper for including the macro URL in base64 encoded URLs so long as its non-null.
-        const include_macro_url = (output) => {
-            if (ui.macro_url !== null) {
-                return {
-                    data: `${output.data}&macro_url=${
-                        encodeURIComponent(ui.macro_url)
-                    }`,
-                    metadata: output.metadata,
-                };
-            }
-            return output;
-        };
-
         this.global = new DOM.Div({ class: "panel global" }).add(
             new DOM.Element("label").add("Export: ")
         ).add(
             // The shareable link button.
             new DOM.Element("button").add("Shareable link")
                 .listen("click", () => {
-                    display_export_pane("base64", include_macro_url);
+                    display_export_pane("base64");
                 })
         ).add(
           // The embed button.
           new DOM.Element("button").add("Embed code")
               .listen("click", () => {
-                  display_export_pane("base64", (output) => {
-                      const URL_prefix = window.location.href
-                          .replace(/(\/index\.html)?\?.*$/, "");
-                      return {
-                          data: `<!-- ${URL_prefix} -->
-<iframe class="quiver-embed"\
-src="${include_macro_url(output).data}&scale=${encodeURIComponent(-0.75)}&embed="\
-width="400" height="400" style="border-radius: 8px; border: none;">\
-</iframe>`,
-                          metadata: output.metadata,
-                      };
-                  });
+                  display_export_pane("html-embed");
               })
         ).add(export_to_latex)
         .add(
