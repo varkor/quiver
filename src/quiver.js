@@ -134,6 +134,20 @@ class Quiver {
         }
     }
 
+    bounding_rect() {
+        const objects = Array.from(this.cells[0]);
+
+        const xs = objects.map((cell) => cell.position.x);
+        const ys = objects.map((cell) => cell.position.y);
+
+        return [
+            Math.min(...xs),
+            Math.max(...xs),
+            Math.min(...ys),
+            Math.max(...ys),
+        ];
+    }
+
     /// Returns whether the quiver is empty.
     is_empty() {
         return this.dependencies.size - this.deleted.size === 0;
