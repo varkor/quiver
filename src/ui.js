@@ -31,6 +31,8 @@ Object.assign(CONSTANTS, {
     LONG_PRESS_DURATION: 800,
     /// How much to shorten edges connected to edges by (in %), by default.
     EDGE_EDGE_PADDING: 20,
+    /// Assumed pixel dimensions of an HTML embedded diagram until users specifies otherwise.
+    DEFAULT_EMBED_DIMENSION: 400,
 });
 
 /// Various states for the UI (e.g. whether cells are being rearranged, or connected, etc.).
@@ -3478,6 +3480,10 @@ class Settings {
         this.data = {
             // Whether to wrap the `tikz-cd` output in `\[ \]`.
             "export.centre_diagram": true,
+            // The user defined HTML embedded diagram width in pixels.
+            "export.html.width": CONSTANTS.DEFAULT_EMBED_DIMENSION,
+            // The user defined HTML embedded diagram height in pixels.
+            "export.html.height": CONSTANTS.DEFAULT_EMBED_DIMENSION,
             // Which variant of the corner to use for pullbacks/pushouts.
             "diagram.var_corner": false,
             // The URL from which our LaTeX macros are loaded.
@@ -4215,7 +4221,7 @@ class Panel {
                     ui.definitions(),
                 ));
 
-                let export_pane, tip, warning, list, options, content;
+                let export_pane, tip, warning, list, latex_options, embed_options, content;
 
                 const update_output = (data) => {
                     // At present, the data is always a string.
@@ -4295,12 +4301,23 @@ class Panel {
                         .add_to(export_pane);
 
                     const checkbox = new DOM.Element("input", { type: "checkbox" });
-                    options = new DOM.Div({ class: "options hidden" })
+                    latex_options = new DOM.Div({ class: "options latex hidden" })
                         .add(new DOM.Element("label")
                             .add(checkbox)
                             .add("Centre diagram")
                         )
                         .add_to(export_pane);
+
+                    const width = new DOM.Element("input", { type: "text" });
+                    const height = new DOM.Element("input", { type: "text" });
+                    embed_options = new DOM.Div({ class: "options embed hidden" })
+                        .add(new DOM.Element("span")
+                            .add("Width: ")
+                            .add(width)
+                            .add("px Height: ")
+                            .add(height)
+                            .add("px")
+                        ).add_to(export_pane)
 
                     // When the shortcut is active, we will always be displaying the modal pane,
                     // so the shortcut is always valid.
@@ -4308,7 +4325,7 @@ class Panel {
                     new DOM.Element("kbd", { class: "hint button" })
                         .add(Shortcuts.name([shortcut])).add_to(checkbox.parent);
                     const shortcuts = [ui.shortcuts.add([shortcut], () => {
-                        if (!options.class_list.contains("hidden")) {
+                        if (!latex_options.class_list.contains("hidden")) {
                             checkbox.element.checked = !checkbox.element.checked;
                             checkbox.dispatch(new Event("change"));
                         }
@@ -4328,6 +4345,24 @@ class Panel {
                     // Prevent the highlighted output from being deselected when changing a setting.
                     checkbox.listen(pointer_event("up"), (event) => event.preventDefault());
 
+                    const on_size_change = (setting, field) => {
+                        let value = parseFloat(field.element.value);
+                        if (isNaN(value)) value = CONSTANTS.DEFAULT_EMBED_DIMENSION;
+                        ui.settings.set(setting, value);
+                        const { data } = modify(ui.quiver.export(
+                            "html-embed",
+                            ui.settings,
+                            ui.definitions(),
+                        ));
+                        update_output(data);
+                    };
+                    width.listen("input", (event) => {
+                        on_size_change("export.html.width", width);
+                    });
+                    height.listen("input", (event) => {
+                        on_size_change("export.html.height", height);
+                    });
+
                     content = new DOM.Div({ class: "code" }).add_to(export_pane);
                     ui.element.add(export_pane);
 
@@ -4338,7 +4373,8 @@ class Panel {
                     tip = export_pane.query_selector(".tip");
                     warning = export_pane.query_selector(".warning");
                     list = export_pane.query_selector("ul");
-                    options = export_pane.query_selector(".options");
+                    latex_options = export_pane.query_selector(".options.latex");
+                    embed_options = export_pane.query_selector(".options.embed");
                     content = export_pane.query_selector(".code");
                 }
                 // Display a warning if necessary.
@@ -4352,14 +4388,20 @@ class Panel {
                 }
                 tip.class_list.toggle("hidden", format !== "tikz-cd");
                 warning.class_list.toggle("hidden", unsupported_items.length === 0);
-                options.class_list.toggle("hidden", format !== "tikz-cd");
+                latex_options.class_list.toggle("hidden", format !== "tikz-cd");
+                embed_options.class_list.toggle("hidden", format !== "html-embed");
 
-                const centre_checkbox = options.query_selector('input[type="checkbox"]');
+                const centre_checkbox = latex_options.query_selector('input[type="checkbox"]');
                 if (ui.settings.get("export.centre_diagram")) {
                     centre_checkbox.set_attributes({ checked: "" });
                 } else {
                     centre_checkbox.remove_attributes("checked");
                 }
+
+                const embed_text_fields = embed_options
+                    .query_selector_all('input[type="text"]');
+                embed_text_fields[0].element.value = (ui.settings.get("export.html.width"));
+                embed_text_fields[1].element.value = (ui.settings.get("export.html.height"));
 
                 this.export.format = format;
 
@@ -6644,7 +6686,9 @@ document.addEventListener("DOMContentLoaded", () => {
                     ui.load_macros_from_url(decodeURIComponent(query_data.get("macro_url")));
                 }
                 // Adjust the diagram scale to fit the screen in embedded view.
-                if (query_data.has("embed")) {
+                // However, we have to be careful to only do this if the user
+                // hasn't already set the scale explicitly.
+                if (query_data.has("embed") && !query_data.has("scale")) {
                     ui.scale_to_fit();
                 }
                 dismiss_loading_screen();

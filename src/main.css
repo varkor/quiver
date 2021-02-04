@@ -1398,7 +1398,7 @@ button.flash {
     border-radius: 2px;
 
     font-variant: small-caps;
-	font-size: 10pt;
+	  font-size: 10pt;
 }
 
 .export .warning {
@@ -1476,6 +1476,30 @@ label input[type="checkbox"]:checked::before {
     overflow-wrap: break-word;
     tab-size: 4;
     -moz-tab-size: 4;
+}
+
+.export .options input[type="text"] {
+    padding: 2px 4px;
+
+    background: var(--ui-background);
+    border: var(--ui-border) solid 1px;
+    border-radius: 2px;
+    outline: none;
+
+    font-size: inherit;
+    font-family: monospace;
+    color: var(--ui-white);
+}
+
+.panel input[type="text"]:focus {
+    background: var(--ui-focus);
+    border-color: var(--ui-focus);
+
+    color: hsl(0, 0%, 16%);
+}
+
+.panel input[type="text"]:focus::placeholder {
+    color: hsla(0, 0%, 0%, 0.4);
 }
 
 /* Arrows */

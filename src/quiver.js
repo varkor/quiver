@@ -1093,8 +1093,10 @@ QuiverExport.html_embed = new class extends QuiverExport {
         return {
             data: `<!-- ${URL_prefix} -->
 <iframe class="quiver-embed"\
-src="${QuiverImportExport.base64.export(quiver, settings).data}&scale=${encodeURIComponent(-0.75)}&embed="\
-width="400" height="400" style="border-radius: 8px; border: none;">\
+src="${QuiverImportExport.base64.export(quiver, settings).data}&embed="\
+width="${settings.get("export.html.width")}"\
+height="${settings.get("export.html.height")}"\
+style="border-radius: 8px; border: none;">\
 </iframe>`,
             metadata: {},
         };
