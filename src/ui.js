@@ -31,8 +31,6 @@ Object.assign(CONSTANTS, {
     LONG_PRESS_DURATION: 800,
     /// How much to shorten edges connected to edges by (in %), by default.
     EDGE_EDGE_PADDING: 20,
-    /// How many pixels of padding to place around embedded diagrams.
-    EMBED_PADDING: 50,
 });
 
 /// Various states for the UI (e.g. whether cells are being rearranged, or connected, etc.).
@@ -2428,15 +2426,9 @@ class UI {
     }
 
     scale_to_fit() {
-        // Get the window size, accounting for the border we want to guarantee.
-        const width = Math.max(
-            0,
-            document.body.clientWidth - 2 * CONSTANTS.EMBED_PADDING
-        );
-        const height = Math.max(
-            0,
-            document.body.clientHeight - 2 * CONSTANTS.EMBED_PADDING
-        );
+        // Get the window size.
+        const width = document.body.clientWidth;
+        const height = document.body.clientHeight;
         // Compute the size of the diagram.
         const diagram_size = this.diagram_size();
         // Split on whether the diagram is wider than it is tall (or vice versa)
@@ -2444,7 +2436,7 @@ class UI {
         const scale_factor = width >= height
             ? height / diagram_size[1]
             : width / diagram_size[0];
-        this.pan_view(Offset.zero(), Math.log(scale_factor, 2));
+        this.pan_view(Offset.zero(), Math.log(scale_factor) / Math.log(2));
     }
 
     /// Returns whether there are any selected vertices.
