@@ -374,17 +374,3 @@ function query_parameters() {
     }
     return new Map();
 }
-
-// Takes a `Map` containing a collection of query parameters and reconstrcts a corresponding
-// URL. An array containing parameters to ignore is used to delete unwanted query parameters.
-function reconstruct_URL(query_data, to_ignore) {
-    const URL_prefix = window.location.href.replace(/\?.*$/, "?");
-    if (query_data !== null) {
-        return Array.from(query_data.entries())
-            .filter((entry) => !to_ignore.includes(entry[0]))
-            .map((entry) => `${encodeURIComponent(entry[0])}=${encodeURIComponent(entry[1])}`)
-            .reduce((acc, x) => `${acc}&${x}`, URL_prefix);
-    } else {
-        return URL_prefix;
-    }
-}

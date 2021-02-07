@@ -59,6 +59,7 @@ to return to it later if you decide it needs to be modified, or to share it with
 - Multiple selection, making mass changes easy and fast.
 - A history system, allowing you to undo/redo actions.
 - Support for custom macro definitions: simply paste a URL corresponding to the file containing your `\newcommand`s.
+- Export embeddable diagrams to HTML.
 - Panning and zooming, for large diagrams.
 - Smart label alignment and edge offset.
 

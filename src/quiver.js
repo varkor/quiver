@@ -134,17 +134,16 @@ class Quiver {
         }
     }
 
+    /// Returns the `[[x_min, y_min], [x_max, y_max]]` positions of the vertices in the diagram.
     bounding_rect() {
-        const objects = Array.from(this.cells[0]);
+        const vertices = Array.from(this.cells[0]);
 
-        const xs = objects.map((cell) => cell.position.x);
-        const ys = objects.map((cell) => cell.position.y);
+        const xs = vertices.map((cell) => cell.position.x);
+        const ys = vertices.map((cell) => cell.position.y);
 
         return [
-            Math.min(...xs),
-            Math.max(...xs),
-            Math.min(...ys),
-            Math.max(...ys),
+            [Math.min(...xs), Math.min(...ys)],
+            [Math.max(...xs), Math.max(...ys)],
         ];
     }
 
@@ -191,15 +190,19 @@ class Quiver {
     /// Currently, the supported formats are:
     /// - "tikz-cd"
     /// - "base64"
-    /// - "html-embed"
-    export(format, settings, definitions) {
+    /// - "html"
+    /// `settings` describes persistent user settings (like whether to centre the diagram);
+    /// `options` describes non-persistent user settings and diagram attributes (like the macro
+    /// URL, and the dimensions of the diagram);
+    /// `definitions` contains key-value pairs for macros and colours.
+    export(format, settings, options, definitions) {
         switch (format) {
             case "tikz-cd":
-                return QuiverExport.tikz_cd.export(this, settings, definitions);
+                return QuiverExport.tikz_cd.export(this, settings, options, definitions);
             case "base64":
-                return QuiverImportExport.base64.export(this, settings, definitions);
-            case "html-embed":
-                return QuiverExport.html_embed.export(this, settings, definitions);
+                return QuiverImportExport.base64.export(this, settings, options, definitions);
+            case "html":
+                return QuiverExport.html.export(this, settings, options, definitions);
             default:
                 throw new Error(`unknown export format \`${format}\``);
         }
@@ -219,7 +222,7 @@ class QuiverImportExport extends QuiverExport {
 }
 
 QuiverExport.tikz_cd = new class extends QuiverExport {
-    export(quiver, settings, definitions) {
+    export(quiver, settings, options, definitions) {
         let output = "";
 
         // Wrap tikz-cd code with `\begin{tikzcd} ... \end{tikzcd}`.
@@ -234,7 +237,9 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
             if (settings.get("export.centre_diagram")) {
                 tikzcd = `\\[${tikzcd}\\]`;
             }
-            return `% ${QuiverImportExport.base64.export(quiver, settings).data}\n${tikzcd}`;
+            return `% ${
+                QuiverImportExport.base64.export(quiver, settings, options, definitions).data
+            }\n${tikzcd}`;
         };
 
         // Early exit for empty quivers.
@@ -722,7 +727,7 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
     // - An `index` is an integer indexing into the array `[...vertices, ...edges]`.
     // - Arrays may be truncated if the values of the elements are the default values.
 
-    export(quiver, settings) {
+    export(quiver, _, options) {
         // Remove the query string from the current URL and use that as a base.
         const URL_prefix = window.location.href.replace(/\?.*$/, "");
 
@@ -832,10 +837,9 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
         const VERSION = 0;
         const output = [VERSION, quiver.cells[0].size, ...cells];
 
-        // URL encode the macro URL if it's not null.
-        const macro_data = settings.get("latex.macro_url") !== null
-            ? `&macro_url=${encodeURIComponent(settings.get("latex.macro_url"))}`
-            : "";
+        // Encode the macro URL if it's not null.
+        const macro_data = options.macro_url !== null
+            ? `&macro_url=${encodeURIComponent(options.macro_url)}` : "";
 
         return {
             // We use this `unescape`-`encodeURIComponent` trick to encode non-ASCII characters.
@@ -1087,15 +1091,22 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
     }
 };
 
-QuiverExport.html_embed = new class extends QuiverExport {
-    export (quiver, settings, definitions) {
-        const URL_prefix = window.location.href.replace(/\?.*$/, "");
+QuiverExport.html = new class extends QuiverExport {
+    export (quiver, settings, options, definitions) {
+        const url = QuiverImportExport.base64.export(quiver, settings, options, definitions).data;
+        let [width, height] = settings.get("export.embed.fixed_size") ? [
+            settings.get("export.embed.width"),
+            settings.get("export.embed.height"),
+        ] : [
+            options.dimensions.width + 2 * CONSTANTS.EMBED_PADDING,
+            options.dimensions.height + 2 * CONSTANTS.EMBED_PADDING,
+        ];
         return {
-            data: `<!-- ${URL_prefix} -->
-<iframe class="quiver-embed"\
-src="${QuiverImportExport.base64.export(quiver, settings).data}&embed="\
-width="${settings.get("export.html.width")}"\
-height="${settings.get("export.html.height")}"\
+            data: `<!-- ${url} -->
+<iframe class="quiver-embed" \
+src="${url}&embed" \
+width="${width}" \
+height="${height}" \
 style="border-radius: 8px; border: none;">\
 </iframe>`,
             metadata: {},

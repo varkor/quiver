@@ -70,10 +70,15 @@
             document.addEventListener("keydown", cancel);
             document.addEventListener("keyup", cancel);
 
-            // Conditionally add `embed` to the class list so that we can alter the loading screen
-            // style defaults in an embedded view.
-            const class_list = `loading-screen ${query_data.has("embed") ? "embed" : ""}`;
-            const loading_screen = new DOM.Div({ class: class_list })
+            if (query_data.has("embed")) {
+                // If the `embed` query parameter is present, we'll automatically switch to
+                // `UIMode.Embedded` in `ui.js`, which will add the `embedded` class to the body.
+                // However, we pre-empt this here by adding `embedded` immediately upon loading, so
+                // that the `loading_screen` will have the correct CSS applied from the start.
+                document.body.classList.add("embedded");
+            }
+
+            const loading_screen = new DOM.Div({ class: "loading-screen" })
                 .add(new DOM.Element("img", { src: "quiver-blue.svg", class: "logo" }))
                 .add(new DOM.Element("span").add("Loading diagram..."))
                 // Prevent pointer events effected during loading from taking place after loading
@@ -83,6 +88,17 @@
                 .listen(pointer_event("up"), cancel)
                 .listen("wheel", cancel, { passive: true });
             document.body.appendChild(loading_screen.element);
+        }
+
+        // Takes a `Map` containing a collection of query parameters and reconstructs a
+        // corresponding URL. An array containing parameters to `ignore` is used to delete unwanted
+        // query parameters.
+        function reconstruct_URL(query_data, ignore) {
+            const URL_prefix = window.location.href.replace(/\?.*$/, "?");
+            return Array.from(query_data.entries())
+                .filter(([key,]) => !ignore.includes(key))
+                .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+                .reduce((acc, x) => `${acc}&${x}`, URL_prefix);
         }
 
         // If we're running in embedded view, update the logo so that clicking it opens the

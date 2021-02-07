@@ -191,10 +191,6 @@ kbd {
     transition: opacity 0.6s;
 }
 
-.loading-screen.embed {
-    background: white;
-}
-
 .loading-screen.hidden {
     opacity: 0;
 
@@ -216,6 +212,21 @@ kbd {
     margin-left: 20px; margin-top: 32px;
 
     color: var(--ui-blue);
+    white-space: nowrap;
+}
+
+.embedded .loading-screen {
+    background: white;
+}
+
+.embedded .loading-screen .logo {
+    max-width: 60%;
+}
+
+.embedded .loading-screen span {
+    /* Hide the "Loading diagram..." text in an `<iframe>`, because there's likely not to be enough
+    space for it. */
+    display: none;
 }
 
 /* The canvas of cells */
@@ -427,8 +438,7 @@ being. */
     left: 50%;
     bottom: 0;
     transform: translateX(-50%);
-    width: 35%;
-    min-width: 820px;
+    width: 704px;
     height: 46px;
     padding: 8px;
     /* Display above the export pane. */
@@ -559,7 +569,8 @@ being. */
     display: none;
 }
 
-.panel input[type="text"] {
+.panel input[type="text"],
+.export .options input[type="number"] {
     padding: 2px 4px;
 
     background: var(--ui-background);
@@ -572,22 +583,26 @@ being. */
     color: var(--ui-white);
 }
 
-.panel input[type="text"]::placeholder {
+.panel input[type="text"]::placeholder,
+.export .options input[type="number"]::placeholder {
     color: hsla(0, 0%, 100%, 0.4);
 }
 
-.panel input[type="text"]:hover:not(:disabled):not(:focus) {
+.panel input[type="text"]:hover:not(:disabled):not(:focus),
+.export .options input[type="number"]:hover:not(:disabled):not(:focus) {
     background: var(--ui-hover);
 }
 
-.panel input[type="text"]:focus {
+.panel input[type="text"]:focus,
+.export .options input[type="number"]:focus {
     background: var(--ui-focus);
     border-color: var(--ui-focus);
 
     color: hsl(0, 0%, 16%);
 }
 
-.panel input[type="text"]:focus::placeholder {
+.panel input[type="text"]:focus::placeholder,
+.export .options input[type="number"]:focus::placeholder {
     color: hsla(0, 0%, 0%, 0.4);
 }
 
@@ -837,8 +852,7 @@ div.slider {
 
 .global button {
     display: inline-block;
-    width: calc(15% - 4px);
-    min-width: auto;
+    width: 112px;
     margin: 0;
 }
 
@@ -1398,7 +1412,7 @@ button.flash {
     border-radius: 2px;
 
     font-variant: small-caps;
-	  font-size: 10pt;
+	font-size: 10pt;
 }
 
 .export .warning {
@@ -1431,11 +1445,27 @@ button.flash {
 .export .options label {
     position: relative;
     top: 1px;
+    margin-right: 20pt;
 }
 
 .export .options label kbd.hint {
     /* Leave some space for the checkbox itself. */
     transform: translate(-50%, -50%);
+}
+
+.export .options input[type="number"] {
+    width: 64px;
+    margin-right: -12pt;
+}
+
+/* Disable the up/down buttons for `type="number"` inputs. */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+input[type="number"] {
+    -moz-appearance: textfield;
 }
 
 label input[type="checkbox"] {
@@ -1476,30 +1506,6 @@ label input[type="checkbox"]:checked::before {
     overflow-wrap: break-word;
     tab-size: 4;
     -moz-tab-size: 4;
-}
-
-.export .options input[type="text"] {
-    padding: 2px 4px;
-
-    background: var(--ui-background);
-    border: var(--ui-border) solid 1px;
-    border-radius: 2px;
-    outline: none;
-
-    font-size: inherit;
-    font-family: monospace;
-    color: var(--ui-white);
-}
-
-.panel input[type="text"]:focus {
-    background: var(--ui-focus);
-    border-color: var(--ui-focus);
-
-    color: hsl(0, 0%, 16%);
-}
-
-.panel input[type="text"]:focus::placeholder {
-    color: hsla(0, 0%, 0%, 0.4);
 }
 
 /* Arrows */
@@ -1565,26 +1571,21 @@ label input[type="checkbox"]:checked::before {
 
 /* Embedded view */
 
-.ui.embedded .panel {
-    visibility: hidden;
-}
-
-.ui.embedded .toolbar {
-    visibility: hidden;
-}
-
-.ui.embedded .focus-point {
-    visibility: hidden;
-}
-
+.ui.embedded .panel,
+.ui.embedded .toolbar,
+.ui.embedded .focus-point,
 .ui.embedded .arrow:not(.target):not(.selected) > svg:first-child:hover {
-    visibility: hidden;
+    display: none;
 }
 
 .ui.embedded a > .logo {
-    transform: scale(0.75);
-    left: auto;
-    top: auto;
+    top: auto; bottom: 12px;
     left: 12px;
-    bottom: 12px;
+    transform: scale(0.75);
+
+    opacity: 0.2;
+}
+
+.ui.embedded a > .logo:hover {
+    opacity: 0.4;
 }
