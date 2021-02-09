@@ -516,8 +516,6 @@ UIMode.Embedded = class extends UIMode {
         super();
 
         this.name = "embedded";
-
-        ui.grid.class_list.add("hidden");
     }
 }
 
@@ -2432,7 +2430,11 @@ class UI {
     diagram_size() {
         let [width, height] = [0, 0];
         // Compute the extrema of the diagram.
-        const [[x_min, y_min], [x_max, y_max]] = this.quiver.bounding_rect();
+        const bounding_rect = this.quiver.bounding_rect();
+        if (bounding_rect === null) {
+            return Dimensions.zero();
+        }
+        const [[x_min, y_min], [x_max, y_max]] = bounding_rect;
         // Sum to compute width and height.
         for (let x = x_min; x <= x_max; ++x) {
             width += this.cell_size(this.cell_width, x);

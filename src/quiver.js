@@ -134,8 +134,13 @@ class Quiver {
         }
     }
 
-    /// Returns the `[[x_min, y_min], [x_max, y_max]]` positions of the vertices in the diagram.
+    /// Returns the `[[x_min, y_min], [x_max, y_max]]` positions of the vertices in the quiver, or
+    /// `null` if there are no vertices in the quiver.
     bounding_rect() {
+        if (this.is_empty()) {
+            return null;
+        }
+
         const vertices = Array.from(this.cells[0]);
 
         const xs = vertices.map((cell) => cell.position.x);
@@ -1104,7 +1109,7 @@ QuiverExport.html = new class extends QuiverExport {
         return {
             data: `<!-- ${url} -->
 <iframe class="quiver-embed" \
-src="${url}&embed" \
+src="${url}${!quiver.is_empty() ? "&" : "?"}embed" \
 width="${width}" \
 height="${height}" \
 style="border-radius: 8px; border: none;">\

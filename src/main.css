@@ -1573,6 +1573,7 @@ label input[type="checkbox"]:checked::before {
 
 .ui.embedded .panel,
 .ui.embedded .toolbar,
+.ui.embedded .grid,
 .ui.embedded .focus-point,
 .ui.embedded .arrow:not(.target):not(.selected) > svg:first-child:hover {
     display: none;

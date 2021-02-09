@@ -64,19 +64,27 @@
         // If we are loading a diagram, display a loading screen to prevent a flash of empty canvas.
         // We do this in a `<script>` tag here to make sure that it loads immediately.
         const query_data = query_parameters();
+
+        // If we're running in embedded view, update the logo so that clicking it opens the
+        // the current diagram in the app.
+        if (query_data.has("embed")) {
+            // If the `embed` query parameter is present, we'll automatically switch to
+            // `UIMode.Embedded` in `ui.js`, which will add the `embedded` class to the body.
+            // However, we pre-empt this here by adding `embedded` immediately upon loading, so
+            // that the `loading_screen` will have the correct CSS applied from the start.
+            document.body.classList.add("embedded");
+
+            document.querySelector("#logo-link").href = reconstruct_URL(query_data, [
+                "embed",
+                "scale",
+            ]);
+        }
+
         if (query_data.has("q")) {
             // Prevent keyboard events effected during loading from taking place after loading
             // has completed.
             document.addEventListener("keydown", cancel);
             document.addEventListener("keyup", cancel);
-
-            if (query_data.has("embed")) {
-                // If the `embed` query parameter is present, we'll automatically switch to
-                // `UIMode.Embedded` in `ui.js`, which will add the `embedded` class to the body.
-                // However, we pre-empt this here by adding `embedded` immediately upon loading, so
-                // that the `loading_screen` will have the correct CSS applied from the start.
-                document.body.classList.add("embedded");
-            }
 
             const loading_screen = new DOM.Div({ class: "loading-screen" })
                 .add(new DOM.Element("img", { src: "quiver-blue.svg", class: "logo" }))
@@ -99,15 +107,6 @@
                 .filter(([key,]) => !ignore.includes(key))
                 .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
                 .reduce((acc, x) => `${acc}&${x}`, URL_prefix);
-        }
-
-        // If we're running in embedded view, update the logo so that clicking it opens the
-        // the current diagram in the app.
-        if (query_data.has("embed")) {
-            document.querySelector("#logo-link").href = reconstruct_URL(query_data, [
-                "embed",
-                "scale",
-            ]);
         }
     </script>
 </body>
