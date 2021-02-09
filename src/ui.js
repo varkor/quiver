@@ -31,6 +31,14 @@ Object.assign(CONSTANTS, {
     LONG_PRESS_DURATION: 800,
     /// How much to shorten edges connected to edges by (in %), by default.
     EDGE_EDGE_PADDING: 20,
+    /// Default dimensions (in pixels) of an HTML embedded diagram, which may be overridden by the
+    /// user.
+    DEFAULT_EMBED_SIZE: {
+        WIDTH: 400,
+        HEIGHT: 400,
+    },
+    /// How many pixels to leave around the border of an embedded diagram.
+    EMBED_PADDING: 24,
 });
 
 /// Various states for the UI (e.g. whether cells are being rearranged, or connected, etc.).
@@ -502,6 +510,17 @@ UIMode.Command = class extends UIMode {
     }
 };
 
+// We are viewing a diagram embedded in another webpage.
+UIMode.Embedded = class extends UIMode {
+    constructor(ui) {
+        super();
+
+        this.name = "embedded";
+
+        ui.grid.class_list.add("hidden");
+    }
+}
+
 /// The object responsible for controlling all aspects of the user interface.
 class UI {
     constructor(element) {
@@ -633,6 +652,16 @@ class UI {
     definitions() {
         const { macros, colours } = this;
         return { macros, colours };
+    }
+
+    /// Returns options that are not saved persistently in `settings`, but are used to modify
+    /// export output.
+    options() {
+        const { macro_url } = this;
+        return {
+            macro_url,
+            dimensions: this.diagram_size(),
+        };
     }
 
     initialise() {
@@ -942,6 +971,11 @@ class UI {
 
         // Handle panning via scrolling.
         window.addEventListener("wheel", (event) => {
+            // We don't want to scroll anything at all in embedded mode.
+            if (this.in_mode(UIMode.Embedded)) {
+                return;
+            }
+
             // We don't want to scroll the page while using the mouse wheel.
             event.preventDefault();
 
@@ -2391,6 +2425,37 @@ class UI {
         }
     }
 
+    /// Computes the size of the diagram.
+    diagram_size() {
+        let [width, height] = [0, 0];
+        // Compute the extrema of the diagram.
+        const [[x_min, y_min], [x_max, y_max]] = this.quiver.bounding_rect();
+        // Sum to compute width and height.
+        for (let x = x_min; x <= x_max; ++x) {
+            width += this.cell_size(this.cell_width, x);
+        }
+        for (let y = y_min; y <= y_max; ++y) {
+            height += this.cell_size(this.cell_height, y);
+        }
+        return new Dimensions(width, height);
+    }
+
+    /// Scales the diagram so that it fills the available window size.
+    scale_to_fit() {
+        // Get the available dimensions to work with within the window.
+        const window_width = Math.max(0, document.body.clientWidth - 2 * CONSTANTS.EMBED_PADDING);
+        const window_height = Math.max(0, document.body.clientHeight - 2 * CONSTANTS.EMBED_PADDING);
+
+        // Compute the size of the diagram.
+        const diagram_size = this.diagram_size();
+        const scale = window_width > 0 && window_height > 0 ?
+            Math.log2(Math.min(
+                window_width / diagram_size.width,
+                window_height / diagram_size.height
+            )) : 0;
+        this.pan_view(Offset.zero(), scale);
+    }
+
     /// Returns whether there are any selected vertices.
     selection_contains_vertex() {
         return Array.from(this.selection).some((cell) => cell.is_vertex());
@@ -2984,7 +3049,7 @@ class UI {
     /// Load macros from a URL.
     load_macros_from_url(url) {
         // Reset the stored macro URL. We don't want to store outdated URLs, but we also don't
-        // want to store invalid URLs, so we'll set `macro_url` when we succeed in fetching the
+        // want to store invalid URLs, so we'll set `this.macro_url` when we succeed in fetching the
         // definitions.
         this.macro_url = null;
 
@@ -3434,6 +3499,13 @@ class Settings {
         this.data = {
             // Whether to wrap the `tikz-cd` output in `\[ \]`.
             "export.centre_diagram": true,
+            // Whether to use a fixed size for the embedded `<iframe>`, or compute the size based on
+            // the diagram.
+            "export.embed.fixed_size": false,
+            // The width of an HTML embedded diagram in pixels.
+            "export.embed.width": CONSTANTS.DEFAULT_EMBED_SIZE.WIDTH,
+            // The height of an HTML embedded diagram in pixels.
+            "export.embed.height": CONSTANTS.DEFAULT_EMBED_SIZE.HEIGHT,
             // Which variant of the corner to use for pullbacks/pushouts.
             "diagram.var_corner": false,
         };
@@ -4166,22 +4238,27 @@ class Panel {
                 const { data, metadata } = modify(ui.quiver.export(
                     format,
                     ui.settings,
+                    ui.options(),
                     ui.definitions(),
                 ));
 
-                let export_pane, tip, warning, list, options, content;
+                let export_pane, tip, warning, list, latex_options, embed_options, content;
 
-                const update_output = (data) => {
+                // Select the code for easy copying.
+                const select_output = () => {
+                    const selection = window.getSelection();
+                    const range = document.createRange();
+                    range.selectNodeContents(content.element);
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+                };
+
+                const update_output = (data, prevent_defocus = false) => {
                     // At present, the data is always a string.
                     content.replace(data);
-                    // Select the code for easy copying.
-                    const select_output = () => {
-                        const selection = window.getSelection();
-                        const range = document.createRange();
-                        range.selectNodeContents(content.element);
-                        selection.removeAllRanges();
-                        selection.addRange(range);
-                    };
+                    if (prevent_defocus) {
+                        return;
+                    }
                     select_output();
                     // Safari seems to occasionally fail to select the text immediately, so we
                     // also select it after a delay to ensure the text is selected.
@@ -4248,39 +4325,98 @@ class Panel {
                         .add(list = new DOM.Element("ul"))
                         .add_to(export_pane);
 
-                    const checkbox = new DOM.Element("input", { type: "checkbox" });
-                    options = new DOM.Div({ class: "options hidden" })
+                    const centre_checkbox = new DOM.Element("input", {
+                        type: "checkbox",
+                        "data-setting": "export.centre_diagram",
+                    });
+                    latex_options = new DOM.Div({ class: "options latex hidden" })
                         .add(new DOM.Element("label")
-                            .add(checkbox)
+                            .add(centre_checkbox)
                             .add("Centre diagram")
                         )
                         .add_to(export_pane);
+
+                    const fixed_size_checkbox = new DOM.Element("input", {
+                        type: "checkbox",
+                        "data-setting": "export.embed.fixed_size",
+                    });
+                    const embed_size = {
+                        width: new DOM.Element("input", { type: "number", min: "0" }),
+                        height: new DOM.Element("input", { type: "number", min: "0" }),
+                    };
+                    embed_options = new DOM.Div({ class: "options embed hidden" })
+                        .add(new DOM.Element("label")
+                            .add(fixed_size_checkbox)
+                            .add("Fixed size")
+                        )
+                        .add(new DOM.Element("label").add("Width: ").add(embed_size.width))
+                        .add(new DOM.Element("label").add("Height: ").add(embed_size.height))
+                        .add_to(export_pane)
 
                     // When the shortcut is active, we will always be displaying the modal pane,
                     // so the shortcut is always valid.
                     const shortcut = { key: "C", context: Shortcuts.SHORTCUT_PRIORITY.Always };
                     new DOM.Element("kbd", { class: "hint button" })
-                        .add(Shortcuts.name([shortcut])).add_to(checkbox.parent);
+                        .add(Shortcuts.name([shortcut])).add_to(centre_checkbox.parent);
                     const shortcuts = [ui.shortcuts.add([shortcut], () => {
-                        if (!options.class_list.contains("hidden")) {
-                            checkbox.element.checked = !checkbox.element.checked;
-                            checkbox.dispatch(new Event("change"));
+                        if (!latex_options.class_list.contains("hidden")) {
+                            centre_checkbox.element.checked = !centre_checkbox.element.checked;
+                            centre_checkbox.dispatch(new Event("change"));
                         }
                     })];
 
-                    checkbox.listen("change", () => {
-                        ui.settings.set("export.centre_diagram", checkbox.element.checked);
-                        // Update the output. We ignore `metadata`, which currently does not change
-                        // in response to the settings.
+                    const checkboxes = [
+                        [centre_checkbox, "tikz-cd"],
+                        [fixed_size_checkbox, "html"],
+                    ];
+                    for (const [checkbox, format] of checkboxes) {
+                        checkbox.listen("change", () => {
+                            ui.settings.set(
+                                checkbox.get_attribute("data-setting"),
+                                checkbox.element.checked,
+                            );
+                            // Update the output. We ignore `metadata`, which currently does not
+                            // change in response to the settings.
+                            const { data } = modify(ui.quiver.export(
+                                format,
+                                ui.settings,
+                                ui.options(),
+                                ui.definitions(),
+                            ));
+                            update_output(data);
+                        });
+                        // Prevent the highlighted output from being deselected when changing a
+                        // setting.
+                        checkbox.listen(pointer_event("up"), (event) => event.preventDefault());
+                    }
+
+                    const update_embed_size = (dimension) => {
+                        let value = parseFloat(embed_size[dimension].element.value);
+                        if (Number.isNaN(value)) {
+                            value = CONSTANTS.DEFAULT_EMBED_SIZE[dimension.toUpperCase()];
+                        }
+                        ui.settings.set(`export.embed.${dimension}`, value);
                         const { data } = modify(ui.quiver.export(
-                            "tikz-cd",
+                            "html",
                             ui.settings,
+                            ui.options(),
                             ui.definitions(),
                         ));
-                        update_output(data);
-                    });
-                    // Prevent the highlighted output from being deselected when changing a setting.
-                    checkbox.listen(pointer_event("up"), (event) => event.preventDefault());
+                        update_output(data, true);
+                    };
+
+                    for (const dimension of ["width", "height"]) {
+                        const input = embed_size[dimension];
+                        input.listen("input", () => update_embed_size(dimension));
+                        // Only re-select the output text when we press Enter, so the inputs are
+                        // not blurred whilst typing.
+                        input.listen("keydown", (event) => {
+                            if (event.key === "Enter") {
+                                input.element.blur();
+                                select_output();
+                            }
+                        });
+                    }
 
                     content = new DOM.Div({ class: "code" }).add_to(export_pane);
                     ui.element.add(export_pane);
@@ -4292,7 +4428,8 @@ class Panel {
                     tip = export_pane.query_selector(".tip");
                     warning = export_pane.query_selector(".warning");
                     list = export_pane.query_selector("ul");
-                    options = export_pane.query_selector(".options");
+                    latex_options = export_pane.query_selector(".options.latex");
+                    embed_options = export_pane.query_selector(".options.embed");
                     content = export_pane.query_selector(".code");
                 }
                 // Display a warning if necessary.
@@ -4306,14 +4443,21 @@ class Panel {
                 }
                 tip.class_list.toggle("hidden", format !== "tikz-cd");
                 warning.class_list.toggle("hidden", unsupported_items.length === 0);
-                options.class_list.toggle("hidden", format !== "tikz-cd");
+                latex_options.class_list.toggle("hidden", format !== "tikz-cd");
+                embed_options.class_list.toggle("hidden", format !== "html");
 
-                const centre_checkbox = options.query_selector('input[type="checkbox"]');
-                if (ui.settings.get("export.centre_diagram")) {
-                    centre_checkbox.set_attributes({ checked: "" });
-                } else {
-                    centre_checkbox.remove_attributes("checked");
+                for (const checkbox of export_pane.query_selector_all('input[type="checkbox"]')) {
+                    if (ui.settings.get(checkbox.get_attribute("data-setting"))) {
+                        checkbox.set_attributes({ checked: "" });
+                    } else {
+                        checkbox.remove_attributes("checked");
+                    }
                 }
+
+                const [embed_width, embed_height] = embed_options
+                    .query_selector_all('input[type="number"]');
+                embed_width.element.value = ui.settings.get("export.embed.width");
+                embed_height.element.value = ui.settings.get("export.embed.height");
 
                 this.export.format = format;
 
@@ -4328,30 +4472,27 @@ class Panel {
         // The export button.
         const export_to_latex = Panel.create_button_with_shortcut(
             ui,
-            "Export to LaTeX",
-            "Export to LaTeX",
+            "LaTeX",
+            "LaTeX",
             { key: "E", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always },
             () => display_export_pane("tikz-cd"),
         );
 
         this.global = new DOM.Div({ class: "panel global" }).add(
+            new DOM.Element("label").add("Export: ")
+        ).add(export_to_latex).add(
             // The shareable link button.
-            new DOM.Element("button").add("Get shareable link")
+            new DOM.Element("button").add("Shareable link")
                 .listen("click", () => {
-                    display_export_pane("base64", (output) => {
-                        if (ui.macro_url !== null) {
-                            return {
-                                data: `${output.data}&macro_url=${
-                                    encodeURIComponent(ui.macro_url)
-                                }`,
-                                metadata: output.metadata,
-                            };
-                        }
-                        return output;
-                    });
+                    display_export_pane("base64");
                 })
-        ).add(export_to_latex)
-        .add(
+        ).add(
+          // The embed button.
+          new DOM.Element("button").add("Embed code")
+              .listen("click", () => {
+                  display_export_pane("html");
+              })
+        ).add(
             new DOM.Div({ class: "indicator-container" }).add(
                 new DOM.Element("label").add("Macros: ")
                     .add(
@@ -5021,6 +5162,11 @@ class Shortcuts {
 
         // Handle global key presses (such as, but not exclusively limited to, keyboard shortcuts).
         const handle_shortcut = (type, event) => {
+            // Ignore everything in embedded mode.
+            if (ui.in_mode(UIMode.Embedded)) {
+                return;
+            }
+
             // Many keyboard shortcuts are only relevant when we're not midway
             // through typing in an input, which should capture key presses.
             const editing_input = ui.input_is_active();
@@ -5296,8 +5442,12 @@ class Toolbar {
             "Save",
             [{ key: "S", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always }],
             () => {
-                // For now, we do not include macro information in the URL.
-                const { data } = ui.quiver.export("base64", ui.settings, ui.definitions());
+                const { data } = ui.quiver.export(
+                    "base64",
+                    ui.settings,
+                    ui.options(),
+                    ui.definitions(),
+                );
                 // `data` is the new URL.
                 history.pushState({}, "", data);
             },
@@ -6551,8 +6701,23 @@ document.addEventListener("DOMContentLoaded", () => {
     ui.initialise();
 
     const load_quiver_from_query_string = () => {
-        // If there is `q` parameter in the query string, try to decode it as a diagram.
         const query_data = query_parameters();
+
+        // Set the initial zoom level based on the `scale` parameter.
+        if (query_data.has("scale")) {
+            const scale = parseFloat(decodeURIComponent(query_data.get("scale")));
+            if (!Number.isNaN(scale)) {
+                ui.pan_view(Offset.zero(), scale);
+            }
+        }
+
+        // The `embed` parameter means that we should disable all UI elements and user interaction,
+        // because the diagram is being displayed in an `<iframe>`.
+        if (query_data.has("embed")) {
+            ui.switch_mode(new UIMode.Embedded(ui))
+        }
+
+        // If there is `q` parameter in the query string, try to decode it as a diagram.
         if (query_data.has("q")) {
             const dismiss_loading_screen = () => {
                 // Dismiss the loading screen. We do this after a `delay` so that the loading
@@ -6578,6 +6743,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 // If there is a `macro_url`, load the macros from it.
                 if (query_data.has("macro_url")) {
                     ui.load_macros_from_url(decodeURIComponent(query_data.get("macro_url")));
+                }
+                // Adjust the diagram scale to fit the screen in embedded view.
+                // However, we have to be careful to only do this if the user
+                // hasn't already set the scale explicitly.
+                if (query_data.has("embed") && !query_data.has("scale")) {
+                    ui.scale_to_fit();
                 }
                 dismiss_loading_screen();
             } catch (error) {
