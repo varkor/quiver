@@ -94,8 +94,10 @@ If you have any other problems building **quiver**, [open an
 issue](https://github.com/varkor/quiver/issues/new) detailing the problem and I'll try to help.
 
 ## Thanks to
-- [S. C. Steenkamp](https://www.cl.cam.ac.uk/~scs62/) , for helpful discussions regarding the
+- [S. C. Steenkamp](https://www.cl.cam.ac.uk/~scs62/), for helpful discussions regarding the
 aesthetic rendering of arrows.
-- [AndréC](https://tex.stackexchange.com/users/138900/andr%c3%a9c) for the custom TikZ style for
+- [AndréC](https://tex.stackexchange.com/users/138900/andr%c3%a9c), for the custom TikZ style for
 curves of a fixed height.
+- [Nathan Corbyn](https://github.com/doctorn), for adding the ability to export embeddable diagrams
+to HTML.
 - Everyone who has improved **quiver** by reporting issues or suggesting improvements.

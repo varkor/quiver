@@ -881,6 +881,9 @@ class UI {
                     )
                 ).add(", for the custom TikZ style for curves of a fixed height."),
                 new DOM.Element("li").add(
+                    new DOM.Link("https://github.com/doctorn", "Nathan Corbyn", true)
+                ).add(", for adding the ability to export embeddable diagrams to HTML."),
+                new DOM.Element("li").add(
                     "Everyone who has improved "
                 ).add(new DOM.Element("b").add("quiver"))
                 .add(" by reporting issues or suggesting improvements.")
