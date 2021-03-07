@@ -3,7 +3,7 @@
 /// Various parameters.
 Object.assign(CONSTANTS, {
     /// The current quiver version.
-    VERSION: "1.1.0",
+    VERSION: "1.2.0",
     /// When the `quiver.sty` package was last modified.
     PACKAGE_VERSION: "2021/01/11",
     /// We currently only support 0-cells, 1-cells, 2-cells, and 3-cells. This is due to
