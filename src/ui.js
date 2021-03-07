@@ -4485,7 +4485,7 @@ class Panel {
 
         this.global = new DOM.Div({ class: "panel global" }).add(
             new DOM.Element("label").add("Export: ")
-        ).add(export_to_latex).add(
+        ).add(
             // The shareable link button.
             new DOM.Element("button").add("Shareable link")
                 .listen("click", () => {
@@ -4497,7 +4497,7 @@ class Panel {
               .listen("click", () => {
                   display_export_pane("html");
               })
-        ).add(
+        ).add(export_to_latex).add(
             new DOM.Div({ class: "indicator-container" }).add(
                 new DOM.Element("label").add("Macros: ")
                     .add(
