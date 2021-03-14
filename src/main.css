@@ -1590,3 +1590,8 @@ label input[type="checkbox"]:checked::before {
 .ui.embedded a > .logo:hover {
     opacity: 0.4;
 }
+
+.ui.embedded #welcome-pane {
+    /* Don't show the welcome pane if the first time we are loaded is in embed mode. */
+    display: none;
+}
