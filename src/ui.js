@@ -1777,7 +1777,7 @@ class UI {
                 return;
             }
 
-            if (this.in_mode(UIMode.KeyMove)) {
+            if (this.in_mode(UIMode.PointerMove) || this.in_mode(UIMode.KeyMove)) {
                 this.switch_mode(UIMode.default);
                 return;
             }
