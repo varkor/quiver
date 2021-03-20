@@ -4316,9 +4316,16 @@ class Panel {
 
                     tip.add(", or ")
                         .add(
-                            new DOM.Element("a", { href: "quiver.sty", target: "_blank" })
-                                .listen("click", update_package_previous_download)
-                                .add("open it in a new tab")
+                            new DOM.Element("a", {
+                                // We would like to simply use `quiver.sty` here, but,
+                                // unfortunately, GitHub pages does not permit overriding the
+                                // `content-type` of a resource, and by default `.sty` files are
+                                // treated as `application/octet-stream`.
+                                href: "https://raw.githubusercontent.com/varkor/quiver/master/src/quiver.sty",
+                                target: "_blank"
+                            })
+                            .listen("click", update_package_previous_download)
+                            .add("open it in a new tab")
                         )
                         .add(" to copy-and-paste.")
                         .add_to(export_pane);

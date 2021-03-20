@@ -378,7 +378,6 @@ class Arrow {
         this.element.class_list.remove("invalid");
         this.svg.class_list.remove("invalid");
 
-
         let start, end;
         try {
             [start, end] = this.find_endpoints();
