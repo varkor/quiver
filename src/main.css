@@ -1590,3 +1590,7 @@ label input[type="checkbox"]:checked::before {
 .ui.embedded a > .logo:hover {
     opacity: 0.4;
 }
+
+.ui.embedded #welcome-pane {
+    display: none;
+}
