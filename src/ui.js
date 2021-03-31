@@ -1124,12 +1124,12 @@ class UI {
                 const touch = event.changedTouches[0];
                 const touched_element = document.elementFromPoint(touch.clientX, touch.clientY);
                 if (touched_element !== null) {
-                    const pointer_event = new Event(pointer_event("up"), { bubbles: true });
+                    const pointer_ev = new Event(pointer_event("up"), { bubbles: true });
                     // We overwrite some properties that are necessary for `pointerup` listeners.
-                    pointer_event.button = 0;
-                    pointer_event.pageX = touch.pageX;
-                    pointer_event.pageY = touch.pageY;
-                    touched_element.dispatchEvent(pointer_event);
+                    pointer_ev.button = 0;
+                    pointer_ev.pageX = touch.pageX;
+                    pointer_ev.pageY = touch.pageY;
+                    touched_element.dispatchEvent(pointer_ev);
                 }
             }
             is_touching = false;
