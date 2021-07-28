@@ -1,0 +1,13 @@
+cff-version: 1.1.0
+message: "If you would like to cite quiver, you may do so with the following."
+title: quiver
+abstract: "A modern commutative diagram editor."
+authors:
+  - family-names: Arkor
+    given-names: Nathanael
+    orcid: https://orcid.org/0000-0002-4092-7930
+url: https://q.uiver.app/
+version: 1.2.0
+date-released: 2021-03-07
+repository-code: https://github.com/varkor/quiver
+license: MIT
