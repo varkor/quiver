@@ -6067,11 +6067,12 @@ class Cell {
                         ui.focus_point.class_list.remove(
                             "revealed", "pending", "active", "focused", "smooth"
                         );
+                        const vertices = Array.from(ui.selection).filter((cell) => cell.is_vertex());
                         // If the cell we're dragging is part of the existing selection,
                         // then we'll move every cell that is selected. However, if it's
                         // not already part of the selection, we'll just drag this cell
                         // and ignore the selection.
-                        const move = new Set(ui.selection.has(this) ? [...ui.selection] : [this]);
+                        const move = new Set(ui.selection.has(this) ? vertices : [this]);
                         ui.switch_mode(
                             new UIMode.PointerMove(
                                 ui,
