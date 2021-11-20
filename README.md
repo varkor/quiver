@@ -83,7 +83,7 @@ Currently, macros may be defined using `\newcommand`, and colours may be defined
 `\definecolor` (using the colour modes: `rgb`, `RGB` or `gray`).
 
 ## Building
-Run `make` from the command land, and then open `src/index.html` in your favourite web browser.
+Run `make` from the command line, and then open `src/index.html` in your favourite web browser.
 
 If this fails, you might be using an incompatible version of Make or Bash. In this case, you can
 manually download the [latest release](https://github.com/KaTeX/KaTeX/releases) of KaTeX and place
