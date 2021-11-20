@@ -6,7 +6,7 @@
 # Build KaTeX.
 all:
 	set -e
-	curl -L -O "https://github.com/KaTeX/KaTeX/releases/download/v0.12.0/katex.zip"
+	curl -L -O "https://github.com/KaTeX/KaTeX/releases/download/v0.15.1/katex.zip"
 	unzip katex.zip
 	rm katex.zip
 	mv katex src/KaTeX
