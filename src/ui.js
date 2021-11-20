@@ -3609,6 +3609,16 @@ class Panel {
         // the input field is modified.
         this.label_input.listen("input", () => {
             if (!ui.in_mode(UIMode.Command)) {
+                const selection = Array.from(ui.selection).filter((cell) => {
+                    return cell.label !== this.label_input.element.value;
+                });
+                if (selection.length === 0) {
+                    // It can happen that we receive an event (e.g. `inputType` `historyUndo`)
+                    // that has no effect on any label. It is unclear whether this is the
+                    // correct behaviour, but we must account for it in any case. In this case,
+                    // we do not want to add a history event, as it would be idempotent.
+                    return;
+                }
                 this.unqueue_selected(ui);
                 ui.history.add_or_modify_previous(
                     ui,
@@ -3616,7 +3626,7 @@ class Panel {
                     [{
                         kind: "label",
                         value: this.label_input.element.value,
-                        cells: Array.from(ui.selection).map((cell) => ({
+                        cells: selection.map((cell) => ({
                             cell,
                             from: cell.label,
                             to: this.label_input.element.value,
