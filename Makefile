@@ -41,7 +41,8 @@ gh-pages:
 	# instead copy it from an existing directory, typically the one in `src/KaTeX`, which must be
 	# stored in the `$KATEX` environment variable.
 	if [ ! -d "$$KATEX" ]; then
-		exit "KATEX must be set to a directory."
+		echo "KATEX must be set to a directory."
+		exit 1
 	fi
 	# Store the name of the current branch, to return to it after completing this process.
 	CURRENT=$$(git rev-parse --abbrev-ref HEAD)
