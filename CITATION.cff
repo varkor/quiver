@@ -7,7 +7,7 @@ authors:
     given-names: Nathanael
     orcid: https://orcid.org/0000-0002-4092-7930
 url: https://q.uiver.app/
-version: 1.2.0
-date-released: 2021-03-07
+version: 1.2.1
+date-released: 2021-11-20
 repository-code: https://github.com/varkor/quiver
 license: MIT
