@@ -6815,7 +6815,9 @@ document.addEventListener("DOMContentLoaded", () => {
         src: "KaTeX/katex.min.js",
     }).listen("error", () => {
         // Handle KaTeX not loading (somewhat) gracefully.
-        UI.display_error(`KaTeX failed to load.`)
+        UI.display_error(`KaTeX failed to load.`);
+        // Remove the loading screen.
+        ui.element.query_selector(".loading-screen").class_list.add("hidden");
     });
 
     KaTeX = new Promise((accept) => {
