@@ -3504,6 +3504,8 @@ class Settings {
         this.data = {
             // Whether to wrap the `tikz-cd` output in `\[ \]`.
             "export.centre_diagram": true,
+            // Whether to use `\&` instead of `&` for column separators in tikz-cd output.
+            "export.ampersand_replacement": false,
             // Whether to use a fixed size for the embedded `<iframe>`, or compute the size based on
             // the diagram.
             "export.embed.fixed_size": false,
@@ -4351,10 +4353,18 @@ class Panel {
                         type: "checkbox",
                         "data-setting": "export.centre_diagram",
                     });
+                    const ampersand_replacement = new DOM.Element("input", {
+                        type: "checkbox",
+                        "data-setting": "export.ampersand_replacement",
+                    });
                     latex_options = new DOM.Div({ class: "options latex hidden" })
                         .add(new DOM.Element("label")
                             .add(centre_checkbox)
                             .add("Centre diagram")
+                        )
+                        .add(new DOM.Element("label")
+                            .add(ampersand_replacement)
+                            .add("Ampersand replacement")
                         )
                         .add_to(export_pane);
 
@@ -4375,23 +4385,29 @@ class Panel {
                         .add(new DOM.Element("label").add("Height: ").add(embed_size.height))
                         .add_to(export_pane)
 
-                    // When the shortcut is active, we will always be displaying the modal pane,
-                    // so the shortcut is always valid.
-                    const shortcut = { key: "C", context: Shortcuts.SHORTCUT_PRIORITY.Always };
-                    new DOM.Element("kbd", { class: "hint button" })
-                        .add(Shortcuts.name([shortcut])).add_to(centre_checkbox.parent);
-                    const shortcuts = [ui.shortcuts.add([shortcut], () => {
-                        if (!latex_options.class_list.contains("hidden")) {
-                            centre_checkbox.element.checked = !centre_checkbox.element.checked;
-                            centre_checkbox.dispatch(new Event("change"));
-                        }
-                    })];
-
                     const checkboxes = [
-                        [centre_checkbox, "tikz-cd"],
-                        [fixed_size_checkbox, "html"],
+                        [centre_checkbox, "tikz-cd", "C"],
+                        [ampersand_replacement, "tikz-cd", "A"],
+                        [fixed_size_checkbox, "html", "F"],
                     ];
-                    for (const [checkbox, format] of checkboxes) {
+                    const shortcuts = [];
+                    for (const [checkbox, format, key] of checkboxes) {
+                        // Add a keyboard shortcut if applicable.
+                        if (key !== null) {
+                            // When the shortcut is active, we will always be displaying the modal
+                            // pane, so the shortcut is always valid.
+                            const shortcut = { key, context: Shortcuts.SHORTCUT_PRIORITY.Always };
+                            new DOM.Element("kbd", { class: "hint button" })
+                                .add(Shortcuts.name([shortcut])).add_to(checkbox.parent);
+                            shortcuts.push(ui.shortcuts.add([shortcut], () => {
+                                const visible_options = export_pane.query_selector(".options:not(.hidden)");
+                                if (visible_options !== null && visible_options.contains(checkbox)) {
+                                    checkbox.element.checked = !checkbox.element.checked;
+                                    checkbox.dispatch(new Event("change"));
+                                }
+                            }));
+                        }
+                        // Update the settings when the checkbox changes.
                         checkbox.listen("change", () => {
                             ui.settings.set(
                                 checkbox.get_attribute("data-setting"),

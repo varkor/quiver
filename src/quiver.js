@@ -234,7 +234,9 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
         // We also add custom TikZ styles if required, e.g. for drawing fixed-height curves, which
         // improve upon the build-in `bend` option.
         const wrap_boilerplate = (output) => {
-            let tikzcd = `\\begin{tikzcd}\n${
+            let tikzcd = `\\begin{tikzcd}${
+                settings.get("export.ampersand_replacement") ? "[ampersand replacement=\\&]" : ""
+            }\n${
                 output.length > 0 ? `${
                     output.split("\n").map(line => `\t${line}`).join("\n")
                 }\n` : ""
@@ -254,6 +256,10 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                 metadata: { tikz_incompatibilities: new Set() },
             };
         }
+
+        // Which symbol to use as a column separator. Usually ampersand (`&`), but sometimes it is
+        // necessary to escape the ampersand when using TikZ diagrams in a nested context.
+        const ampersand = settings.get("export.ampersand_replacement") ? "\\&" : "&";
 
         // If a label is particularly simple (containing no special symbols), we do not need to
         // surround it in curly brackets. This is preferable, because simpler output is more
@@ -297,7 +303,7 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
             let first_in_row = true;
             for (const [x, vertex] of Array.from(row).sort(([x1,], [x2,]) => x1 - x2)) {
                 if (x - prev.x > 0) {
-                    output += `${!first_in_row ? " " : ""}${"&".repeat(x - prev.x)} `;
+                    output += `${!first_in_row ? " " : ""}${ampersand.repeat(x - prev.x)} `;
                 }
                 if (vertex.label !== "" && vertex.label_colour.is_not_black()) {
                     output += `\\textcolor${

@@ -160,6 +160,10 @@ DOM.Element = class {
         this.element.dispatchEvent(event);
         return this;
     }
+
+    contains(other) {
+        return this.element.contains(other.element);
+    }
 };
 
 DOM.Div = class extends DOM.Element {
