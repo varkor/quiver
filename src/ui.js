@@ -39,6 +39,9 @@ Object.assign(CONSTANTS, {
     },
     /// How many pixels to leave around the border of an embedded diagram.
     EMBED_PADDING: 24,
+    /// Minimum and maximum zoom levels.
+    MIN_ZOOM: -2.5,
+    MAX_ZOOM: 1,
 });
 
 /// Various states for the UI (e.g. whether cells are being rearranged, or connected, etc.).
@@ -746,12 +749,16 @@ class UI {
             ]))
             .add(new DOM.Element("h2").add("Navigation"))
             .add(new DOM.Table([
+                ["Pan view", "Scroll"],
                 // Technically "pointer panning", but "mouse panning" is likely less confusing
                 // overall for users.
                 ["Enable mouse panning", (td) => Shortcuts.element(td, [
                     { key: "Control" }, { key: "Alt" }
                 ])],
                 ["Enable touch panning", "Long press"],
+                ["Enable mouse zooming", (td) => Shortcuts.element(td, [
+                    { key: "Shift" }
+                ])],
                 ["Move focus point", (td) => Shortcuts.element(td, [
                     { key: "ArrowLeft" },
                     { key: "ArrowUp" },
@@ -983,10 +990,20 @@ class UI {
             // Hide the focus point if it is visible.
             this.focus_point.class_list.remove("revealed", "pending", "active");
 
-            this.pan_view(new Offset(
-                event.deltaX * 2 ** -this.scale,
-                event.deltaY * 2 ** -this.scale,
-            ));
+            // If the user is holding shift, then we zoom, otherwise we pan.
+            if (event.shiftKey) {
+                this.pan_to(this.view, clamp(
+                    CONSTANTS.MIN_ZOOM,
+                    this.scale - event.deltaY / 100,
+                    CONSTANTS.MAX_ZOOM,
+                ));
+                this.toolbar.update(this);
+            } else {
+                this.pan_view(new Offset(
+                    event.deltaX * 2 ** -this.scale,
+                    event.deltaY * 2 ** -this.scale,
+                ));
+            }
         }, { passive: false });
 
         // The canvas is only as big as the window, so we need to resize it when the window resizes.
@@ -5682,8 +5699,8 @@ class Toolbar {
             // mirror the conditions in `centre_view`.
             || ui.selection.size > 0 || (ui.quiver.cells.length > 0 && ui.quiver.cells[0].size > 0)
         );
-        enable_if("Zoom in", ui.scale < 1);
-        enable_if("Zoom out", ui.scale > -2.5);
+        enable_if("Zoom in", ui.scale < CONSTANTS.MAX_ZOOM);
+        enable_if("Zoom out", ui.scale > CONSTANTS.MIN_ZOOM);
         enable_if("Reset zoom", ui.scale !== 0);
 
         // Update the current zoom level underneath the "Reset zoom" button.
