@@ -60,10 +60,6 @@ noscript {
 
 /* Special elements */
 
-.MathJax_SVG {
-    outline: none;
-}
-
 .error-banner {
     position: fixed;
     width: 100%;

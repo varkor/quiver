@@ -363,7 +363,7 @@ class Colour extends Encodable {
     }
 }
 
-// Returns a `Map` containing the current URL's query parameters.
+/// Returns a `Map` containing the current URL's query parameters.
 function query_parameters() {
     const query_string = window.location.href.match(/\?(.*)$/);
     if (query_string !== null) {

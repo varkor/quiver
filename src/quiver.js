@@ -220,6 +220,7 @@ class QuiverExport {
     export() {}
 }
 
+/// Various methods of exporting and importing a quiver.
 class QuiverImportExport extends QuiverExport {
     /// A method to import a quiver as a string. `import(export(quiver))` should be the
     /// identity function. Currently `import` takes a `UI` into which to import directly.

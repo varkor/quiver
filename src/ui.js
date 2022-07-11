@@ -512,7 +512,7 @@ UIMode.Command = class extends UIMode {
 
 // We are viewing a diagram embedded in another webpage.
 UIMode.Embedded = class extends UIMode {
-    constructor(ui) {
+    constructor() {
         super();
 
         this.name = "embedded";
@@ -2769,9 +2769,8 @@ class UI {
             error.class_list.add("hidden");
             setTimeout(() => error.remove(), 0.2 * SECOND);
             return true;
-        } else {
-            return false;
         }
+        return false;
     }
 
     /// Create the canvas upon which the grid will be drawn.
@@ -4328,16 +4327,16 @@ class Panel {
 
                     tip.add(", or ")
                         .add(
-                            new DOM.Element("a", {
-                                // We would like to simply use `quiver.sty` here, but,
-                                // unfortunately, GitHub pages does not permit overriding the
-                                // `content-type` of a resource, and by default `.sty` files are
-                                // treated as `application/octet-stream`.
-                                href: "https://raw.githubusercontent.com/varkor/quiver/master/src/quiver.sty",
-                                target: "_blank"
-                            })
+                            // We would like to simply use `quiver.sty` here, but,
+                            // unfortunately, GitHub pages does not permit overriding the
+                            // `content-type` of a resource, and by default `.sty` files are
+                            // treated as `application/octet-stream`.
+                            new DOM.Link(
+                                "https://raw.githubusercontent.com/varkor/quiver/master/src/quiver.sty",
+                                "open it in a new tab",
+                                true,
+                            )
                             .listen("click", update_package_previous_download)
-                            .add("open it in a new tab")
                         )
                         .add(" to copy-and-paste.")
                         .add_to(export_pane);
@@ -6754,7 +6753,7 @@ document.addEventListener("DOMContentLoaded", () => {
         // The `embed` parameter means that we should disable all UI elements and user interaction,
         // because the diagram is being displayed in an `<iframe>`.
         if (query_data.has("embed")) {
-            ui.switch_mode(new UIMode.Embedded(ui))
+            ui.switch_mode(new UIMode.Embedded())
         }
 
         // If there is `q` parameter in the query string, try to decode it as a diagram.
@@ -6816,7 +6815,7 @@ document.addEventListener("DOMContentLoaded", () => {
         src: "KaTeX/katex.min.js",
     }).listen("error", () => {
         // Handle KaTeX not loading (somewhat) gracefully.
-        UI.display_error(`KaTeX failed to load.`);
+        UI.display_error("KaTeX failed to load.");
         // Remove the loading screen.
         ui.element.query_selector(".loading-screen").class_list.add("hidden");
     });
@@ -6828,7 +6827,7 @@ document.addEventListener("DOMContentLoaded", () => {
             // immediately available. In this case, we delay loading
             // the quiver until the library has loaded.
             load_quiver_from_query_string();
-        })
+        });
     });
 
     // Load the style sheet needed for KaTeX.
