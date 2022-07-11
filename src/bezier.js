@@ -195,8 +195,8 @@ class Bezier {
                         const x = -c / m;
                         if (
                             x >= 0 && x <= 1
-                            && x >= Math.min(endpoints[0].x, endpoints[1].x)
-                            && x <= Math.max(endpoints[0].x, endpoints[1].x)
+                            && x >= Math.min(endpoints[0].x, endpoints[1].x) - EPSILON
+                            && x <= Math.max(endpoints[0].x, endpoints[1].x) + EPSILON
                         ) {
                             add_intersection(new Point(x, 0));
                         }
