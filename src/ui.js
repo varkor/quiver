@@ -6736,7 +6736,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // The global UI.
-    const ui = new UI(new DOM.Element(document.body));
+    const body = new DOM.Element(document.body);
+    const ui = new UI(body);
     ui.initialise();
 
     const load_quiver_from_query_string = () => {
@@ -6838,6 +6839,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Trigger the script load.
     document.head.appendChild(rendering_library.element);
+
+    // Prevent clicking on the logo from having any effect other than opening the link.
+    body.query_selector("#logo-link").listen("pointerdown", (event) => {
+        event.stopPropagation();
+    });
 
     // Listen for history change events, and update the diagram accordingly.
     window.addEventListener("popstate", () => {
