@@ -4798,6 +4798,9 @@ class Panel {
                 for (const edge of ui.quiver.transitive_dependencies([cell], true)) {
                     edge.render(ui);
                 }
+
+                // If the cell is empty, we highlight it to make it easier to spot.
+                cell.element.class_list.toggle("empty", cell.label.trim() === "");
             }
         };
 

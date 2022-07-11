@@ -345,6 +345,10 @@ kbd {
     text-align: center;
 }
 
+.vertex.empty:not(.selected) .content:not(:hover) {
+    border: var(--cell-hover) 2px solid;
+}
+
 /* We would like to animate the movement of vertices when moving them via the keyboard, but the
 transitions are quite subtle, especially when interacting with the origin of the resizable grid, so
 in the interest of time, I have decided to be satisfied with instantaneous movement for the timing
