@@ -232,11 +232,42 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
         let output = "";
 
         // Wrap tikz-cd code with `\begin{tikzcd} ... \end{tikzcd}`.
-        // We also add custom TikZ styles if required, e.g. for drawing fixed-height curves, which
-        // improve upon the build-in `bend` option.
         const wrap_boilerplate = (output) => {
+            const diagram_options = [];
+            // Ampersand replacement.
+            if (settings.get("export.ampersand_replacement")) {
+                diagram_options.push("ampersand replacement=\\&");
+            }
+            // Column and row separation.
+            const sep = {
+                column: `${options.sep.column.toFixed(2)}em`,
+                row: `${options.sep.row.toFixed(2)}em`,
+            };
+            const seps = {
+                "0.45em": "tiny",
+                "0.90em": "small",
+                "1.35em": "scriptsize",
+                "1.80em": "normal",
+                "2.70em": "large",
+                "3.60em": "huge",
+            };
+            for (const axis of ["column", "row"]) {
+                if (seps.hasOwnProperty(sep[axis])) {
+                    sep[axis] = seps[sep[axis]];
+                }
+            }
+            if (sep.column === sep.row && sep.column !== "normal") {
+                diagram_options.push(`sep=${sep.column}`);
+            } else {
+                for (const axis of ["column", "row"]) {
+                    if (sep[axis] !== "normal") {
+                        diagram_options.push(`${axis} sep=${sep[axis]}`);
+                    }
+                }
+            }
+            // `tikzcd` environment.
             let tikzcd = `\\begin{tikzcd}${
-                settings.get("export.ampersand_replacement") ? "[ampersand replacement=\\&]" : ""
+                diagram_options.length > 0 ? `[${diagram_options.join(",")}]` : ""
             }\n${
                 output.length > 0 ? `${
                     output.split("\n").map(line => `\t${line}`).join("\n")
@@ -245,6 +276,7 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
             if (settings.get("export.centre_diagram")) {
                 tikzcd = `\\[${tikzcd}\\]`;
             }
+            // URL.
             return `% ${
                 QuiverImportExport.base64.export(quiver, settings, options, definitions).data
             }\n${tikzcd}`;

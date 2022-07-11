@@ -58,6 +58,11 @@ noscript {
     color: var(--ui-white);
 }
 
+/* We occasionally want to disable transitions on a particular element. */
+.no-transition {
+    transition: none !important;
+}
+
 /* Special elements */
 
 .error-banner {
@@ -758,12 +763,23 @@ div.slider {
     left: 56px;
 }
 
+.options div.slider {
+    position: relative;
+    width: 80px;
+    margin: -14px 8px 0 4px;
+}
+
 .slider-values {
     display: inline-block;
     position: absolute;
     right: 0;
 
     pointer-events: none;
+}
+
+.options .slider-values {
+    position: relative;
+    width: 54px;
 }
 
 .slider-values .slider-value {

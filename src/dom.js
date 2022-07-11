@@ -394,11 +394,11 @@ DOM.Multislider.Thumb = class extends DOM.Element {
     /// `this.value`.
     /// Returns whether the thumb value was changed (i.e. whether the given `value` was valid and
     // different to the current value).
-    set_value(value, user_triggered = false) {
+    set_value(value, trigger_event = false) {
         // Though we clamp the value to `min` and `max`, we permit non-`step` values (though in
-        // practice, this will not be possible when `user_triggered` is true). `relative_min` and
-        // `relative_max` is the minimum/maximum for this thumb taking into account the
-        // previous/next thumb, and `spacing`.
+        // practice, this will not be possible when this event has been triggered by the user).
+        // `relative_min` and `relative_max` is the minimum/maximum for this thumb taking into
+        // account the previous/next thumb, and `spacing`.
         let relative_min = this.index > 0 ?
             this.slider.thumbs[this.index - 1].value + this.slider.spacing : this.slider.min;
         let relative_max = this.index + 1 < this.slider.thumbs.length ?
@@ -424,23 +424,21 @@ DOM.Multislider.Thumb = class extends DOM.Element {
             Math.min(relative_max, this.slider.max),
         );
 
+        // Although it would make sense to include the position calculation in the following block,
+        // there are times we want to recalculate the position even when the value has not changed,
+        // so it's more convenient to set the position regardless.
+        const slider_rect = this.slider.bounding_rect();
+        const thumb_rect = this.bounding_rect();
+        this.set_style({
+            left: `${
+                thumb_rect.width / 2
+                    + (value - this.slider.min) / (this.slider.max - this.slider.min)
+                        * (slider_rect.width - thumb_rect.width)
+            }px`,
+        });
+
         if (value !== this.value) {
             this.value = value;
-
-            // Trigger a `input` event on the thumb (which will bubble up to the slider).
-            if (user_triggered) {
-                this.dispatch(new Event("input", { bubbles: true }));
-            }
-
-            const slider_rect = this.slider.bounding_rect();
-            const thumb_rect = this.bounding_rect();
-            this.set_style({
-                left: `${
-                    thumb_rect.width / 2
-                        + (value - this.slider.min) / (this.slider.max - this.slider.min)
-                            * (slider_rect.width - thumb_rect.width)
-                }px`,
-            });
 
             const slider_values = this.slider.label.query_selector(".slider-values").clear();
             this.slider.thumbs.forEach((thumb, i) => {
@@ -456,6 +454,11 @@ DOM.Multislider.Thumb = class extends DOM.Element {
                     slider_values.add(" \u2013 ");
                 }
             });
+
+            // Trigger a `input` event on the thumb (which will bubble up to the slider).
+            if (trigger_event) {
+                this.dispatch(new Event("input", { bubbles: true }));
+            }
 
             return true;
         }

@@ -662,6 +662,10 @@ class UI {
         return {
             macro_url,
             dimensions: this.diagram_size(),
+            sep: {
+                column: this.panel.sliders.get("column_sep").values(),
+                row: this.panel.sliders.get("row_sep").values(),
+            },
         };
     }
 
@@ -4267,6 +4271,43 @@ class Panel {
             if (this.export === null || this.export.format !== format) {
                 ui.switch_mode(new UIMode.Modal());
 
+                // Set up the column/row separation sliders. This needs to be done early, because
+                // we access the sliders to get the separation data for `export`.
+                const update_sep_label = (slider) => {
+                    const sep = slider.values().toFixed(2);
+                    const seps = {
+                        "0.45": "Tiny",
+                        "0.90": "Small",
+                        "1.35": "Script",
+                        "1.80": "Normal",
+                        "2.70": "Large",
+                        "3.60": "Huge",
+                    };
+                    const sep_name = seps[sep] || `${sep}em`;
+                    slider.label.query_selector(".slider-value").clear().add(sep_name);
+                };
+                const sep_sliders = {};
+                for (const axis of ["column", "row"]) {
+                    sep_sliders[axis] = new DOM.Multislider(
+                        `${{ "column": "Column", "row": "Row" }[axis]} sep.`, 0.45, 3.6, 0.45,
+                    ).listen("input", () => {
+                        // Update the output. We ignore `metadata`, which currently does not
+                        // change in response to the settings.
+                        const { data } = modify(ui.quiver.export(
+                            format,
+                            ui.settings,
+                            ui.options(),
+                            ui.definitions(),
+                        ));
+                        update_output(data);
+                        // Update the label.
+                        update_sep_label(sep_sliders[axis]);
+                    });
+                    sep_sliders[axis].thumbs[0].set_value(1.8);
+                    update_sep_label(sep_sliders[axis]);
+                    this.sliders.set(`${axis}_sep`, sep_sliders[axis]);
+                }
+
                 // Get the encoding of the diagram. The output may be modified by the caller.
                 const { data, metadata } = modify(ui.quiver.export(
                     format,
@@ -4382,8 +4423,22 @@ class Panel {
                             .add(ampersand_replacement)
                             .add("Ampersand replacement")
                         )
+                        .add(sep_sliders.column.label)
+                        .add(sep_sliders.row.label)
                         .add_to(export_pane);
-
+                    
+                    // Update the thumbs of the column/row separation sliders now that we can
+                    // calculate their widths.
+                    for (const axis of ["column", "row"]) {
+                        sep_sliders[axis].thumbs[0].class_list.add("no-transition");
+                        delay(() => {
+                            sep_sliders[axis].thumbs[0].set_value(sep_sliders[axis].values());
+                            delay(() => {
+                                sep_sliders[axis].thumbs[0].class_list.remove("no-transition");
+                            });
+                        });
+                    }
+                    
                     const fixed_size_checkbox = new DOM.Element("input", {
                         type: "checkbox",
                         "data-setting": "export.embed.fixed_size",
