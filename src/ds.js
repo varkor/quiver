@@ -148,12 +148,24 @@ class Path {
     }
 
     line_to(p) {
-        this.commands.push(`L ${p.x} ${p.y}`);
+        if (p.x === 0) {
+            this.commands.push(`V ${p.y}`);
+        } else if (p.y === 0) {
+            this.commands.push(`H ${p.x}`);
+        } else {
+            this.commands.push(`L ${p.x} ${p.y}`);
+        }
         return this;
     }
 
     line_by(p) {
-        this.commands.push(`l ${p.x} ${p.y}`);
+        if (p.x === 0) {
+            this.commands.push(`v ${p.y}`);
+        } else if (p.y === 0) {
+            this.commands.push(`h ${p.x}`);
+        } else {
+            this.commands.push(`l ${p.x} ${p.y}`);
+        }
         return this;
     }
 
