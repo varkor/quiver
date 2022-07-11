@@ -556,8 +556,9 @@ class Arrow {
 
         // Draw the the proarrow bar.
         if (this.style.body_style === CONSTANTS.ARROW_BODY_STYLE.PROARROW) {
-            const centre = bezier.point(0.5).add(offset);
-            const angle = bezier.tangent(0.5);
+            const mid = (start.t + end.t) / 2;
+            const centre = bezier.point(mid).add(offset);
+            const angle = bezier.tangent(mid);
             const normal = angle + Math.PI / 2;
             const adj_seg = new Point(head_height, 0);
             const adj_seg_2 = adj_seg.div(2);
