@@ -662,10 +662,7 @@ class UI {
         return {
             macro_url,
             dimensions: this.diagram_size(),
-            sep: {
-                column: this.panel.sliders.get("column_sep").values(),
-                row: this.panel.sliders.get("row_sep").values(),
-            },
+            sep: this.panel.sep,
         };
     }
 
@@ -3585,6 +3582,9 @@ class Panel {
 
         // The current edge colour selected in the panel.
         this.colour = Colour.black();
+
+        // The current column and row separation.
+        this.sep = { column: 1.8, row: 1.8 };
     }
 
     /// Set up the panel interface elements.
@@ -4291,6 +4291,7 @@ class Panel {
                     sep_sliders[axis] = new DOM.Multislider(
                         `${{ "column": "Column", "row": "Row" }[axis]} sep.`, 0.45, 3.6, 0.45,
                     ).listen("input", () => {
+                        this.sep[axis] = sep_sliders[axis].values();
                         // Update the output. We ignore `metadata`, which currently does not
                         // change in response to the settings.
                         const { data } = modify(ui.quiver.export(
@@ -4303,7 +4304,7 @@ class Panel {
                         // Update the label.
                         update_sep_label(sep_sliders[axis]);
                     });
-                    sep_sliders[axis].thumbs[0].set_value(1.8);
+                    sep_sliders[axis].thumbs[0].set_value(this.sep[axis]);
                     update_sep_label(sep_sliders[axis]);
                     this.sliders.set(`${axis}_sep`, sep_sliders[axis]);
                 }
