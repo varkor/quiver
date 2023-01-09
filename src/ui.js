@@ -3097,9 +3097,9 @@ class UI {
             // problem, we try to prefix URLs that failed to load with the following service
             // (which should surely not be necessary with `credentials: "omit"`). In doing so, we
             // are hoping that the service never becomes malicious.
-            const CORS_ANYWHERE = "https://cors-anywhere.herokuapp.com/";
+            const CORS_PROXY = "https://api.allorigins.win/raw?url=";
 
-            const attempt_to_fetch_macros = (url, prefix = "") => {
+            const attempt_to_fetch_macros = (url, prefix = "", repeat = true) => {
                 fetch(`${prefix}${url}`, { credentials: "omit" })
                     .then((response) => response.text())
                     .then((text) => {
@@ -3110,9 +3110,9 @@ class UI {
                         macro_input.element.blur();
                     })
                     .catch(() => {
-                        if (!url.startsWith(CORS_ANYWHERE)) {
+                        if (repeat && !url.startsWith(CORS_PROXY)) {
                             // Attempt to fetch using cors-anywhere.
-                            attempt_to_fetch_macros(url, CORS_ANYWHERE);
+                            attempt_to_fetch_macros(url, CORS_PROXY, false);
                             return;
                         }
                         UI.display_error(
