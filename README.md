@@ -79,8 +79,9 @@ Upload the file to a publicly accessible URL (for instance,
 [gist.github.com](https://gist.github.com/)), and paste the URL for the raw text into the "Macros"
 input at the bottom of **quiver**.
 
-Currently, macros may be defined using `\newcommand`, and colours may be defined using
-`\definecolor` (using the colour modes: `rgb`, `RGB` or `gray`).
+Currently, macros may be defined using `\newcommand`, `\newcommand*`, `\renewcommand`,
+`\renewcommand*`, `\DeclareMathOperator`, and `\DeclareMathOperator*`; and colours may be defined
+using `\definecolor` (using the colour modes: `rgb`, `RGB` or `gray`).
 
 ## Building
 Run `make` from the command line, and then open `src/index.html` in your favourite web browser.

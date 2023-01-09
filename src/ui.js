@@ -2990,7 +2990,7 @@ class UI {
     load_macros(definitions) {
         // Here, we ignore `{` and `}` around the command name, but later we check that
         // the brackets at least match.
-        const newcommand = /^\\newcommand\{?\\([a-zA-Z]+)\}?(?:\[(\d)\])?\{(.*)\}$/;
+        const newcommand = /^\\((?:re)?newcommand|DeclareMathOperator)(\*?)\{?\\([a-zA-Z]+)\}?(?:\[(\d)\])?\{(.*)\}$/;
         // It's not clear exactly what the rules for colour names is, so we accept a sensible
         // subset. We don't accept `cymk` for now. We don't validate values in the regex.
         const definecolor = /^\\definecolor\{([a-zA-Z0-9\-]+)\}\{(rgb|RGB|gray)\}\{((?:\d+(?:\.\d+)?)(?:,(?:\d+(?:\.\d+)?))*)\}$/;
@@ -3008,13 +3008,17 @@ class UI {
             let match = line.match(newcommand);
             // Check we either have ``{\commandname}` or `\commandname`, but not mismatched
             // brackets.
-            if (match !== null && /^\\newcommand(\{\\[a-zA-Z]+\}|\\[a-zA-Z]+[^\}])/.test(line)) {
-                const [, command, arity = 0, definition] = match;
-                macros.set(`\\${command}`, {
-                    definition,
-                    arity,
-                });
-                continue;
+            if (match !== null && /^\\((re)?newcommand|DeclareMathOperator)\*?(\{\\[a-zA-Z]+\}|\\[a-zA-Z]+[^\}])/.test(line)) {
+                const [, kind, star, command, arity = 0, definition] = match;
+                if (kind === "DeclareMathOperator" && typeof match[4] !== "undefined") {
+                    console.warn(`Operators defined with \`\\DeclareMathOperator\` may take no arguments.`);
+                } else {
+                    macros.set(`\\${command}`, {
+                        definition: kind === "DeclareMathOperator" ? `\\operatorname${star}{${definition}}` : definition,
+                        arity,
+                    });
+                    continue;
+                }
             }
 
             match = line.replace(/\s/g, "").match(definecolor);
