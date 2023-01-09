@@ -718,7 +718,9 @@ class UI {
         // Prevent the label input being dismissed when clicked on in command mode, when no cells
         // are selected.
         this.panel.label_input.parent.listen(pointer_event("up"), (event) => {
-            if (event.button === 0 && event.pointerType !== "touch") {
+            if (this.in_mode(UIMode.Command)
+                && event.button === 0 && event.pointerType !== "touch"
+            ) {
                 event.stopPropagation();
             }
         });
