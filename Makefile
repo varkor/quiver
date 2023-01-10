@@ -6,7 +6,7 @@
 # Build KaTeX.
 all:
 	set -e
-	curl -L -O "https://github.com/KaTeX/KaTeX/releases/download/v0.15.1/katex.zip"
+	curl -L -O "https://github.com/KaTeX/KaTeX/releases/download/v0.16.4/katex.zip"
 	unzip katex.zip
 	rm katex.zip
 	mv katex src/KaTeX
@@ -56,7 +56,7 @@ gh-pages:
 	# for `subtree split` later, which has to iterate through the entire history of the branch.
 	git reset $$TAIL
 	git add -A
-	git commit -m "Add release branch"
+	git commit --allow-empty -m "Add release branch"
 	# Split off the `src/` directory into its own branch.
 	RELEASE=$$(git subtree split --prefix=src)
 	# Checkout the development branch, squash it, and split it off, just like `release`.
@@ -65,7 +65,7 @@ gh-pages:
 	git checkout -b squashed
 	git reset $$TAIL
 	git add -A
-	git commit -m "Add dev branch"
+	git commit --allow-empty -m "Add dev branch"
 	DEV=$$(git subtree split --prefix=src)
 
 	# Checkout the GitHub Pages branch in a new worktree. We use a new worktree because the branch
@@ -87,16 +87,12 @@ gh-pages:
 	git add -A
 	git commit -m "Merge dev as subdirectory of release"
 
-	# Push to the remote `gh-pages` branch. We do need to force push at some point, to overwrite the
-	# existing branch content. However, this will not suffice to rebuild on GitHub Pages, so we then
-	# perform another (non-`--force`) push immediately afterwards.
-	git push --force
-	# Set the `CNAME`. It is convenient to do so now, because we have to push a commit anyway to
-	# force a rebuild, and we need to set the `CNAME` eventually.
+	# Set the `CNAME`.
 	printf "q.uiver.app" > CNAME
 	git add CNAME
 	git commit -m "Create CNAME"
-	git push
+	# Push to the remote `gh-pages` branch, which will trigger a rebuild on GitHub Pages.
+	git push --force
 
 	# Navigate back to the main working tree.
 	cd ../quiver
