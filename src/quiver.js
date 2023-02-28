@@ -296,8 +296,15 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
 
         // If a label is particularly simple (containing no special symbols), we do not need to
         // surround it in curly brackets. This is preferable, because simpler output is more
-        // readable.
+        // readable. In general, we need to use curly brackets to avoid LaTeX errors. For instance,
+        // `[a]` is invalid: we must use `{[a]}` instead.
         const simple_label = /^[a-zA-Z0-9\\]+$/;
+
+        // Adapt a label to be appropriate for TikZ output, by surrounding it in curly brackets when
+        // necessary, and using `\shortstack` for newlines.
+        const format_label = (label) => {
+            return !simple_label.test(label) ? `{${label}}` : label;
+        };
 
         // We handle the export in two stages: vertices and edges. These are fundamentally handled
         // differently in tikz-cd, so it makes sense to separate them in this way. We have a bit of
@@ -342,7 +349,7 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                     output += `\\textcolor${
                         vertex.label_colour.latex(definitions.colours, true)}{${vertex.label}}`;
                 } else {
-                    output += !simple_label.test(vertex.label) ? `{${vertex.label}}` : vertex.label;
+                    output += format_label(vertex.label);
                 }
                 prev.x = x;
                 first_in_row = false;
@@ -708,9 +715,8 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                             const swap = label.hasOwnProperty("swap");
                             delete label.swap;
                             const parameters = object_to_list(label);
-                            return `"${content !== "" ? (
-                                    !simple_label.test(content) ? `{${content}}` : `${content}`
-                                ) : ""}"${swap ? "'" : ""}${
+                            return `"${content !== "" ?
+                                format_label(content) : ""}"${swap ? "'" : ""}${
                                 parameters.length > 0 ? `{${parameters.join(", ")}}` : ""
                             }`;
                         })
