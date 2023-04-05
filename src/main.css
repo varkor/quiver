@@ -737,7 +737,7 @@ input[type="radio"].short + input[type="radio"]:not(.short) {
     background-color: var(--ui-hover);
 }
 
-.panel input[type="radio"]:active {
+.panel input[type="radio"]:active:not(:disabled) {
     background-color: var(--ui-active);
 }
 
