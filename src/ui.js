@@ -2751,6 +2751,8 @@ class UI {
             // Arities are implicit in KaTeX.
             macros[name] = definition;
         }
+        // Disable newlines in KaTeX.
+        macros["\\\\"] = "\\";
         return macros;
     }
 
