@@ -6824,7 +6824,7 @@ document.addEventListener("DOMContentLoaded", () => {
     ui.initialise();
 
     const load_quiver_from_query_string = () => {
-        const query_data = query_parameters();
+        const query_data = url_parameters();
 
         // Set the initial zoom level based on the `scale` parameter.
         if (query_data.has("scale")) {

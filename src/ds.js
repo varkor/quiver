@@ -375,14 +375,18 @@ class Colour extends Encodable {
     }
 }
 
-/// Returns a `Map` containing the current URL's query parameters.
-function query_parameters() {
+/// Returns a `Map` containing the current URL's query parameters, as well as parameters stored in
+/// the fragment identifier. If a parameter is found in both the query string and the fragment
+/// identifier, the query string parameter is prioritised.
+function url_parameters() {
+    let data = [];
+    const fragment_string = window.location.hash.replace(/^#/, "");
+    if (fragment_string !== "") {
+        data = data.concat(fragment_string.split("&").map(segment => segment.split("=")));
+    }
     const query_string = window.location.href.match(/\?(.*)$/);
     if (query_string !== null) {
-        // If there is `q` parameter in the query string, try to decode it as a diagram.
-        const query_segs = query_string[1].split("&");
-        const query_data = new Map(query_segs.map(segment => segment.split("=")));
-        return query_data;
+        data = data.concat(query_string[1].split("&").map(segment => segment.split("=")));
     }
-    return new Map();
+    return new Map(data);
 }

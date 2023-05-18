@@ -63,7 +63,7 @@
     <script>
         // If we are loading a diagram, display a loading screen to prevent a flash of empty canvas.
         // We do this in a `<script>` tag here to make sure that it loads immediately.
-        const query_data = query_parameters();
+        const query_data = url_parameters();
 
         // If we're running in embedded view, update the logo so that clicking it opens the
         // the current diagram in the app.

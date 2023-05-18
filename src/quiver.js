@@ -778,8 +778,9 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
     // - Arrays may be truncated if the values of the elements are the default values.
 
     export(quiver, _, options) {
-        // Remove the query string from the current URL and use that as a base.
-        const URL_prefix = window.location.href.replace(/\?.*$/, "");
+        // Remove the query string and fragment identifier from the current URL and use that as a
+        // base.
+        const URL_prefix = window.location.href.replace(/\?.*$/, "").replace(/#.*$/, "");
 
         if (quiver.is_empty()) {
             // No need to have an encoding of an empty quiver;
@@ -893,7 +894,7 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
 
         return {
             // We use this `unescape`-`encodeURIComponent` trick to encode non-ASCII characters.
-            data: `${URL_prefix}?q=${
+            data: `${URL_prefix}#q=${
               btoa(unescape(encodeURIComponent(JSON.stringify(output))))
             }${macro_data}`,
             metadata: {},
@@ -1154,7 +1155,7 @@ QuiverExport.html = new class extends QuiverExport {
         return {
             data: `<!-- ${url} -->
 <iframe class="quiver-embed" \
-src="${url}${!quiver.is_empty() ? "&" : "?"}embed" \
+src="${url}${!quiver.is_empty() ? "&" : "#"}embed" \
 width="${width}" \
 height="${height}" \
 style="border-radius: 8px; border: none;">\
