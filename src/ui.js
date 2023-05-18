@@ -2752,7 +2752,9 @@ class UI {
             macros[name] = definition;
         }
         // Disable newlines in KaTeX.
-        macros["\\\\"] = "\\";
+        // This doesn't work as intended, because we want to be able to use newlines in some
+        // commands like `\substack`, but KaTeX doesn't redefine newlines for such commands.
+        // macros["\\\\"] = "\\";
         return macros;
     }
 
