@@ -1852,7 +1852,6 @@ class UI {
         // Holding Option or Control triggers panning mode (and releasing ends panning mode).
         this.shortcuts.add([
             { key: "Alt", context: Shortcuts.SHORTCUT_PRIORITY.Always },
-            { key: "Control", context: Shortcuts.SHORTCUT_PRIORITY.Always },
         ], (event) => {
             if (this.in_mode(UIMode.Default)) {
                 this.switch_mode(new UIMode.Pan(event.key));
