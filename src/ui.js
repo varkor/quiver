@@ -6935,4 +6935,10 @@ document.addEventListener("DOMContentLoaded", () => {
         ui.reset();
         load_quiver_from_query_string();
     });
+
+    // Listen to see if the URL hash changes, in which case we force a page reload. This won't be
+    // triggered if quiver triggers a hash change (e.g. upon a user save).
+    window.addEventListener("hashchange", () => {
+        window.location.reload();
+    });
 });
