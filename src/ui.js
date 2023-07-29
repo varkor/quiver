@@ -4894,6 +4894,8 @@ class Panel {
                     throwOnError: false,
                     errorColor: "hsl(0, 100%, 40%)",
                     macros: ui.latex_macros(),
+                    trust: (context) => ["\\href", "\\url", "\\includegraphics"]
+                        .includes(context.command),
                 },
             );
             // KaTeX loads fonts as it needs them. After we call `render`, it will load the fonts it
