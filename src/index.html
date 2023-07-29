@@ -67,23 +67,26 @@
             ]);
         }
 
+        const loading_screen = new DOM.Div({ class: "loading-screen hidden" })
+            .add(new DOM.Element("img", { src: "quiver-blue.svg", class: "logo" }))
+            .add(new DOM.Element("span").add("Loading diagram..."))
+            // Prevent pointer events effected during loading from taking place after loading
+            // has completed.
+            .listen(pointer_event("down"), cancel)
+            .listen(pointer_event("move"), cancel)
+            .listen(pointer_event("up"), cancel)
+            .listen("wheel", cancel, { passive: true });
+
         if (query_data.has("q")) {
             // Prevent keyboard events effected during loading from taking place after loading
             // has completed.
             document.addEventListener("keydown", cancel);
             document.addEventListener("keyup", cancel);
 
-            const loading_screen = new DOM.Div({ class: "loading-screen" })
-                .add(new DOM.Element("img", { src: "quiver-blue.svg", class: "logo" }))
-                .add(new DOM.Element("span").add("Loading diagram..."))
-                // Prevent pointer events effected during loading from taking place after loading
-                // has completed.
-                .listen(pointer_event("down"), cancel)
-                .listen(pointer_event("move"), cancel)
-                .listen(pointer_event("up"), cancel)
-                .listen("wheel", cancel, { passive: true });
-            document.body.appendChild(loading_screen.element);
+            loading_screen.class_list.remove("hidden");
         }
+
+        document.body.appendChild(loading_screen.element);
 
         // Takes a `Map` containing a collection of query parameters and reconstructs a
         // corresponding URL. An array containing parameters to `ignore` is used to delete unwanted

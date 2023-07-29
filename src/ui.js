@@ -638,8 +638,11 @@ class UI {
         this.history = new History();
 
         // Update UI elements.
+        this.panel.dismiss_export_pane(this);
         this.panel.update(this);
         this.toolbar.update(this);
+        // Reset the focus point.
+        this.focus_point.class_list.remove("focused", "smooth");
         // While the following does work without a delay, it currently experiences some stutters.
         // Using a delay makes the transition much smoother.
         delay(() => {
@@ -6947,11 +6950,5 @@ document.addEventListener("DOMContentLoaded", () => {
     window.addEventListener("popstate", () => {
         ui.reset();
         load_quiver_from_query_string();
-    });
-
-    // Listen to see if the URL hash changes, in which case we force a page reload. This won't be
-    // triggered if quiver triggers a hash change (e.g. upon a user save).
-    window.addEventListener("hashchange", () => {
-        window.location.reload();
     });
 });
