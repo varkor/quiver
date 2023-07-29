@@ -896,10 +896,10 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
         const macro_data = options.macro_url !== null
             ? `&macro_url=${encodeURIComponent(options.macro_url)}` : "";
 
+        const encoder = new TextEncoder();
         return {
-            // We use this `unescape`-`encodeURIComponent` trick to encode non-ASCII characters.
             data: `${URL_prefix}#q=${
-              btoa(unescape(encodeURIComponent(JSON.stringify(output))))
+              btoa(String.fromCharCode(...encoder.encode(JSON.stringify(output))))
             }${macro_data}`,
             metadata: {},
         };
@@ -910,8 +910,12 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
 
         let input;
         try {
-            // We use this `decodeURIComponent`-`escape` trick to encode non-ASCII characters.
-            const decoded = decodeURIComponent(escape(atob(string)));
+            const data = atob(string);
+            const bytes = [];
+            for (let i = 0; i < data.length; ++i) {
+                bytes.push(data.charCodeAt(i));
+            }
+            const decoded = new TextDecoder().decode(new Uint8Array(bytes));
             if (decoded === "") {
                 return quiver;
             }
