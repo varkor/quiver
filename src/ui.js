@@ -4332,7 +4332,7 @@ class Panel {
                     ui.definitions(),
                 ));
 
-                let export_pane, tip, warning, list, latex_options, embed_options, content;
+                let export_pane, tip, warning, latex_options, embed_options, content;
 
                 // Select the code for easy copying.
                 const select_output = () => {
@@ -4416,10 +4416,6 @@ class Panel {
                         .add_to(export_pane);
 
                     warning = new DOM.Element("span", { class: "warning hidden" })
-                        .add("The exported tikz-cd diagram may not match the quiver diagram " +
-                            "exactly, as tikz-cd does not support the following features that " +
-                            "appear in this diagram:")
-                        .add(list = new DOM.Element("ul"))
                         .add_to(export_pane);
 
                     const centre_checkbox = new DOM.Element("input", {
@@ -4567,16 +4563,44 @@ class Panel {
                     content = export_pane.query_selector(".code");
                 }
                 // Display a warning if necessary.
-                list.clear();
+                warning.clear();
+                warning.class_list.add("hidden");
                 const unsupported_items = format === "tikz-cd" ?
                     Array.from(metadata.tikz_incompatibilities).sort() : [];
-                for (const [index, item] of unsupported_items.entries()) {
-                    list.add(new DOM.Element("li")
-                        .add(`${item}${index + 1 < unsupported_items.length ? ";" : "."}`)
-                    );
+                if (unsupported_items.length !== 0) {
+                    warning.class_list.remove("hidden");
+                    warning.add("The exported tikz-cd diagram may not match the quiver diagram " +
+                            "exactly, as tikz-cd does not support the following features that " +
+                            "appear in this diagram:");
+                    const list = warning.add(new DOM.Element("ul"));
+                    for (const [index, item] of unsupported_items.entries()) {
+                        list.add(new DOM.Element("li")
+                            .add(`${item}${index + 1 < unsupported_items.length ? ";" : "."}`)
+                        );
+                    }
+                }
+                const dependencies = format === "tikz-cd" ? metadata.dependencies : new Map();
+                if (dependencies.size !== 0) {
+                    warning.class_list.remove("hidden");
+                    if (unsupported_items.length !== 0) {
+                        warning.add(new DOM.Element("br"));
+                    }
+                    warning.add("The exported tikz-cd diagram relies upon additional TikZ " +
+                        "libraries that you may have to install for the diagram to render " +
+                        "correctly:");
+                    const list = warning.add(new DOM.Element("ul"));
+                    for (const [library, reasons] of dependencies) {
+                        const li = new DOM.Element("li").add_to(list);
+                        const url = { "tikz-nfold": "https://ctan.org/pkg/tikz-nfold" }[library];
+                        li.add(new DOM.Element("a", { href: url, target: "_blank" })
+                            .add(new DOM.Element("code").add(library)));
+                        li.add(`, for ${Array.from(reasons).join("; ")}.`);
+                    }
                 }
                 tip.class_list.toggle("hidden", format !== "tikz-cd");
-                warning.class_list.toggle("hidden", unsupported_items.length === 0);
+                warning.class_list.toggle("hidden",
+                    unsupported_items.length === 0 && dependencies.size === 0,
+                );
                 latex_options.class_list.toggle("hidden", format !== "tikz-cd");
                 embed_options.class_list.toggle("hidden", format !== "html");
 

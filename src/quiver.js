@@ -290,7 +290,7 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
         if (quiver.is_empty()) {
             return {
                 data: wrap_boilerplate(output),
-                metadata: { tikz_incompatibilities: new Set() },
+                metadata: { tikz_incompatibilities: new Set(), dependencies: new Map() },
             };
         }
 
@@ -381,6 +381,16 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
         // unable to export faithfully to tikz-cd. In this case, we issue a warning to alert the
         // user that their diagram is not expected to match the quiver representation.
         const tikz_incompatibilities = new Set();
+        // In some cases, we can resolve this issue by relying on another package. However, these
+        // packages may not yet be standard in LaTeX installations, so we warn the issue that they
+        // are required.
+        const dependencies = new Map();
+        const add_dependency = (dependency, reason) => {
+            if (!dependencies.has(dependency)) {
+                dependencies.set(dependency, new Set());
+            }
+            dependencies.get(dependency).add(reason);
+        };
 
         // Output the edges.
         for (let level = 1; level < quiver.cells.length; ++level) {
@@ -533,9 +543,9 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                         if (edge.options.level === 2 && !edge_is_empty) {
                             parameters.Rightarrow = "";
                         } else if (edge.options.level > 2) {
-                            // TikZ has no built-in support for n-ary arrows, and I have not
-                            // been able to find any custom styles that are suitable yet.
-                            tikz_incompatibilities.add("triple arrows or higher");
+                            parameters.Rightarrow = "";
+                            parameters["scaling nfold"] = edge.options.level;
+                            add_dependency("tikz-nfold", "triple arrows or higher");
                         }
 
                         // We special-case arrows with no head, body, nor tail. This is because the
@@ -734,7 +744,7 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
 
         return {
             data: wrap_boilerplate(output),
-            metadata: { tikz_incompatibilities },
+            metadata: { tikz_incompatibilities, dependencies },
         };
     }
 };

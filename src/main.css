@@ -1445,6 +1445,10 @@ button.flash {
     list-style-type: circle;
 }
 
+.export .warning a {
+    color: var(--ui-black);
+}
+
 .export .options {
     margin-bottom: 8pt;
     padding: 6pt 4pt;
