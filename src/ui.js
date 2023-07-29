@@ -3533,6 +3533,8 @@ class Settings {
             "export.centre_diagram": true,
             // Whether to use `\&` instead of `&` for column separators in tikz-cd output.
             "export.ampersand_replacement": false,
+            // Whether to export diagrams with the `cramped` option.
+            "export.cramped": false,
             // Whether to use a fixed size for the embedded `<iframe>`, or compute the size based on
             // the diagram.
             "export.embed.fixed_size": false,
@@ -4425,6 +4427,10 @@ class Panel {
                         type: "checkbox",
                         "data-setting": "export.ampersand_replacement",
                     });
+                    const cramped = new DOM.Element("input", {
+                        type: "checkbox",
+                        "data-setting": "export.cramped",
+                    });
                     latex_options = new DOM.Div({ class: "options latex hidden" })
                         .add(new DOM.Element("label")
                             .add(centre_checkbox)
@@ -4433,6 +4439,10 @@ class Panel {
                         .add(new DOM.Element("label")
                             .add(ampersand_replacement)
                             .add("Ampersand replacement")
+                        )
+                        .add(new DOM.Element("label")
+                            .add(cramped)
+                            .add("Cramped")
                         )
                         .add(sep_sliders.column.label)
                         .add(sep_sliders.row.label)
@@ -4470,6 +4480,7 @@ class Panel {
                     const checkboxes = [
                         [centre_checkbox, "tikz-cd", "C"],
                         [ampersand_replacement, "tikz-cd", "A"],
+                        [cramped, "tikz-cd", "R"],
                         [fixed_size_checkbox, "html", "F"],
                     ];
                     const shortcuts = [];

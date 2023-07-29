@@ -238,6 +238,10 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
             if (settings.get("export.ampersand_replacement")) {
                 diagram_options.push("ampersand replacement=\\&");
             }
+            // Cramped.
+            if (settings.get("export.cramped")) {
+                diagram_options.push("cramped");
+            }
             // Column and row separation.
             const sep = {
                 column: `${options.sep.column.toFixed(2)}em`,
