@@ -5316,7 +5316,9 @@ class Shortcuts {
                         (shortcut.shift === null || event.shiftKey === shortcut.shift
                             || (key === "shift" && event.shiftKey === (type === "keydown")))
                             && (shortcut.modifier === null
-                                || (event.metaKey || event.ctrlKey) === shortcut.modifier
+                                || (event.metaKey
+                                    || (event.ctrlKey && !Shortcuts.is_Apple_platform()))
+                                        === shortcut.modifier
                                 || ["control", "meta"].includes(key))
                     ) {
                         const effect = () => {
