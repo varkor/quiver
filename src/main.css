@@ -471,6 +471,10 @@ being. */
     margin-bottom: 8px;
 }
 
+label.inline {
+    display: inline-block;
+}
+
 .label-input-container {
     position: fixed;
     left: 50%; height: 32px;
@@ -659,8 +663,12 @@ input[type="text"].flash {
     border-color: var(--ui-focus);
 }
 
-.panel input.hidden {
+.panel input.hidden, .panel div.hidden, .panel label.hidden {
     display: none;
+}
+
+.panel .centred {
+    text-align: center;
 }
 
 .panel .vertical {

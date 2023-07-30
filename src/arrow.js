@@ -138,7 +138,12 @@ class Label {
     }
 }
 
-class Shape {}
+class Shape {
+    /// Return a point representing the origin of the shape.
+    point() {
+        return new Shape.Endpoint(this.origin);
+    }
+}
 
 Shape.RoundedRect = class extends Shape {
     constructor(origin, size, radius) {

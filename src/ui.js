@@ -3444,6 +3444,14 @@ class History {
                     update_panel = true;
                     update_colours = true;
                     break;
+                case "edge_alignment":
+                    for (const cell of action.cells) {
+                        cell.options.edge_alignment[action.end] =
+                            !cell.options.edge_alignment[action.end];
+                        cells.add(cell);
+                    }
+                    update_panel = true;
+                    break;
             }
             for (const cell of ui.quiver.transitive_dependencies(cells)) {
                 cell.render(ui);
@@ -4281,6 +4289,39 @@ class Panel {
         });
         new DOM.Element("label", { title: "Arrow colour" }).add("Colour: ").add(colour_indicator)
             .add(new DOM.Element("kbd", { class: "hint colour" }).add(Shortcuts.name([shortcut])))
+            .add_to(wrapper);
+
+        const change_endpoint_alignment = (element, end) => {
+            const cells = new Set();
+            for (const cell of ui.selection) {
+                if (cell.is_edge() && cell[end].is_edge() &&
+                    cell.options.edge_alignment[end] !== element.checked) {
+                    cells.add(cell);
+                }
+            }
+            ui.history.add(ui, [{
+                kind: "edge_alignment",
+                cells,
+                end,
+            }], true);
+        };
+        new DOM.Element("div", {
+            id: "endpoint-positioning",
+            class: "centred hidden",
+            title: "Whether to align arrow endpoints to their source/target centre (checked), " +
+                "or to their geometric midpoint (unchecked)"
+        }).add("Align ")
+            .add(new DOM.Element("label", { class: "inline hidden" }).add("source: ").add(
+                new DOM.Element("input", { type: "checkbox" }).listen("change", (_, element) => {
+                    change_endpoint_alignment(element, "source");
+                })
+            ))
+            .add(new DOM.Element("label", { class: "inline hidden" }).add("target: ").add(
+                new DOM.Element("input", { type: "checkbox" }).listen("change", (_, element) => {
+                    change_endpoint_alignment(element, "target");
+                })
+            ))
+            .add("to edge")
             .add_to(wrapper);
 
         const display_export_pane = (format, modify = (output) => output) => {
@@ -5215,6 +5256,41 @@ class Panel {
             for (const slider of this.element.query_selector_all(".arrow-style .slider")) {
                 slider.class_list.toggle("disabled", !all_edges_are_arrows);
             }
+
+            // Show/hide the endpoint positioning source/target checkboxes.
+            // For now, the only cells whose shapes are not points are vertices. So we only need to
+            // display this option for arrows that point to arrows that have a vertex as their
+            // source or target.
+            let ep_source_checked = null, ep_target_checked = null;
+            for (const cell of ui.selection) {
+                if (cell.is_edge()) {
+                    if (cell.source.is_edge()
+                        && (cell.source.source.is_vertex() || cell.source.target.is_vertex())) {
+                        if (ep_source_checked === null) {
+                            ep_source_checked = true;
+                        }
+                        ep_source_checked = ep_source_checked &&
+                            cell.options.edge_alignment.source;
+                    }
+                    if (cell.target.is_edge()
+                        && (cell.target.source.is_vertex() || cell.target.target.is_vertex())) {
+                        if (ep_target_checked === null) {
+                            ep_target_checked = true;
+                        }
+                        ep_target_checked = ep_target_checked &&
+                            cell.options.edge_alignment.target;
+                    }
+                }
+            }
+            const endpoint_positioning = this.element.query_selector("#endpoint-positioning");
+            endpoint_positioning.class_list.toggle("hidden",
+                ep_source_checked === null && ep_target_checked === null);
+            const ep_source = endpoint_positioning.query_selector('label:first-of-type');
+            ep_source.class_list.toggle("hidden", ep_source_checked === null);
+            ep_source.query_selector('input[type="checkbox"]').element.checked = ep_source_checked;
+            const ep_target = endpoint_positioning.query_selector('label:last-of-type');
+            ep_target.class_list.toggle("hidden", ep_target_checked === null);
+            ep_target.query_selector('input[type="checkbox"]').element.checked = ep_target_checked;
 
             // Enable all inputs in the global section of the panel.
             this.global.query_selector_all(`input[type="text"]`).forEach((input) => {
@@ -6493,6 +6569,8 @@ class Vertex extends Cell {
             new Dimensions(ui.default_cell_size / 2, ui.default_cell_size / 2),
             ui.default_cell_size / 8,
         );
+        // This property is only relevant for edges. For vertices, it is always simply the shape.
+        this.phantom_shape = this.shape;
 
         this.render(ui);
         super.initialise(ui);
@@ -6617,6 +6695,10 @@ class Edge extends Cell {
         // `this.shape` is used for the source/target from (higher) cells connected to this one.
         // This is located at the centre of the arrow (it will be updated in `render`).
         this.shape = new Shape.Endpoint(Point.zero());
+        // We also record the shape of the edge, if endpoints are not taken into account. E.g. if
+        // the target of this edge is a long label XXX, then the phantom shape is the
+        // arrow pointing not to the left of the first X, but to the centre of the middle X.
+        this.phantom_shape = new Shape.Endpoint(Point.zero());
 
         this.reconnect(ui, source, target);
 
@@ -6633,6 +6715,10 @@ class Edge extends Cell {
             shorten: { source: 0, target: 0 },
             level: 1,
             colour: Colour.black(),
+            // Whether to align the source and target of the current edge to the midpoint of the
+            // source/target edge (`true`), or to the midpoint of the source and target of the
+            // source/target edge (`false`).
+            edge_alignment: { source: true, target: true },
             // For historical reasons, the following options are in a `style` subobject. Originally,
             // these were those pertaining to the edge style. However, options such as `curve` and
             // `level` also pertain to the edge style (and can only be set for arrows), but are not
@@ -6704,19 +6790,23 @@ class Edge extends Cell {
     /// Create the HTML element associated with the edge.
     /// Note that `render_tex` triggers redrawing the edge, rather than the other way around.
     render(ui, pointer_offset = null) {
-        // If we're reconnecting an edge, then we vary its source/target (depending on
-        // which is being dragged) depending on the pointer position.
-        let fixed_endpoints = true;
         if (pointer_offset !== null) {
+            const end = ui.mode.reconnect.end;
             if (ui.mode.target !== null) {
                 // In this case, we're hovering over another cell.
-                this.arrow[ui.mode.reconnect.end] = ui.mode.target.shape;
+                this.arrow[end] =
+                    (ui.mode.target.is_vertex() || this.options.edge_alignment[end]) ?
+                        ui.mode.target.shape : ui.mode.target.phantom_shape
             } else {
                 // In this case, we're not hovering over another cell.
                 // Usually we offset edge endpoints from the cells to which they are connected,
                 // but when we are dragging an endpoint, we want to draw it right up to the pointer.
-                this.arrow[ui.mode.reconnect.end] = new Shape.Endpoint(pointer_offset);
-                fixed_endpoints = false;
+                this.arrow[end] = new Shape.Endpoint(pointer_offset);
+            }
+        } else {
+            for (const end of ["source", "target"]) {
+                this.arrow[end] = this.options.edge_alignment[end] ?
+                    this[end].shape : this[end].phantom_shape
             }
         }
 
@@ -6743,6 +6833,7 @@ class Edge extends Cell {
 
         // Update the origin, which is given by the centre of the edge.
         const bezier = this.arrow.bezier();
+        const midpoint = bezier.point(0.5);
         let centre = null;
         try {
             // Preferably, we take the centre relative to the endpoints, rather than the
@@ -6750,26 +6841,19 @@ class Edge extends Cell {
             const [start, end] = this.arrow.find_endpoints();
             centre = bezier.point((start.t + end.t) / 2);
         } catch (_) {
-            if (fixed_endpoints) {
-                // If we're not reconnecting the edge, and we can't find the endpoints, we just take
-                // the centre relative to the source and target.
-                centre = bezier.point(0.5);
-            } else {
-                // If we are reconnecting the edge, then we just want to fix the centre at the
-                // source or target (whichever is not being changed right now), so the edges
-                // connected to this one don't move around, despite not looking like they're
-                // attached to anything, when this edge is not displayed.
-                const end = { source: "target", target: "source" }[ui.mode.reconnect.end];
-                this.shape.origin = this.arrow[end].origin.add(
-                    new Point(0, this.arrow.style.shift).rotate(this.arrow.angle()),
-                );
-            }
+            // If we're not reconnecting the edge, and we can't find the endpoints, we just take
+            // the centre relative to the source and target.
+            centre = midpoint;
         }
         if (centre !== null) {
+            const relative_position = (position) => {
+                return this.arrow.source.origin.add(
+                    position.add(new Point(0, this.arrow.style.shift)).rotate(this.arrow.angle()),
+                );
+            };
             // `centre` will be `null` only if we've already updated the origin.
-            this.shape.origin = this.arrow.source.origin.add(
-                centre.add(new Point(0, this.arrow.style.shift)).rotate(this.arrow.angle()),
-            );
+            this.shape.origin = relative_position(centre);
+            this.phantom_shape.origin = relative_position(midpoint);
         }
 
         // Move the jump label to the centre of the edge. We may not have created the `kbd` element
@@ -6794,11 +6878,16 @@ class Edge extends Cell {
 
     /// Changes the source and target.
     reconnect(ui, source, target) {
-        [this.arrow.source, this.arrow.target] = [source.shape, target.shape];
         ui.quiver.connect(source, target, this);
+        for (const end of ["source", "target"]) {
+            if (this[end].is_vertex()) {
+                this.options.edge_alignment[end] = true;
+            }
+        }
         for (const cell of ui.quiver.transitive_dependencies([this])) {
             cell.render(ui);
         }
+        ui.panel.update(ui);
     }
 
     /// Flips the edge, so that what was on the left is now on the right. If `flip_arrow` is true,

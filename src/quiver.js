@@ -368,12 +368,12 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
         // A map of unique identifiers for cells.
         const names = new Map();
         let index = 0;
-        const cell_reference = (cell) => {
+        const cell_reference = (cell, phantom) => {
             if (cell.is_vertex()) {
                 // Note that tikz-cd 1-indexes its cells.
                 return `${cell.position.y - offset.y + 1}-${cell.position.x - offset.x + 1}`;
             } else {
-                return `${names.get(cell)}`;
+                return `${names.get(cell)}${phantom ? "p" : ""}`;
             }
         };
 
@@ -419,20 +419,27 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                     && edge.options.style.body.name === "none"
                     && edge.options.style.tail.name === "none";
 
-                // We only need to give edges names if they're depended on by another edge.
-                if (quiver.dependencies_of(edge).size > 0) {
-                    // We create a placeholder label that is used as a source/target for other
-                    // edges. It's more convenient to create a placeholder label so that we have
-                    // fine-grained control of positioning independent of the actual label
-                    // position.
-                    labels.unshift({
-                        name: index,
-                        // The placeholder labels should have zero size. The following properties
-                        // heuristically gave the best results for this purpose.
-                        anchor: "center",
-                        "inner sep": 0,
-                    });
-                    names.set(edge, index++);
+                const current_index = index;
+                // We only need to give edges names if they're depended on by another edge. However,
+                // if the edge is only depended upon in a non edge-aligned manner, then we don't
+                // need to give the edge a name, as a named phantom edge will be created later.
+                for (const [dependency, end] of quiver.dependencies_of(edge)) {
+                    names.set(edge, current_index);
+                    index++;
+                    if (dependency.options.edge_alignment[end]) {
+                        // We create a placeholder label that is used as a source/target for other
+                        // edges. It's more convenient to create a placeholder label so that we have
+                        // fine-grained control of positioning independent of the actual label
+                        // position.
+                        labels.unshift({
+                            name: current_index,
+                            // The placeholder labels should have zero size. The following
+                            // properties heuristically gave the best results for this purpose.
+                            anchor: "center",
+                            "inner sep": 0,
+                        });
+                        break;
+                    }
                 }
 
                 switch (edge.options.label_alignment) {
@@ -708,8 +715,8 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                         break;
                 }
 
-                parameters.from = cell_reference(edge.source);
-                parameters.to = cell_reference(edge.target);
+                parameters.from = cell_reference(edge.source, !edge.options.edge_alignment.source);
+                parameters.to = cell_reference(edge.target, !edge.options.edge_alignment.target);
 
                 const object_to_list = (object) => {
                     return Object.entries(object).map(([key, value]) => {
@@ -735,6 +742,23 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                         .concat(object_to_list(parameters))
                         .join(", ")
                 }]\n`;
+
+                // Check whether any edges depend on this one, but are not edge aligned. In this
+                // case, we have to create a phantom edge that does not depend on the labels of the
+                // source and target.
+                if (quiver.dependencies_of(edge).size > 0) {
+                    for (const [dependency, end] of quiver.dependencies_of(edge)) {
+                        if (!dependency.options.edge_alignment[end]) {
+                            output += `\\arrow[""{name=${
+                                current_index
+                            }p, anchor=center, inner sep=0}, phantom, from=${
+                                parameters.from
+                            }, to=${
+                                parameters.to
+                            }, start anchor=center, end anchor=center]\n`;
+                        }
+                    }
+                }
             }
             // Remove any trailing whitespace.
             output = output.trim();
@@ -955,6 +979,9 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
                 case "float":
                     assert(typeof object === "number", "expected floating-point number");
                     break;
+                case "boolean":
+                    assert(typeof object === "boolean", "expected boolean");
+                    break;
                 case "string":
                     assert(typeof object === "string", "expected string");
                     break;
@@ -1078,6 +1105,14 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
                         // Colour is encoded as an array, so we have to convert it to a `Colour`.
                         options.colour = new Colour(...options.colour);
                     }
+                    if (options.hasOwnProperty("edge_alignment")) {
+                        if (options.edge_alignment.hasOwnProperty("source")) {
+                            assert_kind(options.edge_alignment.source, "boolean");
+                        }
+                        if (options.edge_alignment.hasOwnProperty("target")) {
+                            assert_kind(options.edge_alignment.target, "boolean");
+                        }
+                    }
 
                     // In previous versions of quiver, there was a single `length` parameter, rather
                     // than two `shorten` parameters. We convert from `length` into `shorten` here.
@@ -1179,4 +1214,4 @@ style="border-radius: 8px; border: none;">\
             metadata: {},
         };
     }
-}
+};
