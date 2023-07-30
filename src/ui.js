@@ -4312,7 +4312,7 @@ class Panel {
                 end,
             }], true);
         };
-        new DOM.Element("div", {
+        new DOM.Div({
             id: "endpoint-positioning",
             class: "centred hidden",
             title: "Whether to align arrow endpoints to their source/target centre (checked), " +
@@ -4476,9 +4476,6 @@ class Panel {
                         .add(" to copy-and-paste.")
                         .add_to(export_pane);
 
-                    warning = new DOM.Element("span", { class: "warning hidden" })
-                        .add_to(export_pane);
-
                     const centre_checkbox = new DOM.Element("input", {
                         type: "checkbox",
                         "data-setting": "export.centre_diagram",
@@ -4504,10 +4501,19 @@ class Panel {
                             .add(cramped)
                             .add("Cramped")
                         )
-                        .add(new DOM.Element("div", { class: "linked-sliders" })
+                        .add(new DOM.Div({ class: "linked-sliders" })
                             .add(sep_sliders.column.label)
                             .add(sep_sliders.row.label)
                         )
+                        .add_to(export_pane);
+
+                    warning = new DOM.Element("span", { class: "warning hidden" })
+                        .add_to(export_pane);
+
+                    new DOM.Div({ class: "note latex hidden" })
+                        .add("If you need to edit this diagram, you can open it again in ")
+                        .add(new DOM.Element("b").add("quiver"))
+                        .add(" using the URL below ↴")
                         .add_to(export_pane);
                     
                     // Update the thumbs of the column/row separation sliders now that we can
@@ -4665,6 +4671,8 @@ class Panel {
                     unsupported_items.length === 0 && dependencies.size === 0,
                 );
                 latex_options.class_list.toggle("hidden", format !== "tikz-cd");
+                export_pane.query_selector(".latex.note")
+                    .class_list.toggle("hidden", format !== "tikz-cd");
                 embed_options.class_list.toggle("hidden", format !== "html");
 
                 for (const checkbox of export_pane.query_selector_all('input[type="checkbox"]')) {

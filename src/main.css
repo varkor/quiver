@@ -1474,13 +1474,26 @@ button.flash {
     color: var(--ui-white);
 
     user-select: none;
-    -webkit-user-select: none;
 }
 
 .export .options label {
     position: relative;
     top: 1px;
     margin-right: 20pt;
+}
+
+.export .note {
+    display: inline-block;
+    width: 100%;
+    padding: 8pt;
+    margin-bottom: 8pt;
+
+    background: var(--ui-blue);
+    border-radius: 2px;
+
+    color: var(--ui-black);
+
+    user-select: none;
 }
 
 .export .options label kbd.hint {
