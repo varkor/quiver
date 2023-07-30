@@ -6,11 +6,11 @@ Object.assign(CONSTANTS, {
     VERSION: "1.2.4",
     /// When the `quiver.sty` package was last modified.
     PACKAGE_VERSION: "2021/01/11",
-    /// We currently only support 0-cells, 1-cells, 2-cells, and 3-cells. This is due to
-    /// a restriction with tikz-cd, which does not support n-cells greater than n = 2 (though it has
-    /// issues even then), and also for usability: a user is unlikely to want to draw a higher cell.
-    /// This restriction is not technical: it can be lifted in the editor without issue.
-    MAXIMUM_CELL_LEVEL: 3,
+    /// We currently only support n-cells for (n ≤ 4). This restriction is not technical: it can be
+    /// lifted in the editor without issue. Rather, this is for usability: a user is unlikely to
+    /// want to draw a higher cell. For n-cells for n ≥ 3, we make use of tikz-nfold in exported
+    /// diagrams.
+    MAXIMUM_CELL_LEVEL: 4,
     /// The width of the dashed grid lines.
     GRID_BORDER_WIDTH: 2,
     /// The padding of the content area of a vertex.
@@ -3927,12 +3927,14 @@ class Panel {
             this.sliders.get("length").class_list.remove("symmetric");
         });
 
-        // The level slider. We limit to 3 for now because there are issues with pixel perfection
+        // The level slider. We limit to 4 for now because there are issues with pixel perfection
         // (especially for squiggly arrows, e.g. with their interaction with hooked tails) after 4,
-        // and 3 seems a more consistent setting number with the other settings.. Besides, it's
-        // unlikely people will want to draw diagrams involving 4- or 5-cells.
+        // and it seems unlikely people will want to draw diagrams involving 5-cells or higher.
         const level_slider
-            = create_option_slider("Level", "Arrow dimension", "level", "m", { min: 1, max: 3 });
+            = create_option_slider("Level", "Arrow dimension", "level", "m", {
+                min: 1,
+                max: CONSTANTS.MAXIMUM_CELL_LEVEL,
+        });
         level_slider.class_list.add("arrow-style");
 
         // The list of tail styles.

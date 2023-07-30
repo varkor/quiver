@@ -536,13 +536,11 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                 // Edge styles.
                 switch (edge.options.style.name) {
                     case "arrow":
-                        // tikz-cd only has supported for 1-cells and 2-cells.
-                        // Anything else requires custom support, so for now
-                        // we only special-case 2-cells. Everything else is
-                        // drawn as if it is a 1-cell.
+                        // tikz-cd only has supported for 1-cells and 2-cells...
                         if (edge.options.level === 2 && !edge_is_empty) {
                             parameters.Rightarrow = "";
                         } else if (edge.options.level > 2) {
+                            // So for n-cells for n > 2, we make use of tikz-nfold.
                             parameters.Rightarrow = "";
                             parameters["scaling nfold"] = edge.options.level;
                             add_dependency("tikz-nfold", "triple arrows or higher");
