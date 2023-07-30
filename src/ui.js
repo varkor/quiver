@@ -3833,12 +3833,13 @@ class Panel {
         // thumbs, which are necessary for the length slider. Therefore, we roll our own. (We could
         // just use a custom slider for multi-thumb settings, but by using them for all settings, we
         // ensure consistency of behaviour and styling.)
-        const create_option_slider = (name, property, key, range) => {
+        const create_option_slider = (name, tooltip, property, key, range) => {
             const { min, max, step = 1, thumbs = 1, spacing = 0 } = range;
             const slider = new DOM.Multislider(name, min, max, step, thumbs, spacing, {
                 class: "disabled",
                 "data-name": property,
             });
+            slider.label.set_attributes({ title: tooltip });
 
             slider.listen("input", () => {
                 const value = slider.values();
@@ -3899,17 +3900,19 @@ class Panel {
         };
 
         // The label position (along the edge) slider.
-        create_option_slider("Position", "label_position", "i", { min: 0, max: 100, step: 10 });
+        create_option_slider("Position", "Label position", "label_position", "i",
+            { min: 0, max: 100, step: 10 },
+        );
 
         // The offset slider.
-        create_option_slider("Offset", "offset", "o", { min: -5, max: 5 });
+        create_option_slider("Offset", "Arrow offset", "offset", "o", { min: -5, max: 5 });
 
         // The curve slider.
-        create_option_slider("Curve", "curve", "k", { min: -5, max: 5 })
+        create_option_slider("Curve", "Arrow curve", "curve", "k", { min: -5, max: 5 })
             .class_list.add("arrow-style");
 
         // The length slider, which affects `shorten`.
-        create_option_slider("Length", "length", "l", {
+        create_option_slider("Length", "Arrow length", "length", "l", {
             min: 0,
             max: 100,
             step: 10,
@@ -3929,7 +3932,7 @@ class Panel {
         // and 3 seems a more consistent setting number with the other settings.. Besides, it's
         // unlikely people will want to draw diagrams involving 4- or 5-cells.
         const level_slider
-            = create_option_slider("Level", "level", "m", { min: 1, max: 3 });
+            = create_option_slider("Level", "Arrow dimension", "level", "m", { min: 1, max: 3 });
         level_slider.class_list.add("arrow-style");
 
         // The list of tail styles.
@@ -4274,9 +4277,9 @@ class Panel {
                 action(event);
             }
         });
-        new DOM.Element("label").add("Colour: ").add(colour_indicator).add(
-            new DOM.Element("kbd", { class: "hint colour" }).add(Shortcuts.name([shortcut]))
-        ).add_to(wrapper);
+        new DOM.Element("label", { title: "Arrow colour" }).add("Colour: ").add(colour_indicator)
+            .add(new DOM.Element("kbd", { class: "hint colour" }).add(Shortcuts.name([shortcut])))
+            .add_to(wrapper);
 
         const display_export_pane = (format, modify = (output) => output) => {
             // Handle export button interaction: export the quiver.
@@ -5898,7 +5901,7 @@ class ColourPicker {
             delay(() => this.element.class_list.remove("active"));
         });
         this.sliders.set("lightness", slider);
-        slider.label.add_to(wrapper);
+        slider.label.set_attributes({ title: "Lightness" }).add_to(wrapper);
 
         // The checkbox allowing the label and edge colours to remain in sync.
         new DOM.Element("label")
