@@ -313,6 +313,10 @@ DOM.Multislider = class extends DOM.Element {
                     // Display the currently-dragged thumb above any other. This is important where
                     // there are multiple thumbs, which can overlap.
                     this.thumbs.forEach((thumb) => thumb.set_style({ "z-index": 1 }));
+                    const parent = this.label.parent;
+                    if (parent.class_list.contains("linked-sliders")) {
+                        parent.class_list.add("active");
+                    }
                     this.class_list.add("active");
                     hovered_thumb.class_list.add("active");
                     hovered_thumb.move_to_pointer(event);
@@ -479,9 +483,14 @@ window.addEventListener(pointer_event("move"), (event) => {
 
 // Handle the release of slider thumbs.
 window.addEventListener(pointer_event("up"), () => {
-    if (DOM.Multislider.active_thumb !== null) {
-        DOM.Multislider.active_thumb.slider.class_list.remove("active");
-        DOM.Multislider.active_thumb.class_list.remove("active");
+    const active_thumb = DOM.Multislider.active_thumb;
+    if (active_thumb !== null) {
+        const parent = active_thumb.slider.label.parent;
+        if (parent.class_list.contains("linked-sliders")) {
+            parent.class_list.remove("active");
+        }
+        active_thumb.slider.class_list.remove("active");
+        active_thumb.class_list.remove("active");
         DOM.Multislider.active_thumb = null;
     }
 });

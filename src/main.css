@@ -766,6 +766,10 @@ div.slider {
     position: absolute;
 }
 
+.linked-sliders {
+    display: inline-block;
+}
+
 .panel div.slider {
     width: 55%;
     left: 56px;
@@ -819,7 +823,7 @@ div.slider {
 }
 
 /* Disable transitions when the user is dragging the thumb. */
-.thumb.active {
+.thumb.active, .linked-sliders.linked.active .thumb {
     transition: none;
 }
 
@@ -833,12 +837,15 @@ div.slider {
 }
 
 .slider:not(.disabled):not(.focused) .thumb.hover,
-.slider.symmetric:not(.disabled):not(.focused):hover .thumb {
+.slider.symmetric:not(.disabled):not(.focused):hover .thumb,
+.linked-sliders.linked:hover .thumb
+{
     background: hsl(0, 0%, 20%);
 }
 
 .slider:not(.disabled):not(.focused) .thumb.active,
-.slider.symmetric:not(.disabled):not(.focused).active .thumb {
+.slider.symmetric:not(.disabled):not(.focused).active .thumb,
+.linked-sliders.linked.active .thumb {
     background: hsl(0, 0%, 30%);
 }
 

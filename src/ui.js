@@ -3928,11 +3928,18 @@ class Panel {
             spacing: 20,
         }).class_list.add("arrow-style");
 
-        // Allow edges to be shortened symmetrically by holding shift.
+        // Allow edges to be shortened symmetrically by holding shift; and allow column and row
+        // separation to be changed simultaneously.
         ui.shortcuts.add([{ key: "Shift", context: Shortcuts.SHORTCUT_PRIORITY.Always }], () => {
             this.sliders.get("length").class_list.add("symmetric");
+            for (const element of ui.element.query_selector_all(".linked-sliders")) {
+                element.class_list.add("linked");
+            }
         }, null, () => {
             this.sliders.get("length").class_list.remove("symmetric");
+            for (const element of ui.element.query_selector_all(".linked-sliders")) {
+                element.class_list.remove("linked");
+            }
         });
 
         // The level slider. We limit to 4 for now because there are issues with pixel perfection
@@ -4348,22 +4355,30 @@ class Panel {
                     slider.label.query_selector(".slider-value").clear().add(sep_name);
                 };
                 const sep_sliders = {};
+                const update_sep_slider = (axis) => {
+                    this.sep[axis] = sep_sliders[axis].values();
+                    // Update the output. We ignore `metadata`, which currently does not
+                    // change in response to the settings.
+                    const { data } = modify(ui.quiver.export(
+                        format,
+                        ui.settings,
+                        ui.options(),
+                        ui.definitions(),
+                    ));
+                    update_output(data);
+                    // Update the label.
+                    update_sep_label(sep_sliders[axis]);
+                };
                 for (const axis of ["column", "row"]) {
                     sep_sliders[axis] = new DOM.Multislider(
                         `${{ "column": "Column", "row": "Row" }[axis]} sep.`, 0.45, 3.6, 0.45,
                     ).listen("input", () => {
-                        this.sep[axis] = sep_sliders[axis].values();
-                        // Update the output. We ignore `metadata`, which currently does not
-                        // change in response to the settings.
-                        const { data } = modify(ui.quiver.export(
-                            format,
-                            ui.settings,
-                            ui.options(),
-                            ui.definitions(),
-                        ));
-                        update_output(data);
-                        // Update the label.
-                        update_sep_label(sep_sliders[axis]);
+                        update_sep_slider(axis);
+                        if (sep_sliders[axis].label.parent.class_list.contains("linked")) {
+                            const other_axis = { column: "row", row: "column" }[axis];
+                            sep_sliders[other_axis].thumbs[0].set_value(this.sep[axis]);
+                            update_sep_slider(other_axis);
+                        }
                     });
                     sep_sliders[axis].thumbs[0].set_value(this.sep[axis]);
                     update_sep_label(sep_sliders[axis]);
@@ -4489,8 +4504,10 @@ class Panel {
                             .add(cramped)
                             .add("Cramped")
                         )
-                        .add(sep_sliders.column.label)
-                        .add(sep_sliders.row.label)
+                        .add(new DOM.Element("div", { class: "linked-sliders" })
+                            .add(sep_sliders.column.label)
+                            .add(sep_sliders.row.label)
+                        )
                         .add_to(export_pane);
                     
                     // Update the thumbs of the column/row separation sliders now that we can
