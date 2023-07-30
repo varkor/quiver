@@ -4509,12 +4509,6 @@ class Panel {
 
                     warning = new DOM.Element("span", { class: "warning hidden" })
                         .add_to(export_pane);
-
-                    new DOM.Div({ class: "note latex hidden" })
-                        .add("If you need to edit this diagram, you can open it again in ")
-                        .add(new DOM.Element("b").add("quiver"))
-                        .add(" using the URL below ↴")
-                        .add_to(export_pane);
                     
                     // Update the thumbs of the column/row separation sliders now that we can
                     // calculate their widths.
@@ -4617,6 +4611,12 @@ class Panel {
                         });
                     }
 
+                    new DOM.Div({ class: "note" })
+                        .add("If you need to edit this diagram, you can open it again in ")
+                        .add(new DOM.Element("b").add("quiver"))
+                        .add(" using the URL below ↴")
+                        .add_to(export_pane);
+
                     content = new DOM.Div({ class: "code" }).add_to(export_pane);
                     ui.element.add(export_pane);
 
@@ -4626,7 +4626,6 @@ class Panel {
                     export_pane = ui.element.query_selector(".export");
                     tip = export_pane.query_selector(".tip");
                     warning = export_pane.query_selector(".warning");
-                    list = export_pane.query_selector("ul");
                     latex_options = export_pane.query_selector(".options.latex");
                     embed_options = export_pane.query_selector(".options.embed");
                     content = export_pane.query_selector(".code");
@@ -4671,8 +4670,6 @@ class Panel {
                     unsupported_items.length === 0 && dependencies.size === 0,
                 );
                 latex_options.class_list.toggle("hidden", format !== "tikz-cd");
-                export_pane.query_selector(".latex.note")
-                    .class_list.toggle("hidden", format !== "tikz-cd");
                 embed_options.class_list.toggle("hidden", format !== "html");
 
                 for (const checkbox of export_pane.query_selector_all('input[type="checkbox"]')) {
