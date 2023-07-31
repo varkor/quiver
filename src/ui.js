@@ -4467,7 +4467,7 @@ class Panel {
                             // `content-type` of a resource, and by default `.sty` files are
                             // treated as `application/octet-stream`.
                             new DOM.Link(
-                                "https://raw.githubusercontent.com/varkor/quiver/master/src/quiver.sty",
+                                "https://raw.githubusercontent.com/varkor/quiver/master/package/quiver.sty",
                                 "open it in a new tab",
                                 true,
                             )
