@@ -83,6 +83,11 @@ Currently, macros may be defined using `\newcommand`, `\newcommand*`, `\renewcom
 `\renewcommand*`, `\DeclareMathOperator`, and `\DeclareMathOperator*`; and colours may be defined
 using `\definecolor` (using the colour modes: `rgb`, `RGB` or `gray`).
 
+## Editor integration
+
+See [Editor integration](https://github.com/varkor/quiver/wiki/Editor-integration) on the [quiver
+wiki](https://github.com/varkor/quiver/wiki).
+
 ## Building
 Run `make` from the command line, and then open `src/index.html` in your favourite web browser.
 
