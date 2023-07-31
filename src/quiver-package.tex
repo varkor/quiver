@@ -1,0 +1,149 @@
+\documentclass[12pt,a4paper]{article}
+
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{microtype}
+
+% For the date.
+\usepackage[UKenglish]{isodate}
+
+% For URLs.
+\usepackage{hyperref}[pdfusetitle]
+\hypersetup{colorlinks,urlcolor=blue}
+\urlstyle{rm}
+
+% For tables.
+\usepackage{tabularray}
+
+% For side-by-side examples.
+\usepackage[skins,listings]{tcolorbox}
+\tcbuselibrary{minted}
+\newtcblisting{tikzexample}{
+    sidebyside,
+    center lower,
+    bicolor,
+    colbacklower=white,
+    sharp corners,
+    frame engine=empty
+}
+
+% The package in question.
+\usepackage{quiver}
+
+\newcommand{\quiver}{\textsf{quiver}}
+\newcommand{\tcd}{\textsf{tikz-cd}}
+\newcommand{\TikZ}{{\rm Ti{\it k}Z}}
+
+\title{\textsf{quiver} \\ \small A modern commutative diagram editor}
+\author{\normalsize \textsf{@varkor}}
+\date{\cleanlookdateon\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+    The \textsf{quiver} package provides compatibility with the \textsf{quiver} commutative diagram editor.
+\end{abstract}
+
+\section{Usage}
+
+The \quiver{} package is intended to be used in conjunction with the \url{https://q.uiver.app/} commutative diagram editor. It functions as a wrapper around the \tcd{} package that provides some extra \TikZ{} styles, which are used in diagrams exported by the editor. However, these styles may be used in isolation of the editor.
+
+To use the \quiver{} package, add the following to the preamble of your document.
+
+\begin{verbatim}
+\usepackage{quiver}
+\end{verbatim}
+
+\section{\TikZ{} styles}
+
+The \quiver{} package provides several styles that are useful in the rendering of commutative diagrams.
+
+\subsection{The \texttt{curve} style}
+
+The typical method of curving arrows in \tcd{} commutative diagrams is to use the \TikZ{} \texttt{bend left} and \texttt{bend right} styles, together with the \texttt{in} and \texttt{out} parameters. These styles facilitate the bending of paths with respect to an angle. However, it is often more convenient to bend a path with respect to a distance (namely, the height of the apex of the curve). This may be achieved with the \texttt{curve} style\footnotemark{}.
+\footnotetext{The \texttt{curve} style is due to Andr\'eC (\url{https://tex.stackexchange.com/users/138900/andr\%C3\%A9c}).}
+
+\begin{tikzexample}
+\begin{tikzcd}
+	a \ar["f", rr, curve={height=-24pt}] && b
+\end{tikzcd}
+\end{tikzexample}
+
+The \texttt{curve} style takes two (optional) named parameters.
+
+\begin{itemize}
+    \item \texttt{height} specifies the height of the apex of the curve. It is a signed distance (default \texttt{0}).
+    \item \texttt{pos} specifies the position of the control point for the curve. It is a value between \texttt{0.0} and \texttt{1.0} (default \texttt{0.35}).
+\end{itemize}
+
+\begin{tikzexample}
+\begin{tikzcd}
+	a \ar["f", rr, curve={height=-24pt, pos=0.2}] && b
+\end{tikzcd}
+\end{tikzexample}
+
+\begin{tikzexample}
+\begin{tikzcd}
+	a \ar["f", rr, curve={height=-24pt, pos=0.5}] && b
+\end{tikzcd}
+\end{tikzexample}
+
+\begin{tikzexample}
+\begin{tikzcd}
+	a \ar["f", rr, curve={height=-24pt, pos=0.8}] && b
+\end{tikzcd}
+\end{tikzexample}
+
+\subsection{Arrowhead and tail styles}
+
+The \tcd{} package provides several arrowhead and tail styles. The \quiver{} package provides the following additional styles.
+
+\begin{center}
+    \begin{tblr}{cc}
+        {\bf Style} & {\bf Appearance} \\
+        \texttt{tail reversed} &
+        % https://q.uiver.app/?q=WzAsMixbMCwwXSxbMSwwXSxbMCwxLCIiLDAseyJzdHlsZSI6eyJ0YWlsIjp7Im5hbWUiOiJhcnJvd2hlYWQifX19XV0=
+        \begin{tikzcd}[ampersand replacement=\&]
+        	{} \& {}
+        	\arrow[tail reversed, from=1-1, to=1-2]
+        \end{tikzcd}
+        \\
+        \texttt{2tail} &
+        % https://q.uiver.app/?q=WzAsMixbMCwwXSxbMSwwXSxbMCwxLCIiLDAseyJsZXZlbCI6Miwic3R5bGUiOnsidGFpbCI6eyJuYW1lIjoibW9ubyJ9fX1dXQ==
+        \begin{tikzcd}[ampersand replacement=\&]
+        	{} \& {}
+        	\arrow[Rightarrow, 2tail, from=1-1, to=1-2]
+        \end{tikzcd}
+        \\
+        \texttt{2tail reversed} &
+        % https://q.uiver.app/?q=WzAsMixbMCwwXSxbMSwwXSxbMCwxLCIiLDAseyJsZXZlbCI6Miwic3R5bGUiOnsidGFpbCI6eyJuYW1lIjoiYXJyb3doZWFkIn19fV1d
+        \begin{tikzcd}[ampersand replacement=\&]
+        	{} \& {}
+        	\arrow[Rightarrow, 2tail reversed, from=1-1, to=1-2]
+        \end{tikzcd}
+        \\
+        \texttt{no body} &
+        % https://q.uiver.app/?q=WzAsMixbMCwwXSxbMSwwXSxbMCwxLCIiLDAseyJzdHlsZSI6eyJib2R5Ijp7Im5hbWUiOiJub25lIn19fV1d
+        \begin{tikzcd}[ampersand replacement=\&]
+        	{} \& {}
+        	\arrow[no body, from=1-1, to=1-2]
+        \end{tikzcd}
+    \end{tblr}
+\end{center}
+
+\section{Version history}
+
+The \quiver{} version number is tied to the editor version number. This is reflected in the history below: not every editor update corresponds to a package update.
+
+\begin{center}
+    \begin{tblr}{colspec={ccX[c]},row{even}=black!5}
+        {\bf Version} & {\bf Date} & {\bf Release notes} \\
+        1.0.0 & 2020-11-10 & First public version. Imports necessary packages and defines the \texttt{curve} style. \\
+        1.0.1 & 2020-11-27 & Added the \texttt{tail reversed}, \texttt{2tail}, and \texttt{2tail reversed} styles. \\
+        1.1.0 & 2020-12-18 & Added a dependency. \\
+        1.2.0 & 2021-01-11 & Added the \texttt{no body} style.
+    \end{tblr}
+\end{center}
+
+\end{document}
