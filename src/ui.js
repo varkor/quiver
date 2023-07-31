@@ -5326,6 +5326,10 @@ class Panel {
             this.global.query_selector_all('input[type="text"]')
                 .forEach((input) => input.element.disabled = true);
         }
+
+        // The panel size is not fixed, since we hide some options depending on the edge (e.g. the
+        // edge alignment checkboxes), so we need to resize the panel after updating it.
+        this.update_position();
     }
 
     /// Hide the panel off-screen.
@@ -5381,7 +5385,12 @@ class Panel {
             = this.element.query_selector(".wrapper").bounding_rect().height;
         const document_height = document.body.offsetHeight;
         const top_offset = Math.max(document_height - panel_height - 16 * 2, 0) / 2;
-        this.element.set_style({ "margin-top": `${top_offset}px`});
+        this.element.set_style({
+            "margin-top": `${top_offset}px`,
+            // The bottom margin is not required for correct spacing, but is required so that the
+            // bottom area does not capture pointer events.
+            "margin-bottom": `${top_offset}px`,
+        });
     }
 
     /// Dismiss the export pane, if it is shown.
