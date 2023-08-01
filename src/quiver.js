@@ -464,7 +464,8 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
 
                 if (edge.options.offset !== 0) {
                     const side = edge.options.offset > 0 ? "right" : "left";
-                    parameters[`shift ${side}`] = Math.abs(edge.options.offset);
+                    const abs_offset = Math.abs(edge.options.offset);
+                    parameters[`shift ${side}`] = abs_offset !== 1 ? abs_offset : "";
                 }
 
                 // This is the simplest case, because we can set a single attribute for both the
