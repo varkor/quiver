@@ -4339,6 +4339,47 @@ class Panel {
             if (this.export === null || this.export.format !== format) {
                 ui.switch_mode(new UIMode.Modal());
 
+                // Get the encoding of the diagram. The output may be modified by the caller.
+                const { data, metadata } = modify(ui.quiver.export(
+                    format,
+                    ui.settings,
+                    ui.options(),
+                    ui.definitions(),
+                ));
+
+                let export_pane, tip, warning, latex_options, embed_options, content;
+
+                // Select the code for easy copying.
+                const select_output = () => {
+                    const selection = window.getSelection();
+                    const range = document.createRange();
+                    range.selectNodeContents(content.element);
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+                };
+
+                const update_output = (data, prevent_defocus = false) => {
+                    // At present, the data is always a string.
+                    content.replace(data);
+                    if (prevent_defocus) {
+                        return;
+                    }
+                    select_output();
+                    // Safari seems to occasionally fail to select the text immediately, so we
+                    // also select it after a delay to ensure the text is selected.
+                    delay(select_output);
+                };
+
+                if (this.export === null) {
+                    // Create the export pane.
+                    export_pane = new DOM.Div({ class: "export" });
+
+                    // Prevent propagation of scrolling when the cursor is over the export pane.
+                    // This allows the user to scroll the pane when not all the text fits on it.
+                    export_pane.listen("wheel", (event) => {
+                        event.stopImmediatePropagation();
+                    }, { passive: true });
+
                 // Set up the column/row separation sliders. This needs to be done early, because
                 // we access the sliders to get the separation data for `export`.
                 const update_sep_label = (slider) => {
@@ -4384,47 +4425,6 @@ class Panel {
                     update_sep_label(sep_sliders[axis]);
                     this.sliders.set(`${axis}_sep`, sep_sliders[axis]);
                 }
-
-                // Get the encoding of the diagram. The output may be modified by the caller.
-                const { data, metadata } = modify(ui.quiver.export(
-                    format,
-                    ui.settings,
-                    ui.options(),
-                    ui.definitions(),
-                ));
-
-                let export_pane, tip, warning, latex_options, embed_options, content;
-
-                // Select the code for easy copying.
-                const select_output = () => {
-                    const selection = window.getSelection();
-                    const range = document.createRange();
-                    range.selectNodeContents(content.element);
-                    selection.removeAllRanges();
-                    selection.addRange(range);
-                };
-
-                const update_output = (data, prevent_defocus = false) => {
-                    // At present, the data is always a string.
-                    content.replace(data);
-                    if (prevent_defocus) {
-                        return;
-                    }
-                    select_output();
-                    // Safari seems to occasionally fail to select the text immediately, so we
-                    // also select it after a delay to ensure the text is selected.
-                    delay(select_output);
-                };
-
-                if (this.export === null) {
-                    // Create the export pane.
-                    export_pane = new DOM.Div({ class: "export" });
-
-                    // Prevent propagation of scrolling when the cursor is over the export pane.
-                    // This allows the user to scroll the pane when not all the text fits on it.
-                    export_pane.listen("wheel", (event) => {
-                        event.stopImmediatePropagation();
-                    }, { passive: true });
 
                     tip = new DOM.Element("span", { class: "tip hidden" });
 
@@ -4509,18 +4509,6 @@ class Panel {
 
                     warning = new DOM.Element("span", { class: "warning hidden" })
                         .add_to(export_pane);
-                    
-                    // Update the thumbs of the column/row separation sliders now that we can
-                    // calculate their widths.
-                    for (const axis of ["column", "row"]) {
-                        sep_sliders[axis].thumbs[0].class_list.add("no-transition");
-                        delay(() => {
-                            sep_sliders[axis].thumbs[0].set_value(sep_sliders[axis].values());
-                            delay(() => {
-                                sep_sliders[axis].thumbs[0].class_list.remove("no-transition");
-                            });
-                        });
-                    }
                     
                     const fixed_size_checkbox = new DOM.Element("input", {
                         type: "checkbox",
@@ -4630,6 +4618,20 @@ class Panel {
                     embed_options = export_pane.query_selector(".options.embed");
                     content = export_pane.query_selector(".code");
                 }
+
+                // Update the thumbs of the column/row separation sliders now that we can calculate
+                // their widths.
+                for (const axis of ["column", "row"]) {
+                    const slider = this.sliders.get(`${axis}_sep`);
+                    slider.thumbs[0].class_list.add("no-transition");
+                    delay(() => {
+                        slider.thumbs[0].set_value(slider.values());
+                        delay(() => {
+                            slider.thumbs[0].class_list.remove("no-transition");
+                        });
+                    });
+                }
+
                 // Display a warning if necessary.
                 warning.clear();
                 warning.class_list.add("hidden");
