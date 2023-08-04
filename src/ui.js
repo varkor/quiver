@@ -5911,13 +5911,15 @@ class Toolbar {
             element.disabled = !condition;
         };
 
-        enable_if("Undo", ui.in_mode(UIMode.Default, UIMode.KeyMove) && ui.history.present !== 0);
-        enable_if("Redo", ui.in_mode(UIMode.Default, UIMode.KeyMove)
+        const default_pan = [UIMode.Default, UIMode.Pan];
+
+        enable_if("Undo", ui.in_mode(UIMode.KeyMove, ...default_pan) && ui.history.present !== 0);
+        enable_if("Redo", ui.in_mode(UIMode.KeyMove, ...default_pan)
             && ui.history.present < ui.history.actions.length);
         enable_if("Select all",
-            ui.in_mode(UIMode.Default) && ui.selection.size < ui.quiver.all_cells().length);
-        enable_if("Deselect all", ui.in_mode(UIMode.Default) && ui.selection.size > 0);
-        enable_if("Delete", ui.in_mode(UIMode.Default) && ui.selection.size > 0);
+            ui.in_mode(...default_pan) && ui.selection.size < ui.quiver.all_cells().length);
+        enable_if("Deselect all", ui.in_mode(...default_pan) && ui.selection.size > 0);
+        enable_if("Delete", ui.in_mode(...default_pan) && ui.selection.size > 0);
         enable_if("Centre view",
             ui.element.query_selector(".focus-point.focused")
             // Technically the first condition below is subsumed by the latter, but we keep it to
