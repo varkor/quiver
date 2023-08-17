@@ -92,11 +92,16 @@
         // corresponding URL. An array containing parameters to `ignore` is used to delete unwanted
         // query parameters.
         function reconstruct_URL(query_data, ignore) {
-            const URL_prefix = window.location.href.replace(/\?.*$/, "?");
-            return Array.from(query_data.entries())
-                .filter(([key,]) => !ignore.includes(key))
-                .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
-                .reduce((acc, x) => `${acc}&${x}`, URL_prefix);
+            const URL_prefix = new URL(window.location.href);
+            URL_prefix.search = "";
+            URL_prefix.hash = "";
+            return `${URL_prefix}#${
+                Array.from(query_data.entries())
+                    .filter(([key,]) => !ignore.includes(key))
+                    .map(([key, value]) => `${
+                        encodeURIComponent(key)
+                    }=${encodeURIComponent(value)}`).join("&")
+            }`;
         }
     </script>
 </body>
