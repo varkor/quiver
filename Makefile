@@ -1,4 +1,4 @@
-.PHONY: all gh-pages
+.PHONY: all gh-pages cleanup
 
 # Ensure `cd` works properly by forcing everything to be executed in a single shell.
 .ONESHELL:
@@ -101,4 +101,10 @@ gh-pages:
 	# Checkout the original branch.
 	git checkout $$CURRENT
 	# Delete the temporary `squashed` branch.
+	git branch -D squashed
+
+# Clean up the effects of the gh-pages upload, if it did not successfully terminate.
+cleanup:
+	git checkout master
+	git worktree remove ../quiver-worktree -f
 	git branch -D squashed
