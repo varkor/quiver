@@ -4442,12 +4442,15 @@ class Panel {
 
                     tip.add("Remember to include ")
                         .add(new DOM.Element("code").add("\\usepackage{quiver}"))
-                        .add(" in your LaTeX preamble. You can ")
-                        .add(
-                            new DOM.Element("a", { href: "quiver.sty", download: "quiver.sty" })
-                                .listen("click", update_package_previous_download)
-                                .add("download ")
-                                .add(new DOM.Element("code").add("quiver.sty"))
+                        .add(" in your LaTeX preamble. You can install the package using ")
+                        .add(new DOM.Link("https://tug.org/texlive/", "TeX Live 2023", true))
+                        .add(", ")
+                        .add(new DOM.Element("a", {
+                                href: "../package/quiver.sty",
+                                download: "quiver.sty"
+                            }).listen("click", update_package_previous_download)
+                            .add("download ")
+                            .add(new DOM.Element("code").add("quiver.sty"))
                         );
                     // Display an "updated" message if `quiver.sty` has been updated since the last
                     // time the user downloaded or opened it.
