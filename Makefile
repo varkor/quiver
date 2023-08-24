@@ -3,13 +3,27 @@
 # Ensure `cd` works properly by forcing everything to be executed in a single shell.
 .ONESHELL:
 
-# Build KaTeX.
-all:
+all: src/KaTeX src/workbox src/icon-192.png src/icon-512.png
+
+# Vendor KaTeX dependencies.
+src/KaTeX:
 	set -e
 	curl -L -O "https://github.com/KaTeX/KaTeX/releases/download/v0.16.4/katex.zip"
 	unzip katex.zip
 	rm katex.zip
 	mv katex src/KaTeX
+
+# Vendor workbox dependencies.
+src/workbox: src/workbox/workbox-window.prod.mjs src/workbox/workbox-sw.js src/workbox/workbox-core.prod.js src/workbox/workbox-routing.prod.js src/workbox/workbox-strategies.prod.js
+src/workbox/%:
+	mkdir -p $(@D)
+	curl -L -o $@ https://storage.googleapis.com/workbox-cdn/releases/7.0.0/$*
+
+# Generate icons required by the webapp manifest. Requires ImageMagick.
+src/icon-512.png: src/icon.png
+	convert $< -background none -resize 512x512 $@
+src/icon-192.png: src/icon.png
+	convert $< -background none -resize 192x192 $@
 
 # Update the `dev` branch from `master`.
 dev:
