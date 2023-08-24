@@ -4446,7 +4446,7 @@ class Panel {
                         .add(new DOM.Link("https://tug.org/texlive/", "TeX Live 2023", true))
                         .add(", ")
                         .add(new DOM.Element("a", {
-                                href: "../package/quiver.sty",
+                                href: "https://raw.githubusercontent.com/varkor/quiver/master/package/quiver.sty",
                                 download: "quiver.sty"
                             }).listen("click", update_package_previous_download)
                             .add("download ")
