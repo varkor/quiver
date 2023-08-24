@@ -4444,28 +4444,18 @@ class Panel {
                         .add(new DOM.Element("code").add("\\usepackage{quiver}"))
                         .add(" in your LaTeX preamble. You can install the package using ")
                         .add(new DOM.Link("https://tug.org/texlive/", "TeX Live 2023", true));
-                    // Display an "updated" message if `quiver.sty` has been updated since the last
-                    // time the user downloaded or opened it.
-                    const package_previous_download = window.localStorage
-                        .getItem("package-previous-download");
-                    if (
-                        !package_previous_download ||
-                        package_previous_download !== CONSTANTS.PACKAGE_VERSION
-                    ) {
-                        tip.add(new DOM.Element("span", { class: "update" }).add("updated"));
-                    }
-
                     tip.add(", or ")
                         .add(
                             // We would like to simply use `quiver.sty` here, but,
                             // unfortunately, GitHub pages does not permit overriding the
                             // `content-type` of a resource, and by default `.sty` files are
                             // treated as `application/octet-stream`.
-                            new DOM.Link(
-                                "https://raw.githubusercontent.com/varkor/quiver/master/package/quiver.sty",
-                                "open it in a new tab",
-                                true,
-                            )
+                            new DOM.Element("a", {
+                                href: "https://raw.githubusercontent.com/varkor/quiver/master/package/quiver.sty",
+                                target: "_blank",
+                            }).add("open ")
+                                .add(new DOM.Element("code").add("quiver.sty"))
+                                .add(" in a new tab")
                             .listen("click", update_package_previous_download)
                         )
                         .add(" to copy-and-paste.")
