@@ -1,7 +1,7 @@
 {
   "short_name": "quiver",
   "name": "quiver",
-  "description": "a modern commutative diagram editor",
+  "description": "A modern commutative diagram editor.",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",
