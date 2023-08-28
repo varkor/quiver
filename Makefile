@@ -3,6 +3,7 @@
 # Ensure `cd` works properly by forcing everything to be executed in a single shell.
 .ONESHELL:
 
+# NOTE: order matters; service worker must be build last to have a complete assets precaching manifest.
 all: src/KaTeX src/icon-192.png src/icon-512.png src/workbox-window.prod.mjs src/service-worker.js
 
 # Vendor KaTeX dependencies.
