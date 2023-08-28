@@ -1,0 +1,5 @@
+{
+  "devDependencies": {
+    "workbox-build": "^7.0.0"
+  }
+}
