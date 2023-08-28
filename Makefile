@@ -14,7 +14,7 @@ src/KaTeX:
 	mv katex src/KaTeX
 
 # Vendor workbox dependencies.
-src/workbox: src/workbox/workbox-window.prod.mjs src/workbox/workbox-sw.js src/workbox/workbox-core.prod.js src/workbox/workbox-routing.prod.js src/workbox/workbox-strategies.prod.js
+src/workbox: src/workbox/workbox-window.prod.mjs
 src/workbox/%:
 	mkdir -p $(@D)
 	curl -L -o $@ https://storage.googleapis.com/workbox-cdn/releases/7.0.0/$*
