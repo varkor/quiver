@@ -18,6 +18,7 @@ src/workbox: src/workbox/workbox-window.prod.mjs src/workbox/workbox-sw.js src/w
 src/workbox/%:
 	mkdir -p $(@D)
 	curl -L -o $@ https://storage.googleapis.com/workbox-cdn/releases/7.0.0/$*
+	curl -L -o $@.map https://storage.googleapis.com/workbox-cdn/releases/7.0.0/$*.map
 
 # Generate icons required by the webapp manifest. Requires ImageMagick.
 src/icon-512.png: src/icon.png
