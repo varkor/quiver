@@ -172,6 +172,13 @@ DOM.Div = class extends DOM.Element {
     }
 };
 
+DOM.Code = class extends DOM.Element {
+    constructor(value, attributes = {}, style = {}) {
+        super("code", attributes, style);
+        this.add(value);
+    }
+};
+
 /// A class for conveniently dealing with SVGs.
 DOM.SVGElement = class extends DOM.Element {
     constructor(tag_name, attributes = {}, style = {}) {

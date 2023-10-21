@@ -73,7 +73,7 @@ noscript {
     padding: 8px 0;
 
     background: hsl(0, 50%, 50%);
-    color: white;
+    color: var(--ui-white);
 
     text-align: center;
 
@@ -188,14 +188,14 @@ kbd {
     z-index: 400;
 
     background: hsl(0, 0%, 10%);
-
-    transition: opacity 0.6s;
 }
 
 .loading-screen.hidden {
     opacity: 0;
 
     pointer-events: none;
+
+    transition: opacity 0.6s;
 }
 
 .loading-screen .logo {
@@ -443,10 +443,10 @@ being. */
     left: 50%;
     bottom: 0;
     transform: translateX(-50%);
-    width: 704px;
+    width: 808px;
     height: 46px;
     padding: 8px;
-    /* Display above the export pane. */
+    /* Display above the import/export pane. */
     z-index: 101;
 
     background: var(--ui-black);
@@ -579,7 +579,7 @@ label.inline {
 }
 
 .panel input[type="text"],
-.export .options input[type="number"] {
+.port .options input[type="number"] {
     padding: 2px 4px;
 
     background: var(--ui-background);
@@ -593,17 +593,17 @@ label.inline {
 }
 
 .panel input[type="text"]::placeholder,
-.export .options input[type="number"]::placeholder {
+.port .options input[type="number"]::placeholder {
     color: hsla(0, 0%, 100%, 0.4);
 }
 
 .panel input[type="text"]:hover:not(:disabled):not(:focus),
-.export .options input[type="number"]:hover:not(:disabled):not(:focus) {
+.port .options input[type="number"]:hover:not(:disabled):not(:focus) {
     background: var(--ui-hover);
 }
 
 .panel input[type="text"]:focus,
-.export .options input[type="number"]:focus {
+.port .options input[type="number"]:focus {
     background: var(--ui-focus);
     border-color: var(--ui-focus);
 
@@ -611,7 +611,7 @@ label.inline {
 }
 
 .panel input[type="text"]:focus::placeholder,
-.export .options input[type="number"]:focus::placeholder {
+.port .options input[type="number"]:focus::placeholder {
     color: hsla(0, 0%, 0%, 0.4);
 }
 
@@ -866,7 +866,7 @@ div.slider {
     border-color: var(--ui-blue);
 }
 
-.panel button, .pane button {
+.panel button, .pane button, .port button {
     position: relative;
     display: block;
     width: 100%; height: 30px;
@@ -887,7 +887,15 @@ div.slider {
     margin: 0;
 }
 
-.global button:first-of-type {
+.global button.short {
+    width: 56px;
+}
+
+.global button + label {
+    margin-left: 4px;
+}
+
+.global label + button {
     margin-right: 4px;
 }
 
@@ -895,11 +903,15 @@ div.slider {
     margin-left: 4px;
 }
 
-.panel button:hover:not(:disabled):not(:active), .pane button:hover:not(:disabled):not(:active) {
+.panel button:hover:not(:disabled):not(:active),
+.pane button:hover:not(:disabled):not(:active),
+.port button:hover:not(:disabled):not(:active) {
     background: var(--ui-hover);
 }
 
-.panel button:active, .pane button:active {
+.panel button:not(:disabled):not(:active):active,
+.pane button:not(:disabled):not(:active):active,
+.port button:not(:disabled):not(:active):active {
     background: var(--ui-active);
 }
 
@@ -1400,7 +1412,7 @@ button.flash {
 
 /* Modal elements */
 
-.export {
+.port {
     position: fixed;
     width: 100%; height: 100%;
     left: 0; top: 0;
@@ -1412,29 +1424,30 @@ button.flash {
     background: hsla(0, 0%, 10%, 0.8);
 
     backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
 }
 
-.export a {
+.port a {
     color: var(--ui-white);
 }
 
-.export .tip, .export .warning {
+.port .tip, .port div.warning, .port div.error {
     display: inline-block;
     width: 100%;
     padding: 8pt;
     margin-bottom: 8pt;
 
     border-radius: 2px;
+
+    cursor: default;
 }
 
-.export .tip {
+.port .tip {
     background: var(--ui-black);
 
     color: var(--ui-white);
 }
 
-.export .tip .update {
+.port .tip .update {
     padding: 0pt 4pt;
     padding-bottom: 1pt;
     margin-left: 4pt;
@@ -1446,25 +1459,37 @@ button.flash {
 	font-size: 10pt;
 }
 
-.export .warning {
-    background: hsla(50, 100%, 70%, 1);
+.port div.error {
+    color: var(--ui-white);
+    background: hsl(0, 50%, 50%);
 }
 
-.export .hidden {
-    display: none;
+.port div.warning {
+    background: hsl(50, 100%, 70%);
 }
 
-.export .warning ul {
+.port .hidden {
+    display: none !important;
+}
+
+.port div.error ul, .port div.warning ul {
     margin: 4pt 0;
 
     list-style-type: circle;
 }
 
-.export .warning a {
+.port.import div.error ul li:hover,
+.port.import div.error ul li.highlight,
+.port.import div.warning ul li:hover,
+.port.import div.warning ul li.highlight {
+    list-style-type: disc;
+}
+
+.port div.warning a {
     color: var(--ui-black);
 }
 
-.export .options {
+.port .options {
     margin-bottom: 8pt;
     padding: 6pt 4pt;
 
@@ -1476,13 +1501,13 @@ button.flash {
     user-select: none;
 }
 
-.export .options label {
+.port .options label {
     position: relative;
     top: 1px;
     margin-right: 20pt;
 }
 
-.export .note {
+.port .note {
     display: inline-block;
     width: 100%;
     padding: 8pt;
@@ -1496,12 +1521,16 @@ button.flash {
     user-select: none;
 }
 
-.export .options label kbd.hint {
+.port .note.hidden {
+    display: none;
+}
+
+.port .options label kbd.hint {
     /* Leave some space for the checkbox itself. */
     transform: translate(-50%, -50%);
 }
 
-.export .options input[type="number"] {
+.port .options input[type="number"] {
     width: 64px;
     margin-right: -12pt;
 }
@@ -1546,14 +1575,48 @@ label input[type="checkbox"]:checked::before {
     color: var(--ui-black);
 }
 
-.export .code {
+.port .code, .port div[contenteditable] {
     font: 16px monospace;
-    color: white;
+    color: var(--ui-white);
 
     white-space: pre-wrap;
     overflow-wrap: break-word;
     tab-size: 4;
     -moz-tab-size: 4;
+}
+
+.port div[contenteditable] {
+    width: 100%;
+    height: 252pt;
+    resize: none;
+    padding: 6pt 8pt;
+    overflow-y: auto;
+
+    background: hsla(0, 0%, 0%, 0.2);
+
+    border: none;
+    outline: none;
+}
+
+/* We pad empty fragments so that we can see their highlight. */
+.port .fragment:empty::before {
+    content: " ";
+}
+
+.port .fragment.error {
+    text-decoration: hsl(0, 50%, 50%) wavy underline;
+}
+.port .fragment.error:hover, .port .fragment.error.highlight {
+    background: hsl(0, 50%, 50%);
+}
+
+.port .fragment.warning {
+    text-decoration: hsl(50, 100%, 70%) wavy underline;
+}
+.port .fragment.warning:hover, .port .fragment.highlight.warning {
+    background: hsl(50, 100%, 70%);
+
+    color: var(--ui-black);
 }
 
 /* Arrows */

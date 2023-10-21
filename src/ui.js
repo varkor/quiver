@@ -613,12 +613,8 @@ class UI {
         this.settings = new Settings();
     }
 
-    /// Reset most of the UI. We don't bother resetting current zoom, etc.: just enough to make
-    /// changing the URL history work properly.
-    reset() {
-        // Reset the mode.
-        this.switch_mode(UIMode.default);
-
+    /// Clear the current diagram. This also clears the history.
+    clear_quiver() {
         // Clear the existing quiver.
         for (const cell of this.quiver.all_cells()) {
             cell.element.remove();
@@ -638,11 +634,11 @@ class UI {
         this.history = new History();
 
         // Update UI elements.
-        this.panel.dismiss_export_pane(this);
         this.panel.update(this);
         this.toolbar.update(this);
         // Reset the focus point.
         this.focus_point.class_list.remove("focused", "smooth");
+
         // While the following does work without a delay, it currently experiences some stutters.
         // Using a delay makes the transition much smoother.
         delay(() => {
@@ -650,6 +646,19 @@ class UI {
             this.panel.label_input.parent.class_list.add("hidden");
             this.colour_picker.close();
         });
+    }
+
+    /// Reset most of the UI. We don't bother resetting current zoom, etc.: just enough to make
+    /// changing the URL history work properly.
+    reset() {
+        // Reset the mode.
+        this.switch_mode(UIMode.default);
+
+        // Clear the quiver and update associated UI elements.
+        this.clear_quiver();
+
+        // Update UI elements.
+        this.panel.dismiss_port_pane(this);
     }
 
     /// Returns definitions of macros and colours that are recognised by LaTeX.
@@ -1789,7 +1798,7 @@ class UI {
             }
 
             // Close any open panes.
-            if (this.panel.dismiss_export_pane(this)) {
+            if (this.panel.dismiss_port_pane(this)) {
                 return;
             }
 
@@ -2696,7 +2705,8 @@ class UI {
     /// actions (primarily keyboard shortcuts) will be disabled.)
     input_is_active() {
         // This may not be the label input, e.g. it may be the macros input.
-        return document.activeElement.matches('input[type="text"]') && document.activeElement;
+        return document.activeElement.matches('input[type="text"], div[contenteditable]')
+            && document.activeElement;
     }
 
     /// Resizes a label to fit within a cell.
@@ -3591,8 +3601,8 @@ class Panel {
         // Buttons and options affecting the entire diagram (e.g. export, macros).
         this.global = null;
 
-        // The displayed export format (`null` if not currently shown).
-        this.export = null;
+        // The displayed import/export format (`null` if not currently shown).
+        this.port = null;
 
         // The various sliders. We store them in a variable, rather than finding them with
         // `query_selector` as we usually do, because we need access to the `DOM.Multislider`
@@ -4331,23 +4341,27 @@ class Panel {
             .add("to edge")
             .add_to(wrapper);
 
-        const display_export_pane = (format, modify = (output) => output) => {
-            // Handle export button interaction: export the quiver.
-            // If the user clicks on two different exports in a row
-            // we will simply switch the displayed export format.
+        const display_port_pane = (kind, format, modify = (output) => output) => {
+            // Handle import/export button interaction.
+            // If the user clicks on two different imports/exports in a row
+            // we will simply switch the displayed import/export format.
             // Clicking on the same button twice closes the panel.
-            if (this.export === null || this.export.format !== format) {
+            if (this.port === null || this.port.kind !== kind || this.port.format !== format) {
                 ui.switch_mode(new UIMode.Modal());
 
                 // Get the encoding of the diagram. The output may be modified by the caller.
-                const { data, metadata } = modify(ui.quiver.export(
-                    format,
-                    ui.settings,
-                    ui.options(),
-                    ui.definitions(),
-                ));
+                const { data, metadata } = modify(kind === "import" ?
+                    { data: "", metadata: null } :
+                    ui.quiver.export(
+                        format,
+                        ui.settings,
+                        ui.options(),
+                        ui.definitions(),
+                    )
+                );
 
-                let export_pane, tip, warning, latex_options, embed_options, content;
+                let port_pane, tip, warning, error, latex_options, embed_options, note, content;
+                let textarea, parse_button;
 
                 // Select the code for easy copying.
                 const select_output = () => {
@@ -4356,6 +4370,14 @@ class Panel {
                     range.selectNodeContents(content.element);
                     selection.removeAllRanges();
                     selection.addRange(range);
+                };
+
+                // Clear any errors and warnings.
+                const hide_errors_and_warnings = () => {
+                    error.clear();
+                    error.class_list.add("hidden");
+                    warning.clear();
+                    warning.class_list.add("hidden");
                 };
 
                 const update_output = (data, prevent_defocus = false) => {
@@ -4370,61 +4392,62 @@ class Panel {
                     delay(select_output);
                 };
 
-                if (this.export === null) {
-                    // Create the export pane.
-                    export_pane = new DOM.Div({ class: "export" });
+                if (this.port === null) {
+                    // Create the import/export pane.
+                    port_pane = new DOM.Div({ class: "port" });
 
-                    // Prevent propagation of scrolling when the cursor is over the export pane.
-                    // This allows the user to scroll the pane when not all the text fits on it.
-                    export_pane.listen("wheel", (event) => {
+                    // Prevent propagation of scrolling when the cursor is over the import/export
+                    // pane. This allows the user to scroll the pane when not all the text fits on
+                    // it.
+                    port_pane.listen("wheel", (event) => {
                         event.stopImmediatePropagation();
                     }, { passive: true });
 
-                // Set up the column/row separation sliders. This needs to be done early, because
-                // we access the sliders to get the separation data for `export`.
-                const update_sep_label = (slider) => {
-                    const sep = slider.values().toFixed(2);
-                    const seps = {
-                        "0.45": "Tiny",
-                        "0.90": "Small",
-                        "1.35": "Script",
-                        "1.80": "Normal",
-                        "2.70": "Large",
-                        "3.60": "Huge",
+                    // Set up the column/row separation sliders. This needs to be done early, because
+                    // we access the sliders to get the separation data for `export`.
+                    const update_sep_label = (slider) => {
+                        const sep = slider.values().toFixed(2);
+                        const seps = {
+                            "0.45": "Tiny",
+                            "0.90": "Small",
+                            "1.35": "Script",
+                            "1.80": "Normal",
+                            "2.70": "Large",
+                            "3.60": "Huge",
+                        };
+                        const sep_name = seps[sep] || `${sep}em`;
+                        slider.label.query_selector(".slider-value").clear().add(sep_name);
                     };
-                    const sep_name = seps[sep] || `${sep}em`;
-                    slider.label.query_selector(".slider-value").clear().add(sep_name);
-                };
-                const sep_sliders = {};
-                const update_sep_slider = (axis) => {
-                    this.sep[axis] = sep_sliders[axis].values();
-                    // Update the output. We ignore `metadata`, which currently does not
-                    // change in response to the settings.
-                    const { data } = modify(ui.quiver.export(
-                        format,
-                        ui.settings,
-                        ui.options(),
-                        ui.definitions(),
-                    ));
-                    update_output(data);
-                    // Update the label.
-                    update_sep_label(sep_sliders[axis]);
-                };
-                for (const axis of ["column", "row"]) {
-                    sep_sliders[axis] = new DOM.Multislider(
-                        `${{ "column": "Column", "row": "Row" }[axis]} sep.`, 0.45, 3.6, 0.45,
-                    ).listen("input", () => {
-                        update_sep_slider(axis);
-                        if (sep_sliders[axis].label.parent.class_list.contains("linked")) {
-                            const other_axis = { column: "row", row: "column" }[axis];
-                            sep_sliders[other_axis].thumbs[0].set_value(this.sep[axis]);
-                            update_sep_slider(other_axis);
-                        }
-                    });
-                    sep_sliders[axis].thumbs[0].set_value(this.sep[axis]);
-                    update_sep_label(sep_sliders[axis]);
-                    this.sliders.set(`${axis}_sep`, sep_sliders[axis]);
-                }
+                    const sep_sliders = {};
+                    const update_sep_slider = (axis) => {
+                        this.sep[axis] = sep_sliders[axis].values();
+                        // Update the output. We ignore `metadata`, which currently does not
+                        // change in response to the settings.
+                        const { data } = modify(ui.quiver.export(
+                            format,
+                            ui.settings,
+                            ui.options(),
+                            ui.definitions(),
+                        ));
+                        update_output(data);
+                        // Update the label.
+                        update_sep_label(sep_sliders[axis]);
+                    };
+                    for (const axis of ["column", "row"]) {
+                        sep_sliders[axis] = new DOM.Multislider(
+                            `${{ "column": "Column", "row": "Row" }[axis]} sep.`, 0.45, 3.6, 0.45,
+                        ).listen("input", () => {
+                            update_sep_slider(axis);
+                            if (sep_sliders[axis].label.parent.class_list.contains("linked")) {
+                                const other_axis = { column: "row", row: "column" }[axis];
+                                sep_sliders[other_axis].thumbs[0].set_value(this.sep[axis]);
+                                update_sep_slider(other_axis);
+                            }
+                        });
+                        sep_sliders[axis].thumbs[0].set_value(this.sep[axis]);
+                        update_sep_label(sep_sliders[axis]);
+                        this.sliders.set(`${axis}_sep`, sep_sliders[axis]);
+                    }
 
                     tip = new DOM.Element("span", { class: "tip hidden" });
 
@@ -4441,7 +4464,7 @@ class Panel {
                     };
 
                     tip.add("Remember to include ")
-                        .add(new DOM.Element("code").add("\\usepackage{quiver}"))
+                        .add(new DOM.Code("\\usepackage{quiver}"))
                         .add(" in your LaTeX preamble. You can install the package using ")
                         .add(new DOM.Link("https://tug.org/texlive/", "TeX Live 2023", true));
                     tip.add(", or ")
@@ -4459,7 +4482,7 @@ class Panel {
                             .listen("click", update_package_previous_download)
                         )
                         .add(" to copy-and-paste.")
-                        .add_to(export_pane);
+                        .add_to(port_pane);
 
                     const centre_checkbox = new DOM.Element("input", {
                         type: "checkbox",
@@ -4490,11 +4513,8 @@ class Panel {
                             .add(sep_sliders.column.label)
                             .add(sep_sliders.row.label)
                         )
-                        .add_to(export_pane);
+                        .add_to(port_pane);
 
-                    warning = new DOM.Element("span", { class: "warning hidden" })
-                        .add_to(export_pane);
-                    
                     const fixed_size_checkbox = new DOM.Element("input", {
                         type: "checkbox",
                         "data-setting": "export.embed.fixed_size",
@@ -4510,7 +4530,7 @@ class Panel {
                         )
                         .add(new DOM.Element("label").add("Width: ").add(embed_size.width))
                         .add(new DOM.Element("label").add("Height: ").add(embed_size.height))
-                        .add_to(export_pane)
+                        .add_to(port_pane);
 
                     const checkboxes = [
                         [centre_checkbox, "tikz-cd", "C"],
@@ -4522,14 +4542,17 @@ class Panel {
                     for (const [checkbox, format, key] of checkboxes) {
                         // Add a keyboard shortcut if applicable.
                         if (key !== null) {
-                            // When the shortcut is active, we will always be displaying the modal
-                            // pane, so the shortcut is always valid.
-                            const shortcut = { key, context: Shortcuts.SHORTCUT_PRIORITY.Always };
+                            const shortcut = {
+                                key,
+                                context: Shortcuts.SHORTCUT_PRIORITY.Conservative,
+                            };
                             new DOM.Element("kbd", { class: "hint button" })
                                 .add(Shortcuts.name([shortcut])).add_to(checkbox.parent);
                             shortcuts.push(ui.shortcuts.add([shortcut], () => {
-                                const visible_options = export_pane.query_selector(".options:not(.hidden)");
-                                if (visible_options !== null && visible_options.contains(checkbox)) {
+                                const visible_options = port_pane
+                                    .query_selector(".options:not(.hidden)");
+                                if (visible_options !== null &&
+                                    visible_options.contains(checkbox)) {
                                     checkbox.element.checked = !checkbox.element.checked;
                                     checkbox.dispatch(new Event("change"));
                                 }
@@ -4584,24 +4607,276 @@ class Panel {
                         });
                     }
 
-                    new DOM.Div({ class: "note" })
-                        .add("If you need to edit this diagram, you can open it again in ")
-                        .add(new DOM.Element("b").add("quiver"))
-                        .add(" using the URL below ↴")
-                        .add_to(export_pane);
+                    error = new DOM.Element("div", { class: "error hidden" }).add_to(port_pane);
+                    warning = new DOM.Element("div", { class: "warning hidden" })
+                        .add_to(port_pane);
 
-                    content = new DOM.Div({ class: "code" }).add_to(export_pane);
-                    ui.element.add(export_pane);
+                    note = new DOM.Div({ class: "note" }).add_to(port_pane);
 
-                    this.export = { shortcuts };
+                    content = new DOM.Div({ class: "code" }).add_to(port_pane);
+
+                    // Insert text at the cursor in the `contenteditable`.
+                    const insert_text = (text) => {
+                        const selection = window.getSelection();
+                        const range = selection.getRangeAt(0);
+                        range.deleteContents();
+                        range.insertNode(document.createTextNode(text));
+                        selection.collapseToEnd();
+                    };
+
+                    // Display all fragments as normal text, without error or warning styles.
+                    const hide_fragments = () => {
+                        for (const fragment of textarea.query_selector_all(".fragment")) {
+                            fragment.class_list.remove("fragment");
+                        }
+                    };
+
+                    // Parse the text in the `contenteditable` and load the resulting diagram.
+                    const parse_text = () => {
+                        // Show the loading screen.
+                        ui.element.query_selector(".loading-screen").class_list.remove("hidden");
+                        hide_errors_and_warnings();
+                        // We delay to make sure the loading screen has appeared.
+                        delay(() => {
+                            // Disable the input and button.
+                            textarea.set_attributes({ contenteditable: "false" });
+                            parse_button.set_attributes({ disabled: "" });
+                            const text = textarea.element.textContent;
+                            // Remove the existing diagram. This also clears the undo/redo history.
+                            ui.clear_quiver();
+                            // The following should never throw an error: any parse errors will be
+                            // reported in `diagnostics`.
+                            const { diagnostics } = ui.quiver.import(
+                                ui,
+                                format,
+                                text,
+                                ui.settings,
+                            );
+                            // We delay before checking the diagnostics, because some diagnostics
+                            // can only be generated after a delay, e.g. diagnostics for `shorten`,
+                            // which depends on checking the lengths of edges.
+                            delay(() => {
+                                // Edges are shortened after initial rendering, so we may need to
+                                // rerender them afterwards.
+                                ui.quiver.all_cells().filter((cell) => {
+                                    return cell.is_edge() && (cell.options.shorten.source > 0 ||
+                                        cell.options.shorten.target > 0);
+                                }).forEach((edge) => edge.render(ui));
+
+                                // Display the diagnostics.
+                                if (diagnostics.length > 0) {
+                                    error.clear().add("The tikz-cd diagram was not imported " +
+                                        "successfully, as an error was encountered when parsing:")
+                                    warning.clear().add("The imported ")
+                                        .add(new DOM.Element("b").add("quiver"))
+                                        .add(" diagram may not " +
+                                        "match the tikz-cd diagram exactly, as certain issues " +
+                                        "were encountered when parsing:");
+
+                                    if (diagnostics.some((diagnostic) => {
+                                        return diagnostic instanceof Parser.Error
+                                    })) {
+                                        error.class_list.remove("hidden");
+                                        error;
+                                    }
+                                    if (diagnostics.some((diagnostic) => {
+                                        return diagnostic instanceof Parser.Warning
+                                    })) {
+                                        warning.class_list.remove("hidden");
+                                        warning
+                                    }
+                                    const error_list = new DOM.Element("ul").add_to(error);
+                                    const warning_list = new DOM.Element("ul").add_to(warning);
+
+                                    // The most complicated part of rendering the diagnostics is
+                                    // splitting the input text up into fragments so that we can
+                                    // highlight the different parts associated to an error or
+                                    // warning. This is done by identifying the endpoints of the
+                                    // ranges of all the diagnostics, and splitting up into spans
+                                    // representing each possible range (including those formed from
+                                    // overlapping ranges).
+                                    let endpoints = new Set([0, text.length]);
+                                    const fragments_for_diagnostic = new Map();
+                                    const diagnostics_for_fragment = new Map();
+                                    // Create the list items associated to the diagnostics.
+                                    for (const diagnostic of diagnostics) {
+                                        fragments_for_diagnostic.set(diagnostic, []);
+                                        let { message, range } = diagnostic;
+                                        if (range !== null) {
+                                            endpoints.add(range.start);
+                                            endpoints.add(range.end);
+                                        }
+                                        const li = new DOM.Element("li")
+                                            .listen("mouseenter", () => {
+                                            for (const fragment of fragments_for_diagnostic
+                                                .get(diagnostic)
+                                            ) {
+                                                fragment.class_list.add("highlight");
+                                            }
+                                        }).listen("mouseleave", () => {
+                                            for (const fragment of textarea
+                                                .query_selector_all(".fragment.highlight")
+                                            ) {
+                                                fragment.class_list.remove("highlight");
+                                            }
+                                        });
+                                        diagnostic.element = li;
+                                        if (typeof message === "string") {
+                                            message = [message];
+                                        }
+                                        message.forEach((part) => li.add(part));
+                                        if (diagnostic instanceof Parser.Error) {
+                                            error.class_list.remove("hidden");
+                                            error_list.add(li);
+                                        } else {
+                                            warning.class_list.remove("hidden");
+                                            warning_list.add(li);
+                                        }
+                                    }
+                                    // Sort the endpoints.
+                                    endpoints = Array.from(endpoints);
+                                    endpoints.sort((a, b) => a - b);
+                                    // We deduplicate endpoints, so that if two ranges end at the
+                                    // same position, we don't end up creating multiple fragments.
+                                    // However, if there are fragments with zero length, we would
+                                    // still like to display them for clarity. Therefore, after
+                                    // sorting the `endpoints` array, we go through and check, for
+                                    // each endpoint, whether there is a range of zero length at
+                                    // that position. If there is, we add an extra index, so that,
+                                    // in the next loop, there will be a zero width fragment.
+                                    for (let i = 0; i < endpoints.length; ++i) {
+                                        const endpoint = endpoints[i];
+                                        for (const diagnostic of diagnostics) {
+                                            const { range } = diagnostic;
+                                            if (
+                                                range !== null &&
+                                                range.start === endpoint && range.end === endpoint
+                                            ) {
+                                                endpoints.splice(i, 0, endpoint);
+                                                ++i;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    // Create the spans associated to the diagnostic fragments, and
+                                    // highlight them as necessary.
+                                    textarea.clear();
+                                    for (let i = 0; i < endpoints.length - 1; ++i) {
+                                        const endpoint = endpoints[i];
+                                        let substring = text.substring(endpoint, endpoints[i + 1]);
+                                        const zero_width = substring.length === 0;
+                                        const fragment = new DOM.Element("span", {
+                                            class: "fragment"
+                                        }).add(substring).listen("mouseenter", () => {
+                                            for (const diagnostic of diagnostics_for_fragment
+                                                .get(fragment)
+                                            ) {
+                                                diagnostic.class_list.add("highlight");
+                                            }
+                                        }).listen("mouseleave", () => {
+                                            for (const diagnostic of port_pane
+                                                .query_selector_all("li.highlight")
+                                            ) {
+                                                diagnostic.class_list.remove("highlight");
+                                            }
+                                        });
+                                        diagnostics_for_fragment.set(fragment, []);
+                                        for (const diagnostic of diagnostics) {
+                                            const { range } = diagnostic;
+                                            if (range === null) {
+                                                continue;
+                                            }
+                                            if (
+                                                (range.start <= endpoint && range.end > endpoint) ||
+                                                (zero_width && range.start === endpoint
+                                                    && range.end === endpoint)
+                                            ) {
+                                                fragments_for_diagnostic
+                                                    .get(diagnostic).push(fragment);
+                                                diagnostics_for_fragment
+                                                    .get(fragment).push(diagnostic.element);
+                                                fragment.class_list.add(
+                                                    diagnostic instanceof Parser.Error ?
+                                                        "error" : "warning"
+                                                );
+                                            }
+                                        }
+                                        textarea.add(fragment);
+                                    }
+                                } else {
+                                    // If the parse was successful, i.e. there were no errors or
+                                    // warnings, we close the import pane immediately.
+                                    this.dismiss_port_pane(ui);
+                                }
+                                // Regardless of whether the parse was successful or not, we hide
+                                // the loading screen once it has been concluded.
+                                ui.element.query_selector(".loading-screen").class_list
+                                    .add("hidden");
+                                // Make the textarea editable again.
+                                textarea.set_attributes({ contenteditable: "true" });
+                                if (text.length > 0) {
+                                    parse_button.remove_attributes("disabled");
+                                }
+                            });
+                        });
+                    };
+
+                    // The `contenteditable` used for the tikz-cd input.
+                    textarea = new DOM.Div({
+                        // We would like to use "plaintext-only", but Firefox does not support it at
+                        // the time of writing.
+                        contenteditable: "true",
+                        spellcheck: "false",
+                        // Note that users must press Shift + Enter to insert a newline. This does
+                        // not seem convenient to override, but users should mostly be pasting
+                        // code so it should not matter significantly.
+                    }).listen("input", () => {
+                        // If the user starts editing, we want to hide the warning/error
+                        // highlighting, because they will no longer be correct once the text has
+                        // been modified.
+                        hide_fragments();
+                        if (textarea.element.textContent.length > 0) {
+                            parse_button.remove_attributes("disabled");
+                        } else {
+                            parse_button.set_attributes({ disabled: "" });
+                        }
+                    }).listen("keydown", (event) => {
+                        // For some reason, `contenteditable` only inserts newlines when
+                        // Shift + Enter is pressed. It does not seem possible to configure this
+                        // behaviour, so instead we choose to keep this behaviour and instead
+                        // trigger a parse on Enter.
+                        if (event.key === "Enter" && !event.shiftKey) {
+                            event.preventDefault();
+                            parse_text();
+                        }
+                    }).listen("paste", (event) => {
+                        // We wish to import the diagram upon a paste event.
+                        // If we rely on the default behaviour, the browser will insert rich text,
+                        // which we do not want. Therefore, we paste manually.
+                        event.preventDefault();
+                        insert_text(event.clipboardData.getData("text/plain"));
+                        parse_text();
+                    }).add_to(port_pane);
+
+                    parse_button = new DOM.Element("button").add("Import").listen("click", () => {
+                        parse_text();
+                    }).add_to(port_pane);
+
+                    ui.element.add(port_pane);
+
+                    this.port = { shortcuts };
                 } else {
-                    // Find the existing export pane.
-                    export_pane = ui.element.query_selector(".export");
-                    tip = export_pane.query_selector(".tip");
-                    warning = export_pane.query_selector(".warning");
-                    latex_options = export_pane.query_selector(".options.latex");
-                    embed_options = export_pane.query_selector(".options.embed");
-                    content = export_pane.query_selector(".code");
+                    // Find the existing import/export pane.
+                    port_pane = ui.element.query_selector(".port");
+                    tip = port_pane.query_selector(".tip");
+                    warning = port_pane.query_selector("div.warning");
+                    error = port_pane.query_selector("div.error");
+                    latex_options = port_pane.query_selector(".options.latex");
+                    embed_options = port_pane.query_selector(".options.embed");
+                    note = port_pane.query_selector(".note");
+                    content = port_pane.query_selector(".code");
+                    textarea = port_pane.query_selector('div[contenteditable]');
+                    parse_button = port_pane.query_selector('div[contenteditable] + button');
                 }
 
                 // Update the thumbs of the column/row separation sliders now that we can calculate
@@ -4617,24 +4892,40 @@ class Panel {
                     });
                 }
 
+                // Reposition the error/warning messages depending on the tab.
+                switch (kind) {
+                    case "export":
+                        port_pane.element.insertBefore(error.element, note.element);
+                        port_pane.element.insertBefore(warning.element, note.element);
+                        break;
+                    case "import":
+                        port_pane.add(error);
+                        port_pane.add(warning);
+                        break;
+                }
+
+                // Clear any existing errors, which do not persist between tabs.
+                hide_errors_and_warnings();
+
                 // Display a warning if necessary.
-                warning.clear();
-                warning.class_list.add("hidden");
-                const unsupported_items = format === "tikz-cd" ?
+                const unsupported_items = kind === "export" && format === "tikz-cd" ?
                     Array.from(metadata.tikz_incompatibilities).sort() : [];
                 if (unsupported_items.length !== 0) {
                     warning.class_list.remove("hidden");
-                    warning.add("The exported tikz-cd diagram may not match the quiver diagram " +
+                    warning.add("The exported tikz-cd diagram may not match the ")
+                        .add(new DOM.Element("b").add("quiver"))
+                        .add(" diagram " +
                             "exactly, as tikz-cd does not support the following features that " +
                             "appear in this diagram:");
-                    const list = warning.add(new DOM.Element("ul"));
+                    const list = new DOM.Element("ul").add_to(warning);
                     for (const [index, item] of unsupported_items.entries()) {
                         list.add(new DOM.Element("li")
                             .add(`${item}${index + 1 < unsupported_items.length ? ";" : "."}`)
                         );
                     }
                 }
-                const dependencies = format === "tikz-cd" ? metadata.dependencies : new Map();
+                const dependencies = kind === "export" && format === "tikz-cd" ?
+                    metadata.dependencies : new Map();
                 if (dependencies.size !== 0) {
                     warning.class_list.remove("hidden");
                     if (unsupported_items.length !== 0) {
@@ -4643,23 +4934,50 @@ class Panel {
                     warning.add("The exported tikz-cd diagram relies upon additional TikZ " +
                         "libraries that you may have to install for the diagram to render " +
                         "correctly:");
-                    const list = warning.add(new DOM.Element("ul"));
+                    const list = new DOM.Element("ul").add_to(warning);
                     for (const [library, reasons] of dependencies) {
                         const li = new DOM.Element("li").add_to(list);
                         const url = { "tikz-nfold": "https://ctan.org/pkg/tikz-nfold" }[library];
                         li.add(new DOM.Element("a", { href: url, target: "_blank" })
-                            .add(new DOM.Element("code").add(library)));
+                            .add(new DOM.Code(library)));
                         li.add(`, for ${Array.from(reasons).join("; ")}.`);
                     }
                 }
-                tip.class_list.toggle("hidden", format !== "tikz-cd");
+
+                // Update the note.
+                note.clear();
+                if (kind === "import" && format === "tikz-cd") {
+                    note.add("Paste a ").add(new DOM.Code("tikz-cd"))
+                        .add(" diagram below to load it into ")
+                        .add(new DOM.Element("b").add("quiver"))
+                        .add(" ↴");
+                }
+                if (kind === "export") {
+                    note.add("If you need to edit this diagram, you can open it again in ")
+                        .add(new DOM.Element("b").add("quiver"))
+                        .add(" using the URL below ↴");
+                }
+
+                // Update the import textarea/button.
+                textarea.clear();
+                textarea.set_attributes({ "contenteditable": "true" });
+                parse_button.set_attributes({ disabled: "" });
+
+                // Show/hide relevant UI elements.
+                tip.class_list.toggle("hidden", kind !== "export" || format !== "tikz-cd");
                 warning.class_list.toggle("hidden",
                     unsupported_items.length === 0 && dependencies.size === 0,
                 );
-                latex_options.class_list.toggle("hidden", format !== "tikz-cd");
-                embed_options.class_list.toggle("hidden", format !== "html");
+                latex_options.class_list.toggle(
+                    "hidden",
+                    kind !== "export" || format !== "tikz-cd",
+                );
+                embed_options.class_list.toggle("hidden", kind !== "export" || format !== "html");
+                const import_tikz_cd = kind !== "import" || format !== "tikz-cd";
+                textarea.class_list.toggle("hidden", import_tikz_cd);
+                parse_button.class_list.toggle("hidden", import_tikz_cd);
 
-                for (const checkbox of export_pane.query_selector_all('input[type="checkbox"]')) {
+                for (const checkbox of port_pane.query_selector_all('input[type="checkbox"]')) {
                     if (ui.settings.get(checkbox.get_attribute("data-setting"))) {
                         checkbox.set_attributes({ checked: "" });
                     } else {
@@ -4672,15 +4990,30 @@ class Panel {
                 embed_width.element.value = ui.settings.get("export.embed.width");
                 embed_height.element.value = ui.settings.get("export.embed.height");
 
-                this.export.format = format;
+                this.port.kind = kind;
+                this.port.format = format;
+                port_pane.class_list.remove("import", "export");
+                port_pane.class_list.add(kind);
 
                 update_output(data);
-                // Disable cell data editing while the export pane is visible.
+                if (kind === "import" && format === "tikz-cd") {
+                    delay(() => textarea.element.focus());
+                }
+                // Disable cell data editing while the import/export pane is visible.
                 this.update(ui);
             } else {
-                this.dismiss_export_pane(ui);
+                this.dismiss_port_pane(ui);
             }
         };
+
+        // The import button.
+        const import_from_tikz = Panel.create_button_with_shortcut(
+            ui,
+            "tikz-cd diagram",
+            "tikz-cd",
+            { key: "I", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always },
+            () => display_port_pane("import", "tikz-cd"),
+        ).set_attributes({ class: "short" });
 
         // The export button.
         const export_to_latex = Panel.create_button_with_shortcut(
@@ -4688,22 +5021,24 @@ class Panel {
             "LaTeX",
             "LaTeX",
             { key: "E", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always },
-            () => display_export_pane("tikz-cd"),
+            () => display_port_pane("export", "tikz-cd"),
         );
 
         this.global = new DOM.Div({ class: "panel global" }).add(
+            new DOM.Element("label").add("Import: ")
+        ).add(import_from_tikz).add(
             new DOM.Element("label").add("Export: ")
         ).add(
             // The shareable link button.
             new DOM.Element("button").add("Shareable link")
                 .listen("click", () => {
-                    display_export_pane("base64");
+                    display_port_pane("export", "base64");
                 })
         ).add(
           // The embed button.
           new DOM.Element("button").add("Embed code")
               .listen("click", () => {
-                  display_export_pane("html");
+                  display_port_pane("export", "html");
               })
         ).add(export_to_latex).add(
             new DOM.Div({ class: "indicator-container" }).add(
@@ -4996,7 +5331,7 @@ class Panel {
         const selection_contains_edge = ui.selection_contains_edge();
 
         // Modifying cells is not permitted when the export pane is visible.
-        if (this.export === null) {
+        if (this.port === null) {
             // Default options (for when no edges/cells are selected). We only need to provide
             // defaults for inputs that display their state even when disabled.
             if (!selection_contains_edge) {
@@ -5380,14 +5715,14 @@ class Panel {
         });
     }
 
-    /// Dismiss the export pane, if it is shown.
-    dismiss_export_pane(ui) {
-        if (this.export !== null) {
-            ui.element.query_selector(".export").remove();
-            for (const id of this.export.shortcuts) {
+    /// Dismiss the import/export pane, if it is shown.
+    dismiss_port_pane(ui) {
+        if (this.port !== null) {
+            ui.element.query_selector(".port").remove();
+            for (const id of this.port.shortcuts) {
                 ui.shortcuts.remove(id);
             }
-            this.export = null;
+            this.port = null;
             ui.switch_mode(UIMode.default);
             this.update(ui);
             return true;
@@ -6704,7 +7039,7 @@ class Vertex extends Cell {
 
 /// k-cells (for k > 0), or edges. This is primarily specialised in its set up of HTML elements.
 class Edge extends Cell {
-    constructor(ui, label = "", source, target, options, label_colour) {
+    constructor(ui, label, source, target, options, label_colour) {
         super(ui.quiver, Math.max(source.level, target.level) + 1, label, label_colour);
 
         this.options = Edge.default_options(Object.assign({ level: this.level }, options));

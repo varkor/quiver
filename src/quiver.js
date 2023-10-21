@@ -203,11 +203,24 @@ class Quiver {
     export(format, settings, options, definitions) {
         switch (format) {
             case "tikz-cd":
-                return QuiverExport.tikz_cd.export(this, settings, options, definitions);
+                return QuiverImportExport.tikz_cd.export(this, settings, options, definitions);
             case "base64":
                 return QuiverImportExport.base64.export(this, settings, options, definitions);
             case "html":
                 return QuiverExport.html.export(this, settings, options, definitions);
+            default:
+                throw new Error(`unknown export format \`${format}\``);
+        }
+    }
+
+    /// Return a `{ data, metadata }` object.
+    /// Currently, the supported formats are:
+    /// - "tikz-cd"
+    /// `settings` describes persistent user settings (like whether to centre the diagram);
+    import(ui, format, data, settings) {
+        switch (format) {
+            case "tikz-cd":
+                return QuiverImportExport.tikz_cd.import(ui, data, settings);
             default:
                 throw new Error(`unknown export format \`${format}\``);
         }
@@ -225,9 +238,59 @@ class QuiverImportExport extends QuiverExport {
     /// A method to import a quiver as a string. `import(export(quiver))` should be the
     /// identity function. Currently `import` takes a `UI` into which to import directly.
     import() {}
+
+    begin_import(ui) {
+        // We don't want to relayout every time we add a new cell: instead, we should perform
+        // layout once, once all of the cells have been created.
+        ui.buffer_updates = true;
+    }
+
+    end_import(ui) {
+        // Centre the view on the quiver.
+        ui.centre_view();
+        // Also centre the focus point, so that it's centre of screen.
+        // We subtract 0.5 from the position so that when the view is centred perfectly between
+        // two cells, we prefer the top/leftmost cell.
+        ui.focus_point.class_list.remove("smooth");
+        ui.reposition_focus_point(ui.position_from_offset(ui.view.sub(Point.diag(0.5))));
+        ui.focus_point.class_list.add("focused");
+        delay(() => ui.focus_point.class_list.add("smooth"));
+
+        // When cells are created, they are usually queued. We don't want any cells that have been
+        // imported to be queued.
+        for (const cell of ui.quiver.all_cells()) {
+            cell.element.query_selector("kbd.queue").class_list.remove("queue");
+        }
+
+        // Update all the affected columns and rows.
+        delay(() => ui.update_col_row_size(
+            ...ui.quiver.all_cells()
+                .filter((cell) => cell.is_vertex()).map((vertex) => vertex.position)
+        ));
+
+        // Stop buffering updates, so that individual changes to cells will resize the grid.
+        ui.buffer_updates = false;
+
+        // If the quiver is now nonempty, some toolbar actions will be available.
+        ui.toolbar.update(ui);
+        ui.update_focus_tooltip();
+    }
 }
 
-QuiverExport.tikz_cd = new class extends QuiverExport {
+QuiverExport.CONSTANTS = {
+    // For curves and shortening, we need to try to convert proportional measurements
+    // into absolute distances (in `pt`) for TikZ. There are several subtleties, one of
+    // which is that the grid cell size in tikz-cd has a greater width than height, so
+    // when we scale things, we need to scale differently in the horizontal and vertical
+    // directions. For now, we simply multiply by constants that, heuristically, give
+    // reasonable results for various diagrams I tested. It would be nice to eventually
+    // correct this by using proportional lengths, but that requires a custom TikZ style
+    // I do not currently possess the skills to create.
+    TIKZ_HORIZONTAL_MULTIPLIER: 1/4,
+    TIKZ_VERTICAL_MULTIPLIER: 1/6,
+};
+
+QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
     export(quiver, settings, options, definitions) {
         let output = "";
 
@@ -492,27 +555,21 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
                     }
                 }
 
-                // For curves and shortening, we need to try to convert proportional measurements
-                // into absolute distances (in `pt`) for TikZ. There are several subtleties, one of
-                // which is that the grid cell size in tikz-cd has a greater width than height, so
-                // when we scale things, we need to scale differently in the horizontal and vertical
-                // directions. For now, we simply multiply by constants that, heuristically, give
-                // reasonable results for various diagrams I tested. It would be nice to eventually
-                // correct this by using proportional lengths, but that requires a custom TikZ style
-                // I do not currently possess the skills to create.
-                const TIKZ_HORIZONTAL_MULTIPLIER = 1/4;
-                const TIKZ_VERTICAL_MULTIPLIER = 1/6;
                 // This is the calculation for the radius of an ellipse, combining the two
                 // multipliers based on the angle of the edge.
-                const multiplier = TIKZ_HORIZONTAL_MULTIPLIER * TIKZ_VERTICAL_MULTIPLIER
-                    / ((TIKZ_HORIZONTAL_MULTIPLIER ** 2 * Math.sin(edge.angle()) ** 2
-                    + TIKZ_VERTICAL_MULTIPLIER ** 2 * Math.cos(edge.angle()) ** 2) ** 0.5);
+                const multiplier = QuiverExport.CONSTANTS.TIKZ_HORIZONTAL_MULTIPLIER
+                    * QuiverExport.CONSTANTS.TIKZ_VERTICAL_MULTIPLIER
+                    / ((QuiverExport.CONSTANTS.TIKZ_HORIZONTAL_MULTIPLIER ** 2
+                            * Math.sin(edge.angle()) ** 2
+                    + QuiverExport.CONSTANTS.TIKZ_VERTICAL_MULTIPLIER ** 2
+                        * Math.cos(edge.angle()) ** 2) ** 0.5);
 
                 if (edge.options.curve !== 0) {
                     parameters.curve = `{height=${
                         // Using a fixed multiplier for curves of any angle tends to work better
                         // in the examples I tested.
-                        edge.options.curve * CONSTANTS.CURVE_HEIGHT * TIKZ_HORIZONTAL_MULTIPLIER
+                        edge.options.curve * CONSTANTS.CURVE_HEIGHT
+                            * QuiverExport.CONSTANTS.TIKZ_HORIZONTAL_MULTIPLIER
                     }pt}`;
                 }
 
@@ -770,6 +827,17 @@ QuiverExport.tikz_cd = new class extends QuiverExport {
             metadata: { tikz_incompatibilities, dependencies },
         };
     }
+
+    import(ui, data) {
+        this.begin_import(ui);
+
+        const parser = new Parser(ui, data);
+        parser.parse_diagram();
+
+        this.end_import(ui);
+
+        return { diagnostics: parser.diagnostics };
+    }
 };
 
 QuiverImportExport.base64 = new class extends QuiverImportExport {
@@ -939,8 +1007,6 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
     }
 
     import(ui, string) {
-        const quiver = new Quiver();
-
         let input;
         try {
             const data = atob(string);
@@ -950,7 +1016,7 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
             }
             const decoded = new TextDecoder().decode(new Uint8Array(bytes));
             if (decoded === "") {
-                return quiver;
+                return;
             }
             input = JSON.parse(decoded);
         } catch (_) {
@@ -1023,9 +1089,7 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
         // to let the user know we were not entirely successful.
         const errors = [];
 
-        // We don't want to relayout every time we add a new cell: instead, we should perform
-        // layout once, once all of the cells have been created.
-        ui.buffer_updates = true;
+        this.begin_import(ui);
 
         const indices = [];
         for (const cell of cells) {
@@ -1158,39 +1222,12 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
             }
         }
 
-        // Centre the view on the quiver.
-        ui.centre_view();
-        // Also centre the focus point, so that it's centre of screen.
-        // We subtract 0.5 from the position so that when the view is centred perfectly between
-        // two cells, we prefer the top/leftmost cell.
-        ui.focus_point.class_list.remove("smooth");
-        ui.reposition_focus_point(ui.position_from_offset(ui.view.sub(Point.diag(0.5))));
-        delay(() => ui.focus_point.class_list.add("smooth"));
-
-        // When cells are created, they are usually queued. We don't want any cells that have been
-        // imported to be queued.
-        for (const cell of indices) {
-            cell.element.query_selector("kbd.queue").class_list.remove("queue");
-        }
-
-        // Update all the affected columns and rows.
-        delay(() => ui.update_col_row_size(
-            ...indices.filter((cell) => cell.is_vertex()).map((vertex) => vertex.position)
-        ));
-
-        // Stop buffering updates, so that individual changes to cells will resize the grid.
-        ui.buffer_updates = false;
-
-        // If the quiver is now nonempty, some toolbar actions will be available.
-        ui.toolbar.update(ui);
-        ui.update_focus_tooltip();
+        this.end_import(ui);
 
         if (errors.length > 0) {
             // Just throw the first error.
             throw errors[0];
         }
-
-        return quiver;
     }
 };
 

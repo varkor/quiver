@@ -1,0 +1,211 @@
+%%% Valid diagrams %%%
+
+\begin{tikzcd}
+	A & B
+	\arrow[from=1-1, to=1-2]
+\end{tikzcd}
+
+\begin{tikzcd}
+	A \arrow[r] & B
+\end{tikzcd}
+
+\[\begin{tikzcd}[ampersand replacement=\&,cramped,column sep=large,row sep=2.25em]
+	A \& B
+	\arrow[from=1-1, to=1-2]
+\end{tikzcd}\]
+
+\begin{tikzcd}
+	A & B
+	\arrow[color={rgb,255:red,214;green,92;blue,92}, from=1-1, to=1-2]
+\end{tikzcd}
+
+\begin{tikzcd}
+	\textcolor{rgb,255:red,214;green,92;blue,92}{A} & \textcolor{rgb,255:red,92;green,92;blue,214}{B}
+	\arrow["f"{text={rgb,255:red,92;green,214;blue,92}}, draw={rgb,255:red,214;green,214;blue,92}, from=1-1, to=1-2]
+\end{tikzcd}
+
+% These...
+\begin{tikzcd} % ...are...
+	A & B % ...several...
+	\arrow[from=1-1, to=1-2]
+	% ...comments.
+\end{tikzcd} % And...
+% Another.
+
+% https://q.uiver.app/?q=WzAsMTYsWzAsNSwiZmciXSxbMSw0LCIoZkkpZyJdLFsxLDYsImYoSWcpIl0sWzIsMywiKGYoZ2YpKWciXSxbMiw3LCJmKChnZilnKSJdLFszLDIsIigoZmcpZilnIl0sWzQsMSwiKElmKWciXSxbNSwwLCJmZyJdLFszLDgsImYoZyhmZykpIl0sWzQsOSwiZihnSSkiXSxbNSwxMCwiZmciXSxbNCw1LCIoZmcpKGZnKSJdLFs2LDIsIkkoZmcpIl0sWzYsOCwiKGZnKUkiXSxbNyw1LCJJSSJdLFs5LDUsIkkiXSxbMCwxLCJyXlxcYnVsbGV0MSIsMV0sWzEsMiwiYSJdLFswLDIsIjFsXlxcYnVsbGV0IiwxXSxbMSwzLCIoMVxcYmV0YSkxIiwyXSxbMyw0LCJhIiwwLHsiY3VydmUiOi0xfV0sWzIsNCwiMShcXGJldGExKSJdLFszLDUsImFeXFxidWxsZXQxIiwyXSxbNSw2LCIoXFxhbHBoYTEpMSIsMl0sWzYsNywibDEiLDJdLFs0LDgsIjFhIl0sWzgsOSwiMSgxYSkiXSxbOSwxMCwiMXIiXSxbNSwxMSwiYSIsMCx7ImN1cnZlIjotMn1dLFs4LDExLCJhXlxcYnVsbGV0IiwyLHsiY3VydmUiOjJ9XSxbNiwxMiwiYSIsMix7ImN1cnZlIjoyfV0sWzcsMTIsImxeXFxidWxsZXQiXSxbMTEsMTIsIlxcYWxwaGExIiwyLHsiY3VydmUiOjJ9XSxbMTAsMTMsInJeXFxidWxsZXQiLDJdLFs5LDEzLCJcXGFscGhhXlxcYnVsbGV0IiwwLHsiY3VydmUiOi0yfV0sWzExLDEzLCIxYSIsMCx7ImN1cnZlIjotMn1dLFsxMiwxNCwiMVxcYWxwaGEiLDAseyJjdXJ2ZSI6LTF9XSxbMTMsMTQsIlxcYWxwaGExIiwyLHsiY3VydmUiOjF9XSxbMTQsMTUsImwiLDAseyJjdXJ2ZSI6LTN9XSxbMTQsMTUsInIiLDIseyJjdXJ2ZSI6M31dLFs2LDExLCJcXGNvbmciLDEseyJjdXJ2ZSI6LTIsInN0eWxlIjp7ImJvZHkiOnsibmFtZSI6Im5vbmUifSwiaGVhZCI6eyJuYW1lIjoibm9uZSJ9fX1dLFs5LDExLCJcXGNvbmciLDEseyJjdXJ2ZSI6Miwic3R5bGUiOnsiYm9keSI6eyJuYW1lIjoibm9uZSJ9LCJoZWFkIjp7Im5hbWUiOiJub25lIn19fV0sWzEzLDEyLCJcXGNvbmciLDEseyJjdXJ2ZSI6LTIsInN0eWxlIjp7ImJvZHkiOnsibmFtZSI6Im5vbmUifSwiaGVhZCI6eyJuYW1lIjoibm9uZSJ9fX1dLFswLDcsIjEiLDAseyJjdXJ2ZSI6LTV9XSxbMCwxMCwiMSIsMix7ImN1cnZlIjo1fV0sWzEwLDE1LCJcXGFscGhhIiwyLHsiY3VydmUiOjV9XSxbNywxNSwiXFxhbHBoYSIsMCx7ImN1cnZlIjotNX1dLFsxNiwxOCwiXFxtdSIsMCx7ImN1cnZlIjotMSwibGVuZ3RoIjo1MH1dLFsyMSwxOSwiXFxjb25nIiwxLHsiY3VydmUiOjEsImxldmVsIjoxLCJzdHlsZSI6eyJib2R5Ijp7Im5hbWUiOiJub25lIn0sImhlYWQiOnsibmFtZSI6Im5vbmUifX19XSxbMzgsMzksIlxcY29uZyIsMSx7Imxlbmd0aCI6NzAsInN0eWxlIjp7ImJvZHkiOnsibmFtZSI6Im5vbmUifSwiaGVhZCI6eyJuYW1lIjoibm9uZSJ9fX1dLFsyMiwyNSwiXFxwaSIsMCx7ImN1cnZlIjotNCwibGVuZ3RoIjo0MH1dLFszNCwxMCwiXFxyaG8iLDEseyJjdXJ2ZSI6LTEsImxlbmd0aCI6NTB9XSxbNDMsMjIsIlxcUGhpXnstMX0xIiwyLHsibGVuZ3RoIjo1MH1dLFsyNSw0NCwiMVxcUHNpIiwyLHsibGVuZ3RoIjo1MH1dLFszNiw0NiwiXFxjb25nIiwxLHsibGVuZ3RoIjo3MCwic3R5bGUiOnsiYm9keSI6eyJuYW1lIjoibm9uZSJ9LCJoZWFkIjp7Im5hbWUiOiJub25lIn19fV0sWzcsMzAsIlxcbGFtYmRhIiwxLHsiY3VydmUiOi0xLCJsZW5ndGgiOjUwfV0sWzM3LDQ1LCJcXGNvbmciLDEseyJsZW5ndGgiOjcwLCJzdHlsZSI6eyJib2R5Ijp7Im5hbWUiOiJub25lIn0sImhlYWQiOnsibmFtZSI6Im5vbmUifX19XV0=
+
+%%% Invalid diagrams %%%
+
+% Incorrect start.
+begin{tikzcd}
+	A & B
+	\arrow[from=1-1, to=1-2]
+\end{tikzcd}
+
+% Incorrect end.
+\begin{tikzcd}
+	A & B
+	\arrow[from=1-1, to=1-2]
+\end{tikzcd
+
+% Extra content after end.
+
+\begin{tikzcd}
+	A & B
+	\arrow[from=1-1, to=1-2]
+\end{tikzcd} :)
+
+% No target 1.
+\begin{tikzcd}
+	A & B
+	\arrow[from=1-1]
+\end{tikzcd}
+
+% No target 2.
+\begin{tikzcd}
+	A \ar[] & B
+\end{tikzcd}
+
+% Same source and target.
+\begin{tikzcd}
+	A & B
+	\arrow[from=1-1, to=1-1]
+\end{tikzcd}
+
+% Invalid source/target.
+\begin{tikzcd}
+	A & B
+	\arrow[from=A, to=B]
+\end{tikzcd}
+
+% Missing source/target.
+\begin{tikzcd}
+	A & B
+	\arrow[from=, to=]
+\end{tikzcd}
+
+% Missing comma.
+\begin{tikzcd}
+	A & B
+	\arrow[from=1-1 to=1-2]
+\end{tikzcd}
+
+% Double comma.
+\begin{tikzcd}
+	A & B
+	\arrow[from=1-1, , to=1-2]
+\end{tikzcd}
+
+% Unexpected end of arrow options.
+\begin{tikzcd}
+	A & B
+	\arrow[from=1-1,
+
+% Loop
+\begin{tikzcd}
+	A \arrow[loop, distance=2em, in=55, out=125]
+\end{tikzcd}
+
+% Zero length arrow.
+\begin{tikzcd}
+	A & B
+	\arrow[shorten <=10pt, shorten >=10pt, from=1-1, to=1-2]
+\end{tikzcd}
+
+% No ampersand replacement.
+\begin{tikzcd}[ampersand replacement=]
+	A & B
+	\arrow[from=1-1, to=1-2]
+\end{tikzcd}
+
+% No &.
+\begin{tikzcd}
+	A B
+	\arrow[from=1-1, to=1-2]
+\end{tikzcd}
+
+% Multiple node errors.
+\begin{tikzcd}
+	A B C
+	\arrow[from=1-1, to=1-2]
+\end{tikzcd}
+
+% No separation.
+\begin{tikzcd}[sep=]
+	A & B
+	\arrow[from=1-1, to=1-2]
+\end{tikzcd}
+
+% No name.
+\begin{tikzcd}
+	A & B
+	\arrow["f"{name=}, from=1-1, to=1-2]
+\end{tikzcd}
+
+% Missing colour.
+\begin{tikzcd}
+	A & B
+	\arrow[color=, from=1-1, to=1-2]
+\end{tikzcd}
+
+% Invalid node colour 1.
+\begin{tikzcd}
+	\textcolor{A} & B
+	\arrow[from=1-1, to=1-2]
+\end{tikzcd}
+
+% Invalid node colour 2.
+\begin{tikzcd}
+	\textcolor{rgb,256:red,0;green,0;blue,0}{A} & B
+	\arrow[from=1-1, to=1-2]
+\end{tikzcd}
+
+% Colour without node.
+\begin{tikzcd}
+	\textcolor{rgb,255:red,214;green,92;blue,92} & B
+	\arrow[from=1-1, to=1-2]
+\end{tikzcd}
+
+% Invalid arrow colour.
+\begin{tikzcd}
+	A & B
+	\arrow[color={rgb,256:red,0;green,0;blue,0}, from=1-1, to=1-2]
+\end{tikzcd}
+
+% Invalid level 1.
+\begin{tikzcd}
+	A & B
+	\arrow[Rightarrow, scaling nfold=5, from=1-1, to=1-2]
+\end{tikzcd}
+
+% Invalid level 2.
+\begin{tikzcd}
+	A & B
+	\arrow[Rightarrow, scaling nfold=unknown, from=1-1, to=1-2]
+\end{tikzcd}
+
+% Unknown arrow option.
+\begin{tikzcd}
+	A & B
+	\arrow[unknown, from=1-1, to=1-2]
+\end{tikzcd}
+
+% Unknown diagram option.
+\begin{tikzcd}[unknown]
+	A & B
+	\arrow[from=1-1, to=1-2]
+\end{tikzcd}
+
+% Unknown label option.
+\begin{tikzcd}
+	A & B
+	\arrow["f"{unknown}, from=1-1, to=1-2]
+\end{tikzcd}
+
+% Multiple errors.
+\begin{tikzcd}
+	A & B
+	\arrow[curve={height=X}, from=1-1, to=1-2]
+	\arrow[curve={height=X}, from=1-1, to=1-2]
+	\arrow[curve={height=X}, from=1-1, to=1-2]
+\end{tikzcd}
