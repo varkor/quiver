@@ -188,6 +188,9 @@ class Parser {
                 edges.set(edge, new Edge(
                     this.ui, edge.label, source_cell, target_cell, edge.options, edge.label_colour
                 ));
+                if (edge.reverse) {
+                    edges.get(edge).reverse(this.ui);
+                }
             }
             // Remove any phantom edges. Currently, we only remove those edges that were confirmed
             // to be those exported by quiver for a special purpose, not any edge with the `phantom`
@@ -717,27 +720,6 @@ class Parser {
                 this.range_from(start),
             );
         }
-        if (this.eat("Rightarrow")) {
-            edge.options.level = 2;
-            return;
-        }
-        if (this.eat("scaling nfold")) {
-            this.eat_whitespace();
-            this.eat("=", true);
-            this.eat_whitespace();
-            const start = this.position;
-            const nat = this.parse_nat(true);
-            if (nat !== null) {
-                edge.options.level = clamp(2, nat, CONSTANTS.MAXIMUM_CELL_LEVEL);
-                if (nat < 2 || nat > CONSTANTS.MAXIMUM_CELL_LEVEL) {
-                    throw this.warn(
-                        `Level must be between 2 and ${CONSTANTS.MAXIMUM_CELL_LEVEL}.`,
-                        this.range_from(start),
-                    );
-                }
-            }
-            return;
-        }
         if (this.eat("curve")) {
             this.eat_whitespace();
             this.eat("=", true);
@@ -800,6 +782,143 @@ class Parser {
             this.eat("pt", true);
             return;
         }
+        // tikz-cd presets: these specify head, body, and tail.
+        const flip = (edge, reverse) => {
+            edge.reverse = reverse;
+            return true;
+        };
+        if ((this.eat("Rightarrow") && flip(edge, false))
+            || (this.eat("Leftarrow") && flip(edge, true))) {
+                edge.options.style.body.name = "cell";
+                edge.options.level = 2;
+                edge.options.style.tail.name = "none";
+                edge.options.style.head.name = "arrowhead";
+            return;
+        }
+        if (this.eat("Leftrightarrow")) {
+            edge.options.style.body.name = "cell";
+            edge.options.level = 2;
+            edge.options.style.tail.name = "arrowhead";
+            edge.options.style.head.name = "arrowhead";
+        }
+        if ((this.eat("mapsto") && flip(edge, false))
+            || (this.eat("mapsfrom") && flip(edge, true))) {
+            edge.options.style.body.name = "cell";
+            edge.options.style.tail.name = "maps to";
+            edge.options.style.head.name = "arrowhead";
+            return;
+        }
+        if ((this.eat("Mapsto") && flip(edge, false))
+            || (this.eat("Mapsfrom") && flip(edge, true))) {
+            edge.options.style.body.name = "cell";
+            edge.options.level = 2;
+            edge.options.style.tail.name = "maps to";
+            edge.options.style.head.name = "arrowhead";
+            return;
+        }
+        if ((this.eat("hookrightarrow") && flip(edge, false))
+            || (this.eat("hookleftarrow") && flip(edge, true))) {
+            edge.options.style.body.name = "cell";
+            edge.options.style.tail.name = "hook";
+            edge.options.style.tail.side = "top";
+            edge.options.style.head.name = "arrowhead";
+            return;
+        }
+        if ((this.eat("rightarrowtail") && flip(edge, false))
+            || (this.eat("leftarrowtail") && flip(edge, true))) {
+            edge.options.style.body.name = "cell";
+            edge.options.style.tail.name = "mono";
+            edge.options.style.head.name = "arrowhead";
+            return;
+        }
+        if ((this.eat("rightarrow") && flip(edge, false))
+            || (this.eat("leftarrow") && flip(edge, true))) {
+            edge.options.style.body.name = "cell";
+            edge.options.style.tail.name = "none";
+            edge.options.style.head.name = "arrowhead";
+            return;
+        }
+        if (this.eat("leftrightarrow")) {
+            edge.options.style.body.name = "cell";
+            edge.options.style.tail.name = "arrowhead";
+            edge.options.style.head.name = "arrowhead";
+        }
+        if ((this.eat("twoheadrightarrow") && flip(edge, false))
+            || (this.eat("twoheadleftarrow") && flip(edge, true))) {
+            edge.options.style.body.name = "cell";
+            edge.options.style.tail.name = "none";
+            edge.options.style.head.name = "epi";
+        }
+        if ((this.check("rightharpoonup") || this.check("rightharpoondown")
+            || this.check("leftharpoonup") || this.check("leftharpoondown"))
+            && ((this.eat("rightharpoon") && flip(edge, false))
+            || (this.eat("leftharpoon") && flip(edge, true)))) {
+            edge.options.style.body.name = "cell";
+            edge.options.style.tail.name = "none";
+            edge.options.style.head.name = "harpoon";
+            if (this.eat("up")) {
+                edge.options.style.head.side = "top";
+            } else if (this.eat("down")) {
+                edge.options.style.head.side = "down";
+            }
+            return;
+        }
+        if ((this.eat("dashrightarrow") && flip(edge, false))
+            || (this.eat("dashleftarrow") && flip(edge, true))) {
+            edge.options.style.body.name = "dashed";
+            edge.options.style.tail.name = "none";
+            edge.options.style.head.name = "arrowhead";
+            return;
+        }
+        if ((this.eat("rightsquigarrow") && flip(edge, false))
+            || (this.eat("leftsquigarrow") && flip(edge, true))) {
+            edge.options.style.body.name = "squiggly";
+            edge.options.style.tail.name = "none";
+            edge.options.style.head.name = "arrowhead";
+            return;
+        }
+        if (this.eat("leftrightsquigarrow")) {
+            edge.options.style.body.name = "squiggly";
+            edge.options.style.tail.name = "arrowhead";
+            edge.options.style.head.name = "arrowhead";
+            return;
+        }
+        if (this.eat("dash")) {
+            edge.options.style.body.name = "cell";
+            edge.options.level = 1;
+            edge.options.style.tail.name = "none";
+            edge.options.style.head.name = "none";
+            return;
+        }
+        if (this.eat("equal")) {
+            this.eat("s");
+            edge.options.style.body.name = "cell";
+            edge.options.level = 2;
+            edge.options.style.tail.name = "none";
+            edge.options.style.head.name = "none";
+            return;
+        }
+        // Level.
+        if (this.eat("double line")) {
+            edge.options.level = 2;
+        }
+        if (this.eat("scaling nfold")) {
+            this.eat_whitespace();
+            this.eat("=", true);
+            this.eat_whitespace();
+            const start = this.position;
+            const nat = this.parse_nat(true);
+            if (nat !== null) {
+                edge.options.level = clamp(2, nat, CONSTANTS.MAXIMUM_CELL_LEVEL);
+                if (nat < 2 || nat > CONSTANTS.MAXIMUM_CELL_LEVEL) {
+                    throw this.warn(
+                        `Level must be between 2 and ${CONSTANTS.MAXIMUM_CELL_LEVEL}.`,
+                        this.range_from(start),
+                    );
+                }
+            }
+            return;
+        }
         // Body styles.
         for (const style of ["dashed", "dotted", "squiggly"]) {
             if (this.eat(style)) {
@@ -830,6 +949,10 @@ class Parser {
             return;
         }
         // Head styles.
+        if (this.eat("to head")) {
+            edge.options.style.head.name = "cell";
+            return;
+        }
         if (this.eat("no head")) {
             edge.options.style.head.name = "none";
             return;
@@ -948,6 +1071,11 @@ Parser.Edge = class {
         this.label_colour = Colour.black();
         this.shorten = { source: 0, target: 0 };
         this.phantom = false;
+        // tikz-cd has some built-in styles that effectively reverse the direction of an arrow.
+        // (This could also be achieved by permitting every head style to be used for a tail style
+        // and vice versa, but this is not currently allowed in the quiver UI.) This is tracked with
+        // this flag.
+        this.reverse = false;
     }
 };
 

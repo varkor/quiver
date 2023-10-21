@@ -44,6 +44,22 @@
 	\arrow["f"{text={rgb,255:red,92;green,214;blue,92}}, draw={rgb,255:red,214;green,214;blue,92}, from=1-1, to=1-2]
 \end{tikzcd}
 
+\begin{tikzcd}
+	A & B \\
+	C & D \\
+	% Should not be `maps to`.
+	\arrow[from=1-1, to=1-2, maps to, Rightarrow]
+	% Should be `maps to`.
+	\arrow[from=2-1, to=2-2, Rightarrow, maps to]
+\end{tikzcd}
+
+\begin{tikzcd}
+	A & B \\
+	C & D \\
+	\arrow[leftarrow, from=1-1, to=1-2]
+	\arrow[from=2-1, to=2-2, leftarrow]
+\end{tikzcd}
+
 % These...
 \begin{tikzcd} % ...are...
 	A & B % ...several...
@@ -53,6 +69,23 @@
 % Another.
 
 % https://q.uiver.app/?q=WzAsMTYsWzAsNSwiZmciXSxbMSw0LCIoZkkpZyJdLFsxLDYsImYoSWcpIl0sWzIsMywiKGYoZ2YpKWciXSxbMiw3LCJmKChnZilnKSJdLFszLDIsIigoZmcpZilnIl0sWzQsMSwiKElmKWciXSxbNSwwLCJmZyJdLFszLDgsImYoZyhmZykpIl0sWzQsOSwiZihnSSkiXSxbNSwxMCwiZmciXSxbNCw1LCIoZmcpKGZnKSJdLFs2LDIsIkkoZmcpIl0sWzYsOCwiKGZnKUkiXSxbNyw1LCJJSSJdLFs5LDUsIkkiXSxbMCwxLCJyXlxcYnVsbGV0MSIsMV0sWzEsMiwiYSJdLFswLDIsIjFsXlxcYnVsbGV0IiwxXSxbMSwzLCIoMVxcYmV0YSkxIiwyXSxbMyw0LCJhIiwwLHsiY3VydmUiOi0xfV0sWzIsNCwiMShcXGJldGExKSJdLFszLDUsImFeXFxidWxsZXQxIiwyXSxbNSw2LCIoXFxhbHBoYTEpMSIsMl0sWzYsNywibDEiLDJdLFs0LDgsIjFhIl0sWzgsOSwiMSgxYSkiXSxbOSwxMCwiMXIiXSxbNSwxMSwiYSIsMCx7ImN1cnZlIjotMn1dLFs4LDExLCJhXlxcYnVsbGV0IiwyLHsiY3VydmUiOjJ9XSxbNiwxMiwiYSIsMix7ImN1cnZlIjoyfV0sWzcsMTIsImxeXFxidWxsZXQiXSxbMTEsMTIsIlxcYWxwaGExIiwyLHsiY3VydmUiOjJ9XSxbMTAsMTMsInJeXFxidWxsZXQiLDJdLFs5LDEzLCJcXGFscGhhXlxcYnVsbGV0IiwwLHsiY3VydmUiOi0yfV0sWzExLDEzLCIxYSIsMCx7ImN1cnZlIjotMn1dLFsxMiwxNCwiMVxcYWxwaGEiLDAseyJjdXJ2ZSI6LTF9XSxbMTMsMTQsIlxcYWxwaGExIiwyLHsiY3VydmUiOjF9XSxbMTQsMTUsImwiLDAseyJjdXJ2ZSI6LTN9XSxbMTQsMTUsInIiLDIseyJjdXJ2ZSI6M31dLFs2LDExLCJcXGNvbmciLDEseyJjdXJ2ZSI6LTIsInN0eWxlIjp7ImJvZHkiOnsibmFtZSI6Im5vbmUifSwiaGVhZCI6eyJuYW1lIjoibm9uZSJ9fX1dLFs5LDExLCJcXGNvbmciLDEseyJjdXJ2ZSI6Miwic3R5bGUiOnsiYm9keSI6eyJuYW1lIjoibm9uZSJ9LCJoZWFkIjp7Im5hbWUiOiJub25lIn19fV0sWzEzLDEyLCJcXGNvbmciLDEseyJjdXJ2ZSI6LTIsInN0eWxlIjp7ImJvZHkiOnsibmFtZSI6Im5vbmUifSwiaGVhZCI6eyJuYW1lIjoibm9uZSJ9fX1dLFswLDcsIjEiLDAseyJjdXJ2ZSI6LTV9XSxbMCwxMCwiMSIsMix7ImN1cnZlIjo1fV0sWzEwLDE1LCJcXGFscGhhIiwyLHsiY3VydmUiOjV9XSxbNywxNSwiXFxhbHBoYSIsMCx7ImN1cnZlIjotNX1dLFsxNiwxOCwiXFxtdSIsMCx7ImN1cnZlIjotMSwibGVuZ3RoIjo1MH1dLFsyMSwxOSwiXFxjb25nIiwxLHsiY3VydmUiOjEsImxldmVsIjoxLCJzdHlsZSI6eyJib2R5Ijp7Im5hbWUiOiJub25lIn0sImhlYWQiOnsibmFtZSI6Im5vbmUifX19XSxbMzgsMzksIlxcY29uZyIsMSx7Imxlbmd0aCI6NzAsInN0eWxlIjp7ImJvZHkiOnsibmFtZSI6Im5vbmUifSwiaGVhZCI6eyJuYW1lIjoibm9uZSJ9fX1dLFsyMiwyNSwiXFxwaSIsMCx7ImN1cnZlIjotNCwibGVuZ3RoIjo0MH1dLFszNCwxMCwiXFxyaG8iLDEseyJjdXJ2ZSI6LTEsImxlbmd0aCI6NTB9XSxbNDMsMjIsIlxcUGhpXnstMX0xIiwyLHsibGVuZ3RoIjo1MH1dLFsyNSw0NCwiMVxcUHNpIiwyLHsibGVuZ3RoIjo1MH1dLFszNiw0NiwiXFxjb25nIiwxLHsibGVuZ3RoIjo3MCwic3R5bGUiOnsiYm9keSI6eyJuYW1lIjoibm9uZSJ9LCJoZWFkIjp7Im5hbWUiOiJub25lIn19fV0sWzcsMzAsIlxcbGFtYmRhIiwxLHsiY3VydmUiOi0xLCJsZW5ndGgiOjUwfV0sWzM3LDQ1LCJcXGNvbmciLDEseyJsZW5ndGgiOjcwLCJzdHlsZSI6eyJib2R5Ijp7Im5hbWUiOiJub25lIn0sImhlYWQiOnsibmFtZSI6Im5vbmUifX19XV0=
+
+% Example of phantom edges.
+\begin{tikzcd}
+	\bullet & \bullet \\
+	\bullet & {\text{Long label}} \\
+	\bullet & \bullet
+	\arrow[""{name=0, anchor=center, inner sep=0}, from=1-1, to=1-2]
+	\arrow[from=1-1, to=2-1]
+	\arrow[""{name=1, anchor=center, inner sep=0}, from=2-1, to=2-2]
+	\arrow[""{name=1p, anchor=center, inner sep=0}, phantom, from=2-1, to=2-2, start anchor=center, end anchor=center]
+	\arrow[from=1-2, to=2-2]
+	\arrow[from=3-1, to=2-1]
+	\arrow[""{name=2, anchor=center, inner sep=0}, from=3-1, to=3-2]
+	\arrow[from=3-2, to=2-2]
+	\arrow[shorten <=4pt, shorten >=4pt, Rightarrow, from=0, to=1]
+	\arrow[shorten <=4pt, shorten >=4pt, Rightarrow, from=2, to=1p]
+\end{tikzcd}
 
 %%% Invalid diagrams %%%
 
