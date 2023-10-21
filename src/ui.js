@@ -4809,14 +4809,18 @@ class Panel {
                                     this.dismiss_port_pane(ui);
                                 }
                                 // Regardless of whether the parse was successful or not, we hide
-                                // the loading screen once it has been concluded.
-                                ui.element.query_selector(".loading-screen").class_list
-                                    .add("hidden");
-                                // Make the textarea editable again.
-                                textarea.set_attributes({ contenteditable: "true" });
-                                if (text.length > 0) {
-                                    parse_button.remove_attributes("disabled");
-                                }
+                                // the loading screen once it has been concluded. We delay to ensure
+                                // the diagram has been correctly laid out. However, this seems only
+                                // partially successful with very large diagrams.
+                                delay(() => {
+                                    // Make the textarea editable again.
+                                    textarea.set_attributes({ contenteditable: "true" });
+                                    if (text.length > 0) {
+                                        parse_button.remove_attributes("disabled");
+                                    }
+                                    ui.element.query_selector(".loading-screen").class_list
+                                        .add("hidden");
+                                });
                             });
                         });
                     };
