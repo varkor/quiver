@@ -6,6 +6,26 @@
 \end{tikzcd}
 
 \begin{tikzcd}
+	\A & \B
+	\arrow[from=1-1, to=1-2]
+\end{tikzcd}
+
+\begin{tikzcd}
+	\A\A & \B\B
+	\arrow[from=1-1, to=1-2]
+\end{tikzcd}
+
+\begin{tikzcd}
+	\A \A & \B \B
+	\arrow[from=1-1, to=1-2]
+\end{tikzcd}
+
+\begin{tikzcd}
+	\bullet && \bullet
+	\arrow["f" description, from=1-1, to=1-3]
+\end{tikzcd}
+
+\begin{tikzcd}
 	A \arrow[r] & B
 \end{tikzcd}
 
@@ -196,10 +216,16 @@ begin{tikzcd}
 	\arrow[from=1-1, to=1-2]
 \end{tikzcd}
 
-% Unknown label option.
+% Unknown label option 1.
 \begin{tikzcd}
 	A & B
 	\arrow["f"{unknown}, from=1-1, to=1-2]
+\end{tikzcd}
+
+% Unknown label option 2.
+\begin{tikzcd}
+	\bullet && \bullet
+	\arrow["f" unknown, from=1-1, to=1-3]
 \end{tikzcd}
 
 % Multiple errors.

@@ -290,11 +290,12 @@ class Parser {
     }
 
     eat_whitespace() {
-        if (/^\s+/.test(this.code)) {
+        const match = this.code.match(/^\s+/);
+        if (match !== null) {
             this.code = this.code.replace(/^\s+/, "");
-            return true;
+            return match;
         }
-        return false;
+        return null;
     }
 
     eat_whitespace_and_comments() {
@@ -491,9 +492,28 @@ class Parser {
                 label = this.code.substr(0, i);
                 this.code = this.code.slice(i + 1);
             }
-        } else if (/^\S+/.test(this.code)) {
-            label = this.code.match(/^\S+/)[0];
-            this.code = this.code.replace(/^\S+/, "");
+        } else if (this.check(/^\S+/)) {
+            // Parse a node label without curly brackets. This is a little tricky, but occurs
+            // frequently in hand-written tikz-cd, so we have a heuristic for parsing such labels.
+            // We parse a non-whitespace string, then check whether there is whitespace followed by
+            // a non-whitespace string that is not a column delimiter, a newline, an arrow, or an
+            // `\end`. If so, we append this to the label, and try doing the same thing again until
+            // it's no longer possible.
+            label = "";
+            let whitespace = "";
+            while (true) {
+                label += this.code.match(/^\S+/)[0];
+                this.code = this.code.replace(/^\S+/, "");
+                whitespace = this.eat_whitespace();
+                if (!this.is_finished() && !this.check(this.col_delim) && !this.check("\\\\")
+                    && !this.check("\\ar[") && !this.check("\\arrow[") && !this.check("\\end")
+                    && this.check(/^\S+/)) {
+                    label += whitespace;
+                    continue;
+                }
+                this.code = whitespace + this.code;
+                break;
+            }
         }
         if (label !== null) {
             return new Vertex(
@@ -608,6 +628,7 @@ class Parser {
             if (this.eat("'")) {
                 edge.options.label_alignment = "right";
             }
+            this.eat_whitespace();
             if (this.eat("{")) {
                 this.eat_whitespace();
                 if (!this.eat("}")) {
@@ -629,6 +650,13 @@ class Parser {
                         }
                         this.eat_whitespace();
                     }
+                }
+            } else {
+                if (!this.check("]") && !this.check(",")) {
+                    // Eat a single option.
+                    this.catch_and_log(() => {
+                        this.parse_label_option(edge);
+                    }, this.skip_to_comma_or_bracket());
                 }
             }
             return;
