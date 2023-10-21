@@ -507,7 +507,7 @@ class Parser {
             while (true) {
                 label += this.code.match(/^\S+/)[0];
                 this.code = this.code.replace(/^\S+/, "");
-                whitespace = this.eat_whitespace();
+                whitespace = this.eat_whitespace() || "";
                 if (!this.is_finished() && !this.check(this.col_delim) && !this.check("\\\\")
                     && !this.check("\\ar[") && !this.check("\\arrow[") && !this.check("\\end")
                     && this.check(/^\S+/)) {
