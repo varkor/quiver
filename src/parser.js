@@ -1046,6 +1046,31 @@ class Parser {
             edge.options.label_position = clamp(0, pos * 100, 100);
             return;
         }
+        // quiver only permits the label position to be changed in increments of 10.
+        if (this.eat("at start")) {
+            edge.options.label_position = 0;
+            return;
+        }
+        if (this.eat("very near start")) {
+            edge.options.label_position = 10;
+            return;
+        }
+        if (this.eat("near start")) {
+            edge.options.label_position = 20;
+            return;
+        }
+        if (this.eat("near end")) {
+            edge.options.label_position = 80;
+            return;
+        }
+        if (this.eat("very near end")) {
+            edge.options.label_position = 90;
+            return;
+        }
+        if (this.eat("at end")) {
+            edge.options.label_position = 1;
+            return;
+        }
 
         // The following options are deliberately ignored, because they are used by quiver in
         // tikz-cd export for convenience.
