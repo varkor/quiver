@@ -883,7 +883,7 @@ class Parser {
             edge.options.style.head.name = "arrowhead";
             return;
         }
-        if (this.eat("dash")) {
+        if (!this.check("dashed") && this.eat("dash")) {
             edge.options.style.body.name = "cell";
             edge.options.level = 1;
             edge.options.style.tail.name = "none";

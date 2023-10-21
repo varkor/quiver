@@ -4629,7 +4629,7 @@ class Panel {
                     // Display all fragments as normal text, without error or warning styles.
                     const hide_fragments = () => {
                         for (const fragment of textarea.query_selector_all(".fragment")) {
-                            fragment.class_list.remove("fragment");
+                            fragment.class_list.remove("error", "warning");
                         }
                     };
 
@@ -4847,13 +4847,38 @@ class Panel {
                             parse_button.set_attributes({ disabled: "" });
                         }
                     }).listen("keydown", (event) => {
-                        // For some reason, `contenteditable` only inserts newlines when
-                        // Shift + Enter is pressed. It does not seem possible to configure this
-                        // behaviour, so instead we choose to keep this behaviour and instead
-                        // trigger a parse on Enter.
-                        if (event.key === "Enter" && !event.shiftKey) {
+                        // For some reason, `contenteditable` only inserts newlines when Shift +
+                        // Enter is pressed. It does not seem possible to configure this behaviour,
+                        // so we have to manually insert newlines.
+                        if (event.key === "Enter") {
                             event.preventDefault();
-                            parse_text();
+                            // If the command key or control key are held, we trigger a parse of the
+                            // text...
+                            if (event.metaKey || event.ctrlKey) {
+                                parse_text();
+                            } else {
+                                hide_fragments();
+                                // ...otherwise, we insert a newline. This is easier said than done.
+                                // There are two additional complexities. The first is that
+                                // `textarea` is `pre-whitespace`, which does not display a newline
+                                // if it is right at the end of the element. For this reason, in
+                                // this situation, we insert an extra newline character. However, it
+                                // is not trivial to work out if the caret is at the end of the
+                                // element, because `textarea` is not a single text node, but may
+                                // contain many `.fragment` spans. This is the reason for the
+                                // complexity below.
+                                const text = textarea.element.textContent;
+                                const range = window.getSelection().getRangeAt(0);
+                                const total_range = range.cloneRange();
+                                total_range.selectNodeContents(textarea.element);
+                                total_range.setEnd(range.startContainer, range.startOffset);
+                                total_range.setEnd(range.endContainer, range.endOffset);
+                                const caret = total_range.toString().length;
+                                if (caret === text.length && !/\n$/.test(text)) {
+                                    insert_text("\n");
+                                }
+                                insert_text("\n");
+                            }
                         }
                     }).listen("paste", (event) => {
                         // We wish to import the diagram upon a paste event.
