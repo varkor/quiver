@@ -1053,6 +1053,10 @@ class Parser {
             return;
         }
 
+        if (this.eat("allow upside down")) {
+            return;
+        }
+
         // Throw a warning about an unknown option.
         this.unknown_option_warning(/^[^,\}]*(?=[,\}])/, "label");
     }

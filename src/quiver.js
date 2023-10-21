@@ -513,6 +513,9 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                     case "over":
                         // Centring without clearing is done by using the `marking` style.
                         label.marking = "";
+                        // If the `allow upside down` option is not specified, TikZ will flip labels
+                        // when the rotation is too high.
+                        label["allow upside down"] = "";
                         break;
                     case "right":
                         // By default, the label is drawn on the left side of the edge; `swap`
