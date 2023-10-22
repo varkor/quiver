@@ -1059,6 +1059,10 @@ class Parser {
             edge.options.label_position = 20;
             return;
         }
+        if (this.eat("midway")) {
+            edge.options.label_position = 50;
+            return;
+        }
         if (this.eat("near end")) {
             edge.options.label_position = 80;
             return;

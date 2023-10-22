@@ -865,8 +865,8 @@ class UI {
             .add(new DOM.Element("p").add(new DOM.Element("b").add("quiver")).add(
                 " is a modern, graphical editor for commutative and pasting " +
                 "diagrams, capable of rendering high-quality diagrams for screen viewing, and " +
-                "exporting to LaTeX via tikz-cd."
-            ))
+                "exporting to LaTeX via "
+            ).add(new DOM.Code("tikz-cd")).add("."))
             .add(new DOM.Element("p")
                 .add("Creating and modifying diagrams with ")
                 .add(new DOM.Element("b").add("quiver"))
@@ -4363,7 +4363,7 @@ class Panel {
                 );
 
                 let port_pane, tip, warning, error, latex_options, embed_options, note, content;
-                let textarea, parse_button;
+                let textarea, parse_button, import_success;
 
                 // Select the code for easy copying.
                 const select_output = () => {
@@ -4380,6 +4380,7 @@ class Panel {
                     error.class_list.add("hidden");
                     warning.clear();
                     warning.class_list.add("hidden");
+                    import_success.class_list.add("hidden");
                 };
 
                 const update_output = (data, prevent_defocus = false) => {
@@ -4667,25 +4668,27 @@ class Panel {
 
                                 // Display the diagnostics.
                                 if (diagnostics.length > 0) {
-                                    error.clear().add("The tikz-cd diagram was not imported " +
+                                    error.clear().add("The ").add(new DOM.Code("tikz-cd"))
+                                        .add(" diagram was not imported " +
                                         "successfully, as an error was encountered when parsing:")
-                                    warning.clear().add("The imported ")
+                                    warning.clear().add("Note that the imported ")
                                         .add(new DOM.Element("b").add("quiver"))
-                                        .add(" diagram may not " +
-                                        "match the tikz-cd diagram exactly, as certain issues " +
+                                        .add(" diagram may not match the ")
+                                        .add(new DOM.Code("tikz-cd"))
+                                        .add(" diagram exactly, as certain issues " +
                                         "were encountered when parsing:");
 
                                     if (diagnostics.some((diagnostic) => {
                                         return diagnostic instanceof Parser.Error
                                     })) {
                                         error.class_list.remove("hidden");
-                                        error;
+                                    } else {
+                                        import_success.class_list.remove("hidden");
                                     }
                                     if (diagnostics.some((diagnostic) => {
                                         return diagnostic instanceof Parser.Warning
                                     })) {
                                         warning.class_list.remove("hidden");
-                                        warning
                                     }
                                     const error_list = new DOM.Element("ul").add_to(error);
                                     const warning_list = new DOM.Element("ul").add_to(warning);
@@ -4893,6 +4896,13 @@ class Panel {
                         parse_text();
                     }).add_to(port_pane);
 
+                    import_success = new DOM.Element("div", { class: "note" })
+                        .add(new DOM.Code("tikz-cd"))
+                        .add(" diagram imported successfully. Press ")
+                        .add(new DOM.Element("kbd").add("Escape"))
+                        .add(" to edit the diagram.")
+                        .add_to(port_pane);
+
                     ui.element.add(port_pane);
 
                     this.port = { shortcuts };
@@ -4908,6 +4918,7 @@ class Panel {
                     content = port_pane.query_selector(".code");
                     textarea = port_pane.query_selector('div[contenteditable]');
                     parse_button = port_pane.query_selector('div[contenteditable] + button');
+                    import_success = port_pane.query_selector("button + .note");
                 }
 
                 // Update the thumbs of the column/row separation sliders now that we can calculate
@@ -4943,10 +4954,11 @@ class Panel {
                     Array.from(metadata.tikz_incompatibilities).sort() : [];
                 if (unsupported_items.length !== 0) {
                     warning.class_list.remove("hidden");
-                    warning.add("The exported tikz-cd diagram may not match the ")
+                    warning.add("The exported ").add(new DOM.Code("tikz-cd"))
+                        .add(" diagram may not match the ")
                         .add(new DOM.Element("b").add("quiver"))
-                        .add(" diagram " +
-                            "exactly, as tikz-cd does not support the following features that " +
+                        .add(" diagram exactly, as ").add(new DOM.Code("tikz-cd"))
+                        .add(" does not support the following features that " +
                             "appear in this diagram:");
                     const list = new DOM.Element("ul").add_to(warning);
                     for (const [index, item] of unsupported_items.entries()) {
@@ -4962,7 +4974,8 @@ class Panel {
                     if (unsupported_items.length !== 0) {
                         warning.add(new DOM.Element("br"));
                     }
-                    warning.add("The exported tikz-cd diagram relies upon additional TikZ " +
+                    warning.add("The exported ").add(new DOM.Code("tikz-cd"))
+                        .add(" diagram relies upon additional TikZ " +
                         "libraries that you may have to install for the diagram to render " +
                         "correctly:");
                     const list = new DOM.Element("ul").add_to(warning);

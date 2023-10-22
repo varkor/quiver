@@ -165,7 +165,7 @@ kbd {
     white-space: pre;
 }
 
-.tooltip kbd, .pane kbd {
+.tooltip kbd, .pane kbd, .port kbd {
     padding: 1px 6px;
 
     border-radius: 4px;
@@ -1336,13 +1336,20 @@ button.flash {
     font-size: 12pt;
 }
 
-.pane kbd {
+.pane kbd, .port kbd {
     display: inline-block;
     height: 16.5pt;
     vertical-align: middle;
 
-    background: hsl(0, 0%, 0%, 0.9);
     border: hsla(0, 0%, 100%, 0.4) 1px solid;
+}
+
+.pane kbd {
+    background: hsl(0, 0%, 0%, 0.9);
+}
+
+.port kbd {
+    background: hsl(0, 0%, 100%, 0.9);
 }
 
 .pane h2 {
