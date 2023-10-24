@@ -396,3 +396,10 @@ class CubicBezier {
         return new BezierPoint(p, t, null);
     }
 }
+
+/// A circular arc.
+class Arc {
+    constructor(origin, radius) {
+        // TODO
+    }
+}

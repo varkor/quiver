@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>quiver</title>
+    <title>quiver: arrow lab</title>
     <link rel="icon" href="../icon.png">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
@@ -69,8 +69,8 @@
         });
 
         document.addEventListener("DOMContentLoaded", () => {
-            const source = new Box(64, 240);
-            const target = new Box(640, 240);
+            const source = new Box(240, 360);
+            const target = new Box(640, 360);
             target.redraw();
             const arrow = new Arrow(source, target, new ArrowStyle(), new Label());
             arrow.style.heads = [];

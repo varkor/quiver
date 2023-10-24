@@ -42,6 +42,14 @@ const CONSTANTS = {
     CORNER_LINE_LENGTH: 12,
     /// The radius of the handle for dragging an edge.
     HANDLE_RADIUS: 14,
+    /// The possible path shapes to use for an edge.
+    ARROW_SHAPE: new Enum(
+        "ARROW_SHAPE",
+        // Bézier curve (default for edges).
+        "BEZIER",
+        // Arc (used for loops).
+        "ARC",
+    ),
     /// The possible styles for an edge.
     ARROW_BODY_STYLE: new Enum(
         "ARROW_BODY_STYLE",
@@ -120,6 +128,8 @@ class ArrowStyle {
         this.shift = 0;
         // How much to offset the head and tail of the edge from their endpoints.
         this.shorten = { tail: 0, head: 0 };
+        // The shape of the arrow.
+        this.shape = CONSTANTS.ARROW_SHAPE.BEZIER;
         // The various styles for the head, body, and tail.
         this.body_style = CONSTANTS.ARROW_BODY_STYLE.LINE;
         this.dash_style = CONSTANTS.ARROW_DASH_STYLE.SOLID;
@@ -425,16 +435,27 @@ class Arrow {
         const arclen_to_start = bezier.arc_length(start.t);
         const arclen_to_end = bezier.arc_length(end.t);
         const arclen = bezier.arc_length(1);
+        const flat_distance = 240;
+        const semicircle_dis = 200;
+        const final_radius = 100;
+        const sagitta = length >= flat_distance ? EPSILON : ((semicircle_dis / 2) * (1 - (length - semicircle_dis) / (flat_distance - semicircle_dis)));
+        const r_for_sagitta = sagitta / 2 + (length ** 2) / (8 * sagitta);
+        // const r = length <= semicircle_dis ? (semicircle_dis / 2 + (semicircle_dis - length) / semicircle_dis * (final_radius - semicircle_dis / 2)) : (length / 2 + 1.3 ** (length - semicircle_dis));
+        const r = length <= semicircle_dis ? (semicircle_dis / 2 + (semicircle_dis - length) / semicircle_dis * (final_radius - semicircle_dis / 2)) : r_for_sagitta;
+        console.log(length);
+        // TODO: awkward transition point, but other than that pretty good
         this.requisition_element(this.background, "path.arrow-background", {
             d: `${
                 new Path()
                     .move_to(offset)
-                    .curve_by(new Point(length / 2, this.style.curve), new Point(length, 0))
+                    // NOTE: when length < radius, it starts becoming a circle rather than a semicircle
+                    .arc_by(Point.diag(r), 0, length <= semicircle_dis, true, new Point(length, 0))
+                    // .curve_by(new Point(length / 2, this.style.curve), new Point(length, 0))
             }`,
             fill: "none",
             stroke: "black",
             "stroke-width": edge_width + CONSTANTS.BACKGROUND_PADDING * 2,
-            "stroke-dasharray": `0 ${arclen_to_start} ${arclen_to_end - arclen_to_start} ${Math.ceil(arclen - arclen_to_end)}`,
+            // "stroke-dasharray": `0 ${arclen_to_start} ${arclen_to_end - arclen_to_start} ${Math.ceil(arclen - arclen_to_end)}`,
         });
 
         // The background usually has flat ends, but we want rounded ends. Unfortunately, the
@@ -725,8 +746,16 @@ class Arrow {
             case CONSTANTS.ARROW_BODY_STYLE.LINE:
             case CONSTANTS.ARROW_BODY_STYLE.PROARROW:
                 path.move_to(offset);
-                // A simple quadratic Bézier curve.
-                path.curve_by(new Point(length / 2, this.style.curve), new Point(length, 0));
+                switch (this.shape) {
+                    case CONSTANTS.ARROW_SHAPE.BEZIER:
+                        // A simple quadratic Bézier curve.
+                        path.curve_by(new Point(length / 2, this.style.curve), new Point(length, 0));
+                        break;
+                    case CONSTANTS.ARROW_SHAPE.ARC:
+                        // A circular arc.
+                        path.arc_by(length, 0, false, false, new Point(length, 0));
+                        break;
+                }
                 break;
 
             // A ⊣ shape, for adjunctions.
