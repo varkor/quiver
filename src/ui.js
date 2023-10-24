@@ -4900,7 +4900,7 @@ class Panel {
                         .add(new DOM.Code("tikz-cd"))
                         .add(" diagram imported successfully. Press ")
                         .add(new DOM.Element("kbd").add("Escape"))
-                        .add(" to edit the diagram.")
+                        .add(" to view the diagram.")
                         .add_to(port_pane);
 
                     ui.element.add(port_pane);
