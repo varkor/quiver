@@ -5,8 +5,64 @@
 const EPSILON = 10 ** (-10);
 const INV_EPSILON = 1 / EPSILON;
 
+class Curve {
+    /// Returns whether a point lies inside a polygon. This does so by calculating the winding
+    /// number for the polygon with respect to the point. If the winding number is nonzero, then
+    /// the point lies inside the polygon.
+    /// This algorithm is based on the one at: http://geomalgorithms.com/a03-_inclusion.html.
+    static point_inside_polygon(point, points) {
+        // The displacement of a point from a line (calculated via the determinant of a 2x2 matrix).
+        const displ = ([base, end], point) => {
+            end = end.sub(base);
+            point = point.sub(base);
+            return end.x * point.y - end.y * point.x;
+        };
+
+        const wn = [...Array(points.length).keys()].map((i) => {
+            if ((points[i].y <= point.y) !== (points[(i + 1) % 4].y <= point.y)) {
+                const d = displ([points[i], points[(i + 1) % 4]], point);
+                if (d > 0.0) return 1;
+                if (d < 0.0) return -1;
+            }
+            return 0;
+        }).reduce((a, b) => a + b, 0);
+
+        return wn !== 0;
+    }
+
+    /// Adds an intersection point to the set. This function round intersection points to `EPSILON`,
+    /// so that we don't unnecessary add points that are essentially equal.
+    static add_intersection(intersections, p) {
+        intersections.add(new Point(
+            Math.round(p.x * INV_EPSILON) / INV_EPSILON,
+            Math.round(p.y * INV_EPSILON) / INV_EPSILON,
+        ));
+    };
+
+    /// Handle the case when a rectangle entirely contains the curve whilst checking for
+    /// intersections.
+    static check_for_containment(intersections, rect, permit_containment) {
+        // If there are no intersections, check whether the rectangle entirely contains the curve.
+        if (intersections.size === 0) {
+            // We use a version of the rectangle without rounded corners to simplify checking.
+            const sharp_rect = new RoundedRectangle(rect.centre, rect.size, 0);
+            if (Curve.point_inside_polygon(this.origin, sharp_rect.points())) {
+                if (permit_containment) {
+                    // If the rounded rectangle completely contains the curve, return the
+                    // centre point, to indicate there is an overlap.
+                    return [new CurvePoint(Point.zero(), 0, this.tangent(0))];
+                } else {
+                    // We expect an intersection, so the caller should be alerted if this is not the
+                    // case.
+                    throw new Error("Curve was entirely contained by rounded rectangle.");
+                }
+            }
+        }
+    }
+}
+
 /// A flat symmetric quadratic Bézier curve.
-class Bezier {
+class Bezier extends Curve {
     constructor(origin, w, h, angle) {
         this.origin = origin;
         [this.w, this.h] = [w, h];
@@ -106,32 +162,6 @@ class Bezier {
         };
     }
 
-    /// Returns whether a point lies inside a polygon. This does so by calculating the winding
-    /// number for the polygon with respect to the point. If the winding number is nonzero, then
-    /// the point lies inside the polygon.
-    /// This algorithm is based on the one at: http://geomalgorithms.com/a03-_inclusion.html.
-    /// Technically, this shouldn't really be a method on `Bezier`, but it is currently always used
-    /// for algorithms related to Bézier curves, so it's placed here for convenience.
-    static point_inside_polygon(point, points) {
-        // The displacement of a point from a line (calculated via the determinant of a 2x2 matrix).
-        const displ = ([base, end], point) => {
-            end = end.sub(base);
-            point = point.sub(base);
-            return end.x * point.y - end.y * point.x;
-        };
-
-        const wn = [...Array(points.length).keys()].map((i) => {
-            if ((points[i].y <= point.y) !== (points[(i + 1) % 4].y <= point.y)) {
-                const d = displ([points[i], points[(i + 1) % 4]], point);
-                if (d > 0.0) return 1;
-                if (d < 0.0) return -1;
-            }
-            return 0;
-        }).reduce((a, b) => a + b, 0);
-
-        return wn !== 0;
-    }
-
     /// Intersect the Bézier curve with the given rounded rectangle. Note that the general
     /// (analytic) problem of intersecting a Bézier curve with a circle (for the rounded corners) is
     /// very difficult, so we approximate circles with regular polygons. If the rounded rectangle
@@ -157,15 +187,6 @@ class Bezier {
 
         const intersections = new Set();
 
-        const add_intersection = (p) => {
-            // We round intersection points to `EPSILON`, so that we don't unnecessary add
-            // points that are essentially equal.
-            intersections.add(new Point(
-                Math.round(p.x * INV_EPSILON) / INV_EPSILON,
-                Math.round(p.y * INV_EPSILON) / INV_EPSILON,
-            ));
-        };
-
         // Calculate the `m` and `c` in `y = m x + c`, given two points on the line.
         const m_c = (endpoints) => {
             const m = (endpoints[1].y - endpoints[0].y) / (endpoints[1].x - endpoints[0].x);
@@ -184,7 +205,7 @@ class Bezier {
                         && Math.min(endpoints[0].y, endpoints[1].y) <= 0
                         && Math.max(endpoints[0].y, endpoints[1].y) >= 0
                     ) {
-                        add_intersection(new Point(endpoints[0].x, 0));
+                        Curve.add_intersection(intersections, new Point(endpoints[0].x, 0));
                     }
                 } else {
                     // `y = m x + c`.
@@ -198,7 +219,7 @@ class Bezier {
                             && x >= Math.min(endpoints[0].x, endpoints[1].x) - EPSILON
                             && x <= Math.max(endpoints[0].x, endpoints[1].x) + EPSILON
                         ) {
-                            add_intersection(new Point(x, 0));
+                            Curve.add_intersection(intersections, new Point(x, 0));
                         }
                     } else if (Math.abs(endpoints[0].y) <= EPSILON) {
                         // The lines lies along one of the lines making up the rectangle. There are
@@ -207,8 +228,8 @@ class Bezier {
                         const min = Math.min(endpoints[0].x, endpoints[1].x);
                         const max = Math.max(endpoints[0].x, endpoints[1].x);
                         if (min <= 1 && max >= 0) {
-                            add_intersection(new Point(Math.max(min, 0), 0));
-                            add_intersection(new Point(Math.min(max, 1), 0));
+                            Curve.add_intersection(intersections, new Point(Math.max(min, 0), 0));
+                            Curve.add_intersection(intersections, new Point(Math.min(max, 1), 0));
                         }
                     }
                 }
@@ -226,7 +247,7 @@ class Bezier {
                         && y <= Math.max(endpoints[0].y, endpoints[1].y)
                     ) {
                         // `y` must be at most `0.5`.
-                        add_intersection(new Point(endpoints[0].x, y));
+                        Curve.add_intersection(intersections, new Point(endpoints[0].x, y));
                     }
                 } else {
                     // `y = m x + c`.
@@ -238,38 +259,23 @@ class Bezier {
                                 && x <= Math.max(endpoints[0].x, endpoints[1].x);
                         })
                         .map((x) => new Point(x, m * x + c))
-                        .forEach((int) => add_intersection(int));
+                        .forEach((int) => Curve.add_intersection(intersections, int));
                 }
             }
         }
 
-        // If there are no intersections, check whether the rectangle entirely contains the curve.
-        if (intersections.size === 0) {
-            // We use a version of the rectangle without rounded corners to simplify checking.
-            const sharp_rect = new RoundedRectangle(rect.centre, rect.size, 0);
-            if (Bezier.point_inside_polygon(this.origin, sharp_rect.points())) {
-                if (permit_containment) {
-                    // If the rounded rectangle completely contains the Bézier curve, return the
-                    // centre point, to indicate there is an overlap.
-                    return [new BezierPoint(Point.zero(), 0, this.tangent(0))];
-                } else {
-                    // We expect an intersection, so the caller should be alerted if this is not the
-                    // case.
-                    throw new Error("Bézier curve was entirely contained by rounded rectangle.");
-                }
-            }
-        }
+        Curve.check_for_containment(intersections, rect, permit_containment);
 
         return Array.from(intersections).map((p) => {
             // The derivative of the normalised Bézier curve is `2 - 4x`.
-            return new BezierPoint(p.scale(this.w, h), p.x, Math.atan2((2 - 4 * p.x) * h, this.w));
+            return new CurvePoint(p.scale(this.w, h), p.x, Math.atan2((2 - 4 * p.x) * h, this.w));
         });
     }
 }
 
 /// A point on a quadratic Bézier curve, which also records the parameter `t` and the `angle` of the
 /// curve at the point.
-class BezierPoint extends Point {
+class CurvePoint extends Point {
     constructor(point, t, angle) {
         super(point.x, point.y);
         this.t = t;
@@ -393,13 +399,102 @@ class CubicBezier {
             .add(this.p2.mul(3 * (1 - t) * t ** 2))
             .add(this.p3.mul(t ** 3));
         // The caller of this method never needs an angle.
-        return new BezierPoint(p, t, null);
+        return new CurvePoint(p, t, null);
     }
 }
 
 /// A circular arc.
-class Arc {
-    constructor(origin, radius) {
-        // TODO
+class Arc extends Curve {
+    constructor(origin, chord, major, radius, angle) {
+        this.origin = origin;
+        this.chord = chord;
+        this.major = major;
+        this.radius = radius;
+        this.angle = angle;
+
+        // Computed properties.
+        this.sagitta = this.radius - (this.radius ** 2 - this.chord ** 2 / 4) ** 0.5;
+        this.midpoint = this.origin.add(new Point(this.chord / 2 * (this.major ? -1 : 1), 0)
+            .rotate(this.angle));
+        this.centre = this.midpoint
+            .add(new Point(0, this.radius - this.sagitta).rotate(this.angle));
+        this.start_angle = TODO;
+        this.sweep_angle = TODO;
+    }
+
+    /// Returns the (x, y)-point at t = `t`.
+    point(t) {
+        return this.centre
+            .add(new Point(this.radius, 0).rotate(start_angle + t * this.sweep_angle));
+    }
+
+    /// Returns the angle of the tangent to the curve at t = `t`.
+    tangent(t) {
+        return (this.start_angle + this.sweep_angle * t) + Math.PI / 2;
+    }
+
+    /// Returns whether or not the given angle is contained within the arc.
+    angle_in_arc(angle) {
+        const normalise = (angle) => {
+            while (angle < -Math.PI) angle += 2 * Math.PI;
+            while (angle > Math.PI) angle -= 2 * Math.PI;
+            return angle;
+        };
+
+        const angle1 = normalise(this.start_angle - angle);
+        const angle2 = normalise(angle1 + this.sweep_angle);
+        return angle1 * angle2 < 0 && Math.abs(angle1 - angle2) < Math.PI;
+    }
+
+    /// Intersect the arc with the given rounded rectangle. If the rounded rectangle entirely
+    /// contains the arc, and `permit_containment` is true, a single intersection point (the centre
+    /// of the rectangle) is returned; otherwise, an error is thrown.
+    intersections_with_rounded_rectangle(rect, permit_containment) {
+        // Normalise all the points with respect to the circle.
+        const points = rect.points().map((p) => {
+            // Translate the point with respect to the centre of the circle.
+            p = p.sub(this.centre);
+            return p;
+        });
+        const intersections = new Set();
+
+        // We need to find the intersections of line segments with a circle. There may be 0, 1 or 2
+        // intersections for each segment.
+        for (let i = 0; i < points.length; ++i) {
+            const endpoints = [points[i], points[(i + 1) % points.length]];
+            const d = endpoints[1].sub(endpoints[0]);
+            const det = endpoints[0].x * endpoints[1].y - endpoints[1].x * endpoints[0].y;
+            const ls = d.length() ** 2;
+            const disc = (this.radius ** 2) * ls - (det ** 2);
+            if (Math.sign(disc) < 0) {
+                // No intersection.
+                continue;
+            }
+            // If the sign of `disc` is 0, then the line segment is tangent to the circle.
+            // If the sign is positive, then there are two intersection points.
+            for (const s of disc === 0 ? [0] : [1, -1]) {
+                const [x, y] = [
+                    (det * d.y + s * d.x * (disc ** 0.5) * (d.y < 0 ? -1 : 1)) / ls,
+                    (-det * d.x + s * (disc ** 0.5) * Math.abs(d.y)) / ls,
+                ];
+                // Check that the intersection is on the line segment.
+                if (x >= Math.min(endpoints[0].x, endpoints[1].x)
+                    && x <= Math.max(endpoints[0].x, endpoints[1].x)
+                    && y >= Math.min(endpoints[0].y, endpoints[1].y)
+                    && y <= Math.max(endpoints[0].y, endpoints[1].y)
+                ) {
+                    // Check that the intersection is on the arc.
+                    if (this.angle_in_arc(Math.atan2(y, x))) {
+                        Curve.add_intersection(intersections, new Point(x, y));
+                    }
+                }
+            }
+        }
+
+        Curve.check_for_containment(intersections, rect, permit_containment);
+
+        return Array.from(intersections).map((p) => {
+            return new CurvePoint(p.add(this.centre), t, angle); // TODO
+        });
     }
 }

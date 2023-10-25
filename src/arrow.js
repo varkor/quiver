@@ -219,27 +219,30 @@ class Arrow {
         const diff = this.vector();
         const [length, angle] = [diff.length(), diff.angle()];
 
-        /// Finds the intersection of the Bézier curve with either the source or target. There
-        /// should be a unique intersection point, and this will be true in all but extraordinary
-        /// circumstances: namely, when the source and target are overlapping. In this case, we
-        /// pick either the earliest (if `prefer_min`) or latest intersection point (otherwise).
+        /// Finds the intersection of the (Bézier or arc) curve with either the source or target.
+        /// There should be a unique intersection point, and this will be true in all but
+        /// extraordinary circumstances: namely, when the source and target are overlapping. In this
+        /// case, we pick either the earliest (if `prefer_min`) or latest intersection point
+        /// (otherwise).
         const find_endpoint = (endpoint_shape, prefer_min) => {
-            const bezier = new Bezier(this.source.origin, length, this.style.curve, angle);
+            const curve = true || this.shape === CONSTANTS.ARROW_SHAPE.BEZIER ?
+                new Bezier(this.source.origin, length, this.style.curve, angle)
+                : this.arc_for_chord(this.source.origin, length, angle);
 
             // The case when the endpoint is simply a point.
             if (endpoint_shape instanceof Shape.Endpoint || endpoint_shape.size.is_zero()) {
                 // In this case, there is a trivial intersection with either the source or target.
                 const t = prefer_min ? 0 : 1;
-                return new BezierPoint(
+                return new CurvePoint(
                     endpoint_shape.origin.sub(this.source.origin).rotate(-angle),
                     t,
-                    bezier.tangent(t),
+                    curve.tangent(t),
                 );
             }
 
             // The case when the endpoint is a rounded rectangle.
             // The following function call may throw an error, which should be caught by the caller.
-            const intersections = bezier.intersections_with_rounded_rectangle(
+            const intersections = curve.intersections_with_rounded_rectangle(
                 new RoundedRectangle(
                     endpoint_shape.origin,
                     endpoint_shape.size,
@@ -253,12 +256,12 @@ class Arrow {
                 console.error(
                     "No intersection found for Bézier curve with endpoint.",
                     endpoint_shape,
-                    bezier,
+                    curve,
                 );
                 // Bail out.
                 throw new Error("No intersections found.");
             }
-            if (intersections.length > 1 && Bezier.point_inside_polygon(
+            if (intersections.length > 1 && Curve.point_inside_polygon(
                     (prefer_min ? this.target : this.source).origin,
                     new RoundedRectangle(endpoint_shape.origin, endpoint_shape.size, 0).points(),
             )) {
@@ -435,22 +438,14 @@ class Arrow {
         const arclen_to_start = bezier.arc_length(start.t);
         const arclen_to_end = bezier.arc_length(end.t);
         const arclen = bezier.arc_length(1);
-        const flat_distance = 240;
-        const semicircle_dis = 200;
-        const final_radius = 100;
-        const sagitta = length >= flat_distance ? EPSILON : ((semicircle_dis / 2) * (1 - (length - semicircle_dis) / (flat_distance - semicircle_dis)));
-        const r_for_sagitta = sagitta / 2 + (length ** 2) / (8 * sagitta);
-        // const r = length <= semicircle_dis ? (semicircle_dis / 2 + (semicircle_dis - length) / semicircle_dis * (final_radius - semicircle_dis / 2)) : (length / 2 + 1.3 ** (length - semicircle_dis));
-        const r = length <= semicircle_dis ? (semicircle_dis / 2 + (semicircle_dis - length) / semicircle_dis * (final_radius - semicircle_dis / 2)) : r_for_sagitta;
-        console.log(length);
-        // TODO: awkward transition point, but other than that pretty good
+        const arc = this.arc_for_chord(offset, length, 0);
+        const bg_path = new Path().move_to(offset);
         this.requisition_element(this.background, "path.arrow-background", {
             d: `${
-                new Path()
-                    .move_to(offset)
-                    // NOTE: when length < radius, it starts becoming a circle rather than a semicircle
-                    .arc_by(Point.diag(r), 0, length <= semicircle_dis, true, new Point(length, 0))
-                    // .curve_by(new Point(length / 2, this.style.curve), new Point(length, 0))
+                this.shape === CONSTANTS.ARROW_SHAPE.BEZIER ?
+                   bg_path.curve_by(new Point(length / 2, this.style.curve), new Point(length, 0))
+                    : bg_path
+                        .arc_by(Point.diag(arc.radius), 0, arc.major, true, new Point(arc.chord, 0))
             }`,
             fill: "none",
             stroke: "black",
@@ -980,6 +975,31 @@ class Arrow {
         const dash_array = `0 ${arclen_to_start} ${dashes.join(" ")} ${arclen - arclen_to_end}`;
 
         return { path, dash_array };
+    }
+
+    /// Returns the arc associated to a chord length.
+    arc_for_chord(origin, chord, angle) {
+        // If `outer_dis` <= `chord`, then the path will be a straight line.
+        const outer_dis = 240;
+        // If `inner_dis` <= `chord` <= `outer_dis`, then the path will be an inner arc, with
+        // diameter `inner_dis`.
+        const inner_dis = 200;
+        // If 0 <= `chord` <= `inner_dis`, then the path will be an outer arc, with radius
+        // interpolating from `semicircle_radius` to `loop_radius` (when `chord` is 0).
+        const loop_radius = 100;
+        // Derived constants.
+        const semicircle_radius = inner_dis / 2;
+        const boundary_dis = outer_dis - inner_dis;
+        // The height of the inner arc.
+        const sagitta = chord >= outer_dis ? EPSILON
+            : (semicircle_radius * ((outer_dis - chord) / boundary_dis));
+        // The radius needed for the arc to have height `sagitta`.
+        const r_for_sagitta = sagitta / 2 + (chord ** 2) / (8 * sagitta);
+        // The radius of the arc.
+        const r = chord <= inner_dis ? (semicircle_radius +
+                (inner_dis - chord) / inner_dis * (loop_radius - semicircle_radius))
+                : r_for_sagitta;
+        return new Arc(origin, chord, chord <= inner_dis, r, angle);
     }
 
     /// Redraw the heads or tails attached to an end of the edge.
