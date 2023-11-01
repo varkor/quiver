@@ -420,6 +420,7 @@ class Parser {
             // We simply ignore these options.
             this.eat_whitespace();
             this.eat("=", true);
+            this.eat_whitespace();
             if (this.eat(/-?[0-9a-z\.]+/) === null) {
                 throw this.error("Expected separation amount.");
             }
