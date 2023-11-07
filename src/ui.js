@@ -766,6 +766,7 @@ class UI {
                 ["Dismiss errors, and panels;\nCancel modification or movement;\n"
                     + "Hide focus point;\nDeselect, and dequeue cells", (td) =>
                         Shortcuts.element(td, [{ key: "Escape" }])],
+                ["Import tikz-cd", (td) => Shortcuts.element(td, [{ key: "I", modifier: true }])],
                 ["Export to LaTeX", (td) => Shortcuts.element(td, [{ key: "E", modifier: true }])]
             ]))
             .add(new DOM.Element("h2").add("Navigation"))
