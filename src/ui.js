@@ -274,7 +274,7 @@ UIMode.Connect = class extends UIMode {
         // the situations you want it. (This has no analogue in `offset` or `curve`.)
         let balance = 0;
 
-        const swap = (options) => {
+        const flip = (options) => {
             return {
                 label_alignment: {
                     left: "right",
@@ -287,13 +287,13 @@ UIMode.Connect = class extends UIMode {
             };
         };
 
-        const conserve = (options, between) => {
+        const conserve = (options, parallel) => {
             return {
                 label_alignment: options.label_alignment,
-                // We ignore the offsets and curves of edges that aren't directly `between` the
-                // source and target.
-                offset: between ? options.offset : null,
-                curve: between ? options.curve : null,
+                // We ignore the offsets and curves of edges that don't share a source and target
+                // with the new edge, i.e. we only modify the offset and curve of parallel edges.
+                offset: parallel ? options.offset : null,
+                curve: parallel ? options.curve : null,
             };
         };
 
@@ -320,16 +320,22 @@ UIMode.Connect = class extends UIMode {
         const source_dependencies = ui.quiver.dependencies_of(source);
         const target_dependencies = ui.quiver.dependencies_of(target);
         for (const [edge, relationship] of source_dependencies) {
-            consider({
-                source: swap,
-                target: options => conserve(options, target_dependencies.has(edge)),
-            }[relationship](edge.options), -1);
+            // We consider each edge whose source or target is the source of the new edge.
+            consider(conserve({
+                // If the source of the edge is the same as the source of the new edge, we want to
+                // invert the offset/curve/etc., so that the new edge will not overlap the new one.
+                source: flip(edge.options),
+                target: edge.options,
+            }[relationship], target_dependencies.has(edge)), -1);
         }
         for (const [edge, relationship] of target_dependencies) {
-            consider({
-                source: options => conserve(options, source_dependencies.has(edge)),
-                target: swap,
-            }[relationship](edge.options), 1);
+            // We consider each edge whose source or target is the target of the new edge.
+            consider(conserve({
+                source: edge.options,
+                // If the target of the edge is the same as the target of the new edge, we want to
+                // invert the offset/curve/etc., so that the new edge will not overlap the new one.
+                target: flip(edge.options),
+            }[relationship], source_dependencies.has(edge)), 1);
         }
 
         if (align.size === 1) {
