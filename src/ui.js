@@ -5315,6 +5315,11 @@ class Panel {
     /// Render the TeX contained in the label of a cell.
     render_tex(ui, cell) {
         const label = cell.element.query_selector(".label");
+        if (label === null) {
+            // The label will be null if the edge is invalid, which may happen when bad tikz-cd has
+            // been parsed.
+            return;
+        }
 
         const update_label_transformation = () => {
             if (cell.is_edge()) {
@@ -7183,11 +7188,15 @@ class Edge extends Cell {
         // Set up the endpoint handle interaction events.
         for (const end of ["source", "target"]) {
             const handle = this.arrow.element.query_selector(`.arrow-endpoint.${end}`);
-            handle.listen(pointer_event("down"), (event) => {
-                if (event.button === 0) {
-                    reconnect(event, end);
-                }
-            });
+            // If an invalid edge has been created (e.g. during tikz-cd parsing), the arrow may not
+            // have handles.
+            if (handle !== null) {
+                handle.listen(pointer_event("down"), (event) => {
+                    if (event.button === 0) {
+                        reconnect(event, end);
+                    }
+                });
+            }
         }
 
         ui.panel.render_tex(ui, this);

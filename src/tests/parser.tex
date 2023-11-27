@@ -282,3 +282,10 @@ begin{tikzcd}
 
 % Unexpected end of diagram.
 \begin{tikzcd} X
+
+% A zero-length edge.
+\begin{tikzcd}
+	\bullet & \bullet & \bullet
+	\arrow[""{name=0}, from=1-1, to=1-3]
+	\arrow[from=0, to=1-2]
+\end{tikzcd}

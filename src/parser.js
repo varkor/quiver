@@ -237,6 +237,16 @@ class Parser {
                     } catch (_) {
                         // If there's an error, we simply don't shorten.
                     }
+                    // If the arrow could not be drawn, we remove the arrow.
+                    if (edge.arrow.element.class_list.contains("invalid")) {
+                        this.log(
+                            this.warn(
+                                "Encountered arrow with nonpositive length.",
+                                parser_edge.range,
+                            )
+                        );
+                        this.ui.remove_cell(edge, this.ui.present);
+                    }
                 }
             });
 
