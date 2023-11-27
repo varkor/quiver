@@ -468,6 +468,9 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                 // parameters, we always attach it to the label to which it is relevant. This helps
                 // us avoid accidentally affecting the properties of other labels.
                 const parameters = {};
+                // The parameters that are inherited by phantom edges (i.e. those relating to
+                // positioning, but not styling).
+                const phantom_parameters = {};
                 // The primary label (i.e. the one the user edits directly).
                 const label = { content: edge.label };
                 // A label used for the edge style, e.g. a bar, corner, or adjunction symbol.
@@ -530,6 +533,7 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                     const side = edge.options.offset > 0 ? "right" : "left";
                     const abs_offset = Math.abs(edge.options.offset);
                     parameters[`shift ${side}`] = abs_offset !== 1 ? abs_offset : "";
+                    phantom_parameters[`shift ${side}`] = parameters[`shift ${side}`];
                 }
 
                 // This is the simplest case, because we can set a single attribute for both the
@@ -572,6 +576,7 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                         edge.options.curve * CONSTANTS.CURVE_HEIGHT
                             * QuiverExport.CONSTANTS.TIKZ_HORIZONTAL_MULTIPLIER
                     }pt}`;
+                    phantom_parameters.curve = parameters.curve;
                 }
 
                 // Shortened edges. This may only be set for the `arrow` style.
@@ -814,7 +819,11 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                                 parameters.from
                             }, to=${
                                 parameters.to
-                            }, start anchor=center, end anchor=center]\n`;
+                            }, start anchor=center, end anchor=center${
+                                Object.keys(phantom_parameters).length > 0 ?
+                                    `, ${object_to_list(phantom_parameters).join(", ")}`
+                                : ""
+                            }]\n`;
                         }
                     }
                 }
