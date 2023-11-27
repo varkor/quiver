@@ -483,26 +483,24 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                     && edge.options.style.tail.name === "none";
 
                 const current_index = index;
-                // We only need to give edges names if they're depended on by another edge. However,
-                // if the edge is only depended upon in a non edge-aligned manner, then we don't
-                // need to give the edge a name, as a named phantom edge will be created later.
-                for (const [dependency, end] of quiver.dependencies_of(edge)) {
+                // We only need to give edges names if they're depended on by another edge. Note
+                // that we provide a name even for edges that only have non-edge-aligned edges. This
+                // is not useful for the TikZ output, but is useful if the TikZ code is later parsed
+                // by quiver, as it allows quiver to match phantom edges to the real edges.
+                if (quiver.dependencies_of(edge).size > 0) {
                     names.set(edge, current_index);
+                    // We create a placeholder label that is used as a source/target for other
+                    // edges. It's more convenient to create a placeholder label so that we have
+                    // fine-grained control of positioning independent of the actual label
+                    // position.
+                    labels.unshift({
+                        name: current_index,
+                        // The placeholder labels should have zero size. The following
+                        // properties heuristically gave the best results for this purpose.
+                        anchor: "center",
+                        "inner sep": 0,
+                    });
                     index++;
-                    if (dependency.options.edge_alignment[end]) {
-                        // We create a placeholder label that is used as a source/target for other
-                        // edges. It's more convenient to create a placeholder label so that we have
-                        // fine-grained control of positioning independent of the actual label
-                        // position.
-                        labels.unshift({
-                            name: current_index,
-                            // The placeholder labels should have zero size. The following
-                            // properties heuristically gave the best results for this purpose.
-                            anchor: "center",
-                            "inner sep": 0,
-                        });
-                        break;
-                    }
                 }
 
                 switch (edge.options.label_alignment) {
