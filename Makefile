@@ -22,7 +22,9 @@ src/workbox-%:
 
 # Build service worker.
 src/service-worker.js: service-worker/build.js
-	docker run -it --rm -v $(shell pwd):/workdir -w /workdir node:alpine3.18 sh -c "cd service-worker && npm install && node build.js"
+	cd $(dir $<)
+	. $$NVM_DIR/nvm.sh
+	nvm use 20 && npm install && node build.js
 
 # Generate icons required by the webapp manifest. Requires ImageMagick.
 src/icon-512.png: src/icon.png
