@@ -3,13 +3,35 @@
 # Ensure `cd` works properly by forcing everything to be executed in a single shell.
 .ONESHELL:
 
-# Build KaTeX.
-all:
+# Note: the order matters; the service worker must be built last to have a complete assets
+# precaching manifest.
+all: src/KaTeX src/icon-192.png src/icon-512.png src/workbox-window.prod.mjs src/service-worker.js
+
+# Vendor KaTeX dependencies.
+src/KaTeX:
 	set -e
 	curl -L -O "https://github.com/KaTeX/KaTeX/releases/download/v0.16.4/katex.zip"
 	unzip katex.zip
 	rm katex.zip
 	mv katex src/KaTeX
+
+# Vendor any workbox dependency.
+src/workbox-%:
+	mkdir -p $(@D)
+	curl -L -o $@ https://storage.googleapis.com/workbox-cdn/releases/7.0.0/workbox-$*
+	curl -L -o $@.map https://storage.googleapis.com/workbox-cdn/releases/7.0.0/workbox-$*.map
+
+# Build service worker.
+src/service-worker.js: service-worker/build.js
+	cd $(dir $<)
+	. $$NVM_DIR/nvm.sh
+	nvm use 20 && npm install && node build.js
+
+# Generate icons required by the webapp manifest. Requires ImageMagick.
+src/icon-512.png: src/icon.png
+	convert $< -background none -resize 512x512 $@
+src/icon-192.png: src/icon.png
+	convert $< -background none -resize 192x192 $@
 
 # Update the `dev` branch from `master`.
 dev:
