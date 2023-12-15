@@ -3,7 +3,7 @@
 /// Various parameters.
 Object.assign(CONSTANTS, {
     /// The current quiver version.
-    VERSION: "1.4.1",
+    VERSION: "1.4.2",
     /// When the `quiver.sty` package was last modified.
     PACKAGE_VERSION: "2021/01/11",
     /// We currently only support n-cells for (n ≤ 4). This restriction is not technical: it can be
@@ -912,6 +912,9 @@ class UI {
                 new DOM.Element("li").add(
                     new DOM.Link("https://github.com/doctorn", "Nathan Corbyn", true)
                 ).add(", for adding the ability to export embeddable diagrams to HTML."),
+                new DOM.Element("li").add(
+                    new DOM.Link("https://github.com/paolobrasolin", "Paolo Brasolin", true)
+                ).add(", for adding offline support."),
                 new DOM.Element("li").add(
                     "Everyone who has improved "
                 ).add(new DOM.Element("b").add("quiver"))
