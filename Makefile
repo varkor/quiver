@@ -5,7 +5,7 @@
 
 # Note: the order matters; the service worker must be built last to have a complete assets
 # precaching manifest.
-all: src/KaTeX src/icon-192.png src/icon-512.png src/workbox-window.prod.mjs src/service-worker.js
+all: src/KaTeX src/icon-192.png src/icon-512.png src/Workbox/workbox-window.prod.mjs src/service-worker.js
 
 # Vendor KaTeX dependencies.
 src/KaTeX:
@@ -16,7 +16,7 @@ src/KaTeX:
 	mv katex src/KaTeX
 
 # Vendor any workbox dependency.
-src/workbox-%:
+src/Workbox/workbox-%:
 	mkdir -p $(@D)
 	curl -L -o $@ https://storage.googleapis.com/workbox-cdn/releases/7.0.0/workbox-$*
 	curl -L -o $@.map https://storage.googleapis.com/workbox-cdn/releases/7.0.0/workbox-$*.map

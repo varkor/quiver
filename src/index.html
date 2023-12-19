@@ -46,7 +46,7 @@
     <link rel="manifest" href="manifest.json">
     <!-- Service worker -->
     <script type="module">
-        import { Workbox } from "./workbox-window.prod.mjs";
+        import { Workbox } from "./Workbox/workbox-window.prod.mjs";
         if ("serviceWorker" in navigator) new Workbox("service-worker.js").register();
     </script>
 </head>

@@ -4,6 +4,7 @@ generateSW({
   globDirectory: "../src/",
   globPatterns: ["**/*"],
   swDest: "../src/service-worker.js",
+  sourcemap: false,
 }).then(({ count, size, warnings }) => {
   if (warnings.length > 0) {
     console.warn(
@@ -13,6 +14,6 @@ generateSW({
   }
 
   console.log(
-    `Generated a service worker, which will precache ${count} files, totaling ${size} bytes.`
+    `Generated a service worker, which will precache ${count} files, totalling ${size} bytes.`
   );
 });
