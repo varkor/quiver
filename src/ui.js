@@ -6162,6 +6162,32 @@ class Toolbar {
         );
 
         add_action(
+            "Reflect",
+            [],
+            () => {
+                const vertices = ui.quiver.all_cells().filter((cell) => cell.is_vertex());
+                const bounding_rect = ui.quiver.bounding_rect();
+                if (bounding_rect !== null) {
+                    const [[x_min, y_min], [x_max, y_max]] = bounding_rect;
+                    ui.history.add(ui, [{
+                        kind: "move",
+                        displacements: vertices.map((vertex) => ({
+                            vertex,
+                            from: vertex.position,
+                            to: new Position(
+                                x_min + (x_max - vertex.position.x),
+                                vertex.position.y,
+                            ),
+                        })),
+                    }, {
+                        kind: "flip",
+                        cells: ui.quiver.all_cells().filter((cell) => cell.is_edge()),
+                    }], true);
+                }
+            }
+        );
+
+        add_action(
             "Centre view",
             [{ key: "G" }],
             () => {
@@ -6299,6 +6325,7 @@ class Toolbar {
             ui.in_mode(...default_pan) && ui.selection.size < ui.quiver.all_cells().length);
         enable_if("Deselect all", ui.in_mode(...default_pan) && ui.selection.size > 0);
         enable_if("Delete", ui.in_mode(...default_pan) && ui.selection.size > 0);
+        enable_if("Reflect", ui.in_mode(...default_pan) && ui.quiver.all_cells().length > 0);
         enable_if("Centre view",
             ui.element.query_selector(".focus-point.focused")
             // Technically the first condition below is subsumed by the latter, but we keep it to
