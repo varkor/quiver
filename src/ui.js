@@ -6063,13 +6063,13 @@ class Toolbar {
                 }
             });
 
-        const add_action = (name, combinations, action) => {
+        const add_action = (name, combinations, action, element = this.element) => {
             const shortcut_name = Shortcuts.name(combinations);
 
             const button = new DOM.Element("button", { class: "action", "data-name": name })
                 .add(new DOM.Element("span", { class: "symbol" }).add(
                     new DOM.Element("img", { src: `icons/${
-                        name.toLowerCase().replace(/ /g, "-")
+                        name.toLowerCase().replace(/ /g, "-").replace(/\./g, "")
                     }.svg` })
                 ))
                 .add(new DOM.Element("span", { class: "name" }).add(name))
@@ -6089,8 +6089,16 @@ class Toolbar {
 
             ui.shortcuts.add(combinations, trigger_action_and_update_toolbar, button);
 
-            this.element.add(button);
+            element.add(button);
             return button;
+        };
+
+        const add_subtoolbar = (name) => {
+            const action = add_action(name, [], () => {});
+            action.class_list.add("dropdown");
+            const subtoolbar = new DOM.Div({ class: "subtoolbar" });
+            action.add(subtoolbar);
+            return subtoolbar;
         };
 
         // Add all of the toolbar buttons.
@@ -6161,14 +6169,15 @@ class Toolbar {
             },
         );
 
+        const transform = add_subtoolbar("Transform");
         add_action(
-            "Reflect",
+            "Flip hor.",
             [],
             () => {
                 const vertices = ui.quiver.all_cells().filter((cell) => cell.is_vertex());
                 const bounding_rect = ui.quiver.bounding_rect();
                 if (bounding_rect !== null) {
-                    const [[x_min, y_min], [x_max, y_max]] = bounding_rect;
+                    const [[x_min,], [x_max,]] = bounding_rect;
                     ui.history.add(ui, [{
                         kind: "move",
                         displacements: vertices.map((vertex) => ({
@@ -6184,7 +6193,57 @@ class Toolbar {
                         cells: ui.quiver.all_cells().filter((cell) => cell.is_edge()),
                     }], true);
                 }
-            }
+            },
+            transform
+        );
+        add_action(
+            "Flip ver.",
+            [],
+            () => {
+                const vertices = ui.quiver.all_cells().filter((cell) => cell.is_vertex());
+                const bounding_rect = ui.quiver.bounding_rect();
+                if (bounding_rect !== null) {
+                    const [[, y_min], [, y_max]] = bounding_rect;
+                    ui.history.add(ui, [{
+                        kind: "move",
+                        displacements: vertices.map((vertex) => ({
+                            vertex,
+                            from: vertex.position,
+                            to: new Position(
+                                vertex.position.x,
+                                y_min + (y_max - vertex.position.y),
+                            ),
+                        })),
+                    }, {
+                        kind: "flip",
+                        cells: ui.quiver.all_cells().filter((cell) => cell.is_edge()),
+                    }], true);
+                }
+            },
+            transform
+        );
+        add_action(
+            "Rotate",
+            [],
+            () => {
+                const vertices = ui.quiver.all_cells().filter((cell) => cell.is_vertex());
+                const bounding_rect = ui.quiver.bounding_rect();
+                if (bounding_rect !== null) {
+                    const [[x_min, y_min], [x_max,]] = bounding_rect;
+                    ui.history.add(ui, [{
+                        kind: "move",
+                        displacements: vertices.map((vertex) => ({
+                            vertex,
+                            from: vertex.position,
+                            to: new Position(
+                                x_min + (vertex.position.y - y_min),
+                                y_min - (vertex.position.x - x_max),
+                            ),
+                        })),
+                    }], true);
+                }
+            },
+            transform
         );
 
         add_action(
@@ -6325,7 +6384,7 @@ class Toolbar {
             ui.in_mode(...default_pan) && ui.selection.size < ui.quiver.all_cells().length);
         enable_if("Deselect all", ui.in_mode(...default_pan) && ui.selection.size > 0);
         enable_if("Delete", ui.in_mode(...default_pan) && ui.selection.size > 0);
-        enable_if("Reflect", ui.in_mode(...default_pan) && ui.quiver.all_cells().length > 0);
+        enable_if("Transform", ui.in_mode(...default_pan) && ui.quiver.all_cells().length > 0);
         enable_if("Centre view",
             ui.element.query_selector(".focus-point.focused")
             // Technically the first condition below is subsumed by the latter, but we keep it to

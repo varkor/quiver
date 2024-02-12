@@ -1197,7 +1197,6 @@ user has already pressed semicolon, placing us in command mode. */
 
     background: var(--ui-black);
     border-radius: 8px;
-    overflow: hidden;
 
     color: var(--ui-white);
     white-space: nowrap;
@@ -1230,17 +1229,26 @@ user has already pressed semicolon, placing us in command mode. */
     user-select: none;
 }
 
+.toolbar .action:first-of-type {
+    border-radius: 8px 0 0 8px;
+}
+
+.toolbar .action:last-of-type {
+    border-radius: 0 8px 8px 0;
+}
+
 .toolbar .action:hover {
     background: hsl(0, 0%, 28%);
 }
 
-.toolbar .action:active {
+.toolbar .action:not(.dropdown):active {
     background: var(--ui-blue);
 }
 
 .toolbar .action img {
     width: 28px;
     vertical-align: middle;
+    pointer-events: none;
 }
 
 .toolbar .action:disabled {
@@ -1253,6 +1261,33 @@ user has already pressed semicolon, placing us in command mode. */
 
 .toolbar .action:disabled .name, .toolbar .action:disabled .shortcut {
     color: hsl(0, 0%, 64%);
+}
+
+.toolbar .action.dropdown > .shortcut:empty::before {
+    content: "▾";
+}
+
+.toolbar .action .subtoolbar {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+
+    background: var(--ui-black);
+    border-radius: 0 0 8px 8px;
+}
+
+.toolbar .action:not(:disabled):hover .subtoolbar {
+    display: block;
+}
+
+.subtoolbar .action:first-of-type {
+    border-radius: 0 0 0 8px;
+}
+
+.subtoolbar .action:last-of-type {
+    border-radius: 0 0 8px 0;
 }
 
 button.flash {
