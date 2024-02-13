@@ -1,11 +1,9 @@
-.PHONY: all gh-pages cleanup
+.PHONY: all service-worker gh-pages cleanup
 
 # Ensure `cd` works properly by forcing everything to be executed in a single shell.
 .ONESHELL:
 
-# Note: the order matters; the service worker must be built last to have a complete assets
-# precaching manifest.
-all: src/KaTeX src/icon-192.png src/icon-512.png src/Workbox/workbox-window.prod.mjs src/service-worker.js
+all: src/KaTeX src/icon-192.png src/icon-512.png src/Workbox/workbox-window.prod.mjs
 
 # Vendor KaTeX dependencies.
 src/KaTeX:
@@ -22,7 +20,7 @@ src/Workbox/workbox-%:
 	curl -L -o $@.map https://storage.googleapis.com/workbox-cdn/releases/7.0.0/workbox-$*.map
 
 # Build service worker.
-src/service-worker.js: service-worker/build.js
+service-worker: service-worker/build.js
 	cd $(dir $<)
 	. $$NVM_DIR/nvm.sh
 	nvm use 20 && npm install && node build.js
@@ -40,11 +38,12 @@ dev:
 	git rebase master
 	git checkout @{-1}
 
-# Update the `release` branch from `dev`.
+# Update the `release` branch from `dev`, and build the service worker.
 release:
 	set -e
 	git checkout release
 	git rebase dev
+	make service-worker
 	git checkout @{-1}
 
 # Update the quiver GitHub Pages application.
@@ -59,13 +58,7 @@ gh-pages:
 	# Terminate if there are any errors. We may have to do some manual cleanup in this case, but
 	# it's better than trying to push a broken version of quiver.
 	set -e
-	# It's too error-prone to clone KaTeX from the origin each time we want to push quiver, so we
-	# instead copy it from an existing directory, typically the one in `src/KaTeX`, which must be
-	# stored in the `$KATEX` environment variable.
-	if [ ! -d "$$KATEX" ]; then
-		echo "KATEX must be set to a directory."
-		exit 1
-	fi
+	BASE_DIR=$$PWD
 	# Store the name of the current branch, to return to it after completing this process.
 	CURRENT=$$(git rev-parse --abbrev-ref HEAD)
 	# Checkout the release branch.
@@ -98,13 +91,21 @@ gh-pages:
 	# Reset the GitHub Pages branch so that it contains the release source code.
 	git reset --hard $$RELEASE
 	# Copy KaTeX into the main release directory.
-	cp -r $$KATEX .
+	cp -r $$BASE_DIR/src/KaTeX .
+	# Copy the service worker and its dependencies into the main release directory.
+	cp -r $$BASE_DIR/src/Workbox .
+	cp $$BASE_DIR/src/service-worker.js .
+	SW_DEPENDENCY=$$(find $$BASE_DIR/src -type f -name "workbox-*.js")
+	cp $$SW_DEPENDENCY .
+	cp $$BASE_DIR/src/icon-512.png .
+	cp $$BASE_DIR/src/icon-192.png .
 
 	# Merge the development branch into the `dev/` directory.
 	git merge -s ours --no-commit $$DEV
 	git read-tree --prefix=dev -u $$DEV
 	# We have already cloned KaTeX and stripped it of git repository information, so don't need to
-	# do so again: we can just copy it across.
+	# do so again: we can just copy it across. Note that we do not include the service worker in
+	# dev.
 	cp -r KaTeX dev
 	git add -A
 	git commit -m "Merge dev as subdirectory of release"
