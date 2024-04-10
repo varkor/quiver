@@ -863,7 +863,10 @@ class UI {
             ]))
             .add(new DOM.Element("h2").add("Export"))
             .add(new DOM.Table([
-                ["Toggle diagram centring", (td) => Shortcuts.element(td, [{ key: "C" }])]
+                ["Toggle diagram centring", (td) => Shortcuts.element(td, [{ key: "C" }])],
+                ["Toggle ampersand replacement", (td) => Shortcuts.element(td, [{ key: "A" }])],
+                ["Toggle cramped spacing", (td) => Shortcuts.element(td, [{ key: "R" }])],
+                ["Toggle fixed size", (td) => Shortcuts.element(td, [{ key: "F" }])],
             ])));
 
         // Set up the "About" pane.
