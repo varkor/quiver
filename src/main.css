@@ -350,7 +350,7 @@ kbd {
     text-align: center;
 }
 
-.vertex.empty:not(.selected) .content:not(:hover) {
+.grid:not(.hidden) + .container .vertex.empty:not(.selected) .content:not(:hover) {
     border: var(--cell-hover) 2px solid;
 }
 
