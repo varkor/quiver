@@ -4549,10 +4549,10 @@ class Panel {
                         .add_to(port_pane);
 
                     const checkboxes = [
-                        [centre_checkbox, "tikz-cd", "C"],
-                        [ampersand_replacement, "tikz-cd", "A"],
-                        [cramped, "tikz-cd", "R"],
-                        [fixed_size_checkbox, "html", "F"],
+                        [centre_checkbox, "tikz-cd", "c"],
+                        [ampersand_replacement, "tikz-cd", "a"],
+                        [cramped, "tikz-cd", "r"],
+                        [fixed_size_checkbox, "html", "f"],
                     ];
                     const shortcuts = [];
                     for (const [checkbox, format, key] of checkboxes) {
@@ -4560,7 +4560,7 @@ class Panel {
                         if (key !== null) {
                             const shortcut = {
                                 key,
-                                context: Shortcuts.SHORTCUT_PRIORITY.Conservative,
+                                context: Shortcuts.SHORTCUT_PRIORITY.Always,
                             };
                             new DOM.Element("kbd", { class: "hint button" })
                                 .add(Shortcuts.name([shortcut])).add_to(checkbox.parent);
