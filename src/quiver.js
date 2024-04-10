@@ -461,7 +461,30 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                 output += "\n";
             }
 
-            for (const edge of quiver.cells[level]) {
+            // Sort the edges so that we iterate through based on source (top-to-bottom,
+            // left-to-right), and then target.
+            const edges = [...quiver.cells[level]];
+            const compare_cell_position = (a, b) => {
+                if (a.position.y < b.position.y) {
+                    return -1;
+                }
+                if (a.position.y > b.position.y) {
+                    return 1;
+                }
+                if (a.position.x < b.position.x) {
+                    return -1;
+                }
+                if (a.position.x > b.position.x) {
+                    return 1;
+                }
+                return 0;
+            }
+            edges.sort((a, b) => {
+                return compare_cell_position(a.source, b.source)
+                    || compare_cell_position(a.target, b.target);
+            });
+
+            for (const edge of edges) {
                 // The parameters pertinent to the entire arrow. TikZ is quite flexible in
                 // where it allows various parameters to appear. E.g. `text` can appear in the
                 // general parameter list, or as a parameter specific to a label. For specific
