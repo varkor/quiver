@@ -619,7 +619,17 @@ class Parser {
             edge.options.style.name = "corner-inverse";
             return;
         }
-        if (this.eat("\"\\shortmid\"{marking}")) {
+        if (this.eat("\"\\shortmid\"{marking")) {
+            this.eat_whitespace();
+            if (this.eat(",")) {
+                this.eat_whitespace();
+                this.eat("text", true);
+                this.eat_whitespace();
+                this.eat("=", true);
+                this.eat_whitespace();
+                this.parse_colour(true);
+            }
+            this.eat("}", true);
             edge.options.style.body.name = "barred";
             return;
         }
