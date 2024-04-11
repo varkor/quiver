@@ -42,6 +42,22 @@ const CONSTANTS = {
     CORNER_LINE_LENGTH: 12,
     /// The radius of the handle for dragging an edge.
     HANDLE_RADIUS: 14,
+    /// Constants handling the behaviour of loops.
+    ARC: {
+        // If `OUTER_DIS` <= `chord_length`, then the path will be a straight line.
+        OUTER_DIS: 96,
+        // If `INNER_DIS` <= `chord_length` <= `OUTER_DIS`, then the path will be an inner arc, with
+        // diameter `INNER_DIS`.
+        INNER_DIS: 64,
+    },
+    /// The possible path shapes to use for an edge.
+    ARROW_SHAPE: new Enum(
+        "ARROW_SHAPE",
+        // Bézier curve (default for edges).
+        "BEZIER",
+        // Arc (used for loops).
+        "ARC",
+    ),
     /// The possible styles for an edge.
     ARROW_BODY_STYLE: new Enum(
         "ARROW_BODY_STYLE",
@@ -107,19 +123,23 @@ const CONSTANTS = {
     ),
 };
 
-
 class ArrowStyle {
     constructor() {
         // The "n" in "n-cell". Must be a positive integer.
         this.level = 1;
         // The position of the label (from 0 to 1) along the arrow.
         this.label_position = 0.5;
-        // The height of the curve (in pixels). May be positive or negative.
+        // The height of the curve (in pixels). May be positive or negative. This is used for both
+        // Bézier curves and arcs. However, `curve` is assumed to be nonzero for arcs.
         this.curve = 0;
+        // The angle of the curve (relevant only for arcs).
+        this.angle = 0;
         // The offset of the curve (in pixels). May be positive or negative.
         this.shift = 0;
         // How much to offset the head and tail of the edge from their endpoints.
         this.shorten = { tail: 0, head: 0 };
+        // The shape of the arrow.
+        this.shape = CONSTANTS.ARROW_SHAPE.BEZIER;
         // The various styles for the head, body, and tail.
         this.body_style = CONSTANTS.ARROW_BODY_STYLE.LINE;
         this.dash_style = CONSTANTS.ARROW_DASH_STYLE.SOLID;
@@ -181,9 +201,29 @@ class Arrow {
         this.mask = new DOM.SVGElement("svg");
     }
 
+    /// Returns the source and target origins, adjusting for zero-length edges.
+    origin() {
+        const vector = this.target.origin.sub(this.source.origin);
+        if (this.style.shape === CONSTANTS.ARROW_SHAPE.BEZIER || vector.length() > 0) {
+            return { source: this.source.origin, target: this.target.origin };
+        } else {
+            // If the length of the chord is 0, we still want to draw the arc. However, since the
+            // arc is no longer uniquely determined, we must decide upon the orientation of the arc.
+            // Technically, since the source/target shapes depend on the source/target origins, this
+            // will cause the location of the endpoints to be slightly incorrect. However, since we
+            // only adjust by a very small amount (enough to ensure the SVG arc renders), this
+            // should be essentially imperceptible.
+            const min_chord = 0.01;
+            const angle = vector.angle() + this.style.angle;
+            const nudge = Point.lendir(min_chord / 2, angle);
+            return { source: this.source.origin.sub(nudge), target: this.target.origin.add(nudge) };
+        }
+    }
+
     /// Returns the vector from source to target.
     vector() {
-        return this.target.origin.sub(this.source.origin);
+        const origin = this.origin();
+        return origin.target.sub(origin.source);
     }
 
     /// Returns the angle of the vector from source to target.
@@ -191,14 +231,23 @@ class Arrow {
         return this.vector().angle();
     }
 
-    /// Returns the underlying Bézier curve associated to the arrow.
-    bezier() {
-        return new Bezier(
-            Point.zero(),
-            this.vector().length(),
-            this.style.curve,
-            0,
-        );
+    /// Returns the length of the vector from source to target.
+    length() {
+        return this.vector().length();
+    }
+
+    /// Returns the underlying curve associated to the arrow.
+    curve(origin = this.origin().source, angle = this.angle()) {
+        const length = this.length();
+        switch (this.style.shape) {
+            case CONSTANTS.ARROW_SHAPE.BEZIER:
+                return new Bezier(origin, length, this.style.curve, angle);
+            case CONSTANTS.ARROW_SHAPE.ARC:
+                if (this.source === this.target) {
+                    return new Arc(origin, length, true, this.style.curve, angle);
+                }
+                return this.arc_for_chord(origin, length, this.style.curve, angle);
+        }
     }
 
     /// Returns the points along the Bézier curve associated to the arrow that intersect with the
@@ -206,32 +255,31 @@ class Arrow {
     /// Returns either an array `[start, end]` or throws an error if the curve is invalid and has no
     /// nontrivial endpoints.
     find_endpoints() {
-        const diff = this.vector();
-        const [length, angle] = [diff.length(), diff.angle()];
-
-        /// Finds the intersection of the Bézier curve with either the source or target. There
-        /// should be a unique intersection point, and this will be true in all but extraordinary
-        /// circumstances: namely, when the source and target are overlapping. In this case, we
-        /// pick either the earliest (if `prefer_min`) or latest intersection point (otherwise).
-        const find_endpoint = (endpoint_shape, prefer_min) => {
-            const bezier = new Bezier(this.source.origin, length, this.style.curve, angle);
+        const origin = this.origin();
+        /// Finds the intersection of the (Bézier or arc) curve with either the source or target.
+        /// There should be a unique intersection point, and this will be true in all but
+        /// extraordinary circumstances: namely, when the source and target are overlapping. In this
+        /// case, we pick either the earliest (if `prefer_min`) or latest intersection point
+        /// (otherwise).
+        const find_endpoint = (endpoint_shape, endpoint_origin, prefer_min) => {
+            const curve = this.curve();
 
             // The case when the endpoint is simply a point.
             if (endpoint_shape instanceof Shape.Endpoint || endpoint_shape.size.is_zero()) {
                 // In this case, there is a trivial intersection with either the source or target.
                 const t = prefer_min ? 0 : 1;
-                return new BezierPoint(
-                    endpoint_shape.origin.sub(this.source.origin).rotate(-angle),
+                return new CurvePoint(
+                    endpoint_origin.sub(origin.source).rotate(-curve.angle),
                     t,
-                    bezier.tangent(t),
+                    curve.tangent(t),
                 );
             }
 
             // The case when the endpoint is a rounded rectangle.
             // The following function call may throw an error, which should be caught by the caller.
-            const intersections = bezier.intersections_with_rounded_rectangle(
+            const intersections = curve.intersections_with_rounded_rectangle(
                 new RoundedRectangle(
-                    endpoint_shape.origin,
+                    endpoint_origin,
                     endpoint_shape.size,
                     endpoint_shape.radius,
                 ),
@@ -243,23 +291,30 @@ class Arrow {
                 console.error(
                     "No intersection found for Bézier curve with endpoint.",
                     endpoint_shape,
-                    bezier,
+                    curve,
                 );
                 // Bail out.
                 throw new Error("No intersections found.");
             }
-            if (intersections.length > 1 && Bezier.point_inside_polygon(
-                    (prefer_min ? this.target : this.source).origin,
-                    new RoundedRectangle(endpoint_shape.origin, endpoint_shape.size, 0).points(),
-            )) {
-                // It's difficult to draw this case gracefully, so we bail out here too.
-                throw new Error("The Bézier re-enters an endpoint rectangle.");
+            // We assume for `prefer_min` that intersections are ordered in ascending order by `t`.
+            intersections.sort((a, b) => a.t - b.t);
+            // Check for Bézier curves re-entering a rectangle. We don't check this case for arcs,
+            // because there it is expected that curves will re-enter the rectangle.
+            if (this.style.shape === CONSTANTS.ARROW_SHAPE.BEZIER) {
+                if (intersections.length > 1 && Curve.point_inside_polygon(
+                        origin[prefer_min ? "target" : "source"],
+                        new RoundedRectangle(endpoint_origin, endpoint_shape.size, 0)
+                            .points(),
+                )) {
+                    // It's difficult to draw this case gracefully, so we bail out here too.
+                    throw new Error("The Bézier re-enters an endpoint rectangle.");
+                }
             }
             return intersections[prefer_min ? 0 : intersections.length - 1];
         }
 
-        const start = find_endpoint(this.source, true);
-        const end = find_endpoint(this.target, false);
+        const start = find_endpoint(this.source, origin.source, true);
+        const end = find_endpoint(this.target, origin.target, false);
         return [start, end];
     }
 
@@ -354,25 +409,28 @@ class Arrow {
             + Math.max(head_height, CONSTANTS.STROKE_WIDTH) / 2;
 
         // The distance from the source to the target.
-        const length = this.target.origin.sub(this.source.origin).length();
+        const length = this.length();
 
+        const curve = this.curve(Point.zero(), 0);
+        // We clamp `t` to be at most 1, which handles edge cases more conveniently.
+        const t_after_length = curve.t_after_length(true);
+
+        // The width of the curve connecting the source to the target.
+        const width = curve.width;
         // The vertical distance from the straight line connecting the source to the target, and the
         // peak of the curve.
-        const height = Math.abs(this.style.curve);
+        const height = 2 * Math.abs(curve.height);
 
         // The angle of the straight line connecting the source to the target.
-        const angle = this.target.origin.sub(this.source.origin).angle();
+        const angle = this.angle();
 
         // The width and height of the SVG for the arrow.
-        const [svg_width, svg_height] = [length + padding * 2, height + padding * 2];
+        const [svg_width, svg_height] = [width + padding * 2, height + padding * 2];
 
-        // The path of the edge, with a normalised origin and angle.
-        const bezier = new Bezier(Point.zero(), length, this.style.curve, 0);
-        // We clamp `t` to be at most 1, which handles edge cases more conveniently.
-        const t_after_length = bezier.t_after_length(true);
-
-        // We centre vertically, so we usually have to offset things by half the height.
-        const offset = new Point(padding, padding + height / 2);
+        // We centre vertically, so we usually have to offset things by half the height. For arcs,
+        // the width may be greater than the length, so we must also adjust to take this into
+        // account.
+        const offset = new Point(padding + (width - length) / 2, padding + height / 2);
 
         // The offset of the arrow. We don't apply this to `this.element`, because that causes
         // issues with the z-indexes of the handles.
@@ -408,7 +466,7 @@ class Arrow {
                 "transform-origin": offset.px(false),
                 transform: `
                     translate(${shift.px()})
-                    translate(${this.source.origin.sub(offset).px()})
+                    translate(${this.origin().source.sub(offset).px()})
                     rotate(${angle}rad)
                 `,
             });
@@ -422,19 +480,17 @@ class Arrow {
 
         // Draw the actual background. We only want to draw the background from endpoint to
         // endpoint, so we use `stroke-dasharray` to control where the background starts and ends.
-        const arclen_to_start = bezier.arc_length(start.t);
-        const arclen_to_end = bezier.arc_length(end.t);
-        const arclen = bezier.arc_length(1);
+        const arclen_to_start = curve.arc_length(start.t);
+        const arclen_to_end = curve.arc_length(end.t);
+        const arclen = curve.arc_length(1);
+        const bg_path = new Path().move_to(offset);
         this.requisition_element(this.background, "path.arrow-background", {
-            d: `${
-                new Path()
-                    .move_to(offset)
-                    .curve_by(new Point(length / 2, this.style.curve), new Point(length, 0))
-            }`,
+            d: `${ curve.render(bg_path) }`,
             fill: "none",
             stroke: "black",
             "stroke-width": edge_width + CONSTANTS.BACKGROUND_PADDING * 2,
-            "stroke-dasharray": `0 ${arclen_to_start} ${arclen_to_end - arclen_to_start} ${Math.ceil(arclen - arclen_to_end)}`,
+            "stroke-dasharray": `0 ${arclen_to_start} ${
+                arclen_to_end - arclen_to_start} ${Math.ceil(arclen - arclen_to_end)}`,
         });
 
         // The background usually has flat ends, but we want rounded ends. Unfortunately, the
@@ -455,6 +511,7 @@ class Arrow {
                 });
                 // Add a handle to the endpoint.
                 const origin = Point.diag(CONSTANTS.HANDLE_RADIUS).sub(endpoint);
+                const source_origin = this.origin().source;
                 this.requisition_element(this.element, `div.arrow-endpoint.${name}`, {}, {
                     width: `${CONSTANTS.HANDLE_RADIUS * 2}px`,
                     height: `${CONSTANTS.HANDLE_RADIUS * 2}px`,
@@ -464,8 +521,8 @@ class Arrow {
                     "transform-origin": `${origin.x}px ${origin.y}px`,
                     transform: `
                         translate(${shift.x}px, ${shift.y}px)
-                        translate(calc(${this.source.origin.x}px - 50%),
-                            calc(${this.source.origin.y}px - 50%))
+                        translate(calc(${source_origin.x}px - 50%),
+                            calc(${source_origin.y}px - 50%))
                         rotate(${angle}rad)
                     `,
                 }, null);
@@ -537,10 +594,10 @@ class Arrow {
                 // endpoint offset, these will be too short when the rotation of the head is
                 // different to the rotation of the endpoint. We therefore have to add some padding
                 // at the endpoint to make sure we always draw enough line.
-                const head_angle = bezier.tangent(t_after_length(
-                    bezier.arc_length(endpoint.t) + head_width * (is_start ? 1 : -1)
+                const head_angle = curve.tangent(t_after_length(
+                    curve.arc_length(endpoint.t) + head_width * (is_start ? 1 : -1)
                 ));
-                const endpoint_angle = bezier.tangent(endpoint.t);
+                const endpoint_angle = curve.tangent(endpoint.t);
                 const diff_angle = endpoint_angle - head_angle;
                 return Math.abs(edge_width * Math.sin(diff_angle) / 2);
             }
@@ -555,15 +612,15 @@ class Arrow {
         // We use some of these variables frequently in other methods, so we package them up for
         // convenience in passing them around.
         const constants = {
-            bezier, start, end, length, height, angle, stroke_width, edge_width, head_width,
+            curve, start, end, length, height, stroke_width, edge_width, head_width,
             head_height, shorten, t_after_length, dash_padding, offset,
         };
 
         // Draw the the proarrow bar.
         if (this.style.body_style === CONSTANTS.ARROW_BODY_STYLE.PROARROW) {
             const mid = (start.t + end.t) / 2;
-            const centre = bezier.point(mid).add(offset);
-            const angle = bezier.tangent(mid);
+            const centre = curve.point(mid).add(offset);
+            const angle = curve.tangent(mid);
             const normal = angle + Math.PI / 2;
             const adj_seg = new Point(head_height, 0);
             const adj_seg_2 = adj_seg.div(2);
@@ -655,11 +712,7 @@ class Arrow {
         // We need some padding to avoid aliasing issues.
         const ENDPOINT_PADDING = 1;
         new DOM.SVGElement("path", {
-            d: `${
-                new Path()
-                    .move_to(offset)
-                    .curve_by(new Point(length / 2, this.style.curve), new Point(length, 0))
-            }`,
+            d: `${ curve.render(new Path().move_to(offset)) }`,
             fill: "none",
             stroke: "black",
             "stroke-width": edge_width + CONSTANTS.BACKGROUND_PADDING * 2,
@@ -707,14 +760,14 @@ class Arrow {
         // Various arc lengths, which are used for drawing various parts of the Bézier curve
         // manually (e.g. for squiggly lines) or to determine dash distances.
         const {
-            bezier, start, end, length, shorten, t_after_length, dash_padding, total_width_of_tails,
+            curve, start, end, length, shorten, t_after_length, dash_padding, total_width_of_tails,
             total_width_of_heads, offset,
         } = constants;
-        let arclen_to_start = bezier.arc_length(start.t) + (this.style.shorten.tail + shorten.start)
+        let arclen_to_start = curve.arc_length(start.t) + (this.style.shorten.tail + shorten.start)
             - dash_padding.start;
-        let arclen_to_end = bezier.arc_length(end.t) - (this.style.shorten.head + shorten.end)
+        let arclen_to_end = curve.arc_length(end.t) - (this.style.shorten.head + shorten.end)
             + dash_padding.end;
-        let arclen = bezier.arc_length(1);
+        let arclen = curve.arc_length(1);
 
         // Each squiggle triangle has a width equal to twice its height.
         const HALF_WAVELENGTH = CONSTANTS.SQUIGGLY_TRIANGLE_HEIGHT * 2;
@@ -725,14 +778,13 @@ class Arrow {
             case CONSTANTS.ARROW_BODY_STYLE.LINE:
             case CONSTANTS.ARROW_BODY_STYLE.PROARROW:
                 path.move_to(offset);
-                // A simple quadratic Bézier curve.
-                path.curve_by(new Point(length / 2, this.style.curve), new Point(length, 0));
+                curve.render(path);
                 break;
 
             // A ⊣ shape, for adjunctions.
             case CONSTANTS.ARROW_BODY_STYLE.ADJUNCTION:
-                const centre = bezier.point(0.5).add(offset);
-                const angle = bezier.tangent(0.5);
+                const centre = curve.point(0.5).add(offset);
+                const angle = curve.tangent(0.5);
                 const normal = angle + Math.PI / 2;
                 const adj_seg = new Point(CONSTANTS.ADJUNCTION_LINE_LENGTH, 0);
                 const adj_seg_2 = adj_seg.div(2);
@@ -763,13 +815,13 @@ class Arrow {
                 // The arc length after which to start drawing triangles.
                 const arclen_to_squiggle_start =
                     arclen_to_start + total_width_of_tails + CONSTANTS.SQUIGGLY_PADDING;
-                const squiggle_start_point = bezier.point(t_after_length(arclen_to_squiggle_start));
+                const squiggle_start_point = curve.point(t_after_length(arclen_to_squiggle_start));
                 // The arc length after which to stop drawing triangles.
                 const arclen_to_squiggle_end =
                     arclen_to_end - (total_width_of_heads + CONSTANTS.SQUIGGLY_PADDING);
                 // The start and end points.
-                const start_point = bezier.point(t_after_length(arclen_to_start));
-                const end_point = bezier.point(t_after_length(arclen_to_end));
+                const start_point = curve.point(t_after_length(arclen_to_start));
+                const end_point = curve.point(t_after_length(arclen_to_end));
 
                 // Move to the tail.
                 path.move_to(start_point.add(offset));
@@ -798,8 +850,8 @@ class Arrow {
                 ) {
                     l += HALF_WAVELENGTH / 2;
                     const t = t_after_length(l);
-                    const angle = bezier.tangent(t) + Math.PI / 2 * sign;
-                    const next_point = bezier.point(t).add(
+                    const angle = curve.tangent(t) + Math.PI / 2 * sign;
+                    const next_point = curve.point(t).add(
                         Point.lendir(CONSTANTS.SQUIGGLY_TRIANGLE_HEIGHT * m, angle)
                     );
                     path_len += next_point.sub(prev_point).length();
@@ -953,6 +1005,31 @@ class Arrow {
         return { path, dash_array };
     }
 
+    /// Returns the arc associated to a chord length.
+    arc_for_chord(origin, chord, loop_radius, angle) {
+        // If `outer_dis` <= `chord`, then the path will be a straight line.
+        const outer_dis = CONSTANTS.ARC.OUTER_DIS;
+        // If `inner_dis` <= `chord` <= `outer_dis`, then the path will be an inner arc, with
+        // diameter `inner_dis`.
+        const inner_dis = CONSTANTS.ARC.INNER_DIS;
+        // If 0 <= `chord` <= `inner_dis`, then the path will be an outer arc, with radius
+        // interpolating from `semicircle_radius` to `loop_radius` (when `chord` is 0).
+
+        // Derived constants.
+        const semicircle_radius = inner_dis / 2;
+        const boundary_dis = outer_dis - inner_dis;
+        // The height of the inner arc.
+        const sagitta = chord >= outer_dis ? EPSILON
+            : (semicircle_radius * ((outer_dis - chord) / boundary_dis));
+        // The radius needed for the arc to have height `sagitta`.
+        const r_for_sagitta = sagitta / 2 + (chord ** 2) / (8 * sagitta);
+        // The radius of the arc.
+        const r = chord <= inner_dis ? (semicircle_radius +
+                (inner_dis - chord) / inner_dis * (loop_radius - semicircle_radius))
+                : r_for_sagitta;
+        return new Arc(origin, chord, chord <= inner_dis, r, angle);
+    }
+
     /// Redraw the heads or tails attached to an end of the edge.
     /// In general, we can draw arbitrary sequences of different arrowheads and they will compose
     /// nicely. However, we don't account for harpoons or hooks in combination with other arrowheads
@@ -967,7 +1044,7 @@ class Arrow {
         // the target). This is confusing. Sorry.
 
         const {
-            bezier, stroke_width, head_width, head_height, t_after_length, shorten, dash_padding,
+            curve, stroke_width, head_width, head_height, t_after_length, shorten, dash_padding,
             offset,
         } = constants;
 
@@ -987,7 +1064,7 @@ class Arrow {
         // The width of the combined arrowheads. This will be updated before the function returns.
         let total_width = 0;
 
-        const arclen_to_endpoint = bezier.arc_length(endpoint.t)
+        const arclen_to_endpoint = curve.arc_length(endpoint.t)
             + (is_start ?
                 shorten.start + this.style.shorten.tail :
                 shorten.end + this.style.shorten.head
@@ -1003,8 +1080,8 @@ class Arrow {
             const side_sign
                 = heads.find((head) => head.startsWith("harpoon")).endsWith("top") ? 1 : -1;
             const t = t_after_length(arclen_to_endpoint);
-            const angle = bezier.tangent(t);
-            const point = bezier.point(t)
+            const angle = curve.tangent(t);
+            const point = curve.point(t)
                 .add(offset)
                 .add(new Point(
                     0,
@@ -1035,8 +1112,8 @@ class Arrow {
             }
 
             const t = t_after_length(arclen_to_endpoint);
-            const base_point = bezier.point(t);
-            const angle = bezier.tangent(t);
+            const base_point = curve.point(t);
+            const angle = curve.tangent(t);
             const side_sign
                 = heads.find((head) => head.startsWith("hook")).endsWith("top") ? -1 : 1;
             // To avoid artefacts elsewhere, we mask a little overenthusiastically (see
@@ -1122,8 +1199,8 @@ class Arrow {
                 const head_style = heads[i];
                 const arclen_to_head = arclen_to_endpoint + arclens_to_head[i] * start_sign;
                 const t = t_after_length(arclen_to_head);
-                const point = bezier.point(t).add(offset);
-                let angle = bezier.tangent(t);
+                const point = curve.point(t).add(offset);
+                let angle = curve.tangent(t);
 
                 switch (head_style) {
                     case "mono":
@@ -1176,7 +1253,7 @@ class Arrow {
                         const LENGTH = 12;
                         const base_2 = LENGTH / (2 ** 0.5);
                         const base_point
-                            = bezier.point(t_after_length(
+                            = curve.point(t_after_length(
                                 arclen_to_head + (is_inverse ? 0 : base_2 * start_sign)
                             )).add(offset);
 
@@ -1187,7 +1264,7 @@ class Arrow {
                             // Round the angle to the nearest 45º and adjust with respect to the
                             // current direction.
                             const PI_4 = Math.PI / 4;
-                            const direction = this.target.origin.sub(this.source.origin).angle();
+                            const direction = this.angle();
                             const corner_angle
                                 = (is_inverse ? 0 : Math.PI)
                                     + PI_4 * Math.round(4 * direction / Math.PI) - direction;
@@ -1223,7 +1300,7 @@ class Arrow {
 
     /// Redraw the label attached to the edge. Returns the mask associated to the label.
     redraw_label(constants, tag_name) {
-        const { angle, offset } = constants;
+        const { offset } = constants;
 
         const origin = this.determine_label_position(constants).add(offset).sub(new Point(
             this.label.size.width / 2,
@@ -1241,7 +1318,7 @@ class Arrow {
                 // The label should be horizontal for most alignments, but in the direction of the
                 // arrow for `OVER`.
                 this.label.alignment === CONSTANTS.LABEL_ALIGNMENT.OVER ? "" :
-                    `rotate(${-rad_to_deg(angle)} ${
+                    `rotate(${-rad_to_deg(this.angle())} ${
                         this.label.size.width / 2} ${this.label.size.height / 2})`
             }`,
         });
@@ -1251,42 +1328,49 @@ class Arrow {
     /// it is offset to either side, we want to find the minimum offset from the centre of the edge
     /// such that the label no longer overlaps the edge.
     determine_label_position(constants) {
-        const { length, angle, edge_width, start, end } = constants;
+        const { edge_width, start, end } = constants;
 
-        const bezier = new Bezier(Point.zero(), length, this.style.curve, angle);
-        const centre = bezier.point(start.t + (end.t - start.t) * this.style.label_position);
+        const curve = this.curve(Point.zero());
+        const centre = curve.point(start.t + (end.t - start.t) * this.style.label_position);
 
         // The angle we will try to push the label so that it no longer intersects the curve. This
         // will be set by the following switch block if we do not return by the end of the block.
-        let offset_angle;
+        let offset_angle = 0;
 
+        // We calculate the label position for arcs differently from Bézier curves: in this case, we
+        // want to adjust the label in the direct of the normal to the centre point of the label.
+        if (this.style.shape === CONSTANTS.ARROW_SHAPE.ARC) {
+            offset_angle = curve.tangent(this.style.label_position);
+        }
+
+        // For Bézier curves, we simply adjust up or down.
         switch (this.label.alignment) {
             case CONSTANTS.LABEL_ALIGNMENT.CENTRE:
             case CONSTANTS.LABEL_ALIGNMENT.OVER:
                 return centre;
 
             case CONSTANTS.LABEL_ALIGNMENT.LEFT:
-                offset_angle = -Math.PI / 2;
+                offset_angle -= Math.PI / 2;
                 break;
 
             case CONSTANTS.LABEL_ALIGNMENT.RIGHT:
-                offset_angle = Math.PI / 2;
+                offset_angle += Math.PI / 2;
                 break;
         }
 
         // To offset the label bounding rectangle properly, we're going to iterately approximate its
-        // location. We first normalise the Bézier curve (flat Bézier curves must be special-cased).
-        // We then find all the intersections of the bounding rectangle with the curve: we want the
-        // number of intersections to be zero. To find this distance, we do a binary search (between
-        // 0 and the height of the curve plus the label size). We also add padding to the bounding
-        // rectangle to simulate the thickness of the curve.
+        // location. We first normalise the Bézier curve or arc (flat Bézier curves must be
+        // special-cased). We then find all the intersections of the bounding rectangle with the
+        // curve: we want the number of intersections to be zero. To find this distance, we do a
+        // binary search (between 0 and the height of the curve plus the label size). We also add
+        // padding to the bounding rectangle to simulate the thickness of the curve.
 
         // Unfortunately, floating-point calculations aren't precise, so we need to add some leeway
         // here, otherwise we sometimes encounter situations where `offset_max` isn't quite
         // sufficient.
         const OFFSET_ALLOWANCE = 4;
         let offset_min = 0;
-        let offset_max = OFFSET_ALLOWANCE + Math.abs(this.style.curve) / 2
+        let offset_max = OFFSET_ALLOWANCE + Math.abs(curve.height)
             + this.label.size.add(Point.diag(edge_width)).div(2).length();
         // The following variable will be initialised by the following loop, which runs at least
         // once.
@@ -1294,6 +1378,7 @@ class Arrow {
 
         const BAIL_OUT = 1024;
         let i = 0;
+        const angle = curve.angle;
         while (true) {
             // We will try offseting at distance `label_offset` pixels next.
             label_offset = (offset_min + offset_max) / 2;
@@ -1301,7 +1386,7 @@ class Arrow {
                 .rotate(angle)
                 .add(Point.lendir(label_offset, angle + offset_angle));
             // Compute the intersections between the offset bounding rectangle and the edge.
-            const intersections = bezier
+            const intersections = curve
                 .intersections_with_rounded_rectangle(new RoundedRectangle(
                     rect_centre,
                     this.label.size.add(Point.diag(edge_width)),

@@ -471,6 +471,23 @@ being. */
     margin-bottom: 8px;
 }
 
+.side:not(.nonloop) .nonloop {
+    /* We choose to set the height to 0, rather than `display: none;`, since some element positions,
+    e.g. keyboard hints, are based on size calculations, which are messed up if the element is not
+    displayed. */
+    height: 0;
+    margin: 0;
+    overflow: hidden;
+}
+
+.side.no-transition .nonloop .slider .thumb, .side.no-transition .loop .slider .thumb {
+    transition: none;
+}
+
+.side:not(.loop) .loop {
+    display: none;
+}
+
 label.inline {
     display: inline-block;
 }

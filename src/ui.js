@@ -22,6 +22,8 @@ Object.assign(CONSTANTS, {
     EDGE_OFFSET_DISTANCE: 8,
     /// How many pixels each unit of curve height corresponds to.
     CURVE_HEIGHT: 24,
+    /// How many pixels each unit of loop radius corresponds to.
+    LOOP_HEIGHT: 16,
     /// How many pixels of padding to place around labels on edges.
     EDGE_LABEL_PADDING: 8,
     /// How much padding to try to keep around the focus point when moving it via the keyboard
@@ -98,6 +100,9 @@ UIMode.Connect = class extends UIMode {
         // `"source"` or `"target"`.
         this.reconnect = reconnect;
 
+        // Whether we have dragged far enough from the source to trigger the loop mode.
+        this.loop = false;
+
         if (this.reconnect === null) {
             // The overlay for drawing an edge between the source and the cursor.
             this.overlay = new DOM.Div({ class: "overlay" });
@@ -130,6 +135,7 @@ UIMode.Connect = class extends UIMode {
             }
             this.reconnect = null;
         }
+        this.loop = false;
     }
 
     /// Update the overlay with a new cursor position.
@@ -153,6 +159,12 @@ UIMode.Connect = class extends UIMode {
             this.arrow.source = this.source.shape;
             this.arrow.target = target.shape;
             const level = Math.max(this.source.level, target.level) + 1;
+            const distance = this.arrow.target.origin.sub(this.arrow.source.origin).length();
+            // We only permit loops on vertices, not edges.
+            if (level === 1 && distance >= CONSTANTS.ARC.OUTER_DIS) {
+                this.loop = true;
+            }
+
             this.arrow.style = UI.arrow_style_for_options(
                 this.arrow,
                 Edge.default_options({
@@ -160,12 +172,22 @@ UIMode.Connect = class extends UIMode {
                     shorten: {
                         source: this.source.level === 0 ? 0 : CONSTANTS.EDGE_EDGE_PADDING,
                         target: target.level === 0 ? 0 : CONSTANTS.EDGE_EDGE_PADDING,
-                    }
+                    },
+                    shape: this.loop ? "arc" : "bezier",
                 }),
             );
+
             this.arrow.redraw();
         } else {
             // We're reconnecting an existing edge.
+
+            // Note that we currently do not permit existing edges to be converted into loops,
+            // simply because the desired behaviour is subtle (e.g. we don't want edges with
+            // dependencies to be converted, and we'd have to interpolate curves into loops, etc.).
+            // Thus, the only time `this.loop` will be true is if we're reconnecting an existing
+            // loop. We can convert loops into non-loops.
+            this.loop = this.reconnect.edge.is_loop();
+
             this.reconnect.edge.render(ui, offset);
             for (const cell of ui.quiver.transitive_dependencies([this.reconnect.edge], true)) {
                 cell.render(ui);
@@ -181,8 +203,13 @@ UIMode.Connect = class extends UIMode {
         // We allow cells to be connected even if they do not have the same level. This is
         // because it's often useful when drawing diagrams, even if it may not always be
         // semantically valid.
+
         if (source === target) {
-            // We don't currently permit loops.
+            // We currently only permit loops on nodes.
+            return source.level === 0;
+        }
+        if (source.is_loop() || (target !== null && target.is_loop())) {
+            // We do not permit loops to be connected to anything else.
             return false;
         }
         const source_target_level = Math.max(source.level, target === null ? 0 : target.level);
@@ -819,6 +846,7 @@ class UI {
                 ["Modify label position", (td) => Shortcuts.element(td, [{ key: "I" }])],
                 ["Modify offset", (td) => Shortcuts.element(td, [{ key: "O" }])],
                 ["Modify curve", (td) => Shortcuts.element(td, [{ key: "K" }])],
+                ["Modify radius", (td) => Shortcuts.element(td, [{ key: "N" }])],
                 ["Modify length", (td) => {
                     Shortcuts.element(td, [{ key: "L" }]);
                     td.add(" (hold ");
@@ -918,6 +946,9 @@ class UI {
                 new DOM.Element("li").add(
                     new DOM.Link("https://github.com/paolobrasolin", "Paolo Brasolin", true)
                 ).add(", for adding offline support."),
+                new DOM.Element("li").add(
+                    new DOM.Link("https://github.com/davidson16807", "Carl Davidson", true)
+                ).add(", for discussing and prototyping loop rendering."),
                 new DOM.Element("li").add(
                     "Everyone who has improved "
                 ).add(new DOM.Element("b").add("quiver"))
@@ -2905,17 +2936,30 @@ class UI {
         switch (options.style.name) {
             case "arrow":
                 style.level = options.level;
-                style.curve = options.curve * CONSTANTS.CURVE_HEIGHT * 2;
                 // `shorten` is interpreted with respect to the arc length of the arrow.
-                const bezier = arrow.bezier();
+                const curve = arrow.curve();
                 try {
                     const [start, end] = arrow.find_endpoints();
-                    const arc_length = bezier.arc_length(end.t) - bezier.arc_length(start.t);
+                    const arc_length = curve.arc_length(end.t) - curve.arc_length(start.t);
                     style.shorten.tail = arc_length * options.shorten.source / 100;
                     style.shorten.head = arc_length * options.shorten.target / 100;
                 } catch (_) {
                     // If we can't find the endpoints, the arrow isn't being drawn, so we don't
                     // need to bother trying to shorten it.
+                }
+
+                // Shape.
+                switch (options.shape) {
+                    case "bezier":
+                        style.shape = CONSTANTS.ARROW_SHAPE.BEZIER;
+                        style.curve = options.curve * CONSTANTS.CURVE_HEIGHT * 2;
+                        break;
+                    case "arc":
+                        style.shape = CONSTANTS.ARROW_SHAPE.ARC;
+                        const radius = [2, 3, 4][Math.floor(Math.abs(options.radius) / 2)];
+                        style.curve = radius * Math.sign(options.radius) * CONSTANTS.LOOP_HEIGHT;
+                        style.angle = deg_to_rad(options.angle);
+                        break;
                 }
 
                 // Body style.
@@ -3402,8 +3446,32 @@ class History {
                     break;
                 case "curve":
                     for (const curve of action.curves) {
+                        if (curve.edge.is_loop()) {
+                            continue;
+                        }
                         curve.edge.options.curve = curve[to];
                         cells.add(curve.edge);
+                    }
+                    update_panel = true;
+                    break;
+                case "radius":
+                    // We don't have any special casing for nonstandard plurals :)
+                    for (const radius of action.radiuss) {
+                        if (!radius.edge.is_loop()) {
+                            continue;
+                        }
+                        radius.edge.options.radius = radius[to];
+                        cells.add(radius.edge);
+                    }
+                    update_panel = true;
+                    break;
+                case "angle":
+                    for (const angle of action.angles) {
+                        if (!angle.edge.is_loop()) {
+                            continue;
+                        }
+                        angle.edge.options.angle = angle[to];
+                        cells.add(angle.edge);
                     }
                     update_panel = true;
                     break;
@@ -3902,32 +3970,35 @@ class Panel {
             this.sliders.set(property, slider);
 
             // Allow sliders to be focused via the keyboard.
-            ui.shortcuts.add([{ key }], () => {
-                if (
-                    !this.element.class_list.contains("hidden")
-                    && !slider.class_list.contains("disabled")
-                ) {
-                    if (slider.class_list.contains("focused")) {
-                        // Step through each of the thumbs until the last.
-                        const next_thumb = slider.query_selector(".thumb.focused + .thumb");
-                        slider.query_selector(".thumb.focused").class_list.remove("focused");
-                        if (next_thumb !== null) {
-                            next_thumb.class_list.add("focused");
+            if (key !== null) {
+                ui.shortcuts.add([{ key }], () => {
+                    if (
+                        !this.element.class_list.contains("hidden")
+                        && !slider.class_list.contains("disabled")
+                    ) {
+                        if (slider.class_list.contains("focused")) {
+                            // Step through each of the thumbs until the last.
+                            const next_thumb = slider.query_selector(".thumb.focused + .thumb");
+                            slider.query_selector(".thumb.focused").class_list.remove("focused");
+                            if (next_thumb !== null) {
+                                next_thumb.class_list.add("focused");
+                            } else {
+                                slider.class_list.remove("focused");
+                            }
                         } else {
-                            slider.class_list.remove("focused");
+                            this.defocus_inputs();
+                            slider.class_list.add("focused");
+                            slider.query_selector(".thumb").class_list.add("focused");
                         }
-                    } else {
-                        this.defocus_inputs();
-                        slider.class_list.add("focused");
-                        slider.query_selector(".thumb").class_list.add("focused");
                     }
-                }
-            });
+                });
 
-            delay(() => {
-                slider.label
-                    .add(new DOM.Element("kbd", { class: "hint slider" }).add(key.toUpperCase()));
-            });
+                delay(() => {
+                    slider.label
+                        .add(new DOM.Element("kbd", { class: "hint slider" })
+                        .add(key.toUpperCase()));
+                });
+            }
 
             return slider.label.add_to(wrapper);
         };
@@ -3942,7 +4013,16 @@ class Panel {
 
         // The curve slider.
         create_option_slider("Curve", "Arrow curve", "curve", "k", { min: -5, max: 5 })
-            .class_list.add("arrow-style");
+            .class_list.add("arrow-style", "nonloop");
+
+        // The radius slider.
+        create_option_slider("Radius", "Loop radius", "radius", "n", { min: -5, max: 5, step: 2 })
+            .class_list.add("arrow-style", "loop");
+
+        // The angle slider.
+        create_option_slider("Angle", "Loop orientation", "angle", null,
+            { min: -180, max: 180, step: 45 },
+        ).class_list.add("arrow-style", "loop");
 
         // The length slider, which affects `shorten`.
         create_option_slider("Length", "Arrow length", "length", "l", {
@@ -4149,21 +4229,26 @@ class Panel {
                 ["corner-inverse", "Pullback / pushout", { name: "corner-inverse" }, "p"],
             ],
             "edge-type",
-            ["large"],
+            ["large", "nonloop"],
             true, // `disabled`
             (edges, _, data, user_triggered) => {
                 effect_edge_style_change(user_triggered, () => {
                     for (const edge of edges) {
-                        // We reset `curve`, `level` and `length` for non-arrow edges, because that
-                        // data isn't relevant to them. Otherwise, we set them to whatever the
-                        // sliders are currently set to. This will preserve them under switching
-                        // between arrow styles, because we don't reset the sliders when switching.
+                        // These edge styles are not applicable to loops.
+                        if (edge.is_loop()) {
+                            continue;
+                        }
+                        // We reset `curve`, `radius`, `angle`, `level` and `length` for non-arrow
+                        // edges, because that data isn't relevant to them. Otherwise, we set them
+                        // to whatever the sliders are currently set to. This will preserve them
+                        // under switching between arrow styles, because we don't reset the sliders
+                        // when switching.
                         if (data.name !== "arrow") {
                             edge.options.curve = 0;
                             edge.options.level = 1;
                             edge.options.shorten = { source: 0, target: 0 };
                         } else if (edge.options.style.name !== "arrow") {
-                            for (const property of ["curve", "level"]) {
+                            for (const property of ["curve", "radius", "angle", "level"]) {
                                 edge.options[property] = this.sliders.get(property).values();
                             }
                             const [source, target] = this.sliders.get("length").values();
@@ -5392,6 +5477,26 @@ class Panel {
         // behaviour for both single and multiple selections (including empty selections).
         const selection_contains_edge = ui.selection_contains_edge();
 
+        // Some elements of the panel are visible only when non-loop edges, or loop edges are
+        // selected. If we haven't selected any edges (e.g. if we've just deselected everything by
+        // clicking on the canvas, but haven't yet released the pointer), then we keep the state as
+        // it is to avoid any un-aesthetic size changes while the panel disappears.
+        if (selection_contains_edge) {
+            const selection_contains_nonloop = Array.from(ui.selection).some((cell) => {
+                return cell.is_edge() && !cell.is_loop();
+            });
+            const selection_contains_loop = Array.from(ui.selection).some((cell) => cell.is_loop());
+            // Disable transitions, so that slider thumbs do not appear to move when the are
+            // revealed.
+            if ((selection_contains_nonloop && !this.element.class_list.contains("nonloop"))
+                || (selection_contains_loop && !this.element.class_list.contains("loop"))) {
+                this.element.class_list.add("no-transition");
+                delay(() => this.element.class_list.remove("no-transition"));
+            }
+            this.element.class_list.toggle("nonloop", selection_contains_nonloop);
+            this.element.class_list.toggle("loop", selection_contains_loop);
+        }
+
         // Modifying cells is not permitted when the export pane is visible.
         if (this.port === null) {
             // Default options (for when no edges/cells are selected). We only need to provide
@@ -5487,10 +5592,16 @@ class Panel {
                     // The label alignment buttons are rotated to reflect the direction of the arrow
                     // when all arrows have the same direction (at least to the nearest multiple of
                     // 90°). Otherwise, rotation defaults to 0°.
-                    consider("{angle}", cell.angle());
+                    consider("{edge_angle}", cell.angle());
                     consider("{label_position}", cell.options.label_position);
                     consider("{offset}", cell.options.offset);
-                    consider("{curve}", cell.options.curve);
+                    if (!cell.is_loop()) {
+                        consider("{curve}", cell.options.curve);
+                    }
+                    if (cell.is_loop()) {
+                        consider("{radius}", cell.options.radius);
+                        consider("{angle}", cell.options.angle);
+                    }
                     consider("{length}", cell.options.shorten);
                     consider("{level}", cell.options.level);
                     consider("edge-type", cell.options.style.name);
@@ -5564,7 +5675,7 @@ class Panel {
                                 });
                         }
                         break;
-                    case "{angle}":
+                    case "{edge_angle}":
                         const angle = value !== null ? value : 0;
                         for (const option of label_alignments) {
                             option.set_style({
@@ -5577,6 +5688,8 @@ class Panel {
                         break;
                     case "{offset}":
                     case "{curve}":
+                    case "{radius}":
+                    case "{angle}":
                     case "{level}":
                         this.sliders.get(property).thumbs[0].set_value(value !== null ? value : 0);
                         break;
@@ -6897,7 +7010,7 @@ class Cell {
                 // The second part of the condition should not be necessary, because pointer events
                 // are disabled for reconnected edges, but this acts as a warranty in case this is
                 // not working.
-                if (ui.mode.source !== this
+                if ((ui.mode.source !== this || ui.mode.loop)
                     && (ui.mode.reconnect === null || ui.mode.reconnect.edge !== this)) {
                     if (
                         UIMode.Connect.valid_connection(
@@ -7036,6 +7149,11 @@ class Cell {
     /// Whether this cell is an edge (i.e. whether its level is nonzero).
     is_edge() {
         return this.level > 0;
+    }
+
+    /// Whether this cell is a loop.
+    is_loop() {
+        return this.is_edge() && this.source === this.target;
     }
 
     select() {
@@ -7193,6 +7311,9 @@ class Edge extends Cell {
         this.options = Edge.default_options(Object.assign({ level: this.level }, options));
 
         this.arrow = new Arrow(source.shape, target.shape, new ArrowStyle(), new Label());
+        if (this.source === this.target) {
+            this.options.shape = "arc";
+        }
         this.element = this.arrow.element;
 
         // `this.shape` is used for the source/target from (higher) cells connected to this one.
@@ -7215,8 +7336,11 @@ class Edge extends Cell {
             label_position: 50,
             offset: 0,
             curve: 0,
+            radius: 3,
+            angle: 0,
             shorten: { source: 0, target: 0 },
             level: 1,
+            shape: "bezier",
             colour: Colour.black(),
             // Whether to align the source and target of the current edge to the midpoint of the
             // source/target edge (`true`), or to the midpoint of the source and target of the
@@ -7339,14 +7463,14 @@ class Edge extends Cell {
         }
 
         // Update the origin, which is given by the centre of the edge.
-        const bezier = this.arrow.bezier();
-        const midpoint = bezier.point(0.5);
+        const curve = this.arrow.curve(Point.zero(), 0);
+        const midpoint = curve.point(0.5);
         let centre = null;
         try {
             // Preferably, we take the centre relative to the endpoints, rather than the
             // source and target.
             const [start, end] = this.arrow.find_endpoints();
-            centre = bezier.point((start.t + end.t) / 2);
+            centre = curve.point((start.t + end.t) / 2);
         } catch (_) {
             // If we're not reconnecting the edge, and we can't find the endpoints, we just take
             // the centre relative to the source and target.
@@ -7386,6 +7510,7 @@ class Edge extends Cell {
     /// Changes the source and target.
     reconnect(ui, source, target) {
         ui.quiver.connect(source, target, this);
+        this.options.shape = source !== target ? "bezier" : "arc";
         for (const end of ["source", "target"]) {
             if (this[end].is_vertex()) {
                 this.options.edge_alignment[end] = true;
@@ -7409,6 +7534,9 @@ class Edge extends Cell {
         if (flip_arrow) {
             this.options.offset = -this.options.offset;
             this.options.curve = -this.options.curve;
+            if (this.is_loop()) {
+                this.options.radius = -this.options.radius;
+            }
             if (this.options.style.name === "arrow") {
                 const swap_sides = { top: "bottom", bottom: "top" };
                 if (this.options.style.tail.name === "hook") {
@@ -7444,10 +7572,13 @@ class Edge extends Cell {
         [this.source, this.target] = [this.target, this.source];
         [this.arrow.source, this.arrow.target] = [this.source.shape, this.target.shape];
 
+        if (this.is_loop()) {
+            this.options.angle = mod(this.options.angle + 360, 360) - 180;
+        }
         // Reverse the label alignment and edge offset as well as any oriented styles.
         // Flipping the label will also cause a rerender.
-        // Note that since we do this, the position of the edge will remain the same, which means
-        // we don't need to rerender any of this edge's dependencies.
+        // Note that since we do this, the position of the edge will remain the same, which
+        // means we don't need to rerender any of this edge's dependencies.
         this.flip(ui, true, true);
     }
 }

@@ -101,6 +101,10 @@ class Point {
     is_zero() {
         return this.x === 0 && this.y === 0;
     }
+
+    map(f) {
+        return new (this.constructor)(f(this.x), f(this.y));
+    }
 }
 
 /// Equivalent to `Point`, but used semantically to refer to a position (in cell indices)
@@ -144,6 +148,11 @@ class Path {
 
     move_to(p) {
         this.commands.push(`M ${p.x} ${p.y}`);
+        return this;
+    }
+
+    move_by(p) {
+        this.commands.push(`m ${p.x} ${p.y}`);
         return this;
     }
 
@@ -200,6 +209,10 @@ function arrays_equal(array1, array2) {
     }
 
     return true;
+}
+
+function mod(x, y) {
+    return (x % y + y) % y;
 }
 
 // A type with custom JSON encoding.
