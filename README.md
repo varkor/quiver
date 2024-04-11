@@ -107,4 +107,5 @@ curves of a fixed height.
 - [Nathan Corbyn](https://github.com/doctorn), for adding the ability to export embeddable diagrams
 to HTML.
 - [Paolo Brasolin](https://github.com/paolobrasolin), for adding offline support.
+- [Carl Davidson](https://github.com/davidson16807), for discussing and prototyping loop rendering.
 - Everyone who has improved **quiver** by reporting issues or suggesting improvements.

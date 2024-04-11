@@ -156,7 +156,7 @@ class Parser {
                 }
 
                 const source = adjust_for_phantoms(edge, "source");
-                const target = adjust_for_phantoms(edge, "target");
+                let target = adjust_for_phantoms(edge, "target");
 
                 // Create dummy vertices if there are none in place for the source/target.
                 if (!this.cells.has(`${source}`)) {
@@ -165,14 +165,38 @@ class Parser {
                 // If the target is undefined, it was never set (as opposed to being set to an
                 // invalid value).
                 if (typeof target === "undefined") {
-                    this.log(this.error("Encountered arrow with no target.", edge.range));
-                    continue;
+                    if (edge.loop) {
+                        target = source;
+                    } else {
+                        this.log(this.error("Encountered arrow with no target.", edge.range));
+                        continue;
+                    }
                 }
-                if (`${target}` === `${source}`) {
+                if (`${target}` === `${source}` && !edge.loop) {
                     this.log(
-                        this.error("Encountered arrow with the same source and target.", edge.range)
+                        this.error([
+                            "Encountered non-",
+                            new DOM.Code("loop"),
+                            " arrow with the same source and target."
+                        ], edge.range)
                     );
                     continue;
+                }
+                if (edge.loop) {
+                    if (`${target}` !== `${source}`) {
+                        this.log(this.error(
+                            "Encountered loop with different source and target.",
+                            edge.range,
+                        ));
+                        continue;
+                    }
+                    const clockwise
+                        = mod(edge.loop_head_angle - edge.loop_tail_angle + 180, 360) < 180;
+                    if (!clockwise) {
+                        edge.options.radius *= -1;
+                    }
+                    edge.options.angle = mod(180 - 90 * (clockwise ? 1 : -1)
+                        - (edge.loop_head_angle + edge.loop_tail_angle) / 2 + 180, 360) - 180;
                 }
                 if (!this.cells.has(`${target}`)) {
                     this.cells.set(`${target}`, new Vertex(this.ui, "", target));
@@ -214,9 +238,9 @@ class Parser {
                         + QuiverExport.CONSTANTS.TIKZ_VERTICAL_MULTIPLIER ** 2
                             * Math.cos(edge.angle()) ** 2) ** 0.5);
 
-                        const bezier = edge.arrow.bezier();
+                        const curve = edge.arrow.curve();
                         const [start, end] = edge.arrow.find_endpoints();
-                        const arc_length = bezier.arc_length(end.t) - bezier.arc_length(start.t);
+                        const arc_length = curve.arc_length(end.t) - curve.arc_length(start.t);
                         const convert_length = (length) => {
                             const ROUND_TO = 5;
                             return clamp(0, Math.round(
@@ -732,14 +756,32 @@ class Parser {
             }
             return;
         }
-        // quiver does not yet support loops, but it is helpful to issue an informative warning.
+        // Parse loops.
         if (this.eat("loop")) {
-            // Do not warn about not having a target.
-            edge.target = null;
-            throw this.warn(
-                ["Loops are not yet supported in ", new DOM.Element("b").add("quiver"), "."],
-                this.range_from(start),
-            );
+            edge.loop = true;
+            return;
+        }
+        if (this.eat("distance")) {
+            this.eat_whitespace();
+            this.eat("=", true);
+            this.eat_whitespace();
+            edge.options.radius = 1 + Math.round(clamp(0, this.parse_float(true) / 5 - 1, 2)) * 2;
+            this.eat(/^(em|pt|mm)/); // We ignore the unit.
+            return;
+        }
+        // The following options are used in conjunction with `loop`, but are deliberately ignored
+        // for now.
+        if (this.eat("in")) {
+            this.eat_whitespace();
+            this.eat("=", true);
+            edge.loop_head_angle = this.parse_int(true);
+            return;
+        }
+        if (this.eat("out")) {
+            this.eat_whitespace();
+            this.eat("=", true);
+            edge.loop_tail_angle = this.parse_int(true);
+            return;
         }
         if (this.eat("curve")) {
             this.eat_whitespace();
@@ -1013,23 +1055,6 @@ class Parser {
             return;
         }
 
-        // The following options are deliberately ignored, because they are used in conjunction with
-        // `loop`, which we already warn about.
-        if (this.eat("distance")) {
-            this.eat_whitespace();
-            this.eat("=", true);
-            this.eat_whitespace();
-            this.parse_float(true);
-            this.eat(/^(em|pt)/);
-            return;
-        }
-        if (this.eat("in") || this.eat("out")) {
-            this.eat_whitespace();
-            this.eat("=", true);
-            this.parse_int(true);
-            return;
-        }
-
         // Throw a warning about an unknown option.
         this.unknown_option_warning(/^[^,\]]*(?=[,\]])/, "arrow");
     }
@@ -1119,6 +1144,11 @@ Parser.Edge = class {
         // An undefined target is distinguished from one with `null` target. The former means that
         // the target was never set; the latter means that the target was set, but was invalid.
         this.target = undefined;
+        // Loop options. Note that the angles are TikZ angles, which are anticlockwise. We thus need
+        // to convert these to quiver's angles.
+        this.loop = false;
+        this.loop_tail_angle = 55;
+        this.loop_head_angle = 125;
         // The range of the string specifying the edge, used for diagnostics.
         this.range = range;
         this.options = Edge.default_options({ level: 1 });

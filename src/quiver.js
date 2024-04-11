@@ -615,6 +615,9 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                         // does in quiver.
                         tikz_incompatibilities.add("shortened curved arrows");
                     }
+                    if (edge.target === edge.source) {
+                        tikz_incompatibilities.add("shortened loops");
+                    }
                 }
                 const head_is_empty = edge.options.style.name === "arrow"
                     && edge.options.style.head.name === "none"
@@ -624,6 +627,9 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                     parameters["shorten >"] = `${shorten}pt`;
                     if (edge.options.curve !== 0) {
                         tikz_incompatibilities.add("shortened curved arrows");
+                    }
+                    if (edge.target === edge.source) {
+                        tikz_incompatibilities.add("shortened loops");
                     }
                 }
 
@@ -804,6 +810,17 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
 
                 parameters.from = cell_reference(edge.source, !edge.options.edge_alignment.source);
                 parameters.to = cell_reference(edge.target, !edge.options.edge_alignment.target);
+
+                // Loops.
+                if (edge.target === edge.source) {
+                    parameters.loop = "";
+                    const clockwise = edge.options.radius >= 0 ? 1 : -1;
+                    const loop_angle = (180 - 90 * clockwise - edge.options.angle);
+                    const angle_spread = 30 + 5 * (Math.abs(edge.options.radius) - 1) / 2;
+                    parameters.in = mod(loop_angle - angle_spread * clockwise, 360);
+                    parameters.out = mod(loop_angle + angle_spread * clockwise, 360);
+                    parameters.distance = `${5 + 5 * (Math.abs(edge.options.radius) - 1) / 2}mm`;
+                }
 
                 const object_to_list = (object) => {
                     return Object.entries(object).map(([key, value]) => {
@@ -1002,6 +1019,20 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
                 };
 
                 const delta = probe(options, default_options);
+
+                // Some parameters are redundant and are used only for convenience, so we strip them
+                // out.
+                delete delta["shape"];
+                switch (edge.options.shape) {
+                    case "bezier":
+                        delete delta["radius"];
+                        delete delta["angle"];
+                        break;
+                    case "arc":
+                        delete delta["curve"];
+                        break;
+                }
+
                 if (end.length > 0 || Object.keys(delta).length > 0) {
                     end.push(delta);
                 }
@@ -1185,6 +1216,12 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
                     }
                     if (options.hasOwnProperty("curve")) {
                         assert_kind(options.curve, "integer");
+                    }
+                    if (options.hasOwnProperty("radius")) {
+                        assert_kind(options.radius, "integer");
+                    }
+                    if (options.hasOwnProperty("angle")) {
+                        assert_kind(options.angle, "integer");
                     }
                     if (options.hasOwnProperty("shorten")) {
                         let shorten = { source: 0, target: 0 };

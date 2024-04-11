@@ -98,6 +98,25 @@
 	\arrow["f" near start, from=1-1, to=1-2]
 \end{tikzcd}
 
+% Coloured barred arrow.
+\begin{tikzcd}
+	\bullet & \bullet
+	\arrow["\shortmid"{marking, text={rgb,255:red,214;green,92;blue,92}}, color={rgb,255:red,214;green,92;blue,92}, from=1-1, to=1-2]
+\end{tikzcd}
+
+% Loops of different radii, angles, and direction.
+\begin{tikzcd}
+	\bullet & \bullet & \bullet
+	\arrow[from=1-1, to=1-1, loop, in=105, out=165, distance=5mm]
+	\arrow[from=1-2, to=1-2, loop, in=80, out=10, distance=10mm]
+	\arrow[from=1-3, to=1-3, loop, in=5, out=85, distance=15mm]
+\end{tikzcd}
+
+% A loop without a target.
+\begin{tikzcd}
+	A \arrow[loop]
+\end{tikzcd}
+
 %%% Invalid diagrams %%%
 
 % Incorrect start.
@@ -288,4 +307,9 @@ begin{tikzcd}
 	\bullet & \bullet & \bullet
 	\arrow[""{name=0}, from=1-1, to=1-3]
 	\arrow[from=0, to=1-2]
+\end{tikzcd}
+
+% A loop whose source and target are not the same.
+\begin{tikzcd}
+	A \arrow[r, loop] & B
 \end{tikzcd}
