@@ -7504,6 +7504,9 @@ class Edge extends Cell {
 
     /// Returns the angle of this edge.
     angle() {
+        if (this.is_loop()) {
+            return deg_to_rad(this.options.angle);
+        }
         return this.target.shape.origin.sub(this.source.shape.origin).angle();
     }
 
