@@ -1,4 +1,4 @@
-.PHONY: all service-worker gh-pages cleanup
+.PHONY: all service-worker dev release gh-pages cleanup
 
 # Ensure `cd` works properly by forcing everything to be executed in a single shell.
 .ONESHELL:
