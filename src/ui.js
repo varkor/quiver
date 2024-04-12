@@ -174,6 +174,7 @@ UIMode.Connect = class extends UIMode {
                         target: target.level === 0 ? 0 : CONSTANTS.EDGE_EDGE_PADDING,
                     },
                     shape: this.loop ? "arc" : "bezier",
+                    angle: this.loop ? UIMode.Connect.suggested_loop_angle(ui, this.source) : 0,
                 }),
             );
 
@@ -287,100 +288,145 @@ UIMode.Connect = class extends UIMode {
             // alignment, there will be no checked input.
             options.label_alignment = selected_alignment.element.value;
         }
-        // If *every* existing connection to source and target has a consistent label alignment,
-        // then `align` will be a singleton, in which case we use that element as the alignment.
-        // If it has `left` and `right` in equal measure (regardless of `centre`), then
-        // we will pick `centre`. Otherwise we keep the default. And similarly for `offset` and
-        // `curve`.
-        const align = new Map();
-        const offset = new Map();
-        const curve = new Map();
-        // We only want to pick `centre` when the source and target are equally constraining
-        // (otherwise we end up picking `centre` far too often). So we check that they're both
-        // being considered equally. This means `centre` is chosen only rarely, but often in
-        // the situations you want it. (This has no analogue in `offset` or `curve`.)
-        let balance = 0;
 
-        const flip = (options) => {
-            return {
-                label_alignment: {
-                    left: "right",
-                    centre: "centre",
-                    over: "over",
-                    right: "left",
-                }[options.label_alignment],
-                offset: -options.offset,
-                curve: -options.curve,
+        // The following heuristics are really only sensible for non-loops.
+        if (source !== target) {
+            // If *every* existing connection to source and target has a consistent label alignment,
+            // then `align` will be a singleton, in which case we use that element as the alignment.
+            // If it has `left` and `right` in equal measure (regardless of `centre`), then
+            // we will pick `centre`. Otherwise we keep the default. And similarly for `offset` and
+            // `curve`.
+            const align = new Map();
+            const offset = new Map();
+            const curve = new Map();
+            // We only want to pick `centre` when the source and target are equally constraining
+            // (otherwise we end up picking `centre` far too often). So we check that they're both
+            // being considered equally. This means `centre` is chosen only rarely, but often in
+            // the situations you want it. (This has no analogue in `offset` or `curve`.)
+            let balance = 0;
+
+            const flip = (options) => {
+                return {
+                    label_alignment: {
+                        left: "right",
+                        centre: "centre",
+                        over: "over",
+                        right: "left",
+                    }[options.label_alignment],
+                    offset: -options.offset,
+                    curve: -options.curve,
+                };
             };
-        };
 
-        const conserve = (options, parallel) => {
-            return {
-                label_alignment: options.label_alignment,
-                // We ignore the offsets and curves of edges that don't share a source and target
-                // with the new edge, i.e. we only modify the offset and curve of parallel edges.
-                offset: parallel ? options.offset : null,
-                curve: parallel ? options.curve : null,
+            const conserve = (options, parallel) => {
+                return {
+                    label_alignment: options.label_alignment,
+                    // We ignore the offsets and curves of edges that don't share a source and
+                    // target with the new edge, i.e. we only modify the offset and curve of
+                    // parallel edges.
+                    offset: parallel ? options.offset : null,
+                    curve: parallel ? options.curve : null,
+                };
             };
-        };
 
-        const consider = (options, tip) => {
-            if (!align.has(options.label_alignment)) {
-                align.set(options.label_alignment, 0);
-            }
-            align.set(options.label_alignment, align.get(options.label_alignment) + 1);
-            if (options.offset !== null) {
-                if (!offset.has(options.offset)) {
-                    offset.set(options.offset, 0);
+            const consider = (options, tip) => {
+                if (!align.has(options.label_alignment)) {
+                    align.set(options.label_alignment, 0);
                 }
-                offset.set(options.offset, offset.get(options.offset) + 1);
-            }
-            if (options.curve !== null) {
-                if (!curve.has(options.curve)) {
-                    curve.set(options.curve, 0);
+                align.set(options.label_alignment, align.get(options.label_alignment) + 1);
+                if (options.offset !== null) {
+                    if (!offset.has(options.offset)) {
+                        offset.set(options.offset, 0);
+                    }
+                    offset.set(options.offset, offset.get(options.offset) + 1);
                 }
-                curve.set(options.curve, curve.get(options.curve) + 1);
+                if (options.curve !== null) {
+                    if (!curve.has(options.curve)) {
+                        curve.set(options.curve, 0);
+                    }
+                    curve.set(options.curve, curve.get(options.curve) + 1);
+                }
+                balance += tip;
+            };
+
+            const source_dependencies = ui.quiver.dependencies_of(source);
+            const target_dependencies = ui.quiver.dependencies_of(target);
+            for (const [edge, relationship] of source_dependencies) {
+                // We consider each edge whose source or target is the source of the new edge.
+                consider(conserve({
+                    // If the source of the edge is the same as the source of the new edge, we want
+                    // to invert the offset/curve/etc., so that the new edge will not overlap the
+                    // new one.
+                    source: flip(edge.options),
+                    target: edge.options,
+                }[relationship], target_dependencies.has(edge)), -1);
             }
-            balance += tip;
-        };
+            for (const [edge, relationship] of target_dependencies) {
+                // We consider each edge whose source or target is the target of the new edge.
+                consider(conserve({
+                    source: edge.options,
+                    // If the target of the edge is the same as the target of the new edge, we want
+                    // to invert the offset/curve/etc., so that the new edge will not overlap the
+                    // new one.
+                    target: flip(edge.options),
+                }[relationship], source_dependencies.has(edge)), 1);
+            }
 
-        const source_dependencies = ui.quiver.dependencies_of(source);
-        const target_dependencies = ui.quiver.dependencies_of(target);
-        for (const [edge, relationship] of source_dependencies) {
-            // We consider each edge whose source or target is the source of the new edge.
-            consider(conserve({
-                // If the source of the edge is the same as the source of the new edge, we want to
-                // invert the offset/curve/etc., so that the new edge will not overlap the new one.
-                source: flip(edge.options),
-                target: edge.options,
-            }[relationship], target_dependencies.has(edge)), -1);
-        }
-        for (const [edge, relationship] of target_dependencies) {
-            // We consider each edge whose source or target is the target of the new edge.
-            consider(conserve({
-                source: edge.options,
-                // If the target of the edge is the same as the target of the new edge, we want to
-                // invert the offset/curve/etc., so that the new edge will not overlap the new one.
-                target: flip(edge.options),
-            }[relationship], source_dependencies.has(edge)), 1);
-        }
+            if (align.size === 1) {
+                options.label_alignment = align.keys().next().value;
+            } else if (align.size > 0
+                    && align.get("left") === align.get("right") && balance === 0) {
+                options.label_alignment = "centre";
+            }
 
-        if (align.size === 1) {
-            options.label_alignment = align.keys().next().value;
-        } else if (align.size > 0 && align.get("left") === align.get("right") && balance === 0) {
-            options.label_alignment = "centre";
-        }
-
-        if (offset.size === 1) {
-            options.offset = offset.keys().next().value;
-        }
-        if (curve.size === 1) {
-            options.curve = curve.keys().next().value;
+            if (offset.size === 1) {
+                options.offset = offset.keys().next().value;
+            }
+            if (curve.size === 1) {
+                options.curve = curve.keys().next().value;
+            }
+        } else {
+            // We try to place new loops at a new angle, if possible.
+            options.angle = UIMode.Connect.suggested_loop_angle(ui, source);
         }
 
         const label = "";
         // The edge itself does all the set up, such as adding itself to the page.
         return new Edge(ui, label, source, target, options);
+    }
+
+    /// Returns an appropriate angle at which to create a new loop, reducing overlap with existing
+    /// loops where possible.
+    static suggested_loop_angle(ui, vertex) {
+        const angles = new Map();
+        for (const [loop,] of Array.from(ui.quiver.dependencies_of(vertex))
+            .filter(([edge,]) => edge.is_loop()))
+        {
+            const angle
+                = mod(loop.options.angle + 180 - (loop.options.radius < -1 ? 180 : 0), 360) - 180;
+            angles.set(angle, Math.abs(loop.options.radius));
+            // Both -180 and 180 are possible angle values for symmetry, but they should count
+            // as the same angle.
+            if (Math.abs(angle) === 180) {
+                angles.set(-angle, Math.abs(loop.options.radius));
+            }
+        }
+        // First, attempt to find an angle at which there exists no loop.
+        for (let angle = 0; angle < 360; angle += 45) {
+            const attempt_angle = mod(180 - angle, 360) - 180;
+            if (!angles.has(attempt_angle)) {
+                return attempt_angle;
+            }
+        }
+        // Next, attempt to find an angle at which there is no loop of the default radius.
+        for (let angle = 0; angle < 360; angle += 45) {
+            const attempt_angle = mod(180 - angle, 360) - 180;
+            if (angles.get(attempt_angle) !== 3) {
+                return attempt_angle;
+            }
+        }
+        // Otherwise, default to 0.
+        return 0;
     }
 
     /// Connects the source and target. Note that this does *not* check whether the source and
