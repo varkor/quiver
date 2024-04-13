@@ -599,6 +599,11 @@ class Arc extends Curve {
 
     /// Render the arc to an SVG path.
     render(path) {
+        // Firefox appears to have some rendering issues with very large arcs, so we revert to a
+        // straight line when the difference is minimal.
+        if (!this.major && Math.abs(this.sagitta) <= 1.0) {
+            return path.line_by(new Point(this.chord, 0));
+        }
         return path.arc_by(
             Point.diag(Math.abs(this.radius)),
             0,
