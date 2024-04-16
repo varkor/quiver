@@ -480,8 +480,19 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                 return 0;
             }
             edges.sort((a, b) => {
-                return compare_cell_position(a.source, b.source)
-                    || compare_cell_position(a.target, b.target);
+                const find_vertex = (cell, choose) => {
+                    if (cell.is_edge()) {
+                        return find_vertex(choose(cell), choose);
+                    }
+                    return cell;
+                };
+                return compare_cell_position(
+                    find_vertex(a, (cell) => cell.source),
+                    find_vertex(b, (cell) => cell.source),
+                ) || compare_cell_position(
+                    find_vertex(a, (cell) => cell.target),
+                    find_vertex(b, (cell) => cell.target),
+                );
             });
 
             for (const edge of edges) {
