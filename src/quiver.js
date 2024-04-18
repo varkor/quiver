@@ -174,7 +174,7 @@ class Quiver {
     /// Returns the transitive closure of the dependencies of a collection of cells
     // (including those cells themselves, unless `exclude_roots`).
     transitive_dependencies(cells, exclude_roots = false) {
-        const closure = new Set(cells);
+        let closure = new Set(cells);
         // We're relying on the iteration order of the `Set` here.
         for (const cell of closure) {
             for (const [dependency,] of this.dependencies.get(cell)) {
@@ -188,7 +188,9 @@ class Quiver {
                 closure.delete(cell);
             }
         }
-        return closure;
+        closure = Array.from(closure);
+        closure.sort((a, b) => a.level - b.level);
+        return new Set(closure);
     }
 
     /// Return a `{ data, metadata }` object containing the graph in a specific format.
