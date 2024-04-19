@@ -50,7 +50,7 @@ class Curve {
             if (permit_containment) {
                 // If the rounded rectangle completely contains the curve, return the
                 // centre point, to indicate there is an overlap.
-                return [new CurvePoint(rect.centre, 0, this.tangent(0))];
+                return [new CurvePoint(rect.centre, 0, 0)];
             } else {
                 // We expect an intersection, so the caller should be alerted if this is not the
                 // case.
