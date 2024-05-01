@@ -370,9 +370,17 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
         const simple_label = /^[a-zA-Z0-9\\]+$/;
 
         // Adapt a label to be appropriate for TikZ output, by surrounding it in curly brackets when
-        // necessary, and using `\shortstack` for newlines.
+        // necessary, and using `\array` for newlines.
         const format_label = (label) => {
-            return !simple_label.test(label) ? `{${label}}` : label;
+            if (label.includes("\\\\")) {
+                // The label may contain a newline. In this case, we place the label inside a table,
+                // which is permitted to contain newlines.
+                return `\\begin{array}{c} ${label} \\end{array}`;
+            }
+            if (!simple_label.test(label)) {
+                return `{${label}}`;
+            }
+            return label;
         };
 
         // We handle the export in two stages: vertices and edges. These are fundamentally handled
