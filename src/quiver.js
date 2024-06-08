@@ -367,7 +367,7 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
         // surround it in curly brackets. This is preferable, because simpler output is more
         // readable. In general, we need to use curly brackets to avoid LaTeX errors. For instance,
         // `[a]` is invalid: we must use `{[a]}` instead.
-        const simple_label = /^[a-zA-Z0-9\\]+$/;
+        const simple_label = /^\\?[a-zA-Z0-9]+$/;
 
         // Adapt a label to be appropriate for TikZ output, by surrounding it in curly brackets when
         // necessary, and using `\array` for newlines.
