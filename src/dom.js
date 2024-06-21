@@ -291,7 +291,7 @@ DOM.Multislider = class extends DOM.Element {
         }
 
         if (this.thumbs.length > 0) {
-            track.listen(pointer_event("move"), (event) => {
+            const update_hovered_thumb = (event) => {
                 if (DOM.Multislider.active_thumb === null) {
                     // Find the closest thumb to the cursor.
                     const thumb_proximities = this.thumbs.map((thumb) => {
@@ -309,9 +309,12 @@ DOM.Multislider = class extends DOM.Element {
                     const [, closest_thumb] = thumb_proximities[0];
                     closest_thumb.class_list.add("hover");
                 }
-            });
+            };
+
+            track.listen(pointer_event("move"), update_hovered_thumb);
 
             track.listen(pointer_event("down"), (event) => {
+                update_hovered_thumb(event);
                 const hovered_thumb = this.thumbs.find((thumb) => {
                     return thumb.class_list.contains("hover");
                 });
