@@ -3117,7 +3117,7 @@ class UI {
         const newcommand = /^\\((?:re)?newcommand|DeclareMathOperator)(\*?)\{?\\([a-zA-Z]+)\}?(?:\[(\d)\])?\{(.*)\}$/;
         // It's not clear exactly what the rules for colour names is, so we accept a sensible
         // subset. We don't accept `cymk` for now. We don't validate values in the regex.
-        const definecolor = /^\\definecolor\{([a-zA-Z0-9\-]+)\}\{(rgb|RGB|gray)\}\{((?:\d+(?:\.\d+)?)(?:,(?:\d+(?:\.\d+)?))*)\}$/;
+        const definecolor = /^\\definecolor\{([a-zA-Z0-9\-]+)\}\{(rgb|RGB|gray|HTML)\}\{((?:\d+(?:\.\d+)?)(?:,(?:\d+(?:\.\d+)?))*|[a-fA-F\d]{6})\}$/;
 
         const macros = new Map();
         const colours = new Map();
@@ -3147,8 +3147,8 @@ class UI {
 
             match = line.replace(/\s/g, "").match(definecolor);
             if (match !== null) {
-                const [, name, model] = match;
-                const values = match[3].split(",").map((x) => parseFloat(x));
+                const [, name, model, value] = match;
+                const values = value.split(",").map((x) => parseFloat(x));
                 let colour = null;
                 switch (model) {
                     case "rgb":
@@ -3166,6 +3166,17 @@ class UI {
                     case "gray":
                         if (values.length === 1 && values[0] <= 1) {
                             colour = new Colour(0, 0, Math.round(values[0] * 100));
+                        }
+                        break;
+                    case "HTML":
+                        const hex = /^([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i;
+                        const components = value.match(hex);
+                        if (components !== null) {
+                            colour = Colour.from_rgba(
+                                parseInt(components[1], 16),
+                                parseInt(components[2], 16),
+                                parseInt(components[3], 16),
+                            );
                         }
                         break;
                     default:

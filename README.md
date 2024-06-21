@@ -81,7 +81,7 @@ input at the bottom of **quiver**.
 
 Currently, macros may be defined using `\newcommand`, `\newcommand*`, `\renewcommand`,
 `\renewcommand*`, `\DeclareMathOperator`, and `\DeclareMathOperator*`; and colours may be defined
-using `\definecolor` (using the colour modes: `rgb`, `RGB` or `gray`).
+using `\definecolor` (using the colour modes: `rgb`, `RGB`, `HTML`, `gray`).
 
 ## Editor integration
 
