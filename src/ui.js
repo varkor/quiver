@@ -1172,7 +1172,7 @@ class UI {
             if (event.touches.length > 1) {
                 // Multiple touches can cause strange behaviours, because they don't follow the
                 // usual rules (e.g. two consecutive `pointerdown`s without an intervening
-                // `pointerup`.)
+                // `pointerup`).
                 if (this.in_mode(UIMode.Default)) {
                     this.cancel_creation();
                 }
@@ -1302,6 +1302,8 @@ class UI {
                     } else if (event.ctrlKey) {
                         this.switch_mode(new UIMode.Pan("Control"));
                     } else {
+                        this.dismiss_pane();
+
                         if (this.focus_point.class_list.contains("focused")) {
                             this.focus_point.class_list.remove("focused", "smooth");
                         }
@@ -1890,14 +1892,7 @@ class UI {
             }
 
             // Close any open panes.
-            if (this.panel.dismiss_port_pane(this)) {
-                return;
-            }
-
-            const unhidden_pane = this.element.query_selector(".pane:not(.hidden)");
-            if (unhidden_pane !== null) {
-                unhidden_pane.class_list.add("hidden");
-                this.element.query_selector(".version").class_list.add("hidden");
+            if (this.panel.dismiss_port_pane(this) || this.dismiss_pane()) {
                 return;
             }
 
@@ -2799,6 +2794,17 @@ class UI {
         // This may not be the label input, e.g. it may be the macros input.
         return document.activeElement.matches('input[type="text"], div[contenteditable]')
             && document.activeElement;
+    }
+
+    /// Dismiss any shown ports.
+    dismiss_pane() {
+        const unhidden_pane = this.element.query_selector(".pane:not(.hidden)");
+        if (unhidden_pane !== null) {
+            unhidden_pane.class_list.add("hidden");
+            this.element.query_selector(".version").class_list.add("hidden");
+            return true;
+        }
+        return false;
     }
 
     /// Resizes a label to fit within a cell.
@@ -6971,6 +6977,7 @@ class Cell {
                 if (event.button === 0) {
                     if (ui.in_mode(UIMode.Default)) {
                         event.stopPropagation();
+                        ui.dismiss_pane();
                         ui.focus_point.class_list.remove(
                             "revealed", "pending", "active", "focused", "smooth"
                         );
@@ -7018,6 +7025,7 @@ class Cell {
                 if (ui.in_mode(UIMode.Default) || ui.in_mode(UIMode.Command)) {
                     event.stopPropagation();
                     event.preventDefault();
+                    ui.dismiss_pane();
 
                     // If we prevent the default behaviour, then the global inputs won't be blurred,
                     // so we need to do that manually.
