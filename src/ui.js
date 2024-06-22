@@ -3,7 +3,7 @@
 /// Various parameters.
 Object.assign(CONSTANTS, {
     /// The current quiver version.
-    VERSION: "1.5.1",
+    VERSION: "1.5.2",
     /// When the `quiver.sty` package was last modified.
     PACKAGE_VERSION: "2021/01/11",
     /// We currently only support n-cells for (n ≤ 4). This restriction is not technical: it can be
