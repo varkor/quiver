@@ -6369,7 +6369,24 @@ class Toolbar {
                         })),
                     }, {
                         kind: "flip",
-                        cells: ui.quiver.all_cells().filter((cell) => cell.is_edge()),
+                        cells: ui.quiver.all_cells().filter((cell) => {
+                            return cell.is_edge() && !cell.is_loop();
+                        }),
+                    },
+                    {
+                        kind: "reverse",
+                        cells: ui.quiver.all_cells().filter((cell) => cell.is_loop()),
+                    },
+                    {
+                        kind: "angle",
+                        angles: ui.quiver.all_cells().filter((cell) => cell.is_loop())
+                            .map((edge) => {
+                                return {
+                                    edge,
+                                    from: edge.options.angle,
+                                    to: 180 - edge.options.angle,
+                                };
+                            }),
                     }], true);
                 }
             },
@@ -6395,7 +6412,24 @@ class Toolbar {
                         })),
                     }, {
                         kind: "flip",
-                        cells: ui.quiver.all_cells().filter((cell) => cell.is_edge()),
+                        cells: ui.quiver.all_cells().filter((cell) => {
+                            return cell.is_edge() && !cell.is_loop();
+                        }),
+                    },
+                    {
+                        kind: "reverse",
+                        cells: ui.quiver.all_cells().filter((cell) => cell.is_loop()),
+                    },
+                    {
+                        kind: "angle",
+                        angles: ui.quiver.all_cells().filter((cell) => cell.is_loop())
+                            .map((edge) => {
+                                return {
+                                    edge,
+                                    from: edge.options.angle,
+                                    to: -edge.options.angle,
+                                };
+                            }),
                     }], true);
                 }
             },
@@ -6419,6 +6453,15 @@ class Toolbar {
                                 y_min - (vertex.position.x - x_max),
                             ),
                         })),
+                    }, {
+                        kind: "angle",
+                        angles: ui.quiver.all_cells().filter((cell) => cell.is_loop()).map((edge) => {
+                            let to = edge.options.angle - 90;
+                            if (to < -180) {
+                                to += 360;
+                            }
+                            return { edge, from: edge.options.angle, to };
+                        }),
                     }], true);
                 }
             },
