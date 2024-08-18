@@ -1283,6 +1283,15 @@ class UI {
                             }]);
                         }
                         this.switch_mode(UIMode.default);
+                    } else if (this.in_mode(UIMode.Default)) {
+                        // If we clicked down on an arrow, which revealed the side panel, then
+                        // release the pointer without moving the cursor, we need to remove any
+                        // pending state, so that we don't start creating a new edge when the user
+                        // moves the pointer.
+                        const pending = this.element.query_selector(".cell.pending");
+                        if (pending !== null) {
+                            pending.class_list.remove("pending");
+                        }
                     }
                 }
                 this.panel.hide_if_unselected(this);
