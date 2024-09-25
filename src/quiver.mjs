@@ -1,7 +1,11 @@
-"use strict";
+import { delay } from "./dom.mjs";
+import { Colour, Encodable, Point, Position, mod } from "./ds.mjs";
+import { CONSTANTS } from "./arrow.mjs";
+import { Parser } from "./parser.mjs";
+import { Edge, Vertex } from "./ui.mjs";
 
 /// A directed n-pseudograph, in which (k + 1)-cells can connect k-cells.
-class Quiver {
+export class Quiver {
     constructor() {
         /// An array of array of cells. `cells[k]` is the array of k-cells.
         /// `cells[0]` is therefore the array of objects, etc.
@@ -230,13 +234,13 @@ class Quiver {
 }
 
 /// Various methods of exporting a quiver.
-class QuiverExport {
+export class QuiverExport {
     /// A method to export a quiver as a string.
     export() {}
 }
 
 /// Various methods of exporting and importing a quiver.
-class QuiverImportExport extends QuiverExport {
+export class QuiverImportExport extends QuiverExport {
     /// A method to import a quiver as a string. `import(export(quiver))` should be the
     /// identity function. Currently `import` takes a `UI` into which to import directly.
     import() {}

@@ -1,3 +1,9 @@
+import { CONSTANTS } from "./arrow.mjs";
+import { DOM, delay } from "./dom.mjs";
+import { Colour, Position, clamp, mod } from "./ds.mjs";
+import { QuiverExport } from "./quiver.mjs";
+import { Edge, Vertex } from "./ui.mjs";
+
 /// This is a simple recursive descent parser for tikz-cd diagrams. The intention is to be able to
 /// parse those diagrams exported by quiver, in addition to a handful of other tikz-cd features that
 /// are commonly used in hand-written diagrams. Most of the implementation is dealing with errors
@@ -6,7 +12,7 @@
 /// diagram (though this is certainly something we would like to aim for): some of the techniques we
 /// use are heuristic-based (e.g. calculating lengths), and guaranteeing a perfect round-trip is not
 /// feasible.
-class Parser {
+export class Parser {
     constructor(ui, code) {
         this.ui = ui;
         // `souce` is not changed.

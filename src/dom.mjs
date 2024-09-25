@@ -1,12 +1,12 @@
-"use strict";
+import { clamp } from "./ds.mjs";
 
 /// A helper method to trigger later in the event queue.
-function delay(f, duration = 0) {
+export function delay(f, duration = 0) {
     setTimeout(f, duration);
 }
 
 /// A helper method to cancel the default behaviour of an event.
-function cancel(event) {
+export function cancel(event) {
     event.preventDefault();
     event.stopPropagation();
     event.stopImmediatePropagation();
@@ -17,7 +17,7 @@ function cancel(event) {
 // events instead.
 // This should behave acceptably, because we don't access many pointer-specific properties in the
 // pointer events, and for those that we do, `undefined` will behave as expected.
-function pointer_event(name) {
+export function pointer_event(name) {
     if (`onpointer${name}` in document.documentElement) {
         return `pointer${name}`;
     } else {
@@ -26,7 +26,7 @@ function pointer_event(name) {
 }
 
 /// A helper object for dealing with the DOM.
-const DOM = {};
+export const DOM = {};
 
 /// A class for conveniently dealing with elements. It's primarily useful in giving us a way to
 /// create an element and immediately set properties and styles, in a single statement.

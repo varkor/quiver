@@ -1,7 +1,5 @@
-"use strict";
-
 /// An enumeration type.
-class Enum {
+export class Enum {
     constructor(name, ...variants) {
         for (const variant of variants) {
             this[variant] = Symbol(`${name}::${variant}`);
@@ -10,7 +8,7 @@ class Enum {
 }
 
 /// A quintessential 2D (x, y) point.
-class Point {
+export class Point {
     constructor(x, y) {
         [this.x, this.y] = [x, y];
     }
@@ -109,14 +107,14 @@ class Point {
 
 /// Equivalent to `Point`, but used semantically to refer to a position (in cell indices)
 /// on the canvas.
-class Position extends Point {}
+export class Position extends Point {}
 
 /// Equivalent to `Point`, but used semantically to refer to a position (in pixels) on the canvas.
-class Offset extends Point {}
+export class Offset extends Point {}
 
 /// An (width, height) pair. This is essentially functionally equivalent to `Point`,
 /// but has different semantic intent.
-const Dimensions = class extends Position {
+export const Dimensions = class extends Position {
     get width() {
         return this.x;
     }
@@ -127,17 +125,17 @@ const Dimensions = class extends Position {
 };
 
 /// Convert radians to degrees.
-function rad_to_deg(rad) {
+export function rad_to_deg(rad) {
     return rad * 180 / Math.PI;
 }
 
 /// Convert degrees to radians.
-function deg_to_rad(deg) {
+export function deg_to_rad(deg) {
     return deg * Math.PI / 180;
 }
 
 /// A class for conveniently generating and manipulating SVG paths.
-class Path {
+export class Path {
     constructor() {
         this.commands = [];
     }
@@ -193,11 +191,11 @@ class Path {
     }
 }
 
-function clamp(min, x, max) {
+export function clamp(min, x, max) {
     return Math.max(min, Math.min(x, max));
 }
 
-function arrays_equal(array1, array2) {
+export function arrays_equal(array1, array2) {
     if (array1.length !== array2.length) {
         return false;
     }
@@ -211,18 +209,18 @@ function arrays_equal(array1, array2) {
     return true;
 }
 
-function mod(x, y) {
+export function mod(x, y) {
     return (x % y + y) % y;
 }
 
 // A type with custom JSON encoding.
-class Encodable {
+export class Encodable {
     eq(/* other */) {
         console.error("`eq` must be implemented for each subclass.");
     }
 }
 
-class Colour extends Encodable {
+export class Colour extends Encodable {
     constructor(h, s, l, a = 1, name = Colour.colour_name([h, s, l, a])) {
         super();
         [this.h, this.s, this.l, this.a] = [h, s, l, a];
@@ -391,7 +389,7 @@ class Colour extends Encodable {
 /// Returns a `Map` containing the current URL's query parameters, as well as parameters stored in
 /// the fragment identifier. If a parameter is found in both the query string and the fragment
 /// identifier, the query string parameter is prioritised.
-function url_parameters() {
+export function url_parameters() {
     let data = [];
     const fragment_string = window.location.hash.replace(/^#/, "");
     if (fragment_string !== "") {

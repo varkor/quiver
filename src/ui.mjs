@@ -1,4 +1,9 @@
-"use strict";
+import { Arrow, ArrowStyle, CONSTANTS, Label, Shape } from "./arrow.mjs";
+import { CubicBezier } from "./curve.mjs";
+import { cancel, DOM, delay, pointer_event } from "./dom.mjs";
+import { Colour, Dimensions, Enum, Offset, Point, Position, clamp, deg_to_rad, mod, rad_to_deg, url_parameters } from "./ds.mjs";
+import { Parser } from "./parser.mjs";
+import { Quiver, QuiverImportExport } from "./quiver.mjs";
 
 /// Various parameters.
 Object.assign(CONSTANTS, {
@@ -7295,7 +7300,7 @@ class Cell {
 Cell.NEXT_ID = 0;
 
 /// 0-cells, or vertices. This is primarily specialised in its set up of HTML elements.
-class Vertex extends Cell {
+export class Vertex extends Cell {
     constructor(ui, label, position, label_colour = Colour.black()) {
         super(ui.quiver, 0, label, label_colour);
 
@@ -7421,7 +7426,7 @@ class Vertex extends Cell {
 }
 
 /// k-cells (for k > 0), or edges. This is primarily specialised in its set up of HTML elements.
-class Edge extends Cell {
+export class Edge extends Cell {
     constructor(ui, label, source, target, options, label_colour) {
         super(ui.quiver, Math.max(source.level, target.level) + 1, label, label_colour);
 

@@ -1,8 +1,8 @@
-"use strict";
+import { Point, mod } from "./ds.mjs";
 
 /// A very small value we use to determine fuzzy equality of points. Floating-point arithmetic is
 /// imprecise, so we have to take slight inequalities into account when computing.
-const EPSILON = 10 ** -6;
+export const EPSILON = 10 ** -6;
 const INV_EPSILON = 1 / EPSILON;
 
 // Round a number to the nearest `EPSILON` to avoid floating point precision issues.
@@ -10,7 +10,7 @@ function round_to_epsilon(x) {
     return Math.round(x * INV_EPSILON) / INV_EPSILON;
 }
 
-class Curve {
+export class Curve {
     /// Returns whether a point lies inside a polygon. This does so by calculating the winding
     /// number for the polygon with respect to the point. If the winding number is nonzero, then
     /// the point lies inside the polygon.
@@ -63,7 +63,7 @@ class Curve {
 }
 
 /// A flat symmetric quadratic Bézier curve.
-class Bezier extends Curve {
+export class Bezier extends Curve {
     constructor(origin, w, h, angle) {
         super();
         this.origin = origin;
@@ -295,7 +295,7 @@ class Bezier extends Curve {
 
 /// A point on a quadratic Bézier curve or arc, which also records the parameter `t` and the tangent
 /// `angle` of the curve at the point.
-class CurvePoint extends Point {
+export class CurvePoint extends Point {
     constructor(point, t, angle) {
         super(point.x, point.y);
         this.t = t;
@@ -326,7 +326,7 @@ class NormalisedBezier {
     }
 }
 
-class RoundedRectangle {
+export class RoundedRectangle {
     /// Create a rounded rectangle with centre `(cx, cy)`, width `w`, height `h` and border radius
     /// `r`.
     constructor(centre, size, radius) {
@@ -405,7 +405,7 @@ class RoundedRectangle {
 
 /// A very simple class for computing the value of a cubic Bézier at a point, using for replicating
 /// CSS transition timing functions in JavaScript.
-class CubicBezier {
+export class CubicBezier {
     constructor(p0, p1, p2, p3) {
         this.p0 = p0;
         this.p1 = p1;
@@ -424,7 +424,7 @@ class CubicBezier {
 }
 
 /// A circular arc.
-class Arc extends Curve {
+export class Arc extends Curve {
     constructor(origin, chord, major, radius, angle) {
         super();
         this.origin = origin;
