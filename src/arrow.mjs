@@ -1,11 +1,13 @@
-"use strict";
+import { Arc, Bezier, Curve, CurvePoint, EPSILON, RoundedRectangle } from "./curve.mjs";
+import { DOM } from "./dom.mjs";
+import { Dimensions, Enum, Path, Point, rad_to_deg } from "./ds.mjs";
 
 /// `Array.prototype.includes` but for multiple needles.
 function includes_any(array, ...values) {
     return !values.every((element) => !array.includes(element));
 }
 
-class QuiverSVG {
+export class QuiverSVG {
     constructor() {
         // Create a top-level SVG. This will include all the edges and labels as children.
         // Note that we need to explicitly set the namespace attribute so that the SVG can be
@@ -16,7 +18,7 @@ class QuiverSVG {
 
 // Note that we sometimes use fractional pixel values to align drawings optimally with the pixel
 // grid.
-const CONSTANTS = {
+export const CONSTANTS = {
     /// The space (in pixels) between each line in an n-cell. This space is the distance from the
     /// "outside" of each line: if the lines are thicker, the whitespace between them will be
     /// unaltered, so they will be pushed farther apart.
@@ -123,7 +125,7 @@ const CONSTANTS = {
     ),
 };
 
-class ArrowStyle {
+export class ArrowStyle {
     constructor() {
         // The "n" in "n-cell". Must be a positive integer.
         this.level = 1;
@@ -150,7 +152,7 @@ class ArrowStyle {
     }
 }
 
-class Label {
+export class Label {
     constructor() {
         this.size = Dimensions.zero();
         this.alignment = CONSTANTS.LABEL_ALIGNMENT.CENTRE;
@@ -158,7 +160,7 @@ class Label {
     }
 }
 
-class Shape {
+export class Shape {
     /// Return a point representing the origin of the shape.
     point() {
         return new Shape.Endpoint(this.origin);
@@ -183,7 +185,7 @@ Shape.Endpoint = class extends Shape {
     }
 }
 
-class Arrow {
+export class Arrow {
     constructor(source, target, style = new ArrowStyle(), label = null) {
         this.source = source;
         this.target = target;

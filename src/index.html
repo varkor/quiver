@@ -35,13 +35,13 @@
     <link rel="preload" href="icons/zoom-out.svg" as="image">
     <!-- Style sheets and scripts -->
     <link rel="stylesheet" type="text/css" media="screen" href="main.css">
-    <script type="text/javascript" src="ds.js"></script>
-    <script type="text/javascript" src="dom.js"></script>
-    <script type="text/javascript" src="quiver.js"></script>
-    <script type="text/javascript" src="curve.js"></script>
-    <script type="text/javascript" src="arrow.js"></script>
-    <script type="text/javascript" src="parser.js"></script>
-    <script type="text/javascript" src="ui.js"></script>
+    <script type="module" src="ds.mjs"></script>
+    <script type="module" src="dom.mjs"></script>
+    <script type="module" src="quiver.mjs"></script>
+    <script type="module" src="curve.mjs"></script>
+    <script type="module" src="arrow.mjs"></script>
+    <script type="module" src="parser.mjs"></script>
+    <script type="module" src="ui.mjs"></script>
     <!-- Web app manifest -->
     <link rel="manifest" href="manifest.json">
     <!-- Service worker -->
@@ -57,7 +57,10 @@
         <img src="quiver.svg" class="logo">
     </a>
     <noscript>JavaScript must be enabled to use quiver.</noscript>
-    <script>
+    <script type="module">
+        import { url_parameters } from "./ds.mjs";
+        import { cancel, DOM, pointer_event } from "./dom.mjs";
+
         // If we are loading a diagram, display a loading screen to prevent a flash of empty canvas.
         // We do this in a `<script>` tag here to make sure that it loads immediately.
         const query_data = url_parameters();
