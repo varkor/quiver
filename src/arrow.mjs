@@ -1382,7 +1382,7 @@ export class Arrow {
         let i = 0;
         const angle = curve.angle;
         while (true) {
-            // We will try offseting at distance `label_offset` pixels next.
+            // We will try offsetting at distance `label_offset` pixels next.
             label_offset = (offset_min + offset_max) / 2;
             const rect_centre = centre
                 .rotate(angle)

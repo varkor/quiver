@@ -15,7 +15,7 @@ import { Edge, Vertex } from "./ui.mjs";
 export class Parser {
     constructor(ui, code) {
         this.ui = ui;
-        // `souce` is not changed.
+        // `source` is not changed.
         this.source = code;
         // `code` is changed as the parse proceeds: it is the remaining source to parse.
         this.code = code;
@@ -35,7 +35,7 @@ export class Parser {
         return this.source.length - this.code.length;
     }
 
-    /// Returns a range starting from the specified position, to the currrent position.
+    /// Returns a range starting from the specified position, to the current position.
     range_from(start) {
         return Parser.Range.from_to(start, this.position);
     }

@@ -621,7 +621,7 @@ class UI {
         // The default (minimum) size of each column and row, if a width or height has not been
         // specified.
         this.default_cell_size = 128;
-        // The constraints on the width and height of each cell: we use the maximum constaint for
+        // The constraints on the width and height of each cell: we use the maximum constraint for
         // final width/height. We store these separately from `cell_width` and `cell_height` to
         // avoid recomputing the sizes every time, as we access them frequently.
         this.cell_width_constraints = new Map();
@@ -3136,7 +3136,7 @@ class UI {
         // the brackets at least match.
         const newcommand = /^\\((?:re)?newcommand|DeclareMathOperator)(\*?)\{?\\([a-zA-Z]+)\}?(?:\[(\d)\])?\{(.*)\}$/;
         // It's not clear exactly what the rules for colour names is, so we accept a sensible
-        // subset. We don't accept `cymk` for now. We don't validate values in the regex.
+        // subset. We don't accept `cmyk` for now. We don't validate values in the regex.
         const definecolor = /^\\definecolor\{([a-zA-Z0-9\-]+)\}\{(rgb|RGB|gray|HTML)\}\{((?:\d+(?:\.\d+)?)(?:,(?:\d+(?:\.\d+)?))*|[a-fA-F\d]{6})\}$/;
 
         const macros = new Map();
@@ -4178,7 +4178,7 @@ class Panel {
             recording = false;
         };
 
-        // Trigger an efect that changes an edge style, optionally recording the change in the
+        // Trigger an effect that changes an edge style, optionally recording the change in the
         // history.
         const effect_edge_style_change = (record, modify) => {
             if (record) {
@@ -5776,7 +5776,7 @@ class Panel {
                         thumbs[1].set_value(value !== null ? 100 - value.target : 100);
                         break;
                     case "{colour}":
-                        // This case is analagous to `"{label_colour}"` above.
+                        // This case is analogous to `"{label_colour}"` above.
                         // Default to black.
                         this.colour = value || Colour.black();
                         // If we're currently picking a colour, then changing the selection should
