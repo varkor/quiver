@@ -96,13 +96,12 @@ manually download the [latest release](https://github.com/KaTeX/KaTeX/releases) 
 it under `src/` as `src/KaTeX/`. If KaTeX has not been given the correct path, you will get an
 error telling you that KaTeX failed to load.
 
-The webpage needs to be served through a localhost.
-
-If you have Python installed, an easy solution is to run:
+**quiver** must be run through `localhost`. If you have Python installed, an easy solution is to
+run:
 ```
 python3 -m http.server
 ```
-in the **quiver** directory and then open `localhost:8000/` in browser
+in the **quiver** `src` directory and then open `localhost:8000` in browser.
 
 If you have any other problems building **quiver**, [open an
 issue](https://github.com/varkor/quiver/issues/new) detailing the problem and I'll try to help.
