@@ -428,7 +428,9 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                 }
                 if (vertex.label !== "" && vertex.label_colour.is_not_black()) {
                     output += `\\textcolor${
-                        vertex.label_colour.latex(definitions.colours, true)}{${vertex.label}}`;
+                        vertex.label_colour.latex(definitions.colours, true)}{${format_label(
+                            vertex.label
+                        )}}`;
                 } else {
                     output += format_label(vertex.label);
                 }
