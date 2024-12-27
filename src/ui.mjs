@@ -108,6 +108,11 @@ UIMode.Connect = class extends UIMode {
         // Whether we have dragged far enough from the source to trigger the loop mode.
         this.loop = false;
 
+        // Whether the side panel was visible when we started connecting. We hide the side panel
+        // if the user drags the edge beneath the panel, so we need to know whether to show it again
+        // when the pointer is no longer where the panel would be.
+        this.panel_visible = !ui.panel.element.class_list.contains("hidden");
+
         if (this.reconnect === null) {
             // The overlay for drawing an edge between the source and the cursor.
             this.overlay = new DOM.Div({ class: "overlay" });
@@ -1638,6 +1643,23 @@ class UI {
                 // Update the position of the cursor.
                 const offset = this.offset_from_event(event);
                 this.mode.update(this, offset);
+
+                // Hide the side panel if the user is dragging an edge beneath it.
+                const rect = this.panel.element.bounding_rect();
+                const [x, y] = [
+                    // We use `offsetLeft` and `offsetTop` instead of `rect.x` and `rect.y` because
+                    // we don't want the calculated position to be affected by the transform.
+                    event.pageX - this.panel.element.element.offsetLeft,
+                    event.pageY - this.panel.element.element.offsetTop,
+                ];
+                // We don't check for `x < rect.width`, because there's such a small gap to the
+                // right of the side panel, it doesn't make much sense to make it visible when the
+                // pointer is in this gap.
+                if (x >= 0 && y >= 0 && y < rect.height) {
+                    this.panel.hide(this);
+                } else if (this.mode.panel_visible) {
+                    this.panel.element.class_list.remove("hidden");
+                }
             }
         });
 
