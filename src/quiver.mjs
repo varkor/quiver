@@ -663,22 +663,22 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                 // Edge styles.
                 switch (edge.options.style.name) {
                     case "arrow":
-                        // tikz-cd only has supported for 1-cells and 2-cells...
-                        if (edge.options.level === 2 && !edge_is_empty) {
-                            parameters.Rightarrow = "";
-                        } else if (edge.options.level > 2) {
-                            // So for n-cells for n > 2, we make use of tikz-nfold.
-                            parameters.Rightarrow = "";
-                            parameters["scaling nfold"] = edge.options.level;
-                            add_dependency("tikz-nfold", "triple arrows or higher");
-                        }
-
                         // We special-case arrows with no head, body, nor tail. This is because the
                         // `no body` style has some graphical issues in some versions of TikZ, so
                         // we prefer to avoid this style if possible.
                         if (edge_is_empty) {
                             parameters.draw = "none";
                             break;
+                        }
+
+                        // tikz-cd only has supported for 1-cells and 2-cells...
+                        if (edge.options.level === 2) {
+                            parameters.Rightarrow = "";
+                        } else if (edge.options.level > 2) {
+                            // So for n-cells for n > 2, we make use of tikz-nfold.
+                            parameters.Rightarrow = "";
+                            parameters["scaling nfold"] = edge.options.level;
+                            add_dependency("tikz-nfold", "triple arrows or higher");
                         }
 
                         // Body styles.
