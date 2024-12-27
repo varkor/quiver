@@ -5517,16 +5517,17 @@ class Panel {
                 // In Firefox, the bounding rectangle for the KaTeX element seems to be sporadically
                 // available, unless we render the arrow *beforehand*.
                 cell.render(ui);
-                const bounding_rect = label.query_selector(".katex, .katex-error").bounding_rect();
+                const katex_element = label.query_selector(".katex, .katex-error");
+                const [width, height] = [
+                    katex_element.element.offsetWidth, katex_element.element.offsetHeight
+                ];
                 // The bounding rect is the size on-screen, which will hence be smaller if we are
                 // zoomed out (and conversely if we are zoomed in). We therefore have to adjust the
                 // dimensions (inversely) by the scaling factor.
                 const scale = 2 ** -ui.scale;
                 cell.arrow.label.size = new Dimensions(
-                    bounding_rect.width * scale
-                        + (bounding_rect.width > 0 ? CONSTANTS.EDGE_LABEL_PADDING * 2 : 0),
-                    bounding_rect.height * scale
-                        + (bounding_rect.height > 0 ? CONSTANTS.EDGE_LABEL_PADDING * 2 : 0),
+                    width * scale + (width > 0 ? CONSTANTS.EDGE_LABEL_PADDING * 2 : 0),
+                    height * scale + (height > 0 ? CONSTANTS.EDGE_LABEL_PADDING * 2 : 0),
                 );
                 // Rerender the edge with the new label.
                 cell.render(ui);
