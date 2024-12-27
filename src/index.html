@@ -69,7 +69,7 @@
         // the current diagram in the app.
         if (query_data.has("embed")) {
             // If the `embed` query parameter is present, we'll automatically switch to
-            // `UIMode.Embedded` in `ui.js`, which will add the `embedded` class to the body.
+            // `UIMode.Embedded` in `ui.mjs`, which will add the `embedded` class to the body.
             // However, we pre-empt this here by adding `embedded` immediately upon loading, so
             // that the `loading_screen` will have the correct CSS applied from the start.
             document.body.classList.add("embedded");

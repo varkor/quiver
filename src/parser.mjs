@@ -674,13 +674,27 @@ export class Parser {
             edge.options.style.tail.name = "none";
             return;
         }
+        const swap_label_alignment = () => {
+            switch (edge.options.label_alignment) {
+                case "left":
+                    edge.options.label_alignment = "right";
+                    break;
+                case "right":
+                    edge.options.label_alignment = "left";
+                    break;
+            }
+        };
+        if (this.eat("swap")) {
+            swap_label_alignment();
+            return;
+        }
         // Parse label.
         if (this.eat("\"")) {
             const label = this.eat(/[^"]*/);
             this.eat("\"", true);
             edge.label = label;
-            if (this.eat("'")) {
-                edge.options.label_alignment = "right";
+            while (this.eat("'")) {
+                swap_label_alignment();
             }
             this.eat_whitespace();
             if (this.eat("{")) {
