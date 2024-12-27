@@ -673,7 +673,14 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
 
                         // tikz-cd only has supported for 1-cells and 2-cells...
                         if (edge.options.level === 2) {
-                            parameters.Rightarrow = "";
+                            if (edge.options.style.head.name === "none") {
+                                // We special-case the combination of double arrows with no head,
+                                // because tikz-cd has a dedicated style, which means more concise
+                                // output.
+                                parameters.equals = "";
+                            } else {
+                                parameters.Rightarrow = "";
+                            }
                         } else if (edge.options.level > 2) {
                             // So for n-cells for n > 2, we make use of tikz-nfold.
                             parameters.Rightarrow = "";
@@ -775,7 +782,11 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                         // Head styles.
                         switch (edge.options.style.head.name) {
                             case "none":
-                                parameters["no head"] = "";
+                                // Only add the `no head` option if we haven't already handled this
+                                // when setting the body style earlier.
+                                if (!parameters.hasOwnProperty("equals")) {
+                                    parameters["no head"] = "";
+                                }
                                 break;
 
                             case "epi":
