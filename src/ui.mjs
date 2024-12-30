@@ -396,6 +396,24 @@ UIMode.Connect = class extends UIMode {
             if (curve.size === 1) {
                 options.curve = curve.keys().next().value;
             }
+
+            // If there was not precisely one parallel edge that had a non-zero offset, then we try
+            // to offset the new edge to reduce overlap with existing edges.
+            if (!options.hasOwnProperty("offset") || options.offset === 0) {
+                // We try to offset somewhat symmetrically, and with decent spacing. It seems most
+                // convenient to hardcode the following values, as the pattern is not particularly
+                // uniform.
+                const offset_attempts = [0, -2, 2, -4, 4, -1, 1, -3, 3, -5, 5];
+                while (offset_attempts.length > 0) {
+                    const attempt = offset_attempts.shift();
+                    // We need to negate because the offsets in `offset` are negated, because they
+                    // record offset candidates, rather than offsets that are present.
+                    if (!offset.has(-attempt)) {
+                        options.offset = attempt;
+                        break;
+                    }
+                }
+            }
         }
         if (source === target) {
             // We try to place new loops at a new angle, if possible, to reducing overlap with
