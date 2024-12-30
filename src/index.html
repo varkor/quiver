@@ -111,9 +111,8 @@
             return `${URL_prefix}#${
                 Array.from(query_data.entries())
                     .filter(([key,]) => !ignore.includes(key))
-                    .map(([key, value]) => `${
-                        encodeURIComponent(key)
-                    }=${encodeURIComponent(value)}`).join("&")
+                    // We do not `encodeURIComponent`s, because they are already encoded.
+                    .map(([key, value]) => `${key}=${value}`).join("&")
             }`;
         }
     </script>
