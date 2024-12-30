@@ -158,10 +158,7 @@ UIMode.Connect = class extends UIMode {
             svg.clear();
             // Lock on to the target if present, otherwise simply draw the edge
             // to the position of the cursor.
-            const target = this.target !== null ? {
-                shape: this.target.shape,
-                level: this.target.level,
-            } : {
+            const target = this.target !== null ? this.target : {
                 shape: new Shape.Endpoint(offset),
                 level: 0,
             };
@@ -177,15 +174,11 @@ UIMode.Connect = class extends UIMode {
 
             this.arrow.style = UI.arrow_style_for_options(
                 this.arrow,
-                Edge.default_options({
+                Edge.default_options(Object.assign({
                     level,
-                    shorten: {
-                        source: this.source.level === 0 ? 0 : CONSTANTS.EDGE_EDGE_PADDING,
-                        target: target.level === 0 ? 0 : CONSTANTS.EDGE_EDGE_PADDING,
-                    },
-                    shape: this.loop ? "arc" : "bezier",
-                    angle: this.loop ? UIMode.Connect.suggested_loop_angle(ui, this.source) : 0,
-                }),
+                    shape: this.loop && (this.target === null || this.source === this.target)
+                        ? "arc" : "bezier",
+                }, UIMode.Connect.suggested_edge_options(ui, this.source, target))),
             );
 
             this.arrow.redraw();
@@ -276,6 +269,13 @@ UIMode.Connect = class extends UIMode {
 
     /// Creates a new edge.
     static create_edge(ui, source, target) {
+        // The edge itself does all the set up, such as adding itself to the page.
+        return new Edge(ui, "", source, target, this.suggested_edge_options(ui, source, target));
+    }
+
+    /// Returns the suggested default options for an edge, e.g. automatically offsetting to reducing
+    /// overlap with existing parallel edges where possible.
+    static suggested_edge_options(ui, source, target) {
         // We attempt to guess what the intended label alignment is and what the intended edge
         // offset is, if the cells being connected form some path with existing connections.
         // Otherwise we revert to the currently-selected label alignment in the panel and the
@@ -299,8 +299,9 @@ UIMode.Connect = class extends UIMode {
             options.label_alignment = selected_alignment.element.value;
         }
 
-        // The following heuristics are really only sensible for non-loops.
-        if (source !== target) {
+        // The following heuristics are only sensible for non-loops, and for which the target is a
+        // cell (rather than the pointer).
+        if (target instanceof Cell && source !== target) {
             // If *every* existing connection to source and target has a consistent label alignment,
             // then `align` will be a singleton, in which case we use that element as the alignment.
             // If it has `left` and `right` in equal measure (regardless of `centre`), then
@@ -395,48 +396,45 @@ UIMode.Connect = class extends UIMode {
             if (curve.size === 1) {
                 options.curve = curve.keys().next().value;
             }
-        } else {
-            // We try to place new loops at a new angle, if possible.
-            options.angle = UIMode.Connect.suggested_loop_angle(ui, source);
         }
-
-        const label = "";
-        // The edge itself does all the set up, such as adding itself to the page.
-        return new Edge(ui, label, source, target, options);
-    }
-
-    /// Returns an appropriate angle at which to create a new loop, reducing overlap with existing
-    /// loops where possible.
-    static suggested_loop_angle(ui, vertex) {
-        const angles = new Map();
-        for (const [loop,] of Array.from(ui.quiver.dependencies_of(vertex))
-            .filter(([edge,]) => edge.is_loop()))
-        {
-            const angle
-                = mod(loop.options.angle + 180 - (loop.options.radius < -1 ? 180 : 0), 360) - 180;
-            angles.set(angle, Math.abs(loop.options.radius));
-            // Both -180 and 180 are possible angle values for symmetry, but they should count
-            // as the same angle.
-            if (Math.abs(angle) === 180) {
-                angles.set(-angle, Math.abs(loop.options.radius));
+        if (source === target) {
+            // We try to place new loops at a new angle, if possible, to reducing overlap with
+            // existing loops.
+            const angles = new Map();
+            for (const [loop,] of Array.from(ui.quiver.dependencies_of(source))
+                .filter(([edge,]) => edge.is_loop()))
+            {
+                const angle = mod(
+                    loop.options.angle + 180 - (loop.options.radius < -1 ? 180 : 0), 360) - 180;
+                angles.set(angle, Math.abs(loop.options.radius));
+                // Both -180 and 180 are possible angle values for symmetry, but they should count
+                // as the same angle.
+                if (Math.abs(angle) === 180) {
+                    angles.set(-angle, Math.abs(loop.options.radius));
+                }
+            }
+            let found_space = false;
+            // First, attempt to find an angle at which there exists no loop.
+            for (let angle = 0; angle < 360; angle += 45) {
+                const attempt_angle = mod(180 - angle, 360) - 180;
+                if (!angles.has(attempt_angle)) {
+                    options.angle = attempt_angle;
+                    found_space = true;
+                    break;
+                }
+            }
+            if (!found_space) {
+                // Next, attempt to find an angle at which there is no loop of the default radius.
+                for (let angle = 0; angle < 360; angle += 45) {
+                    const attempt_angle = mod(180 - angle, 360) - 180;
+                    if (angles.get(attempt_angle) !== 3) {
+                        options.angle = attempt_angle;
+                        break;
+                    }
+                }
             }
         }
-        // First, attempt to find an angle at which there exists no loop.
-        for (let angle = 0; angle < 360; angle += 45) {
-            const attempt_angle = mod(180 - angle, 360) - 180;
-            if (!angles.has(attempt_angle)) {
-                return attempt_angle;
-            }
-        }
-        // Next, attempt to find an angle at which there is no loop of the default radius.
-        for (let angle = 0; angle < 360; angle += 45) {
-            const attempt_angle = mod(180 - angle, 360) - 180;
-            if (angles.get(attempt_angle) !== 3) {
-                return attempt_angle;
-            }
-        }
-        // Otherwise, default to 0.
-        return 0;
+        return options;
     }
 
     /// Connects the source and target. Note that this does *not* check whether the source and
