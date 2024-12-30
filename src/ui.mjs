@@ -310,6 +310,9 @@ UIMode.Connect = class extends UIMode {
             const align = new Map();
             const offset = new Map();
             const curve = new Map();
+            // In our offset heuristic below, where we attempt to avoid overlap, we only
+            // wish to consider offset for edges that are not curved.
+            const offset_only = new Map();
             // We only want to pick `centre` when the source and target are equally constraining
             // (otherwise we end up picking `centre` far too often). So we check that they're both
             // being considered equally. This means `centre` is chosen only rarely, but often in
@@ -350,6 +353,12 @@ UIMode.Connect = class extends UIMode {
                         offset.set(options.offset, 0);
                     }
                     offset.set(options.offset, offset.get(options.offset) + 1);
+                }
+                if (options.offset !== null && (options.curve === null || options.curve === 0)) {
+                    if (!offset_only.has(options.offset)) {
+                        offset_only.set(options.offset, 0);
+                    }
+                    offset_only.set(options.offset, offset_only.get(options.offset) + 1);
                 }
                 if (options.curve !== null) {
                     if (!curve.has(options.curve)) {
@@ -408,7 +417,7 @@ UIMode.Connect = class extends UIMode {
                     const attempt = offset_attempts.shift();
                     // We need to negate because the offsets in `offset` are negated, because they
                     // record offset candidates, rather than offsets that are present.
-                    if (!offset.has(-attempt)) {
+                    if (!offset_only.has(-attempt)) {
                         options.offset = attempt;
                         break;
                     }
