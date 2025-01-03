@@ -412,7 +412,7 @@ UIMode.Connect = class extends UIMode {
                 // We try to offset somewhat symmetrically, and with decent spacing. It seems most
                 // convenient to hardcode the following values, as the pattern is not particularly
                 // uniform.
-                const offset_attempts = [0, -2, 2, -4, 4, -1, 1, -3, 3, -5, 5];
+                const offset_attempts = [0, -3, 3, -5, 5, -1, 1, -2, 2, -4, 4];
                 while (offset_attempts.length > 0) {
                     const attempt = offset_attempts.shift();
                     // We need to negate because the offsets in `offset` are negated, because they
