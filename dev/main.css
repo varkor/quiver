@@ -1,0 +1,1778 @@
+/* Root styles */
+
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+:root {
+    /* UI colours. */
+    --ui-black: hsla(0, 0%, 0%, 0.9); /* Almost black. */
+    --ui-white: hsl(0, 0%, 96%); /* Almost white. */
+    --ui-blue: hsl(200, 100%, 50%); /* Selection blue. */
+    --ui-orange: hsl(30, 100%, 50%); /* Highlight orange. */
+
+    --ui-background: transparent;
+    --ui-border: hsla(0, 0%, 100%, 0.2);
+    --ui-hover: hsla(0, 0%, 100%, 0.1);
+    --ui-active: hsla(0, 0%, 100%, 0.2);
+    --ui-focus: var(--ui-blue);
+    --ui-text: hsla(0, 0%, 100%, 0.6);
+
+    /* Cell states. */
+    --cell-hover: hsla(0, 0%, 0%, 0.1);
+    --cell-selected: hsla(0, 0%, 0%, 0.2);
+    --cell-source: hsla(0, 0%, 0%, 0.2);
+    --cell-target: hsla(0, 0%, 0%, 0.2);
+}
+
+body {
+    position: absolute;
+    width: 100%; height: 100%;
+    margin: 0;
+    overflow: hidden;
+
+    background: white;
+
+    font-family: Arial, sans-serif;
+
+    /* Safari on iOS does not currently respect `none`: double-tap-to-zoom is not disabled. We are
+    forced to prevent this in JavaScript instead. */
+    touch-action: none;
+}
+
+body:not(.modal) {
+    user-select: none;
+}
+
+noscript {
+    display: inline-block;
+    position: fixed;
+    left: 50%; top: 50%;
+    padding: 6pt 8pt;
+    transform: translate(-50%, -50%);
+
+    background: var(--ui-black);
+    border-radius: 8px;
+
+    text-align: center;
+    color: var(--ui-white);
+}
+
+/* We occasionally want to disable transitions on a particular element. */
+.no-transition {
+    transition: none !important;
+}
+
+/* Special elements */
+
+.error-banner {
+    position: fixed;
+    width: 100%;
+    left: 0; top: 0;
+    z-index: 200;
+    padding: 8px 0;
+
+    background: hsl(0, 50%, 50%);
+    color: var(--ui-white);
+
+    text-align: center;
+
+    user-select: none;
+
+    transition: transform 0.2s;
+}
+
+.error-banner.hidden {
+    transform: translateY(-100%);
+}
+
+.close {
+    width: 28px; height: 28px;
+    margin-left: 20px;
+
+    background: transparent;
+    border: none;
+    border-radius: 100%;
+    outline: none;
+
+    text-align: center;
+    color: white;
+    font-size: 20px;
+}
+
+.close:hover {
+    background: hsla(0, 0%, 100%, 0.2);
+}
+
+.close:active {
+    background: hsla(0, 0%, 100%, 0.4);
+}
+
+.close::before {
+    content: "×";
+}
+
+a > .logo {
+    position: fixed;
+    left: 16px; top: 16px;
+    width: 100px;
+    z-index: 90;
+
+    opacity: 0.8;
+}
+
+a > .logo:hover {
+    opacity: 1;
+}
+
+.version.hidden {
+    display: none;
+}
+
+.version {
+    position: fixed;
+    left: 50px; top: 48px;
+    z-index: 90;
+
+    font-size: 8pt;
+    color: var(--ui-black);
+
+    pointer-events: none;
+}
+
+.tooltip {
+    display: block;
+    position: absolute;
+    left: 50%;
+    padding: 8px 12px;
+    line-height: 18pt;
+    transform: translateX(-50%);
+    z-index: 80;
+
+    background: var(--ui-blue);
+    border-radius: 4px;
+
+    text-align: center;
+    color: var(--ui-black);
+}
+
+.ui > .tooltip {
+    /* Display just below the toolbar. */
+    top: calc(16px + 48px + 8px);
+}
+
+kbd {
+    white-space: pre;
+}
+
+.tooltip kbd, .pane kbd, .port kbd {
+    padding: 1px 6px;
+
+    border-radius: 4px;
+    box-shadow: hsla(0, 0%, 0%, 0.1) 0 2px 0px;
+}
+
+.tooltip kbd {
+    background: var(--ui-white);
+    border: hsla(0, 0%, 0%, 0.4) 1px solid;
+}
+
+.tooltip kbd + kbd, .pane kbd + kbd {
+    margin-left: 4px;
+}
+
+.loading-screen {
+    position: fixed;
+    left: 0; right: 0;
+    top: 0; bottom: 0;
+    z-index: 400;
+
+    background: hsl(0, 0%, 10%);
+}
+
+.loading-screen.hidden {
+    opacity: 0;
+
+    pointer-events: none;
+
+    transition: opacity 0.6s;
+}
+
+.loading-screen .logo {
+    position: fixed;
+    left: 50%; top: 50%;
+    width: 288px;
+    transform: translate(-50%, -50%);
+}
+
+.loading-screen span {
+    display: inline-block;
+    position: fixed;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    margin-left: 20px; margin-top: 32px;
+
+    color: var(--ui-blue);
+    white-space: nowrap;
+}
+
+.embedded .loading-screen {
+    background: white;
+}
+
+.embedded .loading-screen .logo {
+    max-width: 60%;
+}
+
+.embedded .loading-screen span {
+    /* Hide the "Loading diagram..." text in an `<iframe>`, because there's likely not to be enough
+    space for it. */
+    display: none;
+}
+
+/* The canvas of cells */
+
+.container {
+    position: fixed;
+    width: 100%;
+    height: 100%;
+}
+
+.canvas {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform-origin: top left;
+}
+
+.ui.pan .container {
+    cursor: grab;
+}
+
+.ui.pan .container:active {
+    cursor: grabbing;
+}
+
+/* Grid interaction */
+
+.grid {
+    position: fixed;
+    pointer-events: none;
+    z-index: -100;
+}
+
+.grid.hidden {
+    display: none;
+}
+
+.focus-point {
+    display: block;
+    position: absolute;
+    margin-left: 1px; margin-top: 1px;
+    width: 126px; height: 126px;
+
+    background: hsla(0, 0%, 0%, 0);
+
+    text-align: center;
+    font: 16px Arial, sans-serif;
+    color: hsla(0, 0%, 0%, 0.4);
+}
+
+.focus-point.revealed {
+    background: hsla(0, 0%, 0%, 0.1);
+}
+
+.focus-point.focused {
+    border: var(--ui-focus) 4px solid;
+    border-radius: 8px;
+}
+
+.focus-point.smooth {
+    transition: left 0.1s, top 0.1s, width 0.1s, height 0.1s, padding-top 0.1s;
+}
+
+.focus-point::before {
+    content: "Add vertex";
+    visibility: hidden;
+    position: relative;
+    top: -8px;
+}
+
+.focus-point.active::before {
+    content: "Add edge";
+}
+
+.focus-point.revealed::before {
+    visibility: visible;
+}
+
+.ui:not(.show-hints) .focus-point .tooltip, .focus-point:not(.focused) .tooltip, .tooltip:empty {
+    display: none;
+}
+
+.focus-point .tooltip {
+    bottom: 100%;
+    margin-bottom: 24px;
+
+    white-space: nowrap;
+}
+
+.focus-point .tooltip::before {
+    content: "";
+    position: absolute;
+    top: 100%; left: calc(50% - 14px);
+    /* Make sure there's not a subpixel gap between this and the tooltip. */
+    margin-top: -1px;
+    width: 0; height: 0;
+
+    border: 14px solid transparent;
+    border-top-color: var(--ui-blue);
+    border-bottom: none;
+}
+
+/* Vertices */
+
+.vertex {
+    position: absolute;
+}
+
+.ui.default .vertex {
+    cursor: move;
+}
+
+.vertex .content {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    z-index: 2;
+
+    border-radius: 16px;
+
+    text-align: center;
+}
+
+.grid:not(.hidden) + .container .vertex.empty:not(.selected) .content:not(:hover) {
+    border: var(--cell-hover) 2px solid;
+}
+
+/* We would like to animate the movement of vertices when moving them via the keyboard, but the
+transitions are quite subtle, especially when interacting with the origin of the resizable grid, so
+in the interest of time, I have decided to be satisfied with instantaneous movement for the timing
+being. */
+/* .ui.key-move .vertex, .ui.key-move .vertex .content {
+    transition: left 0.1s, top 0.1s, width 0.1s, height 0.1s;
+} */
+
+.ui.default .vertex .content {
+    cursor: default;
+}
+
+/* This is so explicit because of the CSS specificity rules. */
+.ui.default .vertex:not(.selected):not(.source):not(.target) .content:hover,
+.ui.command .vertex:not(.selected):not(.source):not(.target) .content:hover {
+    background: var(--cell-hover);
+}
+
+.vertex.source .content {
+    background: var(--cell-source);
+}
+
+.vertex.target .content {
+    background: var(--cell-target);
+}
+
+.vertex.selected .content {
+    background: var(--cell-selected);
+}
+
+.label {
+    display: block;
+    position: absolute;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+
+    text-align: center;
+    font-family: inherit;
+    font-size: 26px;
+    white-space: nowrap;
+
+    pointer-events: none;
+    user-select: none;
+}
+
+/* The overlay edge drawn while connecting cells. */
+.overlay, .overlay .arrow-background  {
+    pointer-events: none !important;
+}
+
+/* The side panel */
+
+.panel {
+    position: fixed;
+    z-index: 91;
+    overflow-y: auto;
+
+    font: 14px Arial, sans-serif;
+    color: var(--ui-text);
+}
+
+.side.panel {
+    width: calc(16px * 18);
+    top: 16px;
+    bottom: 16px;
+    right: 16px;
+
+    border-radius: 16px;
+
+    transition: transform 0.1s;
+}
+
+.side.panel.hidden {
+    /* We use `translateX` instead of `right` to avoid continually performing layout. */
+    transform: translateX(calc(16px * 18 + 16px));
+}
+
+.ui.connect .panel {
+    pointer-events: none;
+}
+
+.panel label, .panel button {
+    user-select: none;
+}
+
+.global {
+    left: 50%;
+    bottom: 0;
+    transform: translateX(-50%);
+    width: 808px;
+    height: 46px;
+    padding: 8px;
+    /* Display above the import/export pane. */
+    z-index: 101;
+
+    background: var(--ui-black);
+    border-radius: 8px 8px 0 0;
+
+    text-align: center;
+    white-space: nowrap;
+}
+
+.panel > .wrapper {
+    position: absolute;
+    left: 0;
+    width: 100%;
+    padding: 8px 16px;
+
+    background: var(--ui-black);
+    border-radius: 16px;
+}
+
+.side label {
+    display: block;
+    margin-bottom: 8px;
+}
+
+.side:not(.nonloop) .nonloop {
+    /* We choose to set the height to 0, rather than `display: none;`, since some element positions,
+    e.g. keyboard hints, are based on size calculations, which are messed up if the element is not
+    displayed. */
+    height: 0;
+    margin: 0;
+    overflow: hidden;
+}
+
+.side.no-transition .nonloop .slider .thumb, .side.no-transition .loop .slider .thumb {
+    transition: none;
+}
+
+.side:not(.loop) .loop {
+    display: none;
+}
+
+label.inline {
+    display: inline-block;
+}
+
+.label-input-container {
+    position: fixed;
+    left: 50%; height: 32px;
+    /* Position 8px above the global panel. */
+    bottom: calc(8px + 46px);
+    width: 40%;
+    min-width: 560px;
+    transform: translateX(-50%);
+
+    background: var(--ui-black);
+    border-radius: 8px;
+
+    color: var(--ui-white);
+
+    transition: transform 0.1s;
+}
+
+.label-input-container.hidden {
+    /* We use `translate` instead of `bottom` to avoid continually performing layout. */
+    transform: translate(-50%, calc(16pt + 4px * 2 + 16px + 8px + 46px));
+}
+
+.ui.connect .label-input-container {
+    pointer-events: none;
+}
+
+.ui.command .label-input-container {
+    background: var(--ui-orange);
+}
+
+.label-input {
+    width: 100%; height: 32px;
+    padding: 4px 6px;
+    padding-right: calc(24px + 6px);
+
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    outline: none;
+
+    font-family: monospace;
+    font-size: 16pt;
+    color: inherit;
+    text-align: center;
+
+    transition: width 0.1s;
+}
+
+.label-input:hover:not(:disabled):not(:focus) {
+    background: hsla(0, 0%, 15%, 0.9);
+}
+
+.label-input:focus {
+    background: var(--ui-focus);
+
+    color: black;
+}
+
+.input-mode {
+    display: inline-block;
+    vertical-align: bottom;
+    width: 0px; height: 32px;
+    line-height: 32px;
+    overflow: hidden;
+
+    border-radius: 8px 0 0 8px;
+
+    font-size: 12pt;
+    text-align: center;
+
+    transition: width 0.1s;
+}
+
+.command .input-mode {
+    width: 80px;
+}
+
+.command .label-input:focus {
+    width: calc(100% - 80px);
+
+    background: var(--ui-orange);
+    /* We override this value to make `shadow-flash` the correct colour. This isn't really
+    semantic naming. */
+    --ui-blue: var(--ui-orange);
+}
+
+.label-input::selection {
+    background-color: white;
+}
+
+.label-input-container .colour-indicator {
+    position: absolute;
+    top: 50%;
+    right: 4px;
+    width: 24px;
+    transform: translateY(-50%);
+    border-radius: 4px;
+}
+
+.command .label-input-container .colour-indicator {
+    display: none;
+}
+
+.panel input[type="text"],
+.port .options input[type="number"] {
+    padding: 2px 4px;
+
+    background: var(--ui-background);
+    border: var(--ui-border) solid 1px;
+    border-radius: 2px;
+    outline: none;
+
+    font-size: inherit;
+    font-family: monospace;
+    color: var(--ui-white);
+}
+
+.panel input[type="text"]::placeholder,
+.port .options input[type="number"]::placeholder {
+    color: hsla(0, 0%, 100%, 0.4);
+}
+
+.panel input[type="text"]:hover:not(:disabled):not(:focus),
+.port .options input[type="number"]:hover:not(:disabled):not(:focus) {
+    background: var(--ui-hover);
+}
+
+.panel input[type="text"]:focus,
+.port .options input[type="number"]:focus {
+    background: var(--ui-focus);
+    border-color: var(--ui-focus);
+
+    color: hsl(0, 0%, 16%);
+}
+
+.panel input[type="text"]:focus::placeholder,
+.port .options input[type="number"]:focus::placeholder {
+    color: hsla(0, 0%, 0%, 0.4);
+}
+
+input[type="text"].flash {
+    animation: shadow-flash 0.2s;
+}
+
+@keyframes shadow-flash {
+    from {
+        box-shadow: 0 0 0 4px var(--ui-blue);
+    }
+
+    to {
+        box-shadow: 0 0 0 var(--ui-blue);
+    }
+}
+
+.panel .options {
+    position: relative;
+    margin: 8px 0;
+
+    text-align: center;
+}
+
+.panel input[type="radio"] {
+    -webkit-appearance: none;
+    display: inline-block;
+    width: 48px; height: 48px;
+
+    background-color: var(--ui-background);
+    background-repeat: no-repeat;
+    background-position: center;
+    /* We use stacked backgrounds for the background image, */
+    /* to allow us to change the image directly via CSS. */
+    background-size: 0%, auto;
+    border: var(--ui-border) solid 1px;
+    border-radius: 2px;
+    outline: none;
+}
+
+.panel .large {
+    white-space: nowrap;
+}
+
+.panel .large input[type="radio"] {
+    width: 72px;
+    height: 64px;
+}
+
+.panel .options.focused input[type="radio"]:not(:checked) {
+    background-size: auto, 0%;
+    background-color: var(--ui-white);
+    border-color: var(--ui-focus);
+}
+
+.panel input.hidden, .panel div.hidden, .panel label.hidden {
+    display: none;
+}
+
+.panel .centred {
+    text-align: center;
+}
+
+.panel .vertical {
+    display: inline-block;
+    width: calc(100% - (20% + 4px) * 2);
+    vertical-align: top;
+}
+
+.panel .vertical + .vertical:not(.centre) {
+    margin-left: 4px;
+}
+
+.panel .short {
+    width: 20%;
+}
+
+.panel .centre {
+    position: relative;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.panel .vertical input[type="radio"] {
+    position: relative;
+    display: block;
+    width: 100%; height: 32px;
+    left: 50%;
+    transform: translateX(-50%);
+    margin: 0; margin-top: -1px;
+
+    border-radius: 0;
+}
+
+.panel .vertical input[type="radio"]:first-of-type {
+    margin-top: 0;
+
+    border-radius: 2px 2px 0 0;
+}
+
+.panel .vertical input[type="radio"]:last-of-type {
+    border-radius: 0 0 2px 2px;
+}
+
+.panel .vertical input[type="radio"].short {
+    display: inline-block;
+    width: 50%;
+    left: 0;
+    transform: none;
+}
+
+.panel .vertical input[type="radio"].short + input[type="radio"].short {
+    border-left-width: 0;
+}
+
+.panel .vertical input[type="radio"].short:nth-last-of-type(2) {
+    border-radius: 0 0 0 2px;
+}
+
+.panel .vertical input[type="radio"].short:not(:nth-last-of-type(2)) + input[type="radio"].short {
+    border-radius: 0;
+}
+
+.panel .vertical input[type="radio"].short:last-of-type {
+    border-radius: 0 0 2px 0;
+}
+
+input[type="radio"].short + input[type="radio"]:not(.short) {
+    /* To be honest, I'm not quite sure why this is necessary, but it produces the right effect on
+    the browsers I tested on. */
+    margin-top: -4px;
+}
+
+.panel input[type="radio"]:hover:not(:disabled):not(:active):not(:checked) {
+    background-color: var(--ui-hover);
+}
+
+.panel input[type="radio"]:active:not(:disabled) {
+    background-color: var(--ui-active);
+}
+
+.panel input[type="radio"]:checked:not(:disabled) {
+    background-color: var(--ui-focus);
+    background-size: auto, 0%;
+    border-color: var(--ui-blue);
+}
+
+.panel label {
+    position: relative;
+}
+
+/* A non-native range input, supporting multiple thumbs. */
+div.slider {
+    display: inline-block;
+    vertical-align: middle;
+    position: absolute;
+
+    touch-action: none;
+}
+
+.linked-sliders {
+    display: inline-block;
+}
+
+.panel div.slider {
+    width: 55%;
+    left: 56px;
+}
+
+.options div.slider {
+    position: relative;
+    width: 80px;
+    margin: -14px 8px 0 4px;
+}
+
+.slider-values {
+    display: inline-block;
+    position: absolute;
+    right: 0;
+
+    pointer-events: none;
+}
+
+.options .slider-values {
+    position: relative;
+    width: 54px;
+}
+
+.slider-values .slider-value {
+    display: inline-block;
+    /* Try to keep each value fixed-width. This will technically be font-dependent, but it's simpler
+       to pick a fixed width manually. */
+    min-width: 24px;
+
+    text-align: right;
+}
+
+.slider .thumb {
+    display: inline-block;
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    margin-top: -3px;
+    top: 0;
+    transform: translateX(-50%);
+    z-index: 1;
+
+    background: hsl(0, 0%, 10%);
+    border: var(--ui-border) solid 1px;
+    border-radius: 20px;
+
+    transition: left 0.1s;
+
+    pointer-events: none;
+}
+
+/* Disable transitions when the user is dragging the thumb. */
+.thumb.active, .linked-sliders.linked.active .thumb {
+    transition: none;
+}
+
+.slider.focused .thumb {
+    background: var(--ui-white);
+    border-color: var(--ui-blue);
+}
+
+.slider .thumb.focused, .slider.symmetric.focused .thumb {
+    background: var(--ui-blue);
+}
+
+.slider:not(.disabled):not(.focused) .thumb.hover,
+.slider.symmetric:not(.disabled):not(.focused):hover .thumb,
+.linked-sliders.linked:hover .thumb
+{
+    background: hsl(0, 0%, 20%);
+}
+
+.slider:not(.disabled):not(.focused) .thumb.active,
+.slider.symmetric:not(.disabled):not(.focused).active .thumb,
+.linked-sliders.linked.active .thumb {
+    background: hsl(0, 0%, 30%);
+}
+
+.slider .track {
+    display: inline-block;
+    vertical-align: middle;
+    width: 100%;
+    height: 14px;
+    position: absolute;
+
+    background: var(--ui-background);
+    border: var(--ui-border) solid 1px;
+    border-radius: 14px;
+}
+
+.slider.focused .track {
+    background: var(--ui-white);
+    border-color: var(--ui-blue);
+}
+
+.panel button, .pane button, .port button {
+    position: relative;
+    display: block;
+    width: 100%; height: 30px;
+    margin: 8px 0;
+
+    background: transparent;
+    border: var(--ui-border) solid 1px;
+    border-radius: 2px;
+    outline: none;
+
+    font: inherit;
+    color: var(--ui-white);
+}
+
+.global button {
+    display: inline-block;
+    width: 112px;
+    margin: 0;
+}
+
+.global button.short {
+    width: 56px;
+}
+
+.global button + label {
+    margin-left: 4px;
+}
+
+.global label + button {
+    margin-right: 4px;
+}
+
+.global button:last-of-type {
+    margin-left: 4px;
+}
+
+.panel button:hover:not(:disabled):not(:active),
+.pane button:hover:not(:disabled):not(:active),
+.port button:hover:not(:disabled):not(:active) {
+    background: var(--ui-hover);
+}
+
+.panel button:not(:disabled):not(:active):active,
+.pane button:not(:disabled):not(:active):active,
+.port button:not(:disabled):not(:active):active {
+    background: var(--ui-active);
+}
+
+kbd.hint {
+    position: absolute;
+    min-width: 20px;
+    padding: 2px 4px;
+
+    background: var(--ui-orange);
+    border-radius: 2px;
+
+    color: var(--ui-black);
+    text-align: center;
+
+    pointer-events: none;
+}
+
+.colour-indicator {
+    display: inline-block;
+    vertical-align: middle;
+    position: relative;
+    width: 48px;
+    height: 24px;
+
+    border: var(--ui-border) solid 1px;
+    border-radius: 2px;
+
+    cursor: pointer;
+}
+
+/* Highlight the hints when their codes are (partially) typed. */
+kbd.hint.focused, kbd.hint .focused {
+    color: var(--ui-white);
+}
+
+.ui:not(.command).show-queue kbd.hint.queue {
+    background: var(--ui-white);
+    border: var(--ui-blue) 1px solid;
+
+    color: var(--ui-blue);
+}
+
+.ui:not(.command).show-queue .cell.selected kbd.hint.queue {
+    background: var(--ui-blue);
+
+    color: var(--ui-white);
+}
+
+.ui:not(.command):not(.show-queue):not(.show-hints) kbd.hint.queue {
+    display: none;
+}
+
+.ui:not(.show-hints) kbd.hint:not(.queue) {
+    display: none;
+}
+
+kbd.hint.button, kbd.hint.input {
+    left: 0; top: 0;
+    transform: translate(-25%, -25%);
+}
+
+.label-input-container kbd.hint.colour {
+    right: 0; top: 0;
+    transform: translate(25%, -25%);
+}
+
+/* Hide the keyboard shortcut for changing colour when the user is typing, as it's irrelevant. We
+   don't do this for every keyboard shortcut, but the one in the label input is particularly
+   prominent. */
+.label-input-container .label-input:focus ~ kbd.hint.colour {
+    display: none;
+}
+
+kbd.hint.colour {
+    transform: translate(-25%, -25%);
+}
+
+kbd.hint.slider {
+    left: calc(56px + 55%); top: 0;
+    transform: translate(-25%, -75%);
+}
+
+.ui.command .cell kbd.hint {
+    display: block;
+}
+
+.vertex kbd.hint {
+    left: 50%; top: 0;
+    transform: translateX(-50%);
+}
+
+.arrow kbd {
+    z-index: 10;
+    transform: translate(-50%, -50%);
+}
+
+/* `.kbd-requires-focus` and `.triggers-focus` are mutually exclusive classes. The first is
+intended to trigger the latter. */
+.kbd-requires-focus:not(.focused) kbd.hint:not(.triggers-focus) {
+    display: none;
+}
+
+.kbd-requires-focus:not(.next-to-focus) kbd.hint.triggers-focus {
+    display: none;
+}
+
+/* We always display shortcuts for lists when they're focused. */
+.kbd-requires-focus.focused kbd.hint {
+    display: block;
+}
+
+/* Display a semicolon symbol for the usual keyboard shortcut symbol. This is not necessary when the
+user has already pressed semicolon, placing us in command mode. */
+.ui:not(.command) .cell kbd.hint::before {
+    content: ";";
+}
+
+.ui.command kbd.hint:empty::after,
+.cell kbd.hint:empty:not(.queue)::after,
+.ui:not(.show-queue) kbd.hint:empty::after {
+    content: attr(data-code);
+}
+
+/* When cells are queued, we can press Tab to select them. */
+.ui:not(.command).show-queue .cell kbd.queue.hint::before {
+    content: "⇥";
+}
+
+.indicator-container {
+    display: inline-block;
+    margin-left: 24px;
+}
+
+.panel .success-indicator {
+    display: inline-block;
+    vertical-align: middle;
+    margin-left: 8px;
+    width: 18px; height: 18px;
+
+    background: hsl(0, 0%, 36%);
+    border-radius: 100%;
+
+    color: hsl(0, 0%, 16%);
+    text-align: center;
+    line-height: 18px;
+
+    transform: scale(0);
+
+    transition: transform 0.2s;
+}
+
+.panel .success-indicator.unknown,
+.panel .success-indicator.success,
+.panel .success-indicator.failure {
+    transform: scale(1);
+}
+
+.panel .success-indicator.success::before {
+    content: "✓";
+}
+
+.panel .success-indicator.failure::before {
+    content: "✕";
+}
+
+/* The colour picker */
+
+.colour-panel {
+    position: fixed;
+    width: calc(16px * 20);
+    padding: 8px 16px;
+    padding-top: calc(192px + 16px * 2);
+    max-height: calc(100% - (8px + 46px + 32px) * 2 - 16px * 2);
+	overflow-y: auto;
+
+    background: var(--ui-black);
+    border-radius: 16px;
+
+    font: 14px Arial, sans-serif;
+    color: var(--ui-text);
+
+    transition: opacity 0.2s;
+}
+
+.colour-panel.target-label {
+    bottom: calc(8px + 46px + 32px + 8px);
+    right: calc(50% - 20%);
+}
+
+/* The colour panel position when selecting a colour for an edge. */
+.colour-panel.target-edge {
+    top: 50%;
+    right: calc(16px * 20);
+    transform: translateY(-50%);
+}
+
+.colour-panel.hidden {
+    opacity: 0;
+
+    pointer-events: none;
+
+    transition: opacity 0.1s;
+}
+
+.colour-wheel {
+    position: absolute;
+    left: 50%; top: 16px;
+    transform: translateX(-50%);
+
+    border-radius: 50%;
+}
+
+.colour-picker {
+    position: absolute;
+    width: 32px; height: 32px;
+    transform: translate(-50%, -50%);
+
+    background: var(--ui-black);
+    border: var(--ui-black) 2px solid;
+    border-radius: 50%;
+
+    transition: background 0.1s, left 0.1s, top 0.1s;
+
+    pointer-events: none;
+}
+
+.colour-panel.active .colour-picker, .colour-panel.active .thumb {
+    transition: none;
+}
+
+.colour-panel > .wrapper {
+    position: relative;
+}
+
+.colour-panel div.slider {
+    width: 55%;
+    left: 80px;
+}
+
+.colour-panel label {
+    display: block;
+    margin: 8px 0;
+}
+
+.palette {
+    margin-top: -2px;
+}
+
+.palette label {
+    margin: 4px 0;
+}
+
+.palette label .empty {
+    margin-left: 4px;
+
+	opacity: 0.6;
+}
+
+.palette .colour {
+    display: inline-block;
+    vertical-align: middle;
+    width: 20px; height: 20px;
+    margin: 2px 2px;
+
+    border: var(--ui-border) solid 1px;
+    border-radius: 2px;
+
+	cursor: pointer;
+}
+
+.palette label .colour:first-of-type {
+    margin-left: 4px;
+}
+
+/* The toolbar */
+
+.toolbar {
+    position: fixed;
+    height: 60px;
+    left: 50%; top: 16px;
+    transform: translateX(-50%);
+    z-index: 90;
+
+    background: var(--ui-black);
+    border-radius: 8px;
+
+    color: var(--ui-white);
+    white-space: nowrap;
+
+    transition: opacity 0.1s;
+}
+
+.ui:not(.default):not(.modal) .toolbar {
+    opacity: 0.2;
+
+    pointer-events: none;
+}
+
+.toolbar .action {
+    position: relative;
+    vertical-align: middle;
+    width: 56px; height: 60px;
+
+    background: transparent;
+    border: none;
+    outline: none;
+
+    font: inherit;
+    text-align: center;
+    font-size: 20px;
+    color: inherit;
+    white-space: nowrap;
+
+    cursor: default;
+    user-select: none;
+}
+
+.toolbar .action:first-of-type {
+    border-radius: 8px 0 0 8px;
+}
+
+.toolbar .action:last-of-type {
+    border-radius: 0 8px 8px 0;
+}
+
+.toolbar .action:hover {
+    background: hsl(0, 0%, 28%);
+}
+
+.toolbar .action:not(.dropdown):active {
+    background: var(--ui-blue);
+}
+
+.toolbar .action img {
+    width: 28px;
+    vertical-align: middle;
+    pointer-events: none;
+}
+
+.toolbar .action:disabled {
+    background: transparent;
+}
+
+.toolbar .action:disabled img {
+    opacity: 0.6;
+}
+
+.toolbar .action:disabled .name, .toolbar .action:disabled .shortcut {
+    color: hsl(0, 0%, 64%);
+}
+
+.toolbar .action.dropdown > .shortcut:empty::before {
+    content: "▾";
+}
+
+.toolbar .action .subtoolbar {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+
+    background: var(--ui-black);
+    border-radius: 0 0 8px 8px;
+}
+
+.toolbar .action:not(:disabled):hover .subtoolbar {
+    display: block;
+}
+
+.subtoolbar .action:first-of-type {
+    border-radius: 0 0 0 8px;
+}
+
+.subtoolbar .action:last-of-type {
+    border-radius: 0 0 8px 0;
+}
+
+button.flash {
+    animation: background-flash 0.4s ease-in;
+}
+
+@keyframes background-flash {
+    from {
+        background: var(--ui-blue);
+    }
+}
+
+.toolbar .action .name, .toolbar .action .shortcut {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+
+    font-size: 9.5px;
+    line-height: 9.5px;
+    color: hsl(0, 0%, 80%);
+}
+
+.toolbar .action .name {
+    top: 6px;
+}
+
+.toolbar .action .shortcut {
+    bottom: 6px;
+}
+
+/* The welcome / keyboard shortcuts / about panes */
+
+.pane {
+    position: fixed;
+    /* Display just below the toolbar. */
+    left: 50%;
+    top: calc(16px + 60px + 8px);
+    transform: translateX(-50%);
+    width: 50%;
+    /* Display at most to just above the global panel. */
+    max-height: calc(100% - (16px + 60px + 8px + 16pt + 4px * 2 + 16px + 8px));
+    padding: 8pt 20pt;
+    overflow-y: auto;
+    z-index: 90;
+
+    opacity: 1;
+    background: var(--ui-black);
+    border-radius: 16px;
+
+    color: var(--ui-white);
+
+    transition: opacity 0.2s, transform 0.2s;
+}
+
+.pane.hidden {
+    pointer-events: none;
+
+    transform: scale(0.75, 0.75) translateX(calc(-1 / 0.75 * 50%));
+
+    opacity: 0;
+
+    transition: opacity 0.1s, transform 0.1s;
+}
+
+.pane h1 {
+    margin: 0;
+
+    border-bottom: hsla(0, 0%, 100%, 0.1) 1px solid;
+    padding-bottom: 6px;
+
+    font-size: 18pt;
+    font-weight: normal;
+    text-align: center;
+}
+
+.pane h1 .right {
+    margin-left: 16pt;
+}
+
+.pane h1 kbd {
+    font-size: 12pt;
+}
+
+.pane kbd, .port kbd {
+    display: inline-block;
+    height: 16.5pt;
+    vertical-align: middle;
+
+    border: hsla(0, 0%, 100%, 0.4) 1px solid;
+}
+
+.pane kbd {
+    background: hsl(0, 0%, 0%, 0.9);
+}
+
+.port kbd {
+    background: hsl(0, 0%, 100%, 0.9);
+}
+
+.pane h2 {
+    margin-bottom: 6pt;
+
+    font-size: 14pt;
+    font-weight: normal;
+}
+
+.pane table {
+    width: 100%;
+
+    border-spacing: 0;
+
+    color: hsl(0, 0%, 76%);
+    white-space: pre-line;
+}
+
+.pane table td {
+    width: 50%;
+    padding: 4pt 0;
+}
+
+.pane table tr:first-child td {
+    padding-top: 0;
+}
+
+.pane table kbd {
+    height: 14.5pt;
+
+    font-size: 10pt;
+    color: var(--ui-white);
+}
+
+.pane a {
+    color: var(--ui-white);
+}
+
+.pane ul {
+    margin: 0;
+    padding: 0 20pt;
+}
+
+.pane p, .pane li {
+    color: hsl(0, 0%, 76%);
+}
+
+.pane li {
+    margin: 4pt 0;
+}
+
+.pane button {
+    width: 50%;
+    margin-left: auto;
+    margin-right: auto;
+    margin-top: 12pt;
+}
+
+.pane footer {
+    margin-top: 8pt;
+    padding-top: 8pt;
+
+    border-top: hsla(0, 0%, 100%, 0.1) 1px solid;
+
+    text-align: center;
+}
+
+/* Modal elements */
+
+.port {
+    position: fixed;
+    width: 100%; height: 100%;
+    left: 0; top: 0;
+    z-index: 100;
+    padding: 20px 24px;
+    padding-bottom: calc(46px + 8px);
+    overflow-y: auto;
+
+    background: hsla(0, 0%, 10%, 0.8);
+
+    backdrop-filter: blur(4px);
+}
+
+.port a {
+    color: var(--ui-white);
+}
+
+.port .tip, .port div.warning, .port div.error {
+    display: inline-block;
+    width: 100%;
+    padding: 8pt;
+    margin-bottom: 8pt;
+
+    border-radius: 2px;
+
+    cursor: default;
+}
+
+.port .tip {
+    background: var(--ui-black);
+
+    color: var(--ui-white);
+}
+
+.port .tip .update {
+    padding: 0pt 4pt;
+    padding-bottom: 1pt;
+    margin-left: 4pt;
+
+    background: var(--ui-blue);
+    border-radius: 2px;
+
+    font-variant: small-caps;
+	font-size: 10pt;
+}
+
+.port div.error {
+    color: var(--ui-white);
+    background: hsl(0, 50%, 50%);
+}
+
+.port div.warning {
+    background: hsl(50, 100%, 70%);
+}
+
+.port .hidden {
+    display: none !important;
+}
+
+.port div.error ul, .port div.warning ul {
+    margin: 4pt 0;
+
+    list-style-type: circle;
+}
+
+.port.import div.error ul li:hover,
+.port.import div.error ul li.highlight,
+.port.import div.warning ul li:hover,
+.port.import div.warning ul li.highlight {
+    list-style-type: disc;
+}
+
+.port div.warning a {
+    color: var(--ui-black);
+}
+
+.port .options {
+    margin-bottom: 8pt;
+    padding: 6pt 4pt;
+
+    background: var(--ui-black);
+    border-radius: 2px;
+
+    color: var(--ui-white);
+
+    user-select: none;
+}
+
+.port .options label {
+    position: relative;
+    top: 1px;
+    margin-right: 20pt;
+}
+
+.port .note {
+    display: inline-block;
+    width: 100%;
+    padding: 8pt;
+    margin-bottom: 8pt;
+
+    background: var(--ui-blue);
+    border-radius: 2px;
+
+    color: var(--ui-black);
+
+    user-select: none;
+}
+
+.port .note.hidden {
+    display: none;
+}
+
+.port .options label kbd.hint {
+    /* Leave some space for the checkbox itself. */
+    transform: translate(-50%, -50%);
+}
+
+.port .options input[type="number"] {
+    width: 64px;
+    margin-right: -12pt;
+}
+
+/* Disable the up/down buttons for `type="number"` inputs. */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+input[type="number"] {
+    -moz-appearance: textfield;
+}
+
+label input[type="checkbox"] {
+    margin-top: -1px;
+    margin-right: 6pt;
+    width: 12pt;
+    height: 12pt;
+    vertical-align: middle;
+
+    -webkit-appearance: none;
+    appearance: none;
+    background: var(--ui-white);
+    border-radius: 2px;
+    outline: none;
+}
+
+label input[type="checkbox"]:hover {
+    background: hsl(0, 0%, 80%);
+}
+
+label input[type="checkbox"]:checked {
+    background: var(--ui-focus);
+
+    text-align: center;
+}
+
+label input[type="checkbox"]:checked::before {
+    content: "✓";
+
+    color: var(--ui-black);
+}
+
+.port .code, .port div[contenteditable] {
+    font: 16px monospace;
+    color: var(--ui-white);
+
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    tab-size: 4;
+    -moz-tab-size: 4;
+}
+
+.port div[contenteditable] {
+    width: 100%;
+    height: 252pt;
+    resize: none;
+    padding: 6pt 8pt;
+    overflow-y: auto;
+
+    background: hsla(0, 0%, 0%, 0.2);
+
+    border: none;
+    outline: none;
+}
+
+/* We pad empty fragments so that we can see their highlight. */
+.port .fragment:empty::before {
+    content: " ";
+}
+
+.port .fragment.error {
+    text-decoration: hsl(0, 50%, 50%) wavy underline;
+}
+.port .fragment.error:hover, .port .fragment.error.highlight {
+    background: hsl(0, 50%, 50%);
+}
+
+.port .fragment.warning {
+    text-decoration: hsl(50, 100%, 70%) wavy underline;
+}
+.port .fragment.warning:hover, .port .fragment.highlight.warning {
+    background: hsl(50, 100%, 70%);
+
+    color: var(--ui-black);
+}
+
+/* Arrows */
+
+.arrow > svg {
+    position: absolute;
+    left: 0;
+    top: 0;
+    overflow: visible;
+    pointer-events: none;
+}
+
+.arrow.invalid, .arrow .invalid {
+    display: none;
+}
+
+.arrow > svg:first-child {
+    z-index: 1;
+}
+
+.arrow > svg:nth-child(2) {
+    z-index: 4;
+}
+
+.arrow:not(.reconnecting) > svg:first-child > .arrow-background {
+    pointer-events: stroke;
+}
+
+.arrow:not(.target):not(.selected) > svg:first-child:not(:hover) > .arrow-background,
+.ui.connect .cell:not(.target):not(.selected) > svg:first-child:hover > .arrow-background,
+.ui.pointer-move .cell:not(.selected) > svg:first-child:hover > .arrow-background {
+    opacity: 0;
+}
+
+.arrow:not(.target):not(.selected) > svg:first-child:hover {
+    opacity: 0.1 !important;
+}
+
+.arrow-endpoint {
+    display: none;
+}
+
+.ui.default .arrow:hover .arrow-endpoint, .ui.default .arrow.selected .arrow-endpoint {
+    display: block;
+}
+
+.arrow-endpoint {
+    position: absolute;
+    z-index: 3;
+
+    background: white;
+}
+
+.arrow-endpoint:hover {
+    border: var(--ui-blue) 2px solid;
+}
+
+/* Arrow labels */
+
+.arrow .katex, .arrow .katex-error {
+    font-size: 1em;
+}
+
+/* Embedded view */
+
+.ui.embedded .panel,
+.ui.embedded .toolbar,
+.ui.embedded .grid,
+.ui.embedded .focus-point,
+.ui.embedded .arrow:not(.target):not(.selected) > svg:first-child:hover {
+    display: none;
+}
+
+.ui.embedded a > .logo {
+    top: auto; bottom: 12px;
+    left: 12px;
+    transform: scale(0.75);
+
+    opacity: 0;
+
+    transition: opacity 0.1s;
+}
+
+.ui.embedded:hover a > .logo {
+    opacity: 0.2;
+}
+
+.ui.embedded a > .logo:hover {
+    opacity: 0.4;
+}
+
+.ui.embedded #welcome-pane {
+    display: none;
+}
