@@ -199,6 +199,7 @@ export class Quiver {
 
     /// Return a `{ data, metadata }` object containing the graph in a specific format.
     /// Currently, the supported formats are:
+    /// - "fletcher"
     /// - "tikz-cd"
     /// - "base64"
     /// - "html"
@@ -208,6 +209,8 @@ export class Quiver {
     /// `definitions` contains key-value pairs for macros and colours.
     export(format, settings, options, definitions) {
         switch (format) {
+            case "fletcher":
+                return QuiverExport.fletcher.export(this, settings, options, definitions);
             case "tikz-cd":
                 return QuiverImportExport.tikz_cd.export(this, settings, options, definitions);
             case "base64":
@@ -295,6 +298,225 @@ QuiverExport.CONSTANTS = {
     TIKZ_HORIZONTAL_MULTIPLIER: 1/4,
     TIKZ_VERTICAL_MULTIPLIER: 1/6,
 };
+
+QuiverExport.fletcher = new class extends QuiverExport {
+    export(quiver, settings, options, definitions) {
+        let output = "";
+
+        const wrap_boilerplate = (output) => {
+            return `// ${
+                QuiverImportExport.base64.export(quiver, settings, options, definitions).data
+            }\n#diagram({\n${output}})\n`;
+        };
+
+        // If the quiver is empty, return now.
+        if (quiver.is_empty()) {
+            return {
+                data: wrap_boilerplate(output),
+                metadata: {fletcher_incompatibilities: new Set()}
+            }
+        }
+
+        const fletcher_incompatibilities = new Set();
+
+        // returns the coordinates of a cell in the form (x, y)
+        const cell_to_fletcher_coords = cell => `(${cell.position.x}, ${cell.position.y})`;
+        // Wrap label text in math mode delimiters. If the label text is empty, return an empty string.
+        const label_text_to_fletcher_label = text => text === "" ? "" : `[$${text}$]`;
+        // Concatenate the arguments into a string that can directly be appended to a function call,
+        // ignoring empty strings. If there is no effective argument, returns the empty string.
+        const arglist_to_argstring = list => {
+            const result = list.filter(a => a).join(", ");
+            return result ? `, ${result}` : ""
+        };
+
+        // Get a typst description of the color from a color object
+        // Uses typst's color.hsl() function.
+        const colour_to_typst_hsl = c => {
+            let [h,s,l,_] = c.hsla();
+            return `color.hsl(${h}deg, ${Math.round(s * 2.55)}, ${Math.round(l * 2.55)})`
+        }
+
+        // Output the vertices
+        for (const vertex of quiver.cells[0]) {
+            let color_extra = "";
+            if (vertex.label !== "" && vertex.label_colour.is_not_black()) {
+                color_extra = `text(${colour_to_typst_hsl(vertex.label_colour)})`;
+            }
+            output += `   node(${cell_to_fletcher_coords(vertex)}${
+                arglist_to_argstring([color_extra + label_text_to_fletcher_label(vertex.label)])
+            })\n`;
+        }
+
+        // Output the edges, which are 1-cells and up.
+        for (let level = 1; level < quiver.cells.length; ++level) {
+            // TODO: Implement 2-cells and up. This is not implemented in fletcher as yet.
+            if (level > 1) {
+                fletcher_incompatibilities.add("Arrows level 2 and up are not supported by fletcher");
+                break;
+            }
+
+            for (const edge of quiver.cells[level]) {
+                // This will be the list of arguments passed to the edge()
+                // function after the coordinates of source and target.
+                const args = [label_text_to_fletcher_label(edge.label)];
+
+                if (edge.label !== "") {
+                    // We explicitely state that labels are on the left by default
+                    // because the default behavior for fletcher (auto) is inconsistent
+                    // with quiver's rendering otherwise.
+                    let side = "left";
+                    switch (edge.options.label_alignment) {
+                        case "centre":
+                            side = "center";
+                            break;
+                        case "over":
+                            side = "center";
+                            args.push("label-angle: auto");
+                            break;
+                        case "right":
+                            side = "right";
+                            break;
+                    }
+                    args.push(`label-side: ${side}`);
+
+                    if (edge.options.label_position !== 50) {
+                        args.push(`label-pos: ${edge.options.label_position / 100}`);
+                    }
+                }
+
+                // Shortened edges are not supported
+                if (edge.options.shorten.source !== 0 || edge.options.shorten.target !== 0) {
+                    fletcher_incompatibilities.add("Shortened arrows are not supported by fletcher");
+                }
+
+                // Apply offset
+                if (edge.options.offset !== 0) {
+                    args.push(`shift: ${-edge.options.offset / 20}`);
+                }
+
+                // We will build the arrow descriptor, which will determine tail,
+                // body, and head of the arrow.
+                let arrowdesc = "";
+                // Extraneous arguments to the edge() function when the style isn't implemented
+                // as an arrow descriptor. We save this list separately because these styles need
+                // to appear after the arrow descriptor no matter what.
+                let arrow_extra_style = [] 
+                switch(edge.options.style.name){
+                    case "arrow":
+                        // Fletcher uses arrow descriptors that are always of the form tail-body-head, 
+                        // where body can contain marks.
+                        
+                        // Arrow tail
+                        switch(edge.options.style.tail.name){
+                            case "maps to":
+                                arrowdesc += "|";
+                                break;
+                            case "mono":
+                                arrowdesc += ">";
+                                break;
+                            case "hook":
+                                arrowdesc += "hook";
+                                arrowdesc += edge.options.style.tail.side === "top" ? "" : "'";
+                                break;
+                            case "arrowhead":
+                                arrowdesc += "<";
+                                break;
+                        }
+                        // Arrow body
+                        switch(edge.options.style.body.name){
+                            case "cell":
+                                let userlevel = edge.options.level;
+                                // Level 4 arrows have no shorthand, so we use the 
+                                // level 1 arrow that we manually extrude.
+                                if (userlevel > 3) { 
+                                    userlevel = 1;
+                                    arrow_extra_style.push(`extrude: (-6,-2,2,6)`);
+                                    arrow_extra_style.push(`mark-scale: 2`); // Scale the arrowhead accordingly
+                                }
+                                arrowdesc += userlevel === 1 ? "-" : "=".repeat(edge.options.level-1);
+                                break;
+                            case "dashed":
+                                arrowdesc += "--";
+                                break;
+                            case "dotted":
+                                arrowdesc += "..";
+                                break;
+                            case "squiggly":
+                                arrowdesc += "~";
+                                break;
+                            case "barred":
+                                arrowdesc += "-|-";
+                                break;
+                            case "none":
+                                //TODO: update this when implemented upstream as a shorthand
+                                // see https://github.com/Jollywatt/typst-fletcher/issues/70 for progress on this
+                                arrowdesc += "-";
+                                arrow_extra_style.push("extrude: ()");
+                                break;
+                        }
+                        // Arrow head
+                        switch(edge.options.style.head.name) {
+                            case "none":
+                                break;
+                            case "arrowhead":
+                                arrowdesc += ">";
+                                break;
+                            case "epi":
+                                arrowdesc += ">>";
+                                break;
+                            case "harpoon":
+                                arrowdesc += "harpoon";
+                                arrowdesc += edge.options.style.head.side === "top" ? "" : "'";
+                                break;
+                        }
+                        break;
+                    default:
+                        // In the future, these can probably be implemented with custom marks 
+                        // along with "none" body type.
+                        fletcher_incompatibilities
+                            .add("Adjunctions and pushout/pullbacks are unimplemented in fletcher");
+                        break;
+                }
+                // Only explicitely give the arrow spec when nonstandard
+                if (arrowdesc !== "-") {
+                    args.push(`"${arrowdesc}"`);
+                    arrow_extra_style.forEach(style => args.push(style));
+                }
+
+                // Color the label if not black
+                if (edge.label_colour.is_not_black() && edge.label !== "") {
+                    args[0] = `text(${colour_to_typst_hsl(edge.label_colour)})${args[0]}`;
+                }
+                // Color the arrow if not black
+                if (edge.options.colour.is_not_black()) {
+                    args.push(`stroke: ${colour_to_typst_hsl(edge.options.colour)}`);
+                }
+
+                // Edge is a loop. We translate the radius setting into a bend
+                // angle, mapping radii 1-5 to the range 130deg-150deg.
+                if (edge.source === edge.target) {
+                    args.push(`bend: ${Math.sign(edge.options.radius) *
+                            ((Math.abs(edge.options.radius) - 1) * (150 - 130) / 4 + 130)}deg`);
+                    args.push(`loop-angle: ${90 - edge.options.angle}deg`);
+                }
+                // If the edge is curved and not a loop, add a bend. 
+                else if (edge.options.curve !== 0) args.push(`bend: ${-edge.options.curve * 90 / 5}deg`);
+
+                output += `   edge(${
+                    cell_to_fletcher_coords(edge.source)
+                }, ${
+                    cell_to_fletcher_coords(edge.target)
+                }${arglist_to_argstring(args)})\n`;
+            }
+        }
+        
+        return {
+            data: wrap_boilerplate(output),
+            metadata: {fletcher_incompatibilities}
+        };
+    }
+}
 
 QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
     export(quiver, settings, options, definitions) {
@@ -688,7 +910,7 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                             add_dependency("tikz-nfold", "triple arrows or higher");
                         }
 
-                        // Body styles.
+                       // Body styles.
                         switch (edge.options.style.body.name) {
                             case "cell":
                                 // This is the default in tikz-cd.
@@ -721,7 +943,7 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                                 break;
                         }
 
-                        // Tail styles.
+                       // Tail styles.
                         switch (edge.options.style.tail.name) {
                             case "maps to":
                                 parameters["maps to"] = "";
@@ -1361,3 +1583,5 @@ style="border-radius: 8px; border: none;">\
         };
     }
 };
+
+// vim: set ts=4 sw=4:

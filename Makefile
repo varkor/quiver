@@ -1,4 +1,4 @@
-.PHONY: all service-worker dev release gh-pages cleanup
+.PHONY: all service-worker dev release gh-pages cleanup serve
 
 # Ensure `cd` works properly by forcing everything to be executed in a single shell.
 .ONESHELL:
@@ -22,7 +22,7 @@ src/Workbox/workbox-%:
 # Build service worker.
 service-worker: service-worker/build.js
 	cd $(dir $<)
-	. $$NVM_DIR/nvm.sh
+	if [ ! -z "$$NVM_DIR" ]; then . $$NVM_DIR/nvm.sh; fi
 	nvm use 20 && npm install && node build.js
 
 # Generate icons required by the webapp manifest. Requires ImageMagick.
@@ -131,3 +131,6 @@ cleanup:
 	git checkout master
 	git worktree remove ../quiver-worktree -f
 	git branch -D squashed
+
+serve:
+	python -m http.server -d src/

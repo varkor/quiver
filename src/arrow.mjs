@@ -333,7 +333,8 @@ export class Arrow {
         const elements = parent.query_selector_all(selector);
         switch (elements.length) {
             case 0:
-                const [prefix, ...classes] = selector.split(".");
+                // Strip selector conditions before parsing name, id and classes
+                const [prefix, ...classes] = selector.replace(/^.+>\s+/, "").split(".");
                 const [name, id = null] = prefix.split("#");
                 const extra_attrs = {};
                 if (id !== null) {
@@ -547,7 +548,8 @@ export class Arrow {
 
         // Create a clipping mask for the edge. We use this to cut out the gaps in an n-cell,
         // and also to cut out space for the label when the alignment is `CENTRE`.
-        const defs = this.requisition_element(this.svg, "defs");
+        // Exclude defs that might be in the rendered typst svg.
+        const defs = this.requisition_element(this.svg, "svg:not(.typst-doc) > defs");
         const clipping_mask = this.requisition_element(
             defs,
             `mask#arrow${this.id}-clipping-mask`,
