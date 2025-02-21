@@ -5546,13 +5546,9 @@ class Panel {
                 const [width, height] = [
                     katex_element.element.offsetWidth, katex_element.element.offsetHeight
                 ];
-                // The bounding rect is the size on-screen, which will hence be smaller if we are
-                // zoomed out (and conversely if we are zoomed in). We therefore have to adjust the
-                // dimensions (inversely) by the scaling factor.
-                const scale = 2 ** -ui.scale;
                 cell.arrow.label.size = new Dimensions(
-                    width * scale + (width > 0 ? CONSTANTS.EDGE_LABEL_PADDING * 2 : 0),
-                    height * scale + (height > 0 ? CONSTANTS.EDGE_LABEL_PADDING * 2 : 0),
+                    width + (width > 0 ? CONSTANTS.EDGE_LABEL_PADDING * 2 : 0),
+                    height + (height > 0 ? CONSTANTS.EDGE_LABEL_PADDING * 2 : 0),
                 );
                 // Rerender the edge with the new label.
                 cell.render(ui);
