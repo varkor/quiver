@@ -702,6 +702,9 @@ class UI {
         // Keyboard shortcuts.
         this.shortcuts = new Shortcuts(this);
 
+        // Clipboard.
+        this.clipboard = "";
+
         // A map from cell codes (i.e. IDs) to cells.
         this.codes = new Map();
 
@@ -2279,6 +2282,55 @@ class UI {
                         }
                     }
                 }
+            }
+        });
+
+        // Copying and pasting.
+        this.shortcuts.add([{ key: "C", modifier: true }, { key: "X", modifier: true }], () => {
+            if (this.in_mode(UIMode.Default)) {
+                this.clipboard = QuiverImportExport.base64.export_selection(
+                    this.quiver,
+                    this.quiver.transitive_reverse_dependencies(this.selection),
+                );
+            }
+        });
+
+        this.shortcuts.add([{ key: "X", modifier: true }], () => {
+            if (this.in_mode(UIMode.Default)) {
+                // This keyboard shortcut will first trigger the copy action.
+                this.history.add(this, [{
+                    kind: "delete",
+                    cells: this.quiver.transitive_dependencies(this.selection),
+                }], true);
+                this.panel.update(this);
+            }
+        });
+
+        this.shortcuts.add([{ key: "V", modifier: true }], () => {
+            if (this.in_mode(UIMode.Default)) {
+                try {
+                    const cells = new Set(QuiverImportExport.base64.import(
+                        this,
+                        this.clipboard,
+                        this.focus_position,
+                        false,
+                    ));
+                    this.history.add(this, [{ kind: "create", cells }]);
+                } catch (_) {
+                    const centre_offset = this.cell_centre_at_position(this.focus_position);
+                    const offset = this.offset_from_position(this.focus_position);
+                    const paste_error = new DOM.Div({ class: "inline-error" }, {
+                            left: `${offset.x + centre_offset.x}px`,
+                            top: `${offset.y}px`,
+                        })
+                        .add("You can't paste here!")
+                        .add_to(this.canvas);
+                    delay(() => {
+                        paste_error.class_list.add("hidden");
+                        delay(() => paste_error.remove(), 100);
+                    }, 1000);
+                }
+                this.focus_point.class_list.remove("revealed", "pending", "active");
             }
         });
 
@@ -7082,7 +7134,9 @@ class Cell {
                         ui.focus_point.class_list.remove(
                             "revealed", "pending", "active", "focused", "smooth"
                         );
-                        const vertices = Array.from(ui.selection).filter((cell) => cell.is_vertex());
+                        const vertices = Array.from(ui.selection).filter(
+                            (cell) => cell.is_vertex()
+                        );
                         // If the cell we're dragging is part of the existing selection,
                         // then we'll move every cell that is selected. However, if it's
                         // not already part of the selection, we'll just drag this cell

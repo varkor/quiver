@@ -17,6 +17,8 @@
     --ui-active: hsla(0, 0%, 100%, 0.2);
     --ui-focus: var(--ui-blue);
     --ui-text: hsla(0, 0%, 100%, 0.6);
+    --ui-error: hsl(0, 50%, 50%);
+    --ui-warning: hsl(50, 100%, 70%);
 
     /* Cell states. */
     --cell-hover: hsla(0, 0%, 0%, 0.1);
@@ -72,7 +74,7 @@ noscript {
     z-index: 200;
     padding: 8px 0;
 
-    background: hsl(0, 50%, 50%);
+    background: var(--ui-error);
     color: var(--ui-white);
 
     text-align: center;
@@ -328,6 +330,45 @@ kbd {
     border: 14px solid transparent;
     border-top-color: var(--ui-blue);
     border-bottom: none;
+}
+
+.inline-error {
+    position: absolute;
+    padding: 4px 8px;
+    transform: translate(-50%, -50%);
+    z-index: 81;
+
+    white-space: nowrap;
+
+    background: var(--ui-error);
+    color: var(--ui-white);
+
+    border-radius: 2px;
+
+    animation: error-appear 0.2s cubic-bezier(0.6, 1.4, 0.6, 1.4);
+}
+
+.inline-error.hidden {
+    animation: error-disappear 0.1s forwards;
+}
+
+@keyframes error-appear {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.5, 0.5);
+    }
+
+    to {
+        opacity: 1;
+        transform: translate(-50%, -50%);
+    }
+}
+
+@keyframes error-disappear {
+    to {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.5, 0.5);
+    }
 }
 
 /* Vertices */
@@ -1526,11 +1567,11 @@ button.flash {
 
 .port div.error {
     color: var(--ui-white);
-    background: hsl(0, 50%, 50%);
+    background: var(--ui-error);
 }
 
 .port div.warning {
-    background: hsl(50, 100%, 70%);
+    background: var(--ui-warning);
 }
 
 .port .hidden {
@@ -1669,17 +1710,17 @@ label input[type="checkbox"]:checked::before {
 }
 
 .port .fragment.error {
-    text-decoration: hsl(0, 50%, 50%) wavy underline;
+    text-decoration: var(--ui-error) wavy underline;
 }
 .port .fragment.error:hover, .port .fragment.error.highlight {
-    background: hsl(0, 50%, 50%);
+    background: var(--ui-error);
 }
 
 .port .fragment.warning {
-    text-decoration: hsl(50, 100%, 70%) wavy underline;
+    text-decoration: var(--ui-warning) wavy underline;
 }
 .port .fragment.warning:hover, .port .fragment.highlight.warning {
-    background: hsl(50, 100%, 70%);
+    background: var(--ui-warning);
 
     color: var(--ui-black);
 }
