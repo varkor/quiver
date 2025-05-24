@@ -1305,7 +1305,7 @@ user has already pressed semicolon, placing us in command mode. */
     background: hsl(0, 0%, 28%);
 }
 
-.toolbar .action:not(.dropdown):active {
+.toolbar .action:not(:disabled):not(.dropdown):active {
     background: var(--ui-blue);
 }
 

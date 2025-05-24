@@ -206,6 +206,19 @@ export class Quiver {
         return new Set(closure);
     }
 
+    /// Returns all the cells in the connected components of the given cells.
+    connected_components(cells) {
+        let closure = new Set(cells);
+        // We're relying on the iteration order of the `Set` here.
+        for (const cell of closure) {
+            this.dependencies_of(cell).keys().forEach((dependency) => closure.add(dependency));
+            this.reverse_dependencies_of(cell).forEach((dependency) => closure.add(dependency));
+        }
+        closure = Array.from(closure);
+        closure.sort((a, b) => a.level - b.level);
+        return new Set(closure);
+    }
+
     /// Return a `{ data, metadata }` object containing the graph in a specific format.
     /// Currently, the supported formats are:
     /// - "tikz-cd"

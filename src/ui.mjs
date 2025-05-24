@@ -962,6 +962,9 @@ class UI {
                     { key: "Z", modifier: true, shift: true }
                 ])],
                 ["Select all", (td) => Shortcuts.element(td, [{ key: "A", modifier: true }])],
+                ["Select connected components", (td) => {
+                    return Shortcuts.element(td, [{ key: "C", modifier: true, shift: true }]);
+                }],
                 ["Deselect all", (td) => Shortcuts.element(td, [
                     { key: "A", modifier: true, shift: true }
                 ])],
@@ -6355,16 +6358,14 @@ class Toolbar {
                 }
             });
 
-        const add_action = (name, combinations, action, element = this.element) => {
+        const add_action = (label, name, combinations, action, element = this.element) => {
             const shortcut_name = Shortcuts.name(combinations);
 
             const button = new DOM.Element("button", { class: "action", "data-name": name })
                 .add(new DOM.Element("span", { class: "symbol" }).add(
-                    new DOM.Element("img", { src: `icons/${
-                        name.toLowerCase().replace(/ /g, "-").replace(/\./g, "")
-                    }.svg` })
+                    new DOM.Element("img", { src: `icons/${name}.svg` })
                 ))
-                .add(new DOM.Element("span", { class: "name" }).add(name))
+                .add(new DOM.Element("span", { class: "name" }).add(label))
                 .add(new DOM.Element("span", { class: "shortcut" }).add(shortcut_name))
                 .listen(pointer_event("down"), (event) => {
                     if (event.button === 0) {
@@ -6385,8 +6386,8 @@ class Toolbar {
             return button;
         };
 
-        const add_subtoolbar = (name) => {
-            const action = add_action(name, [], () => {});
+        const add_subtoolbar = (label, name) => {
+            const action = add_action(label, name, [], () => {});
             action.class_list.add("dropdown");
             const subtoolbar = new DOM.Div({ class: "subtoolbar" });
             action.add(subtoolbar);
@@ -6398,6 +6399,7 @@ class Toolbar {
         // "Saving" updates the URL to reflect the current diagram.
         add_action(
             "Save",
+            "save",
             [{ key: "S", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always }],
             () => {
                 const { data } = ui.quiver.export(
@@ -6413,6 +6415,7 @@ class Toolbar {
 
         add_action(
             "Undo",
+            "undo",
             [{ key: "Z", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Defer }],
             () => {
                 ui.history.undo(ui);
@@ -6421,22 +6424,38 @@ class Toolbar {
 
         add_action(
             "Redo",
+            "redo",
             [{ key: "Z", modifier: true, shift: true, context: Shortcuts.SHORTCUT_PRIORITY.Defer }],
             () => {
                 ui.history.redo(ui);
             },
         );
 
+        const select = add_subtoolbar("Select", "select");
+
         add_action(
-            "Select all",
+            "All",
+            "select-all",
             [{ key: "A", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Defer }],
             () => {
                 ui.select(...ui.quiver.all_cells());
             },
+            select,
         );
 
         add_action(
-            "Deselect all",
+            "Connected",
+            "select-connected",
+            [{ key: "C", modifier: true, shift: true, context: Shortcuts.SHORTCUT_PRIORITY.Defer }],
+            () => {
+                ui.select(...ui.quiver.connected_components(ui.selection));
+            },
+            select,
+        );
+
+        add_action(
+            "Deselect",
+            "deselect-all",
             [{ key: "A", modifier: true, shift: true, context: Shortcuts.SHORTCUT_PRIORITY.Defer }],
             () => {
                 ui.deselect();
@@ -6444,10 +6463,12 @@ class Toolbar {
                 ui.panel.label_input.parent.class_list.add("hidden");
                 ui.colour_picker.close();
             },
+            select,
         );
 
         add_action(
             "Delete",
+            "delete",
             [
                 { key: "Backspace" },
                 { key: "Delete" },
@@ -6461,9 +6482,11 @@ class Toolbar {
             },
         );
 
-        const transform = add_subtoolbar("Transform");
+        const transform = add_subtoolbar("Transform", "transform");
+
         add_action(
             "Flip hor.",
+            "flip-hor",
             [],
             () => {
                 const vertices = ui.quiver.all_cells().filter((cell) => cell.is_vertex());
@@ -6507,6 +6530,7 @@ class Toolbar {
         );
         add_action(
             "Flip ver.",
+            "flip-ver",
             [],
             () => {
                 const vertices = ui.quiver.all_cells().filter((cell) => cell.is_vertex());
@@ -6550,6 +6574,7 @@ class Toolbar {
         );
         add_action(
             "Rotate",
+            "rotate",
             [],
             () => {
                 const vertices = ui.quiver.all_cells().filter((cell) => cell.is_vertex());
@@ -6583,6 +6608,7 @@ class Toolbar {
 
         add_action(
             "Centre view",
+            "centre-view",
             [{ key: "G" }],
             () => {
                 // If the focus point is focused, we centre on it; otherwise we centre on the
@@ -6597,6 +6623,7 @@ class Toolbar {
 
         add_action(
             "Zoom out",
+            "zoom-out",
             [{ key: "-", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always }],
             () => {
                 ui.pan_view(Offset.zero(), -0.25);
@@ -6605,6 +6632,7 @@ class Toolbar {
 
         add_action(
             "Zoom in",
+            "zoom-in",
             [{ key: "=", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always }],
             () => {
                 ui.pan_view(Offset.zero(), 0.25);
@@ -6613,6 +6641,7 @@ class Toolbar {
 
         add_action(
             "Reset zoom",
+            "reset-zoom",
             // We'd like to display the current zoom level, so we use a slight hack: we set the
             // "key" to be the zoom level: this will never be triggered by a shortcut, because there
             // is no key called "100%" or similar. However, the text will then display underneath
@@ -6626,6 +6655,7 @@ class Toolbar {
 
         add_action(
             "Hide grid",
+            "hide-grid",
             [{ key: "H", modifier: false, context: Shortcuts.SHORTCUT_PRIORITY.Defer }],
             function () {
                 ui.grid.class_list.toggle("hidden");
@@ -6638,6 +6668,7 @@ class Toolbar {
 
         add_action(
             "Show hints",
+            "show-hints",
             [{
                 key: "H", modifier: true, shift: true, context: Shortcuts.SHORTCUT_PRIORITY.Always
             }],
@@ -6652,6 +6683,7 @@ class Toolbar {
 
         add_action(
             "Show queue",
+            "show-queue",
             [],
             function () {
                 ui.element.class_list.toggle("show-queue");
@@ -6664,6 +6696,7 @@ class Toolbar {
 
         add_action(
             "Shortcuts",
+            "shortcuts",
             [{
                 key: "/", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always
             }],
@@ -6681,6 +6714,7 @@ class Toolbar {
 
         add_action(
             "About",
+            "about",
             [],
             () => {
                 const hidden = ui.element.query_selector("#about-pane").class_list
@@ -6712,26 +6746,33 @@ class Toolbar {
 
         const default_pan = [UIMode.Default, UIMode.Pan];
 
-        enable_if("Undo", ui.in_mode(UIMode.KeyMove, ...default_pan) && ui.history.present !== 0);
-        enable_if("Redo", ui.in_mode(UIMode.KeyMove, ...default_pan)
+        enable_if("undo", ui.in_mode(UIMode.KeyMove, ...default_pan) && ui.history.present !== 0);
+        enable_if("redo", ui.in_mode(UIMode.KeyMove, ...default_pan)
             && ui.history.present < ui.history.actions.length);
-        enable_if("Select all",
+        enable_if("select-all",
             ui.in_mode(...default_pan) && ui.selection.size < ui.quiver.all_cells().length);
-        enable_if("Deselect all", ui.in_mode(...default_pan) && ui.selection.size > 0);
-        enable_if("Delete", ui.in_mode(...default_pan) && ui.selection.size > 0);
-        enable_if("Transform", ui.in_mode(...default_pan) && ui.quiver.all_cells().length > 0);
-        enable_if("Centre view",
+        const connected_components = ui.quiver.connected_components(ui.selection);
+        enable_if("select-connected",
+            ui.in_mode(...default_pan) && ui.selection.size > 0
+            // The user hasn't already selected all connected components.
+            && (ui.selection.size !== connected_components.size
+                || [...ui.selection].some((cell) => !connected_components.has(cell)))
+        );
+        enable_if("deselect-all", ui.in_mode(...default_pan) && ui.selection.size > 0);
+        enable_if("delete", ui.in_mode(...default_pan) && ui.selection.size > 0);
+        enable_if("transform", ui.in_mode(...default_pan) && ui.quiver.all_cells().length > 0);
+        enable_if("centre-view",
             ui.element.query_selector(".focus-point.focused")
             // Technically the first condition below is subsumed by the latter, but we keep it to
             // mirror the conditions in `centre_view`.
             || ui.selection.size > 0 || (ui.quiver.cells.length > 0 && ui.quiver.cells[0].size > 0)
         );
-        enable_if("Zoom in", ui.scale < CONSTANTS.MAX_ZOOM);
-        enable_if("Zoom out", ui.scale > CONSTANTS.MIN_ZOOM);
-        enable_if("Reset zoom", ui.scale !== 0);
+        enable_if("zoom-in", ui.scale < CONSTANTS.MAX_ZOOM);
+        enable_if("zoom-out", ui.scale > CONSTANTS.MIN_ZOOM);
+        enable_if("reset-zoom", ui.scale !== 0);
 
         // Update the current zoom level underneath the "Reset zoom" button.
-        this.element.query_selector('.action[data-name="Reset zoom"] .shortcut').element.innerText
+        this.element.query_selector('.action[data-name="reset-zoom"] .shortcut').element.innerText
             = `${Math.round(2 ** ui.scale * 100)}%`;
     }
 }
