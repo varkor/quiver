@@ -181,7 +181,7 @@ export class Quiver {
         let closure = new Set(cells);
         // We're relying on the iteration order of the `Set` here.
         for (const cell of closure) {
-            this.dependencies_of(cell).keys().forEach((dependency) => closure.add(dependency));
+            this.dependencies_of(cell).forEach((_, dependency) => closure.add(dependency));
         }
         if (exclude_roots) {
             for (const cell of cells) {
@@ -211,7 +211,7 @@ export class Quiver {
         let closure = new Set(cells);
         // We're relying on the iteration order of the `Set` here.
         for (const cell of closure) {
-            this.dependencies_of(cell).keys().forEach((dependency) => closure.add(dependency));
+            this.dependencies_of(cell).forEach((_, dependency) => closure.add(dependency));
             this.reverse_dependencies_of(cell).forEach((dependency) => closure.add(dependency));
         }
         closure = Array.from(closure);
