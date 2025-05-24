@@ -918,6 +918,9 @@ class UI {
                 ["Change source", (td) => Shortcuts.element(td, [{ key: "," }])],
                 ["Change target", (td) => Shortcuts.element(td, [{ key: "." }])],
                 ["Create arrows from selection", (td) => Shortcuts.element(td, [{ key: "/" }])],
+                ["Copy", (td) => Shortcuts.element(td, [{ key: "C", modifier: true }])],
+                ["Cut", (td) => Shortcuts.element(td, [{ key: "X", modifier: true }])],
+                ["Paste", (td) => Shortcuts.element(td, [{ key: "V", modifier: true }])],
             ]))
             .add(new DOM.Element("h2").add("Styling"))
             .add(new DOM.Table([
