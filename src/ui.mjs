@@ -600,7 +600,7 @@ UIMode.Command = class extends UIMode {
 
         this.name = "command";
 
-        ui.panel.label_input.element.value = "";
+        ui.panel.label_input.element.textContent = "";
         this.switch_mode(ui, mode);
         ui.panel.label_input.parent.class_list.remove("hidden");
         ui.panel.label_input.remove_attributes("disabled");
@@ -1455,7 +1455,8 @@ class UI {
                         // it is unlikely they expect to edit all the labels simultaneously,
                         // so in this case we do not focus the input.
                         if (!event.shiftKey && !event.metaKey && !event.ctrlKey) {
-                            this.panel.label_input.element.select();
+                            const selection2 = document.getSelection();
+                            selection2.selectAllChildren(this.panel.label_input.element);
                         }
                     }
                 }
@@ -1511,7 +1512,8 @@ class UI {
                                 // the new vertex.
                                 const { edge, end } = this.mode.reconnect;
                                 if (!event.shiftKey && !event.metaKey && !event.ctrlKey) {
-                                    this.panel.label_input.element.select();
+                                    const selection2 = document.getSelection();
+                                    selection2.selectAllChildren(this.panel.label_input.element);
                                 }
                                 actions.push({
                                     kind: "connect",
@@ -1705,7 +1707,7 @@ class UI {
                     // Get the list of IDs to select.
                     const mode = this.mode.mode;
 
-                    const codes = new Set(this.panel.label_input.element.value.split(" "));
+                    const codes = new Set(this.panel.label_input.element.textContent.split(" "));
                     if (mode === "Select") {
                         // Deselect all selected cells.
                         this.deselect();
@@ -2917,8 +2919,9 @@ class UI {
     /// actions (primarily keyboard shortcuts) will be disabled.)
     input_is_active() {
         // This may not be the label input, e.g. it may be the macros input.
-        return document.activeElement.matches('input[type="text"], div[contenteditable]')
-            && document.activeElement;
+        return document.activeElement.matches(
+            'input[type="text"], div[contenteditable], span[contenteditable="plaintext-only"]'
+        ) && document.activeElement;
     }
 
     /// Dismiss any shown ports.
@@ -3912,9 +3915,10 @@ class Panel {
         const wrapper = new DOM.Div({ class: "wrapper" }).add_to(this.element);
 
         // The label.
-        this.label_input = new DOM.Element("input", {
+        this.label_input = new DOM.Element("span", {
             class: "label-input",
-            type: "text",
+            contenteditable: "plaintext-only",
+            spellcheck: "false",
             disabled: true,
         });
 
@@ -3936,7 +3940,7 @@ class Panel {
         this.label_input.listen("input", () => {
             if (!ui.in_mode(UIMode.Command)) {
                 const selection = Array.from(ui.selection).filter((cell) => {
-                    return cell.label !== this.label_input.element.value;
+                    return cell.label !== this.label_input.element.textContent;
                 });
                 if (selection.length === 0) {
                     // It can happen that we receive an event (e.g. `inputType` `historyUndo`)
@@ -3951,26 +3955,27 @@ class Panel {
                     ["label", ui.selection],
                     [{
                         kind: "label",
-                        value: this.label_input.element.value,
+                        value: this.label_input.element.textContent,
                         cells: selection.map((cell) => ({
                             cell,
                             from: cell.label,
-                            to: this.label_input.element.value,
+                            to: this.label_input.element.textContent,
                         })),
                     }],
                 );
             } else {
                 // We are jumping to a cell with the entered ID.
                 let replaced
-                    = this.label_input.element.value
+                    = this.label_input.element.textContent
                         // We are going to remove any `|` symbols in the next step, so it's safe
                         // to convert them to any other symbol that will be removed. Then we can use
                         // `|` as a placeholder for the position of the caret, which conveniently
                         // allows us to preserve the position when typing, even after modifying the
                         // input.
                         .replace(/\|/g, " ");
-                replaced = replaced.slice(0, this.label_input.element.selectionStart) + "|"
-                    + replaced.slice(this.label_input.element.selectionStart);
+                const selection2 = document.getSelection();
+                replaced = replaced.slice(0, selection2.anchorOffset) + "|"
+                    + replaced.slice(selection2.anchorOffset);
                 switch (ui.mode.mode) {
                     case "Select":
                     case "Toggle":
@@ -4030,8 +4035,8 @@ class Panel {
 
                 const caret = replaced.indexOf("|");
                 replaced = replaced.replace("|", "");
-                this.label_input.element.value = replaced;
-                this.label_input.element.setSelectionRange(caret, caret);
+                this.label_input.element.textContent = replaced;
+                selection.setPosition(this.label_input.element, caret);
             }
         }).listen("focus", () => {
             // Close the colour picker.
@@ -5687,7 +5692,7 @@ class Panel {
             // Default options (for when no edges/cells are selected). We only need to provide
             // defaults for inputs that display their state even when disabled.
             if (!selection_contains_edge) {
-                this.label_input.element.value = "";
+                this.label_input.element.textContent = "";
                 this.element.query_selector(".colour-indicator").set_style({
                     background: Colour.black().css(),
                 });
@@ -5838,11 +5843,18 @@ class Panel {
                 const property = name.slice(1, -1);
                 switch (name) {
                     case "{label}":
-                        if (value === null || this.label_input.element.value !== value) {
+                        if (value === null) {
+                            // In this case, we have selected multiple cells with different labels.
+                            this.label_input.element.textContent = "";
+                            this.label_input.add(new DOM.Element("span", { contenteditable: "true" }).add(" ")).add(new DOM.Element("span", {
+                                class: "ellipsis",
+                                contenteditable: "false",
+                            })).add(new DOM.Element("span").add(" "));
+                        } else if (this.label_input.element.textContent !== value) {
                             // Most browsers handle resetting an input value with the same value
                             // nicely. However, Safari will reset the caret to the end of the input,
                             // so we need to guard on the value actually changing.
-                            this.label_input.element.value = value !== null ? value : "";
+                            this.label_input.element.textContent = value;
                         }
                         break;
                     case "{label_colour}":
@@ -6036,9 +6048,8 @@ class Panel {
 
     /// Focuses and selects all the text in the label input.
     focus_label_input() {
-        const input = this.label_input.element;
-        input.focus();
-        input.setSelectionRange(0, input.value.length);
+        const selection = document.getSelection();
+        selection.selectAllChildren(this.label_input.element);
     }
 
     /// Defocuses any elements that have been focused via the keyboard.
@@ -6185,12 +6196,14 @@ class Shortcuts {
                             //     user that the input is the one receiving the keyboard
                             //     shortcut.
                             const input = document.activeElement;
-                            const [value, selectionStart, selectionEnd]
-                                = [input.value, input.selectionStart,  input.selectionEnd];
+                            const selection = document.getSelection();
+                            const [value, selectionStart, selectionEnd] = [
+                                input.textContent, selection.anchorOffset,  selection.focusOffset
+                            ];
                             setTimeout(() => {
-                                if (input.value === value
-                                    && input.selectionStart === selectionStart
-                                    && input.selectionEnd === selectionEnd)
+                                if (input.textContent === value
+                                    && selection.anchorOffset === selectionStart
+                                    && selection.focusOffset === selectionEnd)
                                 {
                                     if (shortcut.context === Shortcuts.SHORTCUT_PRIORITY.Defer) {
                                         effect();
@@ -6442,7 +6455,7 @@ class Toolbar {
         add_action(
             "All",
             "select-all",
-            [{ key: "A", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Defer }],
+            [{ key: "A", modifier: true }],
             () => {
                 ui.select(...ui.quiver.all_cells());
             },
