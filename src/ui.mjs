@@ -8,7 +8,7 @@ import { Quiver, QuiverImportExport } from "./quiver.mjs";
 /// Various parameters.
 Object.assign(CONSTANTS, {
     /// The current quiver version.
-    VERSION: "1.5.3",
+    VERSION: "1.5.4",
     /// When the `quiver.sty` package was last modified.
     PACKAGE_VERSION: "2021/01/11",
     /// We currently only support n-cells for (n ≤ 4). This restriction is not technical: it can be
