@@ -6151,18 +6151,18 @@ class Shortcuts {
                             if (action !== null) {
                                 // Only trigger the action if the associated button is not
                                 // disabled.
-                                if (shortcut.button === null || !shortcut.button.element.disabled) {
+                                const enabled = shortcut.button !== null
+                                    && !shortcut.button.element.disabled;
+                                if (shortcut.button === null || enabled) {
                                     prevent_others = action(event);
                                 }
-                                if (shortcut.button !== null) {
-                                    // The button might be disabled by `action`, but we still want
-                                    // to trigger the visual indication if it was enabled when
-                                    // activated.
-                                    if (!shortcut.button.element.disabled) {
-                                        // Give some visual indication that the action has
-                                        // been triggered.
-                                        Shortcuts.flash(shortcut.button);
-                                    }
+                                // The button might be disabled by `action`, but we still want
+                                // to trigger the visual indication if it was enabled when
+                                // activated.
+                                if (enabled) {
+                                    // Give some visual indication that the action has
+                                    // been triggered.
+                                    Shortcuts.flash(shortcut.button);
                                 }
                             }
                             return prevent_others;
@@ -6327,6 +6327,12 @@ class Shortcuts {
     /// Trigger a "flash" animation on an element, typically in response to its corresponding
     /// keyboard shortcut being triggered.
     static flash(button) {
+        // If the button is hidden, we will try to flash a parent.
+        if (button.element.offsetParent === null
+            && button.parent.class_list.contains("subtoolbar")) {
+            this.flash(button.parent.parent);
+            return;
+        }
         button.class_list.remove("flash");
         // Removing a class and instantly adding it again is going to be ignored by
         // the browser, so we need to trigger a reflow to get the animation to
@@ -6396,6 +6402,12 @@ class Toolbar {
             const action = add_action(label, name, [], () => {});
             action.class_list.add("dropdown");
             const subtoolbar = new DOM.Div({ class: "subtoolbar" });
+            action.listen("mouseenter", () => {
+                // Prevent flashing when the actions in the subtoolbar are revealed.
+                subtoolbar.query_selector_all(".action.flash").forEach((subaction) => {
+                    subaction.class_list.remove("flash");
+                });
+            });
             action.add(subtoolbar);
             return subtoolbar;
         };
@@ -6448,7 +6460,6 @@ class Toolbar {
             },
             select,
         );
-
         add_action(
             "Connected",
             "select-connected",
@@ -6458,7 +6469,6 @@ class Toolbar {
             },
             select,
         );
-
         add_action(
             "Deselect",
             "deselect-all",
@@ -6471,7 +6481,6 @@ class Toolbar {
             },
             select,
         );
-
         add_action(
             "Delete",
             "delete",
@@ -6672,6 +6681,8 @@ class Toolbar {
             },
         );
 
+        const settings = add_subtoolbar("Settings", "settings");
+
         add_action(
             "Show hints",
             "show-hints",
@@ -6685,6 +6696,7 @@ class Toolbar {
                     (hidden ? "Show" : "Hide") + " hints"
                 );
             },
+            settings,
         );
 
         add_action(
@@ -6698,6 +6710,7 @@ class Toolbar {
                     (hidden ? "Show" : "Hide") + " queue"
                 );
             },
+            settings,
         );
 
         add_action(
