@@ -1,4 +1,4 @@
-.PHONY: all service-worker dev release gh-pages cleanup
+.PHONY: all service-worker dev release gh-pages serve cleanup
 
 # Ensure `cd` works properly by forcing everything to be executed in a single shell.
 .ONESHELL:
@@ -125,6 +125,9 @@ gh-pages:
 	git checkout $$CURRENT
 	# Delete the temporary `squashed` branch.
 	git branch -D squashed
+
+serve:
+	python3 -m http.server -d src/
 
 # Clean up the effects of the gh-pages upload, if it did not successfully terminate.
 cleanup:
