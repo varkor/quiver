@@ -3003,6 +3003,7 @@ class UI {
         // Thus, we don't display an error banner if one is already displayed.
         if (body.query_selector(".error-banner:not(.hidden)") === null) {
             const error = new DOM.Div({ class: "error-banner hidden" })
+                .listen(pointer_event("down"), (event) => event.stopPropagation())
                 .add(message)
                 .add(
                     new DOM.Element("button", { class: "close" })
