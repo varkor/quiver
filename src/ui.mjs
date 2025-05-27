@@ -2296,7 +2296,7 @@ class UI {
             { key: "C", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Defer },
             { key: "X", modifier: true }
         ], () => {
-            if (this.in_mode(UIMode.Default) && !this.input_is_active()) {
+            if (this.in_mode(UIMode.Default, UIMode.Pan) && !this.input_is_active()) {
                 this.clipboard = QuiverImportExport.base64.export_selection(
                     this.quiver,
                     this.quiver.transitive_reverse_dependencies(this.selection),
@@ -2305,7 +2305,7 @@ class UI {
         });
 
         this.shortcuts.add([{ key: "X", modifier: true }], () => {
-            if (this.in_mode(UIMode.Default) && !this.input_is_active()) {
+            if (this.in_mode(UIMode.Default, UIMode.Pan) && !this.input_is_active()) {
                 // This keyboard shortcut will first trigger the copy action.
                 this.history.add(this, [{
                     kind: "delete",
@@ -2316,7 +2316,7 @@ class UI {
         });
 
         this.shortcuts.add([{ key: "V", modifier: true }], () => {
-            if (this.in_mode(UIMode.Default) && !this.input_is_active()) {
+            if (this.in_mode(UIMode.Default, UIMode.Pan) && !this.input_is_active()) {
                 if (this.clipboard === "") {
                     return;
                 }
