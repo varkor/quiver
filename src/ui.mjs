@@ -6464,7 +6464,8 @@ class Toolbar {
         add_action(
             "Connected",
             "select-connected",
-            [{ key: "C", modifier: true, shift: true, context: Shortcuts.SHORTCUT_PRIORITY.Defer }],
+            [{ key: "C", modifier: true, shift: true,
+                context: Shortcuts.SHORTCUT_PRIORITY.Always }],
             () => {
                 ui.select(...ui.quiver.connected_components(ui.selection));
             },
