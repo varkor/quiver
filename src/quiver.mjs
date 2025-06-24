@@ -731,8 +731,10 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                                 break;
 
                             case "barred":
+                            case "double barred":
                                 labels.push(decoration);
-                                decoration.content = "\\shortmid";
+                                decoration.content = edge.options.style.body.name === "barred" ?
+                                    "\\shortmid" : "\\shortmid\\shortmid";
                                 decoration.marking = "";
                                 if (edge.options.colour.is_not_black()) {
                                     decoration.text

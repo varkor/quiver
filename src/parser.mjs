@@ -649,7 +649,9 @@ export class Parser {
             edge.options.style.name = "corner-inverse";
             return;
         }
-        if (this.eat("\"\\shortmid\"{marking")) {
+        let double_barred = false;
+        if (this.eat("\"\\shortmid\"{marking")
+            || ((double_barred = true) && this.eat("\"{\\shortmid\\shortmid}\"{marking"))) {
             this.eat_whitespace();
             if (this.eat(",")) {
                 this.eat_whitespace();
@@ -660,7 +662,7 @@ export class Parser {
                 this.parse_colour(true);
             }
             this.eat("}", true);
-            edge.options.style.body.name = "barred";
+            edge.options.style.body.name = double_barred ? "double barred" : "barred";
             return;
         }
         if (this.eat("phantom")) {

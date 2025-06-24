@@ -3148,6 +3148,9 @@ class UI {
                     case "barred":
                         style.body_style = CONSTANTS.ARROW_BODY_STYLE.PROARROW;
                         break;
+                    case "double barred":
+                        style.body_style = CONSTANTS.ARROW_BODY_STYLE.DOUBLE_PROARROW;
+                        break;
                     case "dashed":
                         style.dash_style = CONSTANTS.ARROW_DASH_STYLE.DASHED;
                         break;
@@ -4364,6 +4367,7 @@ class Panel {
                 ["dotted", "Dotted", { name: "dotted" }, `${key_index++}`],
                 ["squiggly", "Squiggly", { name: "squiggly" }, `${key_index++}`],
                 ["barred", "Barred", { name: "barred" }, `${key_index++}`],
+                ["double barred", "Double barred", { name: "double barred" }, `${key_index++}`],
             ],
             "body-type",
             ["vertical", "arrow-style", "kbd-requires-focus"],

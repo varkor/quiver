@@ -1,6 +1,6 @@
 import { Arc, Bezier, Curve, CurvePoint, EPSILON, RoundedRectangle } from "./curve.mjs";
 import { DOM } from "./dom.mjs";
-import { Dimensions, Enum, Path, Point, rad_to_deg } from "./ds.mjs";
+import { Dimensions, Enum, Path, Point, rad_to_deg, clamp } from "./ds.mjs";
 
 /// `Array.prototype.includes` but for multiple needles.
 function includes_any(array, ...values) {
@@ -73,6 +73,8 @@ export const CONSTANTS = {
         "ADJUNCTION",
         // A line with a bar through it (-+-).
         "PROARROW",
+        // A line with two bars through it (-++-).
+        "DOUBLE_PROARROW",
     ),
     /// The standard dash styles for an edge.
     ARROW_DASH_STYLE: new Enum(
@@ -618,31 +620,54 @@ export class Arrow {
             head_height, shorten, t_after_length, dash_padding, offset,
         };
 
-        // Draw the the proarrow bar.
-        if (this.style.body_style === CONSTANTS.ARROW_BODY_STYLE.PROARROW) {
-            const mid = (start.t + end.t) / 2;
-            const centre = curve.point(mid).add(offset);
-            const angle = curve.tangent(mid);
-            const normal = angle + Math.PI / 2;
-            const adj_seg = new Point(head_height, 0);
-            const adj_seg_2 = adj_seg.div(2);
+        // Draw the body decoration, e.g. the proarrow bar.
+        let bar_offsets = [0];
 
-            const path = new Path();
-            // Top.
-            path.move_to(centre.sub(adj_seg_2.rotate(normal)));
-            // Bottom.
-            path.line_by(adj_seg.rotate(normal));
+        switch (this.style.body_style) {
+            case CONSTANTS.ARROW_BODY_STYLE.DOUBLE_PROARROW:
+                bar_offsets = [-2.5, 2.5];
+                // Fall-through.
 
-            this.requisition_element(this.svg, "path.arrow-bar", {
-                d: `${path}`,
-                mask: `url(#arrow${this.id}-label-clipping-mask)`,
-                fill: "none",
-                stroke: this.style.colour,
-                "stroke-width": CONSTANTS.STROKE_WIDTH,
-                "stroke-linecap": "round",
-            });
-        } else {
-            this.release_element(this.svg, "path.arrow-bar");
+            case CONSTANTS.ARROW_BODY_STYLE.PROARROW: {
+                const path = new Path();
+
+                const mid = (start.t + end.t) / 2;
+                const arclen_to_mid = curve.arc_length(mid);
+                // It looks better if each of the multiple bars are parallel, rather than
+                // calculating their angle based on their individual position.
+                const angle = curve.tangent(mid);
+                const normal = angle + Math.PI / 2;
+                const adj_seg = new Point(head_height, 0);
+                const adj_seg_2 = adj_seg.div(2);
+
+                for (const bar_offset of bar_offsets) {
+                    const bar_t = t_after_length(clamp(
+                        arclen_to_start,
+                        arclen_to_mid + bar_offset,
+                        arclen_to_end,
+                    ));
+                    const centre = curve.point(bar_t).add(offset);
+
+                    // Top.
+                    path.move_to(centre.sub(adj_seg_2.rotate(normal)));
+                    // Bottom.
+                    path.line_by(adj_seg.rotate(normal));
+                }
+
+                this.requisition_element(this.svg, "path.arrow-bar", {
+                    d: `${path}`,
+                    mask: `url(#arrow${this.id}-label-clipping-mask)`,
+                    fill: "none",
+                    stroke: this.style.colour,
+                    "stroke-width": CONSTANTS.STROKE_WIDTH,
+                    "stroke-linecap": "round",
+                });
+                }
+                break;
+
+            default:
+                this.release_element(this.svg, "path.arrow-bar");
+                break;
         }
 
         // We calculate the widths of the tails and heads whilst drawing them, so we have to
@@ -779,6 +804,7 @@ export class Arrow {
             // The normal case: a straight or curved line.
             case CONSTANTS.ARROW_BODY_STYLE.LINE:
             case CONSTANTS.ARROW_BODY_STYLE.PROARROW:
+            case CONSTANTS.ARROW_BODY_STYLE.DOUBLE_PROARROW:
                 path.move_to(offset);
                 curve.render(path);
                 break;
@@ -914,6 +940,7 @@ export class Arrow {
                 // We are deliberately falling through here.
                 case CONSTANTS.ARROW_BODY_STYLE.LINE:
                 case CONSTANTS.ARROW_BODY_STYLE.PROARROW:
+                case CONSTANTS.ARROW_BODY_STYLE.DOUBLE_PROARROW:
                     // Reset the dash array, because we're calculating everything manually.
                     dashes = [];
 
