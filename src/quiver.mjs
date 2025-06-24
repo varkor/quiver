@@ -754,6 +754,9 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                                     decoration.text
                                         = edge.options.colour.latex(definitions.colours);
                                 }
+                                if (["left", "right"].includes(edge.options.label_alignment)) {
+                                    label["inner sep"] = ".8ex";
+                                }
                                 if (edge.options.level > 1) {
                                     tikz_incompatibilities
                                         .add("double arrows or higher with decorations");

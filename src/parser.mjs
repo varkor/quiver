@@ -1154,7 +1154,12 @@ export class Parser {
 
         // The following options are deliberately ignored, because they are used by quiver in
         // tikz-cd export for convenience.
-        if (this.eat("inner sep=0") || this.eat("anchor=center")) {
+        if (this.eat("inner sep=")) {
+            if (this.eat("0") || this.eat(".8ex")) {
+                return;
+            }
+        }
+        if (this.eat("anchor=center")) {
             return;
         }
 
