@@ -4341,7 +4341,7 @@ class Panel {
                 ["none", "No tail", { name: "none" }, `${key_index++}`],
                 ["maps to", "Maps to", { name: "maps to" }, `${key_index++}`],
                 ["top-hook", "Top hook",
-                    { name: "hook", side: "top" }, `${key_index++}`, ["short"]],
+                    { name: "hook", side: "top" }, `${key_index++}`, ["short", "start-of-line"]],
                 ["bottom-hook", "Bottom hook",
                     { name: "hook", side: "bottom" }, `${key_index++}`, ["short"]],
                 ["arrowhead", "Arrowhead", { name: "arrowhead"}, `${key_index++}`],
@@ -4369,13 +4369,18 @@ class Panel {
             [
                 ["solid", "Solid", { name: "cell" }, `${key_index++}`],
                 ["none", "No body", { name: "none" }, `${key_index++}`],
-                ["dashed", "Dashed", { name: "dashed" }, `${key_index++}`],
-                ["dotted", "Dotted", { name: "dotted" }, `${key_index++}`],
+                ["dashed", "Dashed", { name: "dashed" }, `${key_index++}`,
+                    ["short", "start-of-line"]],
+                ["dotted", "Dotted", { name: "dotted" }, `${key_index++}`, ["short"]],
                 ["squiggly", "Squiggly", { name: "squiggly" }, `${key_index++}`],
-                ["barred", "Barred", { name: "barred" }, `${key_index++}`],
-                ["double barred", "Double barred", { name: "double barred" }, `${key_index++}`],
-                ["bullet solid", "Solid bullet", { name: "bullet solid" }, `${key_index++}`],
-                ["bullet hollow", "Hollow bullet", { name: "bullet hollow" }, `${key_index++}`],
+                ["barred", "Barred", { name: "barred" }, `${key_index++}`,
+                    ["short", "start-of-line"]],
+                ["double barred", "Double barred", { name: "double barred" }, `${key_index++}`,
+                    ["short"]],
+                ["bullet solid", "Solid bullet", { name: "bullet solid" }, `${key_index++}`,
+                    ["short", "start-of-line"]],
+                ["bullet hollow", "Hollow bullet", { name: "bullet hollow" }, `${key_index++}`,
+                    ["short"]],
             ],
             "body-type",
             ["vertical", "arrow-style", "kbd-requires-focus"],
@@ -4383,7 +4388,9 @@ class Panel {
             (edges, _, data, user_triggered, idempotent) =>
                 update_style(body_styles, "body")(edges, _, data, user_triggered, idempotent),
             (data) => ({
-                length: ARROW_LENGTH,
+                length: [
+                    "dashed", "dotted", "barred", "double barred", "bullet solid", "bullet hollow"
+                ].includes(data.name) ? SHORTER_ARROW_LENGTH : ARROW_LENGTH,
                 options: Edge.default_options(null, {
                     body: data,
                     head: { name: "none" },
@@ -4401,7 +4408,7 @@ class Panel {
                 ["none", "No arrowhead", { name: "none" }, `${key_index++}`],
                 ["epi", "Epi", { name: "epi"}, `${key_index++}`],
                 ["top-harpoon", "Top harpoon",
-                    { name: "harpoon", side: "top" }, `${key_index++}`, ["short"]],
+                    { name: "harpoon", side: "top" }, `${key_index++}`, ["short", "start-of-line"]],
                 ["bottom-harpoon", "Bottom harpoon",
                     { name: "harpoon", side: "bottom" }, `${key_index++}`, ["short"]],
             ],
