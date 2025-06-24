@@ -627,15 +627,22 @@ export class Arrow {
         // Draw the body decoration, e.g. the proarrow bar.
         let bar_offsets = [0];
 
+        const start_t = Math.max(
+            start.t,
+            t_after_length(arclen_to_start + this.style.shorten.tail)
+        );
+        const end_t = Math.min(
+            end.t,
+            t_after_length(arclen_to_end - this.style.shorten.head)
+        );
+        const mid = (start_t + end_t) / 2;
+
         switch (this.style.body_style) {
             case CONSTANTS.ARROW_BODY_STYLE.DOUBLE_PROARROW:
                 bar_offsets = [-2.5, 2.5];
                 // Fall-through.
 
             case CONSTANTS.ARROW_BODY_STYLE.PROARROW: {
-                const path = new Path();
-
-                const mid = (start.t + end.t) / 2;
                 const arclen_to_mid = curve.arc_length(mid);
                 // It looks better if each of the multiple bars are parallel, rather than
                 // calculating their angle based on their individual position.
@@ -643,6 +650,7 @@ export class Arrow {
                 const normal = angle + Math.PI / 2;
                 const adj_seg = new Point(head_height, 0);
                 const adj_seg_2 = adj_seg.div(2);
+                const path = new Path();
 
                 for (const bar_offset of bar_offsets) {
                     const bar_t = t_after_length(clamp(
@@ -671,7 +679,7 @@ export class Arrow {
                 break;
 
             case CONSTANTS.ARROW_BODY_STYLE.BULLET_SOLID: {
-                const centre = curve.point((start.t + end.t) / 2).add(offset);
+                const centre = curve.point(mid).add(offset);
 
                 this.release_element(this.svg, "path.arrow-decoration");
                 this.requisition_element(this.svg, "circle.arrow-decoration", {
@@ -686,7 +694,7 @@ export class Arrow {
                 break;
 
             case CONSTANTS.ARROW_BODY_STYLE.BULLET_HOLLOW: {
-                const centre = curve.point((start.t + end.t) / 2).add(offset);
+                const centre = curve.point(mid).add(offset);
 
                 this.release_element(this.svg, "path.arrow-decoration");
                 // Bullet outline.

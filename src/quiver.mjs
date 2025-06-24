@@ -761,6 +761,11 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                                     tikz_incompatibilities
                                         .add("double arrows or higher with decorations");
                                 }
+                                if (edge.arrow.style.shorten.head !== 0
+                                    || edge.arrow.style.shorten.tail !== 0) {
+                                    tikz_incompatibilities
+                                        .add("shortened arrows with decorations");
+                                }
                                 break;
 
                             case "none":
