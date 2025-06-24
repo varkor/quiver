@@ -3151,6 +3151,12 @@ class UI {
                     case "double barred":
                         style.body_style = CONSTANTS.ARROW_BODY_STYLE.DOUBLE_PROARROW;
                         break;
+                    case "bullet solid":
+                        style.body_style = CONSTANTS.ARROW_BODY_STYLE.BULLET_SOLID;
+                        break;
+                    case "bullet hollow":
+                        style.body_style = CONSTANTS.ARROW_BODY_STYLE.BULLET_HOLLOW;
+                        break;
                     case "dashed":
                         style.dash_style = CONSTANTS.ARROW_DASH_STYLE.DASHED;
                         break;
@@ -4368,6 +4374,8 @@ class Panel {
                 ["squiggly", "Squiggly", { name: "squiggly" }, `${key_index++}`],
                 ["barred", "Barred", { name: "barred" }, `${key_index++}`],
                 ["double barred", "Double barred", { name: "double barred" }, `${key_index++}`],
+                ["bullet solid", "Solid bullet", { name: "bullet solid" }, `${key_index++}`],
+                ["bullet hollow", "Hollow bullet", { name: "bullet hollow" }, `${key_index++}`],
             ],
             "body-type",
             ["vertical", "arrow-style", "kbd-requires-focus"],

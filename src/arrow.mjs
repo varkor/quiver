@@ -75,6 +75,10 @@ export const CONSTANTS = {
         "PROARROW",
         // A line with two bars through it (-++-).
         "DOUBLE_PROARROW",
+        // A solid bullet.
+        "BULLET_SOLID",
+        // A hollow bullet.
+        "BULLET_HOLLOW",
     ),
     /// The standard dash styles for an edge.
     ARROW_DASH_STYLE: new Enum(
@@ -654,7 +658,8 @@ export class Arrow {
                     path.line_by(adj_seg.rotate(normal));
                 }
 
-                this.requisition_element(this.svg, "path.arrow-bar", {
+                this.release_element(this.svg, "circle.arrow-decoration");
+                this.requisition_element(this.svg, "path.arrow-decoration", {
                     d: `${path}`,
                     mask: `url(#arrow${this.id}-label-clipping-mask)`,
                     fill: "none",
@@ -665,8 +670,47 @@ export class Arrow {
                 }
                 break;
 
+            case CONSTANTS.ARROW_BODY_STYLE.BULLET_SOLID: {
+                const centre = curve.point((start.t + end.t) / 2).add(offset);
+
+                this.release_element(this.svg, "path.arrow-decoration");
+                this.requisition_element(this.svg, "circle.arrow-decoration", {
+                    cx: centre.x,
+                    cy: centre.y,
+                    r: 5,
+                    mask: `url(#arrow${this.id}-label-clipping-mask)`,
+                    fill: this.style.colour,
+                    stroke: "none",
+                });
+                }
+                break;
+
+            case CONSTANTS.ARROW_BODY_STYLE.BULLET_HOLLOW: {
+                const centre = curve.point((start.t + end.t) / 2).add(offset);
+
+                this.release_element(this.svg, "path.arrow-decoration");
+                // Bullet outline.
+                this.requisition_element(this.svg, "circle.arrow-decoration", {
+                    cx: centre.x,
+                    cy: centre.y,
+                    r: 5,
+                    mask: `url(#arrow${this.id}-label-clipping-mask)`,
+                    fill: "none",
+                    stroke: this.style.colour,
+                    "stroke-width": CONSTANTS.STROKE_WIDTH,
+                });
+                // Crop the inside out of the bullet.
+                this.requisition_element(clipping_mask, "circle.arrow-decoration", {
+                    cx: centre.x,
+                    cy: centre.y,
+                    r: 5,
+                    fill: "black",
+                });
+                }
+                break;
+
             default:
-                this.release_element(this.svg, "path.arrow-bar");
+                this.release_element(this.svg, ".arrow-decoration");
                 break;
         }
 
@@ -805,6 +849,8 @@ export class Arrow {
             case CONSTANTS.ARROW_BODY_STYLE.LINE:
             case CONSTANTS.ARROW_BODY_STYLE.PROARROW:
             case CONSTANTS.ARROW_BODY_STYLE.DOUBLE_PROARROW:
+            case CONSTANTS.ARROW_BODY_STYLE.BULLET_SOLID:
+            case CONSTANTS.ARROW_BODY_STYLE.BULLET_HOLLOW:
                 path.move_to(offset);
                 curve.render(path);
                 break;
@@ -941,6 +987,8 @@ export class Arrow {
                 case CONSTANTS.ARROW_BODY_STYLE.LINE:
                 case CONSTANTS.ARROW_BODY_STYLE.PROARROW:
                 case CONSTANTS.ARROW_BODY_STYLE.DOUBLE_PROARROW:
+                case CONSTANTS.ARROW_BODY_STYLE.BULLET_SOLID:
+                case CONSTANTS.ARROW_BODY_STYLE.BULLET_HOLLOW:
                     // Reset the dash array, because we're calculating everything manually.
                     dashes = [];
 

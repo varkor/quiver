@@ -110,6 +110,18 @@
 	\arrow["{\shortmid\shortmid}"{marking}, from=1-1, to=1-2]
 \end{tikzcd}
 
+% Solid bullet arrow.
+\begin{tikzcd}
+	\bullet & \bullet
+	\arrow["\bullet"{marking}, from=1-1, to=1-2]
+\end{tikzcd}
+
+% Hollow bullet arrow.
+\begin{tikzcd}
+	\bullet & \bullet
+	\arrow["\bullet"{marking, text=\pgfkeysvalueof{/tikz/commutative diagrams/background color}}, "\circ"{marking}, from=1-1, to=1-2]
+\end{tikzcd}
+
 % Loops of different radii, angles, and direction.
 \begin{tikzcd}
 	\bullet & \bullet & \bullet

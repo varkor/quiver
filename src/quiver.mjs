@@ -548,7 +548,7 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                 // The primary label (i.e. the one the user edits directly).
                 const label = { content: edge.label };
                 // A label used for the edge style, e.g. a bar, corner, or adjunction symbol.
-                const decoration = {};
+                let decoration = {};
                 // All the labels for this edge, including the primary label, a placeholder label if
                 // any edges are attached to this one, and labels for non-arrow edge styles, or the
                 // bar on a barred arrow.
@@ -730,11 +730,25 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                                 parameters.squiggly = "";
                                 break;
 
+                            case "bullet hollow":
+                                labels.push(decoration);
+                                decoration.content = "\\bullet";
+                                decoration.marking = "";
+                                decoration.text
+                                    = "\\pgfkeysvalueof{/tikz/commutative diagrams/background color}";
+                                decoration = {};
+                                // Fall through.
+
                             case "barred":
                             case "double barred":
+                            case "bullet solid":
                                 labels.push(decoration);
-                                decoration.content = edge.options.style.body.name === "barred" ?
-                                    "\\shortmid" : "\\shortmid\\shortmid";
+                                decoration.content = {
+                                    "barred": "\\shortmid",
+                                    "double barred": "\\shortmid\\shortmid",
+                                    "bullet solid": "\\bullet",
+                                    "bullet hollow": "\\circ",
+                                }[edge.options.style.body.name];
                                 decoration.marking = "";
                                 if (edge.options.colour.is_not_black()) {
                                     decoration.text

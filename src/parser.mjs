@@ -649,21 +649,29 @@ export class Parser {
             edge.options.style.name = "corner-inverse";
             return;
         }
-        let double_barred = false;
-        if (this.eat("\"\\shortmid\"{marking")
-            || ((double_barred = true) && this.eat("\"{\\shortmid\\shortmid}\"{marking"))) {
-            this.eat_whitespace();
-            if (this.eat(",")) {
+        const markings = {
+            "\\shortmid": "barred",
+            "{\\shortmid\\shortmid}": "double barred",
+            "\\bullet": "bullet solid",
+            "\\circ": "bullet hollow"
+        };
+        for (const [marking, body] of Object.entries(markings)) {
+            if (this.eat(`"${marking}"{marking`)) {
                 this.eat_whitespace();
-                this.eat("text", true);
-                this.eat_whitespace();
-                this.eat("=", true);
-                this.eat_whitespace();
-                this.parse_colour(true);
+                if (this.eat(",")) {
+                    this.eat_whitespace();
+                    this.eat("text", true);
+                    this.eat_whitespace();
+                    this.eat("=", true);
+                    this.eat_whitespace();
+                    if (!this.eat("\\pgfkeysvalueof{/tikz/commutative diagrams/background color}")) {
+                        this.parse_colour(true);
+                    }
+                }
+                this.eat("}", true);
+                edge.options.style.body.name = body;
+                return;
             }
-            this.eat("}", true);
-            edge.options.style.body.name = double_barred ? "double barred" : "barred";
-            return;
         }
         if (this.eat("phantom")) {
             // Special behaviour for `phantom`, which is used by quiver for edge alignment.
