@@ -754,6 +754,10 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                                     decoration.text
                                         = edge.options.colour.latex(definitions.colours);
                                 }
+                                if (edge.options.level > 1) {
+                                    tikz_incompatibilities
+                                        .add("double arrows or higher with decorations");
+                                }
                                 break;
 
                             case "none":

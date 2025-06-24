@@ -677,7 +677,7 @@ export class Arrow {
                 this.requisition_element(this.svg, "circle.arrow-decoration", {
                     cx: centre.x,
                     cy: centre.y,
-                    r: 5,
+                    r: head_height / 2,
                     mask: `url(#arrow${this.id}-label-clipping-mask)`,
                     fill: this.style.colour,
                     stroke: "none",
@@ -693,7 +693,7 @@ export class Arrow {
                 this.requisition_element(this.svg, "circle.arrow-decoration", {
                     cx: centre.x,
                     cy: centre.y,
-                    r: 5,
+                    r: head_height / 2,
                     mask: `url(#arrow${this.id}-label-clipping-mask)`,
                     fill: "none",
                     stroke: this.style.colour,
@@ -703,7 +703,7 @@ export class Arrow {
                 this.requisition_element(clipping_mask, "circle.arrow-decoration", {
                     cx: centre.x,
                     cy: centre.y,
-                    r: 5,
+                    r: head_height / 2,
                     fill: "black",
                 });
                 }
@@ -796,6 +796,14 @@ export class Arrow {
         draw_heads(this.style.tails, start, true, true);
         draw_heads(this.style.heads, end, false, true);
 
+        // It's possible that, when drawing the body, we added to the clipping mask (e.g. for the
+        // hollow bullet body style). However, we may then have drawn over this in white when
+        // drawing the edge with level > 1. For this reason, we move anything drawn by the body to
+        // the end of the parent to avoid ordering issues.
+        for (const body_mask of clipping_mask.query_selector_all("circle.arrow-decoration")) {
+            body_mask.parent.add(body_mask);
+        }
+
         // At present, we don't clip the edge using the source and target masks, but this might be
         // something we do in the future.
 
@@ -831,7 +839,7 @@ export class Arrow {
         // Various arc lengths, which are used for drawing various parts of the Bézier curve
         // manually (e.g. for squiggly lines) or to determine dash distances.
         const {
-            curve, start, end, length, shorten, t_after_length, dash_padding, total_width_of_tails,
+            curve, start, end, shorten, t_after_length, dash_padding, total_width_of_tails,
             total_width_of_heads, offset,
         } = constants;
         let arclen_to_start = curve.arc_length(start.t) + (this.style.shorten.tail + shorten.start)
