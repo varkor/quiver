@@ -17,8 +17,6 @@
 \RequirePackage{tikz-cd}
 % `amssymb` is necessary for `\lrcorner` and `\ulcorner`.
 \RequirePackage{amssymb}
-% `array` is necessary for the `Q` column type.
-\RequirePackage{array}
 % `calc` is necessary to draw curved arrows.
 \usetikzlibrary{calc}
 % `pathmorphing` is necessary to draw squiggly arrows.
@@ -46,8 +44,5 @@
 \tikzset{2tail reversed/.code={\pgfsetarrowsstart{Implies}}}
 % TikZ arrow styles.
 \tikzset{no body/.style={/tikz/dash pattern=on 0 off 1mm}}
-
-% A table column type in which every cell is math mode by default.
-\newcolumntype{Q}{>{$}c<{$}}
 
 \endinput
