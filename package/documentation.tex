@@ -95,6 +95,16 @@ The \texttt{curve} style takes two (optional) named parameters.
 \end{tikzcd}
 \end{tikzexample}
 
+\subsection{The \texttt{between} style}
+
+The typical method of curving arrows in \tcd{} commutative diagrams is to use the \TikZ{} \texttt{shorten <} and \texttt{shorten >} styles. However, these styles do not interact well with curved paths. The \texttt{between} style addresses this shortcoming.
+
+\begin{tikzexample}
+\begin{tikzcd}
+	a \ar["f", rr, curve={height=-24pt}, between={0.3}{0.7}] && b
+\end{tikzcd}
+\end{tikzexample}
+
 \subsection{Arrowhead and tail styles}
 
 The \tcd{} package provides several arrowhead and tail styles. The \quiver{} package provides the following additional styles.
@@ -142,7 +152,8 @@ The \quiver{} version number is tied to the editor version number. This is refle
         1.0.0 & 2020-11-10 & First public version. Imports necessary packages and defines the \texttt{curve} style. \\
         1.0.1 & 2020-11-27 & Added the \texttt{tail reversed}, \texttt{2tail}, and \texttt{2tail reversed} styles. \\
         1.1.0 & 2020-12-18 & Added a dependency. \\
-        1.2.0 & 2021-01-11 & Added the \texttt{no body} style.
+        1.2.0 & 2021-01-11 & Added the \texttt{no body} style. \\
+        1.5.5 & 2024-06-24 & Added the \texttt{between} style.
     \end{tblr}
 \end{center}
 
