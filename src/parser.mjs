@@ -254,11 +254,22 @@ export class Parser {
                             ) * ROUND_TO, 100);
                         };
 
-                        edge.options.shorten.source = convert_length(parser_edge.shorten.source);
-                        edge.options.shorten.target = convert_length(parser_edge.shorten.target);
+                        if (parser_edge.between.source !== null
+                            && parser_edge.between.target !== null) {
+                            edge.options.shorten.source = parser_edge.between.source * 100;
+                            edge.options.shorten.target = 100 - parser_edge.between.target * 100;
+                        } else {
+                            edge.options.shorten.source
+                                = convert_length(parser_edge.shorten.source);
+                            edge.options.shorten.target
+                                = convert_length(parser_edge.shorten.target);
+                        }
                         if (edge.options.shorten.source + edge.options.shorten.target >= 100) {
                             this.log(
-                                this.warn("Encountered arrow with zero length.", parser_edge.range)
+                                this.warn(
+                                    "Encountered arrow with zero length.",
+                                    parser_edge.range,
+                                )
                             );
                             // Reset the shortening.
                             edge.options.shorten.source = 0;
@@ -862,17 +873,32 @@ export class Parser {
         if (this.eat("shorten <")) {
             this.eat_whitespace();
             this.eat("=", true);
-            const length = this.parse_int(true);
-            edge.shorten.source = length;
+            edge.shorten.source = this.parse_int(true);
             this.eat("pt", true);
             return;
         }
         if (this.eat("shorten >")) {
             this.eat_whitespace();
             this.eat("=", true);
-            const length = this.parse_int(true);
-            edge.shorten.target = length;
+            edge.shorten.target = this.parse_int(true);
             this.eat("pt", true);
+            return;
+        }
+        if (this.eat("between")) {
+            this.eat_whitespace();
+            this.eat("=", true);
+            this.eat_whitespace();
+            this.eat("{", true);
+            this.eat_whitespace();
+            edge.between.start = this.parse_float(true);
+            this.eat_whitespace();
+            this.eat("}", true);
+            this.eat_whitespace();
+            this.eat("{", true);
+            this.eat_whitespace();
+            edge.between.end = this.parse_float(true);
+            this.eat_whitespace();
+            this.eat("}", true);
             return;
         }
         // tikz-cd presets: these specify head, body, and tail.
@@ -1189,6 +1215,7 @@ Parser.Edge = class {
         this.options = Edge.default_options({ level: 1 });
         this.label_colour = Colour.black();
         this.shorten = { source: 0, target: 0 };
+        this.between = { source: null, target: null };
         this.phantom = false;
         // tikz-cd has some built-in styles that effectively reverse the direction of an arrow.
         // (This could also be achieved by permitting every head style to be used for a tail style

@@ -2,24 +2,29 @@
 % A package for drawing commutative diagrams exported from https://q.uiver.app.
 %
 % This package is currently a wrapper around the `tikz-cd` package, importing necessary TikZ
-% libraries, and defining a new TikZ style for curves of a fixed height.
+% libraries, and defining new TikZ styles for curves of a fixed height and for shortening paths
+% proportionally.
 %
-% Version: 1.5.4
+% Version: 1.5.5
 % Authors:
 % - varkor (https://github.com/varkor)
 % - AndréC (https://tex.stackexchange.com/users/138900/andr%C3%A9c)
 
 \NeedsTeXFormat{LaTeX2e}
-\ProvidesPackage{quiver}[2021/01/11 quiver]
+\ProvidesPackage{quiver}[2025/06/24 quiver]
 
 % `tikz-cd` is necessary to draw commutative diagrams.
 \RequirePackage{tikz-cd}
 % `amssymb` is necessary for `\lrcorner` and `\ulcorner`.
 \RequirePackage{amssymb}
+% `array` is necessary for the `Q` column type.
+\RequirePackage{array}
 % `calc` is necessary to draw curved arrows.
 \usetikzlibrary{calc}
 % `pathmorphing` is necessary to draw squiggly arrows.
 \usetikzlibrary{decorations.pathmorphing}
+% `spath3` is necessary to draw shortened edges.
+\usetikzlibrary{spath3}
 
 % A TikZ style for curved arrows of a fixed height, due to AndréC.
 \tikzset{curve/.style={settings={#1},to path={(\tikztostart)
@@ -30,11 +35,19 @@
         \def\pv##1{\pgfkeysvalueof{/tikz/quiver/##1}}},
     quiver/.cd,pos/.initial=0.35,height/.initial=0}
 
+% A TikZ style for shortening paths without the poor behaviour of `shorten <' and `shorten >'.
+\tikzset{between/.style n args={2}{/tikz/spath/at end path construction={
+    \tikzset{spath/split at keep middle={current}{#1}{#2}}
+}}}
+
 % TikZ arrowhead/tail styles.
 \tikzset{tail reversed/.code={\pgfsetarrowsstart{tikzcd to}}}
 \tikzset{2tail/.code={\pgfsetarrowsstart{Implies[reversed]}}}
 \tikzset{2tail reversed/.code={\pgfsetarrowsstart{Implies}}}
 % TikZ arrow styles.
 \tikzset{no body/.style={/tikz/dash pattern=on 0 off 1mm}}
+
+% A table column type in which every cell is math mode by default.
+\newcolumntype{Q}{>{$}c<{$}}
 
 \endinput

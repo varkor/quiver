@@ -654,34 +654,13 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                 }
 
                 // Shortened edges. This may only be set for the `arrow` style.
-                const tail_is_empty = edge.options.style.name === "arrow"
-                    && edge.options.style.body.name === "none"
-                    && edge.options.style.tail.name === "none";
-                if (!tail_is_empty && edge.options.shorten.source !== 0) {
-                    const shorten = Math.round(edge.arrow.style.shorten.tail * multiplier);
-                    parameters["shorten <"] = `${shorten}pt`;
-                    if (edge.options.curve !== 0) {
-                        // It should be possible to do this using a custom style, but for now we
-                        // simply warn the user that the result will not look quite as good as it
-                        // does in quiver.
-                        tikz_incompatibilities.add("shortened curved arrows");
-                    }
-                    if (edge.target === edge.source) {
-                        tikz_incompatibilities.add("shortened loops");
-                    }
-                }
-                const head_is_empty = edge.options.style.name === "arrow"
-                    && edge.options.style.head.name === "none"
-                    && edge.options.style.body.name === "none";
-                if (!head_is_empty && edge.options.shorten.target !== 0) {
-                    const shorten = Math.round(edge.arrow.style.shorten.head * multiplier);
-                    parameters["shorten >"] = `${shorten}pt`;
-                    if (edge.options.curve !== 0) {
-                        tikz_incompatibilities.add("shortened curved arrows");
-                    }
-                    if (edge.target === edge.source) {
-                        tikz_incompatibilities.add("shortened loops");
-                    }
+                if (!edge_is_empty
+                    && (edge.options.shorten.source !== 0 || edge.options.shorten.target !== 0)) {
+                    parameters['between'] = `{${
+                        edge.options.shorten.source / 100
+                    }}{${
+                        (100 - edge.options.shorten.target) / 100
+                    }}`;
                 }
 
                 // Edge styles.
@@ -712,6 +691,9 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                             add_dependency("tikz-nfold", "triple arrows or higher");
                         }
 
+                        const midpoint = (edge.options.shorten.source
+                            + (100 - edge.options.shorten.target)) / (2 * 100);
+
                         // Body styles.
                         switch (edge.options.style.body.name) {
                             case "cell":
@@ -734,6 +716,7 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                                 labels.push(decoration);
                                 decoration.content = "\\bullet";
                                 decoration.marking = "";
+                                decoration.pos = midpoint;
                                 decoration.text
                                     = "\\pgfkeysvalueof{/tikz/commutative diagrams/background color}";
                                 decoration = {};
@@ -750,6 +733,7 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                                     "bullet hollow": "\\circ",
                                 }[edge.options.style.body.name];
                                 decoration.marking = "";
+                                decoration.pos = midpoint;
                                 if (edge.options.colour.is_not_black()) {
                                     decoration.text
                                         = edge.options.colour.latex(definitions.colours);
@@ -760,11 +744,6 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                                 if (edge.options.level > 1) {
                                     tikz_incompatibilities
                                         .add("double arrows or higher with decorations");
-                                }
-                                if (edge.arrow.style.shorten.head !== 0
-                                    || edge.arrow.style.shorten.tail !== 0) {
-                                    tikz_incompatibilities
-                                        .add("shortened arrows with decorations");
                                 }
                                 break;
 
