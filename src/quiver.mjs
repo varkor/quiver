@@ -661,6 +661,7 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                     }}{${
                         (100 - edge.options.shorten.target) / 100
                     }}`;
+                    add_dependency("quiver", "shortened edges");
                 }
 
                 // Edge styles.

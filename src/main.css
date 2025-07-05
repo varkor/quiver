@@ -1549,13 +1549,18 @@ button.flash {
 .port .tip .update {
     padding: 0pt 4pt;
     padding-bottom: 1pt;
-    margin-left: 4pt;
+    margin-left: 8pt;
 
     background: var(--ui-blue);
     border-radius: 2px;
 
+    color: var(--ui-black);
     font-variant: small-caps;
 	font-size: 10pt;
+}
+
+.port .tip .update time {
+    font-size: 8pt;
 }
 
 .port div.error {

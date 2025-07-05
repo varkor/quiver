@@ -4760,22 +4760,10 @@ class Panel {
 
                     tip = new DOM.Element("span", { class: "tip hidden" });
 
-                    // Create message regarding, and linking to, `quiver.sty`.
-                    const update_package_previous_download = () => {
-                        window.localStorage.setItem(
-                            "package-previous-download",
-                            CONSTANTS.PACKAGE_VERSION,
-                        );
-                        const update = tip.query_selector(".update");
-                        if (update !== null) {
-                            update.remove();
-                        }
-                    };
-
                     tip.add("Remember to include ")
                         .add(new DOM.Code("\\usepackage{quiver}"))
-                        .add(" in your LaTeX preamble. You can install the package using ")
-                        .add(new DOM.Link("https://tug.org/texlive/", "TeX Live 2023", true));
+                        .add(" in your LaTeX preamble. You can install the package through ")
+                        .add(new DOM.Link("https://ctan.org/pkg/quiver", "CTAN", true));
                     tip.add(", or ")
                         .add(
                             // We would like to simply use `quiver.sty` here, but,
@@ -4788,10 +4776,13 @@ class Panel {
                             }).add("open ")
                                 .add(new DOM.Element("code").add("quiver.sty"))
                                 .add(" in a new tab")
-                            .listen("click", update_package_previous_download)
                         )
                         .add(" to copy-and-paste.")
                         .add_to(port_pane);
+                    tip.add(new DOM.Element("span", { class: "update" })
+                        .add("updated on ")
+                        .add(new DOM.Element("time").add("2025-07-05"))
+                    );
 
                     const centre_checkbox = new DOM.Element("input", {
                         type: "checkbox",
@@ -5281,13 +5272,19 @@ class Panel {
                         warning.add(new DOM.Element("br"));
                     }
                     warning.add("The exported ").add(new DOM.Code("tikz-cd"))
-                        .add(" diagram relies upon additional TikZ " +
-                        "libraries that you may have to install for the diagram to render " +
+                        .add(" diagram relies upon additional packages " +
+                        " that you may have to install for the diagram to render " +
                         "correctly:");
                     const list = new DOM.Element("ul").add_to(warning);
                     for (const [library, reasons] of dependencies) {
                         const li = new DOM.Element("li").add_to(list);
-                        const url = { "tikz-nfold": "https://ctan.org/pkg/tikz-nfold" }[library];
+                        const url = {
+                            "tikz-nfold": "https://ctan.org/pkg/tikz-nfold",
+                            "quiver": "https://ctan.org/pkg/quiver",
+                        }[library];
+                        if (library === "quiver") {
+                            li.add("The latest version of ");
+                        }
                         li.add(new DOM.Element("a", { href: url, target: "_blank" })
                             .add(new DOM.Code(library)));
                         li.add(`, for ${Array.from(reasons).join("; ")}.`);
