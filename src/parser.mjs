@@ -890,13 +890,13 @@ export class Parser {
             this.eat_whitespace();
             this.eat("{", true);
             this.eat_whitespace();
-            edge.between.start = this.parse_float(true);
+            edge.between.source = this.parse_float(true);
             this.eat_whitespace();
             this.eat("}", true);
             this.eat_whitespace();
             this.eat("{", true);
             this.eat_whitespace();
-            edge.between.end = this.parse_float(true);
+            edge.between.target = this.parse_float(true);
             this.eat_whitespace();
             this.eat("}", true);
             return;
