@@ -3083,7 +3083,7 @@ class UI {
             context.lineTo(x * scale + width / 2, height);
         }
         context.lineDashOffset
-            = offset.y * scale - dash_offset - height % this.default_cell_size / 2;
+            = offset.y * scale - dash_offset - height % (this.default_cell_size * scale) / 2;
         context.stroke();
 
         // Draw the horizontal lines.
@@ -3094,7 +3094,7 @@ class UI {
             context.lineTo(width, y * scale + height / 2);
         }
         context.lineDashOffset
-            = offset.x * scale - dash_offset - width % this.default_cell_size / 2;
+            = offset.x * scale - dash_offset - width % (this.default_cell_size * scale) / 2;
         context.stroke();
     }
 
