@@ -669,6 +669,13 @@ export class Parser {
         for (const [marking, body] of Object.entries(markings)) {
             if (this.eat(`"${marking}"{marking`)) {
                 this.eat_whitespace();
+                if (this.eat(",") && this.eat_whitespace() && this.eat("pos")) {
+                    this.eat_whitespace();
+                    this.eat("=", true);
+                    this.eat_whitespace();
+                    this.parse_float(true);
+                    this.eat_whitespace();
+                }
                 if (this.eat(",")) {
                     this.eat_whitespace();
                     this.eat("text", true);

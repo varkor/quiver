@@ -717,7 +717,9 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                                 labels.push(decoration);
                                 decoration.content = "\\bullet";
                                 decoration.marking = "";
-                                decoration.pos = midpoint;
+                                if (midpoint !== 0.5) {
+                                    decoration.pos = midpoint;
+                                }
                                 decoration.text
                                     = "\\pgfkeysvalueof{/tikz/commutative diagrams/background color}";
                                 decoration = {};
@@ -734,7 +736,9 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                                     "bullet hollow": "\\circ",
                                 }[edge.options.style.body.name];
                                 decoration.marking = "";
-                                decoration.pos = midpoint;
+                                if (midpoint !== 0.5) {
+                                    decoration.pos = midpoint;
+                                }
                                 if (edge.options.colour.is_not_black()) {
                                     decoration.text
                                         = edge.options.colour.latex(definitions.colours);
