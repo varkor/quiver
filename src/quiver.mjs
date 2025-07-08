@@ -746,7 +746,9 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                                 if (["left", "right"].includes(edge.options.label_alignment)) {
                                     label["inner sep"] = ".8ex";
                                 }
-                                if (edge.options.level > 1) {
+                                if (edge.options.level > 1 && [
+                                    "bullet hollow", "bullet solid"
+                                ].includes(edge.options.style.body.name)) {
                                     tikz_incompatibilities
                                         .add("double arrows or higher with decorations");
                                 }
