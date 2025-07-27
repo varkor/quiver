@@ -201,8 +201,14 @@ export class Parser {
                     if (!clockwise) {
                         edge.options.radius *= -1;
                     }
-                    edge.options.angle = mod(180 - 90 * (clockwise ? 1 : -1)
-                        - (edge.loop_head_angle + edge.loop_tail_angle) / 2 + 180, 360) - 180;
+                    const angle_dis
+                        = mod(edge.loop_head_angle - edge.loop_tail_angle + 180, 360) - 180;
+                    let loop_angle = mod(90 * (clockwise ? 1 : -1)
+                        - mod(edge.loop_tail_angle + angle_dis / 2, 360), 360);
+                    if (loop_angle > 180) {
+                        loop_angle -= 360;
+                    }
+                    edge.options.angle = loop_angle;
                 }
                 if (!this.cells.has(`${target}`)) {
                     this.cells.set(`${target}`, new Vertex(this.ui, "", target));
@@ -817,8 +823,6 @@ export class Parser {
             this.eat(/^(em|pt|mm)/); // We ignore the unit.
             return;
         }
-        // The following options are used in conjunction with `loop`, but are deliberately ignored
-        // for now.
         if (this.eat("in")) {
             this.eat_whitespace();
             this.eat("=", true);
@@ -831,6 +835,8 @@ export class Parser {
             edge.loop_tail_angle = this.parse_int(true);
             return;
         }
+        // The following options are used in conjunction with `loop`, but are deliberately ignored
+        // for now.
         if (this.eat("curve")) {
             this.eat_whitespace();
             this.eat("=", true);
