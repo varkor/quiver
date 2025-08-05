@@ -4771,7 +4771,7 @@ class Panel {
                     typst_tip.add("Remember to include ")
                         .add(new DOM.Code("fletcher"))
                         .add(" in your Typst document with ")
-                        .add(new DOM.Code("#import \"@preview/fletcher:0.5.3\" as fletcher: diagram, node, edge"))
+                        .add(new DOM.Code("#import \"@preview/fletcher:0.5.5\" as fletcher: diagram, node, edge"))
                         .add_to(port_pane);
                     latex_tip.add("Remember to include ")
                         .add(new DOM.Code("\\usepackage{quiver}"))

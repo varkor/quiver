@@ -473,12 +473,20 @@ QuiverExport.fletcher = new class extends QuiverExport {
                             case "barred":
                                 arrowdesc += "-|-";
                                 break;
-                            case "none":
-                                //TODO: update this when implemented upstream as a shorthand
-                                // see https://github.com/Jollywatt/typst-fletcher/issues/70 for progress on this
-                                arrowdesc += "-";
-                                arrow_extra_style.push("extrude: ()");
+                            case "double barred":
+                                arrowdesc += "-||-";
                                 break;
+                            case "bullet solid":
+                                arrowdesc += "-@-";
+                                break;
+                            case "bullet hollow":
+                                arrowdesc += "-O-";
+                                break;
+                            case "none":
+                                arrowdesc += " ";
+                                break;
+                            default:
+                                arrowdesc += "-";
                         }
                         // Arrow head
                         switch(edge.options.style.head.name) {
