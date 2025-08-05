@@ -1386,7 +1386,7 @@ class UI {
         // A helper function for creating a new vertex, as there are
         // several actions that can trigger the creation of a vertex.
         const create_vertex = (position) => {
-            const label = this.settings.get("quiver.renderer") === "typst" ? "$ bullet $" : "\\bullet";
+            const label = this.settings.get("quiver.renderer") === "typst" ? "bullet" : "\\bullet";
             return new Vertex(this, label, position);
         };
 
@@ -4591,7 +4591,7 @@ class Panel {
                     )
                 );
 
-                let port_pane, latex_tip, typst_tip, warning, error, latex_options, embed_options, note;
+                let port_pane, latex_tip, typst_tip, warning, error, latex_options, typst_options, embed_options, note;
                 let content, textarea, parse_button, import_success;
 
                 // Select the code for easy copying.
@@ -4726,6 +4726,7 @@ class Panel {
                         type: "checkbox",
                         "data-setting": "export.centre_diagram",
                     });
+                    const centre_checkbox_typst = centre_checkbox.clone();
                     const ampersand_replacement = new DOM.Element("input", {
                         type: "checkbox",
                         "data-setting": "export.ampersand_replacement",
@@ -4752,6 +4753,11 @@ class Panel {
                             .add(sep_sliders.row.label)
                         )
                         .add_to(port_pane);
+                    typst_options = new DOM.Div({ class: "options typst hidden" })
+                        .add(new DOM.Element("label")
+                            .add(centre_checkbox_typst)
+                            .add("Centre diagram")
+                        ).add_to(port_pane);
 
                     const fixed_size_checkbox = new DOM.Element("input", {
                         type: "checkbox",
@@ -4772,6 +4778,7 @@ class Panel {
 
                     const checkboxes = [
                         [centre_checkbox, "tikz-cd", "c"],
+                        [centre_checkbox_typst, "fletcher", "c"],
                         [ampersand_replacement, "tikz-cd", "a"],
                         [cramped, "tikz-cd", "r"],
                         [fixed_size_checkbox, "html", "f"],
@@ -5149,6 +5156,7 @@ class Panel {
                     warning = port_pane.query_selector("div.warning");
                     error = port_pane.query_selector("div.error");
                     latex_options = port_pane.query_selector(".options.latex");
+                    typst_options = port_pane.query_selector(".options.typst");
                     embed_options = port_pane.query_selector(".options.embed");
                     note = port_pane.query_selector(".note");
                     content = port_pane.query_selector(".code");
@@ -5256,6 +5264,10 @@ class Panel {
                     "hidden",
                     kind !== "export" || format !== "tikz-cd",
                 );
+                typst_options.class_list.toggle(
+                    "hidden",
+                    kind !== "export" || format !== "fletcher",
+                );
                 embed_options.class_list.toggle("hidden", kind !== "export" || format !== "html");
                 const import_tikz_cd = kind !== "import" || format !== "tikz-cd";
                 textarea.class_list.toggle("hidden", import_tikz_cd);
@@ -5290,6 +5302,11 @@ class Panel {
             }
         };
 
+        // Helper middlewares that adds the class `.X-only` for X=typst or X=katex
+        const [typstOnly, katexOnly] = ['typst', 'katex'].map(renderer =>
+          (classes => `${classes} ${renderer}-only`)
+        );
+
         // The import button.
         const import_from_tikz = Panel.create_button_with_shortcut(
             ui,
@@ -5297,7 +5314,7 @@ class Panel {
             "tikz-cd",
             { key: "I", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always },
             () => display_port_pane("import", "tikz-cd"),
-        ).set_attributes({ class: "short" });
+        ).set_attributes({ class: "short" }).change_attribute('class', katexOnly);
 
         // The export button.
         const export_to_latex = Panel.create_button_with_shortcut(
@@ -5306,17 +5323,58 @@ class Panel {
             "LaTeX",
             { key: "E", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always },
             () => display_port_pane("export", "tikz-cd"),
-        );
+        ).change_attribute('class', katexOnly);
         const export_to_typst = Panel.create_button_with_shortcut(
             ui,
             "Typst",
             "Typst",
             { key: "T", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always },
             () => display_port_pane("export", "fletcher"),
-        );
+        ).change_attribute('class', typstOnly);
 
         this.global = new DOM.Div({ class: "panel global" }).add(
-            new DOM.Element("label").add("Import: ")
+            new DOM.Element("label").add("Renderer: ")
+        ).add(
+            [['katex', 'LaTeX'], ['typst', 'Typst']].reduce(
+              (selectElem, rendererNamePair) => selectElem.add(
+                new DOM.Element("option").set_attributes({
+                  value: rendererNamePair[0],
+                  // add selected="" attribute to the current renderer
+                  ...(
+                    ui.settings.get("quiver.renderer") === rendererNamePair[0]
+                    ? {selected: ""}
+                    : {}
+                  )
+                }).add(rendererNamePair[1])
+              ),
+              new DOM.Element("select").set_attributes({name: "renderer"})
+            ).listen("change", event => {
+              const new_renderer = event.target.value
+              ui.settings.set("quiver.renderer", new_renderer);
+
+              const previous_bullet = `${new_renderer === "typst" ? '\\' : ''}bullet`;
+              const new_bullet = `${new_renderer === "typst" ? '' : '\\'}bullet`;
+              ui.quiver.cells[0].forEach(k => {
+                if (k.label == previous_bullet) k.label = new_bullet;
+              })
+
+              // Function to rerender all labels
+              const label_rerender = () =>
+                  ui.quiver.cells.forEach(l => l.forEach(c => ui.panel.render_maths(ui, c)));
+
+              if (new_renderer === "typst") {
+                  // We need to load Typst.
+                  load_typst();
+                  Typst.then((_) => {
+                      label_rerender();
+                  });
+              } else {
+                  // KaTeX is always loaded
+                  label_rerender();
+              }
+            })
+        ).add(
+            new DOM.Element("label").add("Import: ").change_attribute('class', katexOnly)
         ).add(import_from_tikz).add(
             new DOM.Element("label").add("Export: ")
         ).add(
@@ -6695,32 +6753,6 @@ class Toolbar {
         );
 
         add_action(
-            "Renderer",
-            // Same hack as with the Reset zoom button to display text below the icon
-            [{key: ui.settings.get("quiver.renderer") === "katex" ? "KaTeX" : "Typst"}],
-            () => {
-                const current_renderer = ui.settings.get("quiver.renderer")
-                const new_renderer = current_renderer === "katex" ? "typst" : "katex";
-                ui.settings.set("quiver.renderer", new_renderer);
-
-                // Rerender all labels
-                const label_rerender = () =>
-                    ui.quiver.cells.forEach(l => l.forEach(c => ui.panel.render_maths(ui, c)));
-
-                if (new_renderer === "typst") {
-                    // We need to load Typst.
-                    load_typst();
-                    Typst.then((_) => {
-                        label_rerender();
-                    });
-                } else {
-                    // KaTeX is always loaded
-                    label_rerender();
-                }
-            }
-        );
-
-        add_action(
             "About",
             [],
             () => {
@@ -6774,10 +6806,6 @@ class Toolbar {
         // Update the current zoom level underneath the "Reset zoom" button.
         this.element.query_selector('.action[data-name="Reset zoom"] .shortcut').element.innerText
             = `${Math.round(2 ** ui.scale * 100)}%`;
-        
-        // Update the current renderer setting
-        this.element.query_selector('.action[data-name="Renderer"] .shortcut').element.innerText
-            = ui.settings.get("quiver.renderer") === "katex" ? "KaTeX" : "Typst";
     }
 }
 
@@ -7872,7 +7900,7 @@ class PromiseQueue {
 }
 
 const TypstQueue = new class extends PromiseQueue {
-    render(text, template = (t) => `${CONSTANTS.TYPST_PREAMBLE}${t}`) {
+    render(text, template = (t) => `${CONSTANTS.TYPST_PREAMBLE}\n$${t}$`) {
         return this.enqueue(() => Typst.then(typst => {
             return typst.svg({
                 mainContent: template(text),
@@ -7971,6 +7999,13 @@ document.addEventListener("DOMContentLoaded", () => {
             try {
                 // Decode the diagram.
                 QuiverImportExport.base64.import(ui, query_data.get("q"));
+                if (query_data.has('r')) {
+                  ui.settings.set('quiver.renderer',
+                    // Only set a valid renderer type. Defaults to katex.
+                    ['katex', 'typst'].filter(
+                      e => e === query_data.get('r')
+                    ).concat(['katex'])[0]);
+                }
                 // If there is a `macro_url`, load the macros from it.
                 if (query_data.has("macro_url")) {
                     ui.load_macros_from_url(decodeURIComponent(query_data.get("macro_url")));

@@ -304,9 +304,10 @@ QuiverExport.fletcher = new class extends QuiverExport {
         let output = "";
 
         const wrap_boilerplate = (output) => {
+            const center = settings.get("export.centre_diagram");
             return `// ${
                 QuiverImportExport.base64.export(quiver, settings, options, definitions).data
-            }\n#diagram({\n${output}})\n`;
+            }\n#${center?'align(center, ':''}diagram({\n${output}})${center?')':''}\n`;
         };
 
         // If the quiver is empty, return now.
@@ -322,7 +323,7 @@ QuiverExport.fletcher = new class extends QuiverExport {
         // returns the coordinates of a cell in the form (x, y)
         const cell_to_fletcher_coords = cell => `(${cell.position.x}, ${cell.position.y})`;
         // Wrap label in a content block. If the label text is empty, return an empty string.
-        const label_text_to_fletcher_label = text => text === "" ? "" : `[${text}]`;
+        const label_text_to_fletcher_label = text => text === "" ? "" : `[$${text}$]`;
         // Concatenate the arguments into a string that can directly be appended to a function call,
         // ignoring empty strings. If there is no effective argument, returns the empty string.
         const arglist_to_argstring = list => {
@@ -1192,7 +1193,7 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
     // - An `index` is an integer indexing into the array `[...vertices, ...edges]`.
     // - Arrays may be truncated if the values of the elements are the default values.
 
-    export(quiver, _, options) {
+    export(quiver, settings, options) {
         // Remove the query string and fragment identifier from the current URL and use that as a
         // base.
         const URL_prefix = window.location.href.replace(/\?.*$/, "").replace(/#.*$/, "");
@@ -1323,7 +1324,9 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
 
         const encoder = new TextEncoder();
         return {
-            data: `${URL_prefix}#q=${
+            data: `${URL_prefix}#r=${
+                settings.get("quiver.renderer")
+            }&q=${
               btoa(String.fromCharCode(...encoder.encode(JSON.stringify(output))))
             }${macro_data}`,
             metadata: {},
