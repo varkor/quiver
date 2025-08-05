@@ -5410,7 +5410,7 @@ class Panel {
                     ).add(
                         new DOM.Div({ class: "success-indicator" })
                     )
-            )
+            ).change_attribute('class', katexOnly)
         );
 
         // Prevent propagation of pointer events when interacting with the global options.
