@@ -1249,7 +1249,9 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
             ? `&macro_url=${encodeURIComponent(options.macro_url)}` : "";
 
         return {
-            data: `${URL_prefix}#q=${
+            data: `${URL_prefix}#r=${
+                settings.get("quiver.renderer")
+            }&q=${
                 this.export_selection(quiver, new Set(quiver.all_cells()))
             }${macro_data}`,
             metadata: {},
