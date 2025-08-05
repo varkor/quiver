@@ -1785,3 +1785,6 @@ body:has(select[name="renderer"] > option[value="katex"]:checked) .typst-only {
   display: none;
 }
 
+.typst-error {
+  color: red
+}
