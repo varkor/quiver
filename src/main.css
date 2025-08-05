@@ -17,6 +17,8 @@
     --ui-active: hsla(0, 0%, 100%, 0.2);
     --ui-focus: var(--ui-blue);
     --ui-text: hsla(0, 0%, 100%, 0.6);
+    --ui-error: hsl(0, 50%, 50%);
+    --ui-warning: hsl(50, 100%, 70%);
 
     /* Cell states. */
     --cell-hover: hsla(0, 0%, 0%, 0.1);
@@ -72,7 +74,7 @@ noscript {
     z-index: 200;
     padding: 8px 0;
 
-    background: hsl(0, 50%, 50%);
+    background: var(--ui-error);
     color: var(--ui-white);
 
     text-align: center;
@@ -328,6 +330,45 @@ kbd {
     border: 14px solid transparent;
     border-top-color: var(--ui-blue);
     border-bottom: none;
+}
+
+.inline-error {
+    position: absolute;
+    padding: 4px 8px;
+    transform: translate(-50%, -50%);
+    z-index: 81;
+
+    white-space: nowrap;
+
+    background: var(--ui-error);
+    color: var(--ui-white);
+
+    border-radius: 2px;
+
+    animation: error-appear 0.2s cubic-bezier(0.6, 1.4, 0.6, 1.4);
+}
+
+.inline-error.hidden {
+    animation: error-disappear 0.1s forwards;
+}
+
+@keyframes error-appear {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.5, 0.5);
+    }
+
+    to {
+        opacity: 1;
+        transform: translate(-50%, -50%);
+    }
+}
+
+@keyframes error-disappear {
+    to {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.5, 0.5);
+    }
 }
 
 /* Vertices */
@@ -729,7 +770,7 @@ input[type="text"].flash {
     border-radius: 2px 2px 0 0;
 }
 
-.panel .vertical input[type="radio"]:last-of-type {
+.panel .vertical input[type="radio"]:not(.short):last-of-type {
     border-radius: 0 0 2px 2px;
 }
 
@@ -738,28 +779,21 @@ input[type="text"].flash {
     width: 50%;
     left: 0;
     transform: none;
+    /* To be honest, I'm not quite sure why the following is necessary, but it produces the right
+    effect on the browsers I tested on. */
+    margin-bottom: -3px;
 }
 
-.panel .vertical input[type="radio"].short + input[type="radio"].short {
+.panel .vertical input[type="radio"].short.start-of-line + input[type="radio"].short {
     border-left-width: 0;
 }
 
-.panel .vertical input[type="radio"].short:nth-last-of-type(2) {
-    border-radius: 0 0 0 2px;
-}
-
-.panel .vertical input[type="radio"].short:not(:nth-last-of-type(2)) + input[type="radio"].short {
-    border-radius: 0;
+.panel .vertical input[type="radio"].short.start-of-line:nth-last-of-type(2) {
+    border-bottom-left-radius: 2px;
 }
 
 .panel .vertical input[type="radio"].short:last-of-type {
-    border-radius: 0 0 2px 0;
-}
-
-input[type="radio"].short + input[type="radio"]:not(.short) {
-    /* To be honest, I'm not quite sure why this is necessary, but it produces the right effect on
-    the browsers I tested on. */
-    margin-top: -4px;
+    border-bottom-right-radius: 2px;
 }
 
 .panel input[type="radio"]:hover:not(:disabled):not(:active):not(:checked) {
@@ -1262,7 +1296,7 @@ user has already pressed semicolon, placing us in command mode. */
     background: hsl(0, 0%, 28%);
 }
 
-.toolbar .action:not(.dropdown):active {
+.toolbar .action:not(:disabled):not(.dropdown):active {
     background: var(--ui-blue);
 }
 
@@ -1513,22 +1547,27 @@ button.flash {
 .port .tip .update {
     padding: 0pt 4pt;
     padding-bottom: 1pt;
-    margin-left: 4pt;
+    margin-left: 8pt;
 
     background: var(--ui-blue);
     border-radius: 2px;
 
+    color: var(--ui-black);
     font-variant: small-caps;
 	font-size: 10pt;
 }
 
+.port .tip .update time {
+    font-size: 8pt;
+}
+
 .port div.error {
     color: var(--ui-white);
-    background: hsl(0, 50%, 50%);
+    background: var(--ui-error);
 }
 
 .port div.warning {
-    background: hsl(50, 100%, 70%);
+    background: var(--ui-warning);
 }
 
 .port .hidden {
@@ -1667,17 +1706,17 @@ label input[type="checkbox"]:checked::before {
 }
 
 .port .fragment.error {
-    text-decoration: hsl(0, 50%, 50%) wavy underline;
+    text-decoration: var(--ui-error) wavy underline;
 }
 .port .fragment.error:hover, .port .fragment.error.highlight {
-    background: hsl(0, 50%, 50%);
+    background: var(--ui-error);
 }
 
 .port .fragment.warning {
-    text-decoration: hsl(50, 100%, 70%) wavy underline;
+    text-decoration: var(--ui-warning) wavy underline;
 }
 .port .fragment.warning:hover, .port .fragment.highlight.warning {
-    background: hsl(50, 100%, 70%);
+    background: var(--ui-warning);
 
     color: var(--ui-black);
 }

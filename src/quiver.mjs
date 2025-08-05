@@ -181,16 +181,38 @@ export class Quiver {
         let closure = new Set(cells);
         // We're relying on the iteration order of the `Set` here.
         for (const cell of closure) {
-            for (const [dependency,] of this.dependencies.get(cell)) {
-                if (!this.deleted.has(dependency)) {
-                    closure.add(dependency);
-                }
-            }
+            this.dependencies_of(cell).forEach((_, dependency) => closure.add(dependency));
         }
         if (exclude_roots) {
             for (const cell of cells) {
                 closure.delete(cell);
             }
+        }
+        closure = Array.from(closure);
+        closure.sort((a, b) => a.level - b.level);
+        return new Set(closure);
+    }
+
+    /// Returns the transitive closure of the reverse dependencies of a collection of cells
+    /// (including those cells themselves).
+    transitive_reverse_dependencies(cells) {
+        let closure = new Set(cells);
+        // We're relying on the iteration order of the `Set` here.
+        for (const cell of closure) {
+            this.reverse_dependencies_of(cell).forEach((dependency) => closure.add(dependency));
+        }
+        closure = Array.from(closure);
+        closure.sort((a, b) => a.level - b.level);
+        return new Set(closure);
+    }
+
+    /// Returns all the cells in the connected components of the given cells.
+    connected_components(cells) {
+        let closure = new Set(cells);
+        // We're relying on the iteration order of the `Set` here.
+        for (const cell of closure) {
+            this.dependencies_of(cell).forEach((_, dependency) => closure.add(dependency));
+            this.reverse_dependencies_of(cell).forEach((dependency) => closure.add(dependency));
         }
         closure = Array.from(closure);
         closure.sort((a, b) => a.level - b.level);
@@ -254,20 +276,22 @@ export class QuiverImportExport extends QuiverExport {
         ui.buffer_updates = true;
     }
 
-    end_import(ui) {
-        // Centre the view on the quiver.
-        ui.centre_view();
-        // Also centre the focus point, so that it's centre of screen.
-        // We subtract 0.5 from the position so that when the view is centred perfectly between
-        // two cells, we prefer the top/leftmost cell.
-        ui.focus_point.class_list.remove("smooth");
-        ui.reposition_focus_point(ui.position_from_offset(ui.view.sub(Point.diag(0.5))));
-        ui.focus_point.class_list.add("focused");
-        delay(() => ui.focus_point.class_list.add("smooth"));
+    end_import(ui, imported_cells, centre_view = true) {
+        if (centre_view) {
+            // Centre the view on the quiver.
+            ui.centre_view();
+            // Also centre the focus point, so that it's centre of screen.
+            // We subtract 0.5 from the position so that when the view is centred perfectly between
+            // two cells, we prefer the top/leftmost cell.
+            ui.focus_point.class_list.remove("smooth");
+            ui.reposition_focus_point(ui.position_from_offset(ui.view.sub(Point.diag(0.5))));
+            ui.focus_point.class_list.add("focused");
+            delay(() => ui.focus_point.class_list.add("smooth"));
+        }
 
         // When cells are created, they are usually queued. We don't want any cells that have been
         // imported to be queued.
-        for (const cell of ui.quiver.all_cells()) {
+        for (const cell of imported_cells) {
             cell.element.query_selector("kbd.queue").class_list.remove("queue");
         }
 
@@ -747,7 +771,7 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                 // The primary label (i.e. the one the user edits directly).
                 const label = { content: edge.label };
                 // A label used for the edge style, e.g. a bar, corner, or adjunction symbol.
-                const decoration = {};
+                let decoration = {};
                 // All the labels for this edge, including the primary label, a placeholder label if
                 // any edges are attached to this one, and labels for non-arrow edge styles, or the
                 // bar on a barred arrow.
@@ -853,34 +877,14 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                 }
 
                 // Shortened edges. This may only be set for the `arrow` style.
-                const tail_is_empty = edge.options.style.name === "arrow"
-                    && edge.options.style.body.name === "none"
-                    && edge.options.style.tail.name === "none";
-                if (!tail_is_empty && edge.options.shorten.source !== 0) {
-                    const shorten = Math.round(edge.arrow.style.shorten.tail * multiplier);
-                    parameters["shorten <"] = `${shorten}pt`;
-                    if (edge.options.curve !== 0) {
-                        // It should be possible to do this using a custom style, but for now we
-                        // simply warn the user that the result will not look quite as good as it
-                        // does in quiver.
-                        tikz_incompatibilities.add("shortened curved arrows");
-                    }
-                    if (edge.target === edge.source) {
-                        tikz_incompatibilities.add("shortened loops");
-                    }
-                }
-                const head_is_empty = edge.options.style.name === "arrow"
-                    && edge.options.style.head.name === "none"
-                    && edge.options.style.body.name === "none";
-                if (!head_is_empty && edge.options.shorten.target !== 0) {
-                    const shorten = Math.round(edge.arrow.style.shorten.head * multiplier);
-                    parameters["shorten >"] = `${shorten}pt`;
-                    if (edge.options.curve !== 0) {
-                        tikz_incompatibilities.add("shortened curved arrows");
-                    }
-                    if (edge.target === edge.source) {
-                        tikz_incompatibilities.add("shortened loops");
-                    }
+                if (!edge_is_empty
+                    && (edge.options.shorten.source !== 0 || edge.options.shorten.target !== 0)) {
+                    parameters['between'] = `{${
+                        edge.options.shorten.source / 100
+                    }}{${
+                        (100 - edge.options.shorten.target) / 100
+                    }}`;
+                    add_dependency("quiver", "shortened edges");
                 }
 
                 // Edge styles.
@@ -911,7 +915,10 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                             add_dependency("tikz-nfold", "triple arrows or higher");
                         }
 
-                       // Body styles.
+                        const midpoint = (edge.options.shorten.source
+                            + (100 - edge.options.shorten.target)) / (2 * 100);
+
+                        // Body styles.
                         switch (edge.options.style.body.name) {
                             case "cell":
                                 // This is the default in tikz-cd.
@@ -929,13 +936,44 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                                 parameters.squiggly = "";
                                 break;
 
-                            case "barred":
+                            case "bullet hollow":
                                 labels.push(decoration);
-                                decoration.content = "\\shortmid";
+                                decoration.content = "\\bullet";
                                 decoration.marking = "";
+                                if (midpoint !== 0.5) {
+                                    decoration.pos = midpoint;
+                                }
+                                decoration.text
+                                    = "\\pgfkeysvalueof{/tikz/commutative diagrams/background color}";
+                                decoration = {};
+                                // Fall through.
+
+                            case "barred":
+                            case "double barred":
+                            case "bullet solid":
+                                labels.push(decoration);
+                                decoration.content = {
+                                    "barred": "\\shortmid",
+                                    "double barred": "\\shortmid\\shortmid",
+                                    "bullet solid": "\\bullet",
+                                    "bullet hollow": "\\circ",
+                                }[edge.options.style.body.name];
+                                decoration.marking = "";
+                                if (midpoint !== 0.5) {
+                                    decoration.pos = midpoint;
+                                }
                                 if (edge.options.colour.is_not_black()) {
                                     decoration.text
                                         = edge.options.colour.latex(definitions.colours);
+                                }
+                                if (["left", "right"].includes(edge.options.label_alignment)) {
+                                    label["inner sep"] = ".8ex";
+                                }
+                                if (edge.options.level > 1 && [
+                                    "bullet hollow", "bullet solid"
+                                ].includes(edge.options.style.body.name)) {
+                                    tikz_incompatibilities
+                                        .add("double arrows or higher with decorations");
                                 }
                                 break;
 
@@ -1145,7 +1183,7 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
         const parser = new Parser(ui, data);
         parser.parse_diagram();
 
-        this.end_import(ui);
+        this.end_import(ui, ui.quiver.all_cells());
 
         return { diagnostics: parser.diagnostics };
     }
@@ -1199,14 +1237,30 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
         const URL_prefix = window.location.href.replace(/\?.*$/, "").replace(/#.*$/, "");
 
         if (quiver.is_empty()) {
-            // No need to have an encoding of an empty quiver;
-            // we'll just use the URL directly.
+            // No need to have an encoding of an empty quiver; we'll just use the URL directly.
             return {
                 data: URL_prefix,
                 metadata: {},
             };
         }
 
+        // Encode the macro URL if it's not null.
+        const macro_data = options.macro_url !== null
+            ? `&macro_url=${encodeURIComponent(options.macro_url)}` : "";
+
+        return {
+            data: `${URL_prefix}#q=${
+                this.export_selection(quiver, new Set(quiver.all_cells()))
+            }${macro_data}`,
+            metadata: {},
+        };
+    }
+
+    // Export just the specified selection of cells. This is used when we copy a selection. It is
+    // not assumed that the selection is closed under dependencies: e.g. it is possible to export an
+    // edge without exporting the corresponding vertices.
+    export_selection(quiver, selection) {
+        let vertices = 0;
         const cells = [];
         const indices = new Map();
 
@@ -1214,9 +1268,15 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
         // We want to ensure that the top-left cell is in position (0, 0), so we need
         // to work out where the top-left cell actually is, to compute an offset.
         for (const vertex of quiver.cells[0]) {
-            offset = offset.min(vertex.position);
+            if (selection.has(vertex)) {
+                offset = offset.min(vertex.position);
+                ++vertices;
+            }
         }
         for (const vertex of quiver.cells[0]) {
+            if (!selection.has(vertex)) {
+                continue;
+            }
             const { label, label_colour } = vertex;
             indices.set(vertex, cells.length);
             const position = vertex.position.sub(offset).toArray();
@@ -1235,6 +1295,9 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
 
         for (let level = 1; level < quiver.cells.length; ++level) {
             for (const edge of quiver.cells[level]) {
+                if (!selection.has(edge)) {
+                    continue;
+                }
                 const { label, label_colour, options: { label_alignment, ...options } } = edge;
                 const [source, target] = [indices.get(edge.source), indices.get(edge.target)];
                 indices.set(edge, cells.length);
@@ -1316,24 +1379,12 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
 
         // The version of the base64 output format exported by this version of quiver.
         const VERSION = 0;
-        const output = [VERSION, quiver.cells[0].size, ...cells];
-
-        // Encode the macro URL if it's not null.
-        const macro_data = options.macro_url !== null
-            ? `&macro_url=${encodeURIComponent(options.macro_url)}` : "";
-
+        const output = [VERSION, vertices, ...cells];
         const encoder = new TextEncoder();
-        return {
-            data: `${URL_prefix}#r=${
-                settings.get("quiver.renderer")
-            }&q=${
-              btoa(String.fromCharCode(...encoder.encode(JSON.stringify(output))))
-            }${macro_data}`,
-            metadata: {},
-        };
+        return btoa(String.fromCharCode(...encoder.encode(JSON.stringify(output))));
     }
 
-    import(ui, string) {
+    import(ui, string, origin = Position.zero(), centre_view = true) {
         let input;
         try {
             const data = atob(string);
@@ -1411,10 +1462,13 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
         assert_kind(vertices, "natural");
         assert(vertices <= cells.length, "invalid number of vertices");
 
-        // If we encounter errors while loading cells, we skip the malformed cell and try to
-        // continue loading the diagram, but we want to report the errors we encountered afterwards,
-        // to let the user know we were not entirely successful.
+        // If we encounter an error while loading a specific cell, we skip the malformed cell and
+        // try to continue loading the diagram, but we want to report the errors we encountered
+        // afterwards, to let the user know we were not entirely successful.
         const errors = [];
+        // However, some errors are treated as unrecoverable (e.g. if a position is already occupied
+        // by a cell, which can happen when we try to paste on top of an existing cell).
+        let unrecoverable = false;
 
         this.begin_import(ui);
 
@@ -1433,10 +1487,18 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
                     assert_kind(label, "string");
                     assert_kind(label_colour, "colour");
 
+                    const position = origin.add(new Position(x, y));
+                    if (ui.positions.has(`${position}`)) {
+                        // If we cannot place every cell, we would prefer to add no cells, so we
+                        // must remove any we have added so far.
+                        indices.forEach((cell) => ui.remove_cell(cell, ui.history.present));
+                        unrecoverable = true;
+                        throw new Error("position already occupied");
+                    }
                     const vertex = new Vertex(
                         ui,
                         label,
-                        new Position(x, y),
+                        position,
                         new Colour(...label_colour),
                     );
                     indices.push(vertex);
@@ -1552,15 +1614,20 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
                 }
             } catch (error) {
                 errors.push(error);
+                if (unrecoverable) {
+                    break;
+                }
             }
         }
 
-        this.end_import(ui);
+        this.end_import(ui, indices, centre_view);
 
         if (errors.length > 0) {
             // Just throw the first error.
             throw errors[0];
         }
+
+        return indices;
     }
 };
 

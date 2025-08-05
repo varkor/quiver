@@ -1,6 +1,6 @@
 import { Arc, Bezier, Curve, CurvePoint, EPSILON, RoundedRectangle } from "./curve.mjs";
 import { DOM } from "./dom.mjs";
-import { Dimensions, Enum, Path, Point, rad_to_deg } from "./ds.mjs";
+import { Dimensions, Enum, Path, Point, rad_to_deg, clamp } from "./ds.mjs";
 
 /// `Array.prototype.includes` but for multiple needles.
 function includes_any(array, ...values) {
@@ -73,6 +73,12 @@ export const CONSTANTS = {
         "ADJUNCTION",
         // A line with a bar through it (-+-).
         "PROARROW",
+        // A line with two bars through it (-++-).
+        "DOUBLE_PROARROW",
+        // A solid bullet.
+        "BULLET_SOLID",
+        // A hollow bullet.
+        "BULLET_HOLLOW",
     ),
     /// The standard dash styles for an edge.
     ARROW_DASH_STYLE: new Enum(
@@ -620,31 +626,102 @@ export class Arrow {
             head_height, shorten, t_after_length, dash_padding, offset,
         };
 
-        // Draw the the proarrow bar.
-        if (this.style.body_style === CONSTANTS.ARROW_BODY_STYLE.PROARROW) {
-            const mid = (start.t + end.t) / 2;
-            const centre = curve.point(mid).add(offset);
-            const angle = curve.tangent(mid);
-            const normal = angle + Math.PI / 2;
-            const adj_seg = new Point(head_height, 0);
-            const adj_seg_2 = adj_seg.div(2);
+        // Draw the body decoration, e.g. the proarrow bar.
+        let bar_offsets = [0];
 
-            const path = new Path();
-            // Top.
-            path.move_to(centre.sub(adj_seg_2.rotate(normal)));
-            // Bottom.
-            path.line_by(adj_seg.rotate(normal));
+        const start_t = Math.max(
+            start.t,
+            t_after_length(arclen_to_start + this.style.shorten.tail)
+        );
+        const end_t = Math.min(
+            end.t,
+            t_after_length(arclen_to_end - this.style.shorten.head)
+        );
+        const mid = (start_t + end_t) / 2;
 
-            this.requisition_element(this.svg, "path.arrow-bar", {
-                d: `${path}`,
-                mask: `url(#arrow${this.id}-label-clipping-mask)`,
-                fill: "none",
-                stroke: this.style.colour,
-                "stroke-width": CONSTANTS.STROKE_WIDTH,
-                "stroke-linecap": "round",
-            });
-        } else {
-            this.release_element(this.svg, "path.arrow-bar");
+        switch (this.style.body_style) {
+            case CONSTANTS.ARROW_BODY_STYLE.DOUBLE_PROARROW:
+                bar_offsets = [-2.5, 2.5];
+                // Fall-through.
+
+            case CONSTANTS.ARROW_BODY_STYLE.PROARROW: {
+                const arclen_to_mid = curve.arc_length(mid);
+                // It looks better if each of the multiple bars are parallel, rather than
+                // calculating their angle based on their individual position.
+                const angle = curve.tangent(mid);
+                const normal = angle + Math.PI / 2;
+                const adj_seg = new Point(head_height, 0);
+                const adj_seg_2 = adj_seg.div(2);
+                const path = new Path();
+
+                for (const bar_offset of bar_offsets) {
+                    const bar_t = t_after_length(clamp(
+                        arclen_to_start,
+                        arclen_to_mid + bar_offset,
+                        arclen_to_end,
+                    ));
+                    const centre = curve.point(bar_t).add(offset);
+
+                    // Top.
+                    path.move_to(centre.sub(adj_seg_2.rotate(normal)));
+                    // Bottom.
+                    path.line_by(adj_seg.rotate(normal));
+                }
+
+                this.release_element(this.svg, "circle.arrow-decoration");
+                this.requisition_element(this.svg, "path.arrow-decoration", {
+                    d: `${path}`,
+                    mask: `url(#arrow${this.id}-label-clipping-mask)`,
+                    fill: "none",
+                    stroke: this.style.colour,
+                    "stroke-width": CONSTANTS.STROKE_WIDTH,
+                    "stroke-linecap": "round",
+                });
+                }
+                break;
+
+            case CONSTANTS.ARROW_BODY_STYLE.BULLET_SOLID: {
+                const centre = curve.point(mid).add(offset);
+
+                this.release_element(this.svg, "path.arrow-decoration");
+                this.requisition_element(this.svg, "circle.arrow-decoration", {
+                    cx: centre.x,
+                    cy: centre.y,
+                    r: head_height / 2,
+                    mask: `url(#arrow${this.id}-label-clipping-mask)`,
+                    fill: this.style.colour,
+                    stroke: "none",
+                });
+                }
+                break;
+
+            case CONSTANTS.ARROW_BODY_STYLE.BULLET_HOLLOW: {
+                const centre = curve.point(mid).add(offset);
+
+                this.release_element(this.svg, "path.arrow-decoration");
+                // Bullet outline.
+                this.requisition_element(this.svg, "circle.arrow-decoration", {
+                    cx: centre.x,
+                    cy: centre.y,
+                    r: head_height / 2,
+                    mask: `url(#arrow${this.id}-label-clipping-mask)`,
+                    fill: "none",
+                    stroke: this.style.colour,
+                    "stroke-width": CONSTANTS.STROKE_WIDTH,
+                });
+                // Crop the inside out of the bullet.
+                this.requisition_element(clipping_mask, "circle.arrow-decoration", {
+                    cx: centre.x,
+                    cy: centre.y,
+                    r: head_height / 2,
+                    fill: "black",
+                });
+                }
+                break;
+
+            default:
+                this.release_element(this.svg, ".arrow-decoration");
+                break;
         }
 
         // We calculate the widths of the tails and heads whilst drawing them, so we have to
@@ -729,6 +806,14 @@ export class Arrow {
         draw_heads(this.style.tails, start, true, true);
         draw_heads(this.style.heads, end, false, true);
 
+        // It's possible that, when drawing the body, we added to the clipping mask (e.g. for the
+        // hollow bullet body style). However, we may then have drawn over this in white when
+        // drawing the edge with level > 1. For this reason, we move anything drawn by the body to
+        // the end of the parent to avoid ordering issues.
+        for (const body_mask of clipping_mask.query_selector_all("circle.arrow-decoration")) {
+            body_mask.parent.add(body_mask);
+        }
+
         // At present, we don't clip the edge using the source and target masks, but this might be
         // something we do in the future.
 
@@ -764,7 +849,7 @@ export class Arrow {
         // Various arc lengths, which are used for drawing various parts of the Bézier curve
         // manually (e.g. for squiggly lines) or to determine dash distances.
         const {
-            curve, start, end, length, shorten, t_after_length, dash_padding, total_width_of_tails,
+            curve, start, end, shorten, t_after_length, dash_padding, total_width_of_tails,
             total_width_of_heads, offset,
         } = constants;
         let arclen_to_start = curve.arc_length(start.t) + (this.style.shorten.tail + shorten.start)
@@ -781,6 +866,9 @@ export class Arrow {
             // The normal case: a straight or curved line.
             case CONSTANTS.ARROW_BODY_STYLE.LINE:
             case CONSTANTS.ARROW_BODY_STYLE.PROARROW:
+            case CONSTANTS.ARROW_BODY_STYLE.DOUBLE_PROARROW:
+            case CONSTANTS.ARROW_BODY_STYLE.BULLET_SOLID:
+            case CONSTANTS.ARROW_BODY_STYLE.BULLET_HOLLOW:
                 path.move_to(offset);
                 curve.render(path);
                 break;
@@ -916,6 +1004,9 @@ export class Arrow {
                 // We are deliberately falling through here.
                 case CONSTANTS.ARROW_BODY_STYLE.LINE:
                 case CONSTANTS.ARROW_BODY_STYLE.PROARROW:
+                case CONSTANTS.ARROW_BODY_STYLE.DOUBLE_PROARROW:
+                case CONSTANTS.ARROW_BODY_STYLE.BULLET_SOLID:
+                case CONSTANTS.ARROW_BODY_STYLE.BULLET_HOLLOW:
                     // Reset the dash array, because we're calculating everything manually.
                     dashes = [];
 

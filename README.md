@@ -99,9 +99,9 @@ error telling you that KaTeX failed to load.
 **quiver** must be run through `localhost`. If you have Python installed, an easy solution is to
 run:
 ```
-python3 -m http.server
+make serve
 ```
-in the **quiver** `src` directory and then open `localhost:8000` in browser.
+in the **quiver** directory and then open `localhost:8000` in browser.
 
 If you have any other problems building **quiver**, [open an
 issue](https://github.com/varkor/quiver/issues/new) detailing the problem and I'll try to help.

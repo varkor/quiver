@@ -8,9 +8,9 @@ import { Quiver, QuiverImportExport } from "./quiver.mjs";
 /// Various parameters.
 Object.assign(CONSTANTS, {
     /// The current quiver version.
-    VERSION: "1.5.3",
+    VERSION: "1.5.5",
     /// When the `quiver.sty` package was last modified.
-    PACKAGE_VERSION: "2021/01/11",
+    PACKAGE_VERSION: "2025/06/24",
     /// We currently only support n-cells for (n ≤ 4). This restriction is not technical: it can be
     /// lifted in the editor without issue. Rather, this is for usability: a user is unlikely to
     /// want to draw a higher cell. For n-cells for n ≥ 3, we make use of tikz-nfold in exported
@@ -706,6 +706,9 @@ class UI {
         // Keyboard shortcuts.
         this.shortcuts = new Shortcuts(this);
 
+        // Clipboard.
+        this.clipboard = "";
+
         // A map from cell codes (i.e. IDs) to cells.
         this.codes = new Map();
 
@@ -919,6 +922,9 @@ class UI {
                 ["Change source", (td) => Shortcuts.element(td, [{ key: "," }])],
                 ["Change target", (td) => Shortcuts.element(td, [{ key: "." }])],
                 ["Create arrows from selection", (td) => Shortcuts.element(td, [{ key: "/" }])],
+                ["Copy", (td) => Shortcuts.element(td, [{ key: "C", modifier: true }])],
+                ["Cut", (td) => Shortcuts.element(td, [{ key: "X", modifier: true }])],
+                ["Paste", (td) => Shortcuts.element(td, [{ key: "V", modifier: true }])],
             ]))
             .add(new DOM.Element("h2").add("Styling"))
             .add(new DOM.Table([
@@ -960,6 +966,9 @@ class UI {
                     { key: "Z", modifier: true, shift: true }
                 ])],
                 ["Select all", (td) => Shortcuts.element(td, [{ key: "A", modifier: true }])],
+                ["Select connected components", (td) => {
+                    return Shortcuts.element(td, [{ key: "C", modifier: true, shift: true }]);
+                }],
                 ["Deselect all", (td) => Shortcuts.element(td, [
                     { key: "A", modifier: true, shift: true }
                 ])],
@@ -2286,6 +2295,61 @@ class UI {
             }
         });
 
+        // Copying and pasting.
+        this.shortcuts.add([
+            { key: "C", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Defer },
+            { key: "X", modifier: true }
+        ], () => {
+            if (this.in_mode(UIMode.Default, UIMode.Pan) && !this.input_is_active()) {
+                this.clipboard = QuiverImportExport.base64.export_selection(
+                    this.quiver,
+                    this.quiver.transitive_reverse_dependencies(this.selection),
+                );
+            }
+        });
+
+        this.shortcuts.add([{ key: "X", modifier: true }], () => {
+            if (this.in_mode(UIMode.Default, UIMode.Pan) && !this.input_is_active()) {
+                // This keyboard shortcut will first trigger the copy action.
+                this.history.add(this, [{
+                    kind: "delete",
+                    cells: this.quiver.transitive_dependencies(this.selection),
+                }], true);
+                this.panel.update(this);
+            }
+        });
+
+        this.shortcuts.add([{ key: "V", modifier: true }], () => {
+            if (this.in_mode(UIMode.Default, UIMode.Pan) && !this.input_is_active()) {
+                if (this.clipboard === "") {
+                    return;
+                }
+                try {
+                    const cells = new Set(QuiverImportExport.base64.import(
+                        this,
+                        this.clipboard,
+                        this.focus_position,
+                        false,
+                    ));
+                    this.history.add(this, [{ kind: "create", cells }]);
+                } catch (_) {
+                    const centre_offset = this.cell_centre_at_position(this.focus_position);
+                    const offset = this.offset_from_position(this.focus_position);
+                    const paste_error = new DOM.Div({ class: "inline-error" }, {
+                            left: `${offset.x + centre_offset.x}px`,
+                            top: `${offset.y}px`,
+                        })
+                        .add("You can't paste here!")
+                        .add_to(this.canvas);
+                    delay(() => {
+                        paste_error.class_list.add("hidden");
+                        delay(() => paste_error.remove(), 100);
+                    }, 1000);
+                }
+                this.focus_point.class_list.remove("revealed", "pending", "active");
+            }
+        });
+
         // Centre the cell at (0, 0) in the view, which looks prettier.
         this.pan_view(Offset.diag(this.default_cell_size / 2));
     }
@@ -2943,6 +3007,7 @@ class UI {
         // Thus, we don't display an error banner if one is already displayed.
         if (body.query_selector(".error-banner:not(.hidden)") === null) {
             const error = new DOM.Div({ class: "error-banner hidden" })
+                .listen(pointer_event("down"), (event) => event.stopPropagation())
                 .add(message)
                 .add(
                     new DOM.Element("button", { class: "close" })
@@ -3022,7 +3087,7 @@ class UI {
             context.lineTo(x * scale + width / 2, height);
         }
         context.lineDashOffset
-            = offset.y * scale - dash_offset - height % this.default_cell_size / 2;
+            = offset.y * scale - dash_offset - height % (this.default_cell_size * scale) / 2;
         context.stroke();
 
         // Draw the horizontal lines.
@@ -3033,7 +3098,7 @@ class UI {
             context.lineTo(width, y * scale + height / 2);
         }
         context.lineDashOffset
-            = offset.x * scale - dash_offset - width % this.default_cell_size / 2;
+            = offset.x * scale - dash_offset - width % (this.default_cell_size * scale) / 2;
         context.stroke();
     }
 
@@ -3086,6 +3151,15 @@ class UI {
                         break;
                     case "barred":
                         style.body_style = CONSTANTS.ARROW_BODY_STYLE.PROARROW;
+                        break;
+                    case "double barred":
+                        style.body_style = CONSTANTS.ARROW_BODY_STYLE.DOUBLE_PROARROW;
+                        break;
+                    case "bullet solid":
+                        style.body_style = CONSTANTS.ARROW_BODY_STYLE.BULLET_SOLID;
+                        break;
+                    case "bullet hollow":
+                        style.body_style = CONSTANTS.ARROW_BODY_STYLE.BULLET_HOLLOW;
                         break;
                     case "dashed":
                         style.dash_style = CONSTANTS.ARROW_DASH_STYLE.DASHED;
@@ -4274,7 +4348,7 @@ class Panel {
                 ["none", "No tail", { name: "none" }, `${key_index++}`],
                 ["maps to", "Maps to", { name: "maps to" }, `${key_index++}`],
                 ["top-hook", "Top hook",
-                    { name: "hook", side: "top" }, `${key_index++}`, ["short"]],
+                    { name: "hook", side: "top" }, `${key_index++}`, ["short", "start-of-line"]],
                 ["bottom-hook", "Bottom hook",
                     { name: "hook", side: "bottom" }, `${key_index++}`, ["short"]],
                 ["arrowhead", "Arrowhead", { name: "arrowhead"}, `${key_index++}`],
@@ -4302,10 +4376,18 @@ class Panel {
             [
                 ["solid", "Solid", { name: "cell" }, `${key_index++}`],
                 ["none", "No body", { name: "none" }, `${key_index++}`],
-                ["dashed", "Dashed", { name: "dashed" }, `${key_index++}`],
-                ["dotted", "Dotted", { name: "dotted" }, `${key_index++}`],
+                ["dashed", "Dashed", { name: "dashed" }, `${key_index++}`,
+                    ["short", "start-of-line"]],
+                ["dotted", "Dotted", { name: "dotted" }, `${key_index++}`, ["short"]],
                 ["squiggly", "Squiggly", { name: "squiggly" }, `${key_index++}`],
-                ["barred", "Barred", { name: "barred" }, `${key_index++}`],
+                ["barred", "Barred", { name: "barred" }, `${key_index++}`,
+                    ["short", "start-of-line"]],
+                ["double barred", "Double barred", { name: "double barred" }, `${key_index++}`,
+                    ["short"]],
+                ["bullet solid", "Solid bullet", { name: "bullet solid" }, `${key_index++}`,
+                    ["short", "start-of-line"]],
+                ["bullet hollow", "Hollow bullet", { name: "bullet hollow" }, `${key_index++}`,
+                    ["short"]],
             ],
             "body-type",
             ["vertical", "arrow-style", "kbd-requires-focus"],
@@ -4313,7 +4395,9 @@ class Panel {
             (edges, _, data, user_triggered, idempotent) =>
                 update_style(body_styles, "body")(edges, _, data, user_triggered, idempotent),
             (data) => ({
-                length: ARROW_LENGTH,
+                length: [
+                    "dashed", "dotted", "barred", "double barred", "bullet solid", "bullet hollow"
+                ].includes(data.name) ? SHORTER_ARROW_LENGTH : ARROW_LENGTH,
                 options: Edge.default_options(null, {
                     body: data,
                     head: { name: "none" },
@@ -4331,7 +4415,7 @@ class Panel {
                 ["none", "No arrowhead", { name: "none" }, `${key_index++}`],
                 ["epi", "Epi", { name: "epi"}, `${key_index++}`],
                 ["top-harpoon", "Top harpoon",
-                    { name: "harpoon", side: "top" }, `${key_index++}`, ["short"]],
+                    { name: "harpoon", side: "top" }, `${key_index++}`, ["short", "start-of-line"]],
                 ["bottom-harpoon", "Bottom harpoon",
                     { name: "harpoon", side: "bottom" }, `${key_index++}`, ["short"]],
             ],
@@ -4684,18 +4768,6 @@ class Panel {
                     latex_tip = new DOM.Element("span", { class: "tip hidden tikz-cd" });
                     typst_tip = new DOM.Element("span", { class: "tip hidden typst" });
 
-                    // Create message regarding, and linking to, `quiver.sty`.
-                    const update_package_previous_download = () => {
-                        window.localStorage.setItem(
-                            "package-previous-download",
-                            CONSTANTS.PACKAGE_VERSION,
-                        );
-                        const update = latex_tip.query_selector(".update");
-                        if (update !== null) {
-                            update.remove();
-                        }
-                    };
-
                     typst_tip.add("Remember to include ")
                         .add(new DOM.Code("fletcher"))
                         .add(" in your Typst document with ")
@@ -4704,7 +4776,7 @@ class Panel {
                     latex_tip.add("Remember to include ")
                         .add(new DOM.Code("\\usepackage{quiver}"))
                         .add(" in your LaTeX preamble. You can install the package using ")
-                        .add(new DOM.Link("https://tug.org/texlive/", "TeX Live 2023", true));
+                        .add(new DOM.Link("https://ctan.org/pkg/quiver", "CTAN", true));
                     latex_tip.add(", or ")
                         .add(
                             // We would like to simply use `quiver.sty` here, but,
@@ -4717,10 +4789,13 @@ class Panel {
                             }).add("open ")
                                 .add(new DOM.Element("code").add("quiver.sty"))
                                 .add(" in a new tab")
-                            .listen("click", update_package_previous_download)
                         )
                         .add(" to copy-and-paste.")
                         .add_to(port_pane);
+                    latex_tip.add(new DOM.Element("span", { class: "update" })
+                        .add("updated on ")
+                        .add(new DOM.Element("time").add("2025-07-05"))
+                    );
 
                     const centre_checkbox = new DOM.Element("input", {
                         type: "checkbox",
@@ -5222,13 +5297,19 @@ class Panel {
                         warning.add(new DOM.Element("br"));
                     }
                     warning.add("The exported ").add(new DOM.Code("tikz-cd"))
-                        .add(" diagram relies upon additional TikZ " +
-                        "libraries that you may have to install for the diagram to render " +
+                        .add(" diagram relies upon additional packages " +
+                        " that you may have to install for the diagram to render " +
                         "correctly:");
                     const list = new DOM.Element("ul").add_to(warning);
                     for (const [library, reasons] of dependencies) {
                         const li = new DOM.Element("li").add_to(list);
-                        const url = { "tikz-nfold": "https://ctan.org/pkg/tikz-nfold" }[library];
+                        const url = {
+                            "tikz-nfold": "https://ctan.org/pkg/tikz-nfold",
+                            "quiver": "https://ctan.org/pkg/quiver",
+                        }[library];
+                        if (library === "quiver") {
+                            li.add("The latest version of ");
+                        }
                         li.add(new DOM.Element("a", { href: url, target: "_blank" })
                             .add(new DOM.Code(library)));
                         li.add(`, for ${Array.from(reasons).join("; ")}.`);
@@ -5639,13 +5720,9 @@ class Panel {
                         +typst_svg.element.getAttribute('width'), +typst_svg.element.getAttribute('height')
                     ];
                 }
-                // The bounding rect is the size on-screen, which will hence be smaller if we are
-                // zoomed out (and conversely if we are zoomed in). We therefore have to adjust the
-                // dimensions (inversely) by the scaling factor.
-                const scale = 2 ** -ui.scale;
                 cell.arrow.label.size = new Dimensions(
-                    width * scale + (width > 0 ? CONSTANTS.EDGE_LABEL_PADDING * 2 : 0),
-                    height * scale + (height > 0 ? CONSTANTS.EDGE_LABEL_PADDING * 2 : 0),
+                    width + (width > 0 ? CONSTANTS.EDGE_LABEL_PADDING * 2 : 0),
+                    height + (height > 0 ? CONSTANTS.EDGE_LABEL_PADDING * 2 : 0),
                 );
                 // Rerender the edge with the new label.
                 cell.render(ui);
@@ -6215,18 +6292,18 @@ class Shortcuts {
                             if (action !== null) {
                                 // Only trigger the action if the associated button is not
                                 // disabled.
-                                if (shortcut.button === null || !shortcut.button.element.disabled) {
+                                const enabled = shortcut.button !== null
+                                    && !shortcut.button.element.disabled;
+                                if (shortcut.button === null || enabled) {
                                     prevent_others = action(event);
                                 }
-                                if (shortcut.button !== null) {
-                                    // The button might be disabled by `action`, but we still want
-                                    // to trigger the visual indication if it was enabled when
-                                    // activated.
-                                    if (!shortcut.button.element.disabled) {
-                                        // Give some visual indication that the action has
-                                        // been triggered.
-                                        Shortcuts.flash(shortcut.button);
-                                    }
+                                // The button might be disabled by `action`, but we still want
+                                // to trigger the visual indication if it was enabled when
+                                // activated.
+                                if (enabled) {
+                                    // Give some visual indication that the action has
+                                    // been triggered.
+                                    Shortcuts.flash(shortcut.button);
                                 }
                             }
                             return prevent_others;
@@ -6391,6 +6468,12 @@ class Shortcuts {
     /// Trigger a "flash" animation on an element, typically in response to its corresponding
     /// keyboard shortcut being triggered.
     static flash(button) {
+        // If the button is hidden, we will try to flash a parent.
+        if (button.element.offsetParent === null
+            && button.parent.class_list.contains("subtoolbar")) {
+            this.flash(button.parent.parent);
+            return;
+        }
         button.class_list.remove("flash");
         // Removing a class and instantly adding it again is going to be ignored by
         // the browser, so we need to trigger a reflow to get the animation to
@@ -6428,16 +6511,14 @@ class Toolbar {
                 }
             });
 
-        const add_action = (name, combinations, action, element = this.element) => {
+        const add_action = (label, name, combinations, action, element = this.element) => {
             const shortcut_name = Shortcuts.name(combinations);
 
             const button = new DOM.Element("button", { class: "action", "data-name": name })
                 .add(new DOM.Element("span", { class: "symbol" }).add(
-                    new DOM.Element("img", { src: `icons/${
-                        name.toLowerCase().replace(/ /g, "-").replace(/\./g, "")
-                    }.svg` })
+                    new DOM.Element("img", { src: `icons/${name}.svg` })
                 ))
-                .add(new DOM.Element("span", { class: "name" }).add(name))
+                .add(new DOM.Element("span", { class: "name" }).add(label))
                 .add(new DOM.Element("span", { class: "shortcut" }).add(shortcut_name))
                 .listen(pointer_event("down"), (event) => {
                     if (event.button === 0) {
@@ -6458,10 +6539,16 @@ class Toolbar {
             return button;
         };
 
-        const add_subtoolbar = (name) => {
-            const action = add_action(name, [], () => {});
+        const add_subtoolbar = (label, name) => {
+            const action = add_action(label, name, [], () => {});
             action.class_list.add("dropdown");
             const subtoolbar = new DOM.Div({ class: "subtoolbar" });
+            action.listen("mouseenter", () => {
+                // Prevent flashing when the actions in the subtoolbar are revealed.
+                subtoolbar.query_selector_all(".action.flash").forEach((subaction) => {
+                    subaction.class_list.remove("flash");
+                });
+            });
             action.add(subtoolbar);
             return subtoolbar;
         };
@@ -6471,6 +6558,7 @@ class Toolbar {
         // "Saving" updates the URL to reflect the current diagram.
         add_action(
             "Save",
+            "save",
             [{ key: "S", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always }],
             () => {
                 const { data } = ui.quiver.export(
@@ -6486,6 +6574,7 @@ class Toolbar {
 
         add_action(
             "Undo",
+            "undo",
             [{ key: "Z", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Defer }],
             () => {
                 ui.history.undo(ui);
@@ -6494,22 +6583,37 @@ class Toolbar {
 
         add_action(
             "Redo",
+            "redo",
             [{ key: "Z", modifier: true, shift: true, context: Shortcuts.SHORTCUT_PRIORITY.Defer }],
             () => {
                 ui.history.redo(ui);
             },
         );
 
+        const select = add_subtoolbar("Select", "select");
+
         add_action(
-            "Select all",
+            "All",
+            "select-all",
             [{ key: "A", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Defer }],
             () => {
                 ui.select(...ui.quiver.all_cells());
             },
+            select,
         );
-
         add_action(
-            "Deselect all",
+            "Connected",
+            "select-connected",
+            [{ key: "C", modifier: true, shift: true,
+                context: Shortcuts.SHORTCUT_PRIORITY.Always }],
+            () => {
+                ui.select(...ui.quiver.connected_components(ui.selection));
+            },
+            select,
+        );
+        add_action(
+            "Deselect",
+            "deselect-all",
             [{ key: "A", modifier: true, shift: true, context: Shortcuts.SHORTCUT_PRIORITY.Defer }],
             () => {
                 ui.deselect();
@@ -6517,10 +6621,11 @@ class Toolbar {
                 ui.panel.label_input.parent.class_list.add("hidden");
                 ui.colour_picker.close();
             },
+            select,
         );
-
         add_action(
             "Delete",
+            "delete",
             [
                 { key: "Backspace" },
                 { key: "Delete" },
@@ -6534,9 +6639,11 @@ class Toolbar {
             },
         );
 
-        const transform = add_subtoolbar("Transform");
+        const transform = add_subtoolbar("Transform", "transform");
+
         add_action(
             "Flip hor.",
+            "flip-hor",
             [],
             () => {
                 const vertices = ui.quiver.all_cells().filter((cell) => cell.is_vertex());
@@ -6580,6 +6687,7 @@ class Toolbar {
         );
         add_action(
             "Flip ver.",
+            "flip-ver",
             [],
             () => {
                 const vertices = ui.quiver.all_cells().filter((cell) => cell.is_vertex());
@@ -6623,6 +6731,7 @@ class Toolbar {
         );
         add_action(
             "Rotate",
+            "rotate",
             [],
             () => {
                 const vertices = ui.quiver.all_cells().filter((cell) => cell.is_vertex());
@@ -6656,6 +6765,7 @@ class Toolbar {
 
         add_action(
             "Centre view",
+            "centre-view",
             [{ key: "G" }],
             () => {
                 // If the focus point is focused, we centre on it; otherwise we centre on the
@@ -6670,6 +6780,7 @@ class Toolbar {
 
         add_action(
             "Zoom out",
+            "zoom-out",
             [{ key: "-", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always }],
             () => {
                 ui.pan_view(Offset.zero(), -0.25);
@@ -6678,6 +6789,7 @@ class Toolbar {
 
         add_action(
             "Zoom in",
+            "zoom-in",
             [{ key: "=", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always }],
             () => {
                 ui.pan_view(Offset.zero(), 0.25);
@@ -6686,6 +6798,7 @@ class Toolbar {
 
         add_action(
             "Reset zoom",
+            "reset-zoom",
             // We'd like to display the current zoom level, so we use a slight hack: we set the
             // "key" to be the zoom level: this will never be triggered by a shortcut, because there
             // is no key called "100%" or similar. However, the text will then display underneath
@@ -6699,6 +6812,7 @@ class Toolbar {
 
         add_action(
             "Hide grid",
+            "hide-grid",
             [{ key: "H", modifier: false, context: Shortcuts.SHORTCUT_PRIORITY.Defer }],
             function () {
                 ui.grid.class_list.toggle("hidden");
@@ -6709,8 +6823,11 @@ class Toolbar {
             },
         );
 
+        const settings = add_subtoolbar("Settings", "settings");
+
         add_action(
             "Show hints",
+            "show-hints",
             [{
                 key: "H", modifier: true, shift: true, context: Shortcuts.SHORTCUT_PRIORITY.Always
             }],
@@ -6721,10 +6838,12 @@ class Toolbar {
                     (hidden ? "Show" : "Hide") + " hints"
                 );
             },
+            settings,
         );
 
         add_action(
             "Show queue",
+            "show-queue",
             [],
             function () {
                 ui.element.class_list.toggle("show-queue");
@@ -6733,10 +6852,12 @@ class Toolbar {
                     (hidden ? "Show" : "Hide") + " queue"
                 );
             },
+            settings,
         );
 
         add_action(
             "Shortcuts",
+            "shortcuts",
             [{
                 key: "/", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always
             }],
@@ -6754,6 +6875,7 @@ class Toolbar {
 
         add_action(
             "About",
+            "about",
             [],
             () => {
                 const hidden = ui.element.query_selector("#about-pane").class_list
@@ -6785,26 +6907,33 @@ class Toolbar {
 
         const default_pan = [UIMode.Default, UIMode.Pan];
 
-        enable_if("Undo", ui.in_mode(UIMode.KeyMove, ...default_pan) && ui.history.present !== 0);
-        enable_if("Redo", ui.in_mode(UIMode.KeyMove, ...default_pan)
+        enable_if("undo", ui.in_mode(UIMode.KeyMove, ...default_pan) && ui.history.present !== 0);
+        enable_if("redo", ui.in_mode(UIMode.KeyMove, ...default_pan)
             && ui.history.present < ui.history.actions.length);
-        enable_if("Select all",
+        enable_if("select-all",
             ui.in_mode(...default_pan) && ui.selection.size < ui.quiver.all_cells().length);
-        enable_if("Deselect all", ui.in_mode(...default_pan) && ui.selection.size > 0);
-        enable_if("Delete", ui.in_mode(...default_pan) && ui.selection.size > 0);
-        enable_if("Transform", ui.in_mode(...default_pan) && ui.quiver.all_cells().length > 0);
-        enable_if("Centre view",
+        const connected_components = ui.quiver.connected_components(ui.selection);
+        enable_if("select-connected",
+            ui.in_mode(...default_pan) && ui.selection.size > 0
+            // The user hasn't already selected all connected components.
+            && (ui.selection.size !== connected_components.size
+                || [...ui.selection].some((cell) => !connected_components.has(cell)))
+        );
+        enable_if("deselect-all", ui.in_mode(...default_pan) && ui.selection.size > 0);
+        enable_if("delete", ui.in_mode(...default_pan) && ui.selection.size > 0);
+        enable_if("transform", ui.in_mode(...default_pan) && ui.quiver.all_cells().length > 0);
+        enable_if("centre-view",
             ui.element.query_selector(".focus-point.focused")
             // Technically the first condition below is subsumed by the latter, but we keep it to
             // mirror the conditions in `centre_view`.
             || ui.selection.size > 0 || (ui.quiver.cells.length > 0 && ui.quiver.cells[0].size > 0)
         );
-        enable_if("Zoom in", ui.scale < CONSTANTS.MAX_ZOOM);
-        enable_if("Zoom out", ui.scale > CONSTANTS.MIN_ZOOM);
-        enable_if("Reset zoom", ui.scale !== 0);
+        enable_if("zoom-in", ui.scale < CONSTANTS.MAX_ZOOM);
+        enable_if("zoom-out", ui.scale > CONSTANTS.MIN_ZOOM);
+        enable_if("reset-zoom", ui.scale !== 0);
 
         // Update the current zoom level underneath the "Reset zoom" button.
-        this.element.query_selector('.action[data-name="Reset zoom"] .shortcut').element.innerText
+        this.element.query_selector('.action[data-name="reset-zoom"] .shortcut').element.innerText
             = `${Math.round(2 ** ui.scale * 100)}%`;
     }
 }
@@ -7211,7 +7340,9 @@ class Cell {
                         ui.focus_point.class_list.remove(
                             "revealed", "pending", "active", "focused", "smooth"
                         );
-                        const vertices = Array.from(ui.selection).filter((cell) => cell.is_vertex());
+                        const vertices = Array.from(ui.selection).filter(
+                            (cell) => cell.is_vertex()
+                        );
                         // If the cell we're dragging is part of the existing selection,
                         // then we'll move every cell that is selected. However, if it's
                         // not already part of the selection, we'll just drag this cell

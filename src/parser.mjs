@@ -201,8 +201,14 @@ export class Parser {
                     if (!clockwise) {
                         edge.options.radius *= -1;
                     }
-                    edge.options.angle = mod(180 - 90 * (clockwise ? 1 : -1)
-                        - (edge.loop_head_angle + edge.loop_tail_angle) / 2 + 180, 360) - 180;
+                    const angle_dis
+                        = mod(edge.loop_head_angle - edge.loop_tail_angle + 180, 360) - 180;
+                    let loop_angle = mod(90 * (clockwise ? 1 : -1)
+                        - mod(edge.loop_tail_angle + angle_dis / 2, 360), 360);
+                    if (loop_angle > 180) {
+                        loop_angle -= 360;
+                    }
+                    edge.options.angle = loop_angle;
                 }
                 if (!this.cells.has(`${target}`)) {
                     this.cells.set(`${target}`, new Vertex(this.ui, "", target));
@@ -254,11 +260,22 @@ export class Parser {
                             ) * ROUND_TO, 100);
                         };
 
-                        edge.options.shorten.source = convert_length(parser_edge.shorten.source);
-                        edge.options.shorten.target = convert_length(parser_edge.shorten.target);
+                        if (parser_edge.between.source !== null
+                            && parser_edge.between.target !== null) {
+                            edge.options.shorten.source = parser_edge.between.source * 100;
+                            edge.options.shorten.target = 100 - parser_edge.between.target * 100;
+                        } else {
+                            edge.options.shorten.source
+                                = convert_length(parser_edge.shorten.source);
+                            edge.options.shorten.target
+                                = convert_length(parser_edge.shorten.target);
+                        }
                         if (edge.options.shorten.source + edge.options.shorten.target >= 100) {
                             this.log(
-                                this.warn("Encountered arrow with zero length.", parser_edge.range)
+                                this.warn(
+                                    "Encountered arrow with zero length.",
+                                    parser_edge.range,
+                                )
                             );
                             // Reset the shortening.
                             edge.options.shorten.source = 0;
@@ -649,19 +666,36 @@ export class Parser {
             edge.options.style.name = "corner-inverse";
             return;
         }
-        if (this.eat("\"\\shortmid\"{marking")) {
-            this.eat_whitespace();
-            if (this.eat(",")) {
+        const markings = {
+            "\\shortmid": "barred",
+            "{\\shortmid\\shortmid}": "double barred",
+            "\\bullet": "bullet solid",
+            "\\circ": "bullet hollow"
+        };
+        for (const [marking, body] of Object.entries(markings)) {
+            if (this.eat(`"${marking}"{marking`)) {
                 this.eat_whitespace();
-                this.eat("text", true);
-                this.eat_whitespace();
-                this.eat("=", true);
-                this.eat_whitespace();
-                this.parse_colour(true);
+                if (this.eat(",") && this.eat_whitespace() && this.eat("pos")) {
+                    this.eat_whitespace();
+                    this.eat("=", true);
+                    this.eat_whitespace();
+                    this.parse_float(true);
+                    this.eat_whitespace();
+                }
+                if (this.eat(",")) {
+                    this.eat_whitespace();
+                    this.eat("text", true);
+                    this.eat_whitespace();
+                    this.eat("=", true);
+                    this.eat_whitespace();
+                    if (!this.eat("\\pgfkeysvalueof{/tikz/commutative diagrams/background color}")) {
+                        this.parse_colour(true);
+                    }
+                }
+                this.eat("}", true);
+                edge.options.style.body.name = body;
+                return;
             }
-            this.eat("}", true);
-            edge.options.style.body.name = "barred";
-            return;
         }
         if (this.eat("phantom")) {
             // Special behaviour for `phantom`, which is used by quiver for edge alignment.
@@ -789,8 +823,6 @@ export class Parser {
             this.eat(/^(em|pt|mm)/); // We ignore the unit.
             return;
         }
-        // The following options are used in conjunction with `loop`, but are deliberately ignored
-        // for now.
         if (this.eat("in")) {
             this.eat_whitespace();
             this.eat("=", true);
@@ -803,6 +835,8 @@ export class Parser {
             edge.loop_tail_angle = this.parse_int(true);
             return;
         }
+        // The following options are used in conjunction with `loop`, but are deliberately ignored
+        // for now.
         if (this.eat("curve")) {
             this.eat_whitespace();
             this.eat("=", true);
@@ -852,17 +886,32 @@ export class Parser {
         if (this.eat("shorten <")) {
             this.eat_whitespace();
             this.eat("=", true);
-            const length = this.parse_int(true);
-            edge.shorten.source = length;
+            edge.shorten.source = this.parse_int(true);
             this.eat("pt", true);
             return;
         }
         if (this.eat("shorten >")) {
             this.eat_whitespace();
             this.eat("=", true);
-            const length = this.parse_int(true);
-            edge.shorten.target = length;
+            edge.shorten.target = this.parse_int(true);
             this.eat("pt", true);
+            return;
+        }
+        if (this.eat("between")) {
+            this.eat_whitespace();
+            this.eat("=", true);
+            this.eat_whitespace();
+            this.eat("{", true);
+            this.eat_whitespace();
+            edge.between.source = this.parse_float(true);
+            this.eat_whitespace();
+            this.eat("}", true);
+            this.eat_whitespace();
+            this.eat("{", true);
+            this.eat_whitespace();
+            edge.between.target = this.parse_float(true);
+            this.eat_whitespace();
+            this.eat("}", true);
             return;
         }
         // tikz-cd presets: these specify head, body, and tail.
@@ -1144,7 +1193,12 @@ export class Parser {
 
         // The following options are deliberately ignored, because they are used by quiver in
         // tikz-cd export for convenience.
-        if (this.eat("inner sep=0") || this.eat("anchor=center")) {
+        if (this.eat("inner sep=")) {
+            if (this.eat("0") || this.eat(".8ex")) {
+                return;
+            }
+        }
+        if (this.eat("anchor=center")) {
             return;
         }
 
@@ -1174,6 +1228,7 @@ Parser.Edge = class {
         this.options = Edge.default_options({ level: 1 });
         this.label_colour = Colour.black();
         this.shorten = { source: 0, target: 0 };
+        this.between = { source: null, target: null };
         this.phantom = false;
         // tikz-cd has some built-in styles that effectively reverse the direction of an arrow.
         // (This could also be achieved by permitting every head style to be used for a tail style
