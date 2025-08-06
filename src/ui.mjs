@@ -5435,7 +5435,7 @@ class Panel {
 
               const previous_bullet = `${new_renderer === "typst" ? '\\' : ''}bullet`;
               const new_bullet = `${new_renderer === "typst" ? '' : '\\'}bullet`;
-              ui.quiver.cells[0].forEach(k => {
+              (ui.quiver.cells[0] || []).forEach(k => {
                 if (k.label == previous_bullet) k.label = new_bullet;
               })
 
