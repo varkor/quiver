@@ -975,7 +975,7 @@ class UI {
                 ["Zoom out", (td) => Shortcuts.element(td, [{ key: "-", modifier: true }])],
                 ["Zoom in", (td) => Shortcuts.element(td, [{ key: "=", modifier: true }])],
                 ["Toggle grid", (td) => Shortcuts.element(td, [{ key: "H" }])],
-                ["Toggle help", (td) => Shortcuts.element(td, [{
+                ["Toggle hints", (td) => Shortcuts.element(td, [{
                     key: "H", modifier: true, shift: true
                 }])]
             ]))
