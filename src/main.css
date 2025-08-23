@@ -488,7 +488,7 @@ being. */
     left: 50%;
     bottom: 0;
     transform: translateX(-50%);
-    width: 808px;
+    width: auto;
     height: 46px;
     padding: 8px;
     /* Display above the import/export pane. */
@@ -927,7 +927,7 @@ div.slider {
     border-color: var(--ui-blue);
 }
 
-.panel button, .pane button, .port button {
+.panel button, .pane button, .port button, .panel select {
     position: relative;
     display: block;
     width: 100%; height: 30px;
@@ -942,6 +942,12 @@ div.slider {
     color: var(--ui-white);
 }
 
+.global select {
+    display: inline-block;
+    width: auto;
+    margin: 0;
+}
+
 .global button {
     display: inline-block;
     width: 112px;
@@ -952,15 +958,7 @@ div.slider {
     width: 56px;
 }
 
-.global button + label {
-    margin-left: 4px;
-}
-
-.global label + button {
-    margin-right: 4px;
-}
-
-.global button:last-of-type {
+.global button + label, .global label + button, .global select + label {
     margin-left: 4px;
 }
 
@@ -1818,4 +1816,18 @@ label input[type="checkbox"]:checked::before {
 
 .ui.embedded #welcome-pane {
     display: none;
+}
+
+/* The two blocks below allow selectively hiding elements depending on
+ * the current renderer without Javascript */
+body:has(select[name="renderer"] > option[value="typst"]:checked) .katex-only {
+  display: none;
+}
+
+body:has(select[name="renderer"] > option[value="katex"]:checked) .typst-only {
+  display: none;
+}
+
+.typst-error {
+  color: red
 }
