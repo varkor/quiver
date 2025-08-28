@@ -42,6 +42,10 @@ body {
     touch-action: none;
 }
 
+body.embedded {
+    background: transparent;
+}
+
 body:not(.modal) {
     user-select: none;
 }
