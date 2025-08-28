@@ -5441,12 +5441,11 @@ class Panel {
 
               // Function to rerender all labels
               const label_rerender = () =>
-                  ui.quiver.cells.forEach(l => l.forEach(c => ui.panel.render_maths(ui, c)));
+                  ui.quiver.all_cells().forEach(c => ui.panel.render_maths(ui, c));
 
               if (new_renderer === "typst") {
                   // We need to load Typst.
-                  load_typst();
-                  Typst.then((_) => {
+                  load_typst().then((_) => {
                       label_rerender();
                   });
               } else {
@@ -5714,11 +5713,13 @@ class Panel {
                         katex_element.element.offsetWidth, katex_element.element.offsetHeight
                     ];
                 } else if (mode === "typst") {
-                    const typst_svg = label.query_selector("svg.typst-doc");
+                    const typst_svg = label.query_selector(".typst-doc");
                     // Previously when rendering, we explicitely set the width and height attribute on the svg
-                    [width, height] = [
-                        +typst_svg.element.getAttribute('width'), +typst_svg.element.getAttribute('height')
-                    ];
+                    if (typst_svg) {
+                        [width, height] = [
+                            +typst_svg.element.getAttribute('width'), +typst_svg.element.getAttribute('height')
+                        ];
+                    }
                 }
                 cell.arrow.label.size = new Dimensions(
                     width + (width > 0 ? CONSTANTS.EDGE_LABEL_PADDING * 2 : 0),
@@ -5741,6 +5742,10 @@ class Panel {
         };
 
         if (ui.settings.get("quiver.renderer") === "typst") {
+            // First, show the raw code as a placeholder. This is basically
+            // only visible when typst is loading.
+            label.element.innerHTML = `<pre class="breathe">${cell.label}</pre>`;
+            update_label_transformation("typst");
             // Render the label with typst. then clause must got a svg(in text), not an error
             TypstQueue.render(`${cell.label}`).then(result => {
                 const template = document.createElement('template');
@@ -5760,7 +5765,11 @@ class Panel {
                 svg_dom.setAttribute("width", bbox.width);
                 svg_dom.setAttribute("height", bbox.height);
                 update_label_transformation("typst");
-            }).catch(error => {
+                // We can afford to hide loading screen on first render instead
+                // of last because rendering is almost instantaneous, only
+                // loading typst.ts is long.
+                ui.element.query_selector(".loading-screen").class_list.add("hidden");
+            }).catch(_ => {
                 // display malformed label with style `.typst-error`, like katex.
                 // this error must be handled outside of the promise queue, because some visible hint
                 // should be provided for the user.
@@ -8052,7 +8061,7 @@ const TypstQueue = new class extends PromiseQueue {
 // wait for it.
 const load_typst = () => {
     if (Typst !== null) {
-        return;
+        return Typst;
     }
     Typst = import("https://cdn.jsdelivr.net/npm/@myriaddreamin/typst.ts@0.5.5-rc7/dist/esm/contrib/all-in-one-lite.bundle.js").then((module) => {
         const $typst = module.$typst;
@@ -8075,6 +8084,8 @@ const load_typst = () => {
         // Handle Typst.ts not loading (somewhat) gracefully.
         UI.display_error("Typst failed to load.");
     });
+    Typst.then(() => TypstQueue.render('')) // Load the wasm binaries in memory
+    return Typst;
 };
 
 // We want until the (minimal) DOM content has loaded, so we have access to `document.body`.
@@ -8106,6 +8117,12 @@ document.addEventListener("DOMContentLoaded", () => {
         if (query_data.has("embed")) {
             ui.switch_mode(new UIMode.Embedded())
         }
+        if (query_data.has("r")) {
+            const renderer = query_data.get('r') === "typst" ? "typst" : "katex";
+            if (renderer === "typst") load_typst();
+            ui.settings.set('quiver.renderer', renderer)
+            ui.element.query_selector('select[name="renderer"]').element.value = renderer;
+        }
 
         // If there is `q` parameter in the query string, try to decode it as a diagram.
         if (query_data.has("q")) {
@@ -8122,8 +8139,17 @@ document.addEventListener("DOMContentLoaded", () => {
                     // This ensures that the diagram will have been rendered correctly by the time
                     // we reveal it.
                     document.fonts.ready.then(() => {
-                        ui.element.query_selector(".loading-screen").class_list.add("hidden");
+                        if (ui.settings.get('quiver.renderer') === "katex")
+                          ui.element.query_selector(".loading-screen").class_list.add("hidden");
                     });
+                    if (ui.settings.get('quiver.renderer') === "typst") {
+                      let typst = load_typst()
+                      if (ui.quiver.is_empty()) {
+                        typst.then(() => {
+                          ui.element.query_selector(".loading-screen").class_list.add("hidden");
+                        });
+                      }
+                    }
                 });
             };
 
@@ -8178,13 +8204,14 @@ document.addEventListener("DOMContentLoaded", () => {
         // Handle KaTeX not loading (somewhat) gracefully.
         UI.display_error("KaTeX failed to load.");
         // Remove the loading screen.
-        ui.element.query_selector(".loading-screen").class_list.add("hidden");
+        if (ui.settings.get("quiver.renderer") === "katex"){
+          ui.element.query_selector(".loading-screen").class_list.add("hidden");
+        }
     });
 
     // Load immediately if Typst if the renderer set in user settings
     if (ui.settings.get("quiver.renderer") === "typst"){
-        load_typst();
-        Typst.catch(() => {
+        load_typst().catch(() => {
             // Remove the loading screen.
             ui.element.query_selector(".loading-screen").class_list.add("hidden");
         });

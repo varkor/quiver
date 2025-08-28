@@ -1827,3 +1827,13 @@ body:has(select[name="renderer"] > option[value="katex"]:checked) .typst-only {
 .typst-error {
   color: red
 }
+
+.breathe {
+  color: #000;
+  animation: breathe .5s ease-in-out infinite alternate;
+}
+@keyframes breathe {
+  from { color: #000; }
+  to   { color: #888; }
+}
+
