@@ -3833,6 +3833,8 @@ class Settings {
         this.data = {
             // Whether to wrap the `tikz-cd` output in `\[ \]`.
             "export.centre_diagram": true,
+            // Whether to wrap the `tikz-cd` output in a standalone LaTeX document.
+            "export.standalone": false,
             // Whether to use `\&` instead of `&` for column separators in tikz-cd output.
             "export.ampersand_replacement": false,
             // Whether to export diagrams with the `cramped` option.
@@ -4788,6 +4790,10 @@ class Panel {
                         type: "checkbox",
                         "data-setting": "export.centre_diagram",
                     });
+                    const standalone_checkbox = new DOM.Element("input", {
+                        type: "checkbox",
+                        "data-setting": "export.standalone",
+                    });
                     const ampersand_replacement = new DOM.Element("input", {
                         type: "checkbox",
                         "data-setting": "export.ampersand_replacement",
@@ -4800,6 +4806,10 @@ class Panel {
                         .add(new DOM.Element("label")
                             .add(centre_checkbox)
                             .add("Centre diagram")
+                        )
+                        .add(new DOM.Element("label")
+                            .add(standalone_checkbox)
+                            .add("Standalone")
                         )
                         .add(new DOM.Element("label")
                             .add(ampersand_replacement)
@@ -4834,6 +4844,7 @@ class Panel {
 
                     const checkboxes = [
                         [centre_checkbox, "tikz-cd", "c"],
+                        [standalone_checkbox, "tikz-cd", "s"],
                         [ampersand_replacement, "tikz-cd", "a"],
                         [cramped, "tikz-cd", "r"],
                         [fixed_size_checkbox, "html", "f"],
