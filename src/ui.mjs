@@ -1581,6 +1581,7 @@ class UI {
                                 this.selection_excluding(created),
                             );
                         }
+                        this.panel.hide_if_unselected(this);
                         this.switch_mode(UIMode.default);
                     }
                 }
