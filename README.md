@@ -111,6 +111,8 @@ issue](https://github.com/varkor/quiver/issues/new) detailing the problem and I'
 aesthetic rendering of arrows.
 - [AndréC](https://tex.stackexchange.com/users/138900/andr%c3%a9c), for the custom TikZ style for
 curves of a fixed height.
+- [Andrew Stacey](https://tex.stackexchange.com/users/86/andrew-stacey), for the custom TikZ style
+for shortened curves.
 - [Nathan Corbyn](https://github.com/doctorn), for adding the ability to export embeddable diagrams
 to HTML.
 - [Paolo Brasolin](https://github.com/paolobrasolin), for adding offline support.

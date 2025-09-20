@@ -1031,6 +1031,13 @@ class UI {
                     )
                 ).add(", for the custom TikZ style for curves of a fixed height."),
                 new DOM.Element("li").add(
+                    new DOM.Link(
+                        "https://tex.stackexchange.com/users/86/andrew-stacey",
+                        "Andrew Stacey",
+                        true,
+                    )
+                ).add(", for the custom TikZ style for shortened curves."),
+                new DOM.Element("li").add(
                     new DOM.Link("https://github.com/doctorn", "Nathan Corbyn", true)
                 ).add(", for adding the ability to export embeddable diagrams to HTML."),
                 new DOM.Element("li").add(
