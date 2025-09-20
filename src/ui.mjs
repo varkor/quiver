@@ -872,6 +872,16 @@ class UI {
                         [{ key: "/", modifier: true }],
                     ))
             )
+            .add(new DOM.Element("p")
+                .add("For a guide on using keyboard shortcuts in ")
+                .add(new DOM.Element("b").add("quiver"))
+                .add(" see ")
+                .add(new DOM.Link(
+                    "https://github.com/varkor/quiver/blob/master/tutorial.md",
+                    "the tutorial"
+                ))
+                .add(".")
+            )
             .add(new DOM.Element("h2").add("General"))
             .add(new DOM.Table([
                 ["Dismiss errors, and panels;\nCancel modification or movement;\n"
@@ -1002,6 +1012,14 @@ class UI {
                     " is orders of magnitude faster than writing the equivalent LaTeX by hand " +
                     "and, with a little experience, competes with pen-and-paper."
                 )
+                .add(" To learn how to use ")
+                .add(new DOM.Element("b").add("quiver"))
+                .add(" efficiently, see ")
+                .add(new DOM.Link(
+                    "https://github.com/varkor/quiver/blob/master/tutorial.md",
+                    "the tutorial"
+                ))
+                .add(".")
             )
             .add(new DOM.Element("p")
                 .add("The editor is open source and may be found ")
@@ -1093,7 +1111,17 @@ class UI {
                 "Edit labels with the input bar at the bottom of the screen.",
                 "Click and drag the empty space around a object to move it around.",
                 "Hold Shift (⇧) to select multiple cells to edit them simultaneously."
-            ]));
+            ]))
+            .add(new DOM.Element("p")
+                .add("For a detailed guide to using ")
+                .add(new DOM.Element("b").add("quiver"))
+                .add(", see ")
+                .add(new DOM.Link(
+                    "https://github.com/varkor/quiver/blob/master/tutorial.md",
+                    "the tutorial"
+                ))
+                .add(".")
+            );
         panes.push(welcome_pane);
         new DOM.Element("button").add("Get started").listen("click", () => {
             // There are technically other ways to dismiss the welcome pane (e.g. opening the
