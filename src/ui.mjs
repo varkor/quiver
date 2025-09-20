@@ -8,9 +8,9 @@ import { Quiver, QuiverImportExport } from "./quiver.mjs";
 /// Various parameters.
 Object.assign(CONSTANTS, {
     /// The current quiver version.
-    VERSION: "1.5.5",
+    VERSION: "1.6.0",
     /// When the `quiver.sty` package was last modified.
-    PACKAGE_VERSION: "2025/06/24",
+    PACKAGE_VERSION: "2025/09/20",
     /// We currently only support n-cells for (n ≤ 4). This restriction is not technical: it can be
     /// lifted in the editor without issue. Rather, this is for usability: a user is unlikely to
     /// want to draw a higher cell. For n-cells for n ≥ 3, we make use of tikz-nfold in exported
