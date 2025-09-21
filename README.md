@@ -6,13 +6,17 @@
 rendering high-quality diagrams for screen viewing, and exporting to LaTeX via [tikz-cd].
 
 Creating and modifying diagrams with **quiver** is orders of magnitude faster than writing the
-equivalent LaTeX by hand and, with a little experience, competes with pen-and-paper.
+equivalent LaTeX by hand and, with a little experience, competes with pen-and-paper. To learn how to
+use **quiver** efficiently, see the [tutorial](tutorial.md).
 
 [commutative]: https://en.wikipedia.org/wiki/Commutative_diagram
 [pasting diagrams]: https://ncatlab.org/nlab/show/pasting+diagram
 [tikz-cd]: https://github.com/astoff/tikz-cd
 
 Try **quiver** out: [q.uiver.app](https://q.uiver.app)
+
+For tips on using **quiver** (including how to create and modify diagrams entirely using the
+keyboard), see the [**quiver** tutorial](tutorial.md).
 
 ## Features & screenshots
 
@@ -63,26 +67,6 @@ to return to it later if you decide it needs to be modified, or to share it with
 - Panning and zooming, for large diagrams.
 - Smart label alignment and edge offset.
 
-## Importing macros and colours
-
-To use custom macros and colours in **quiver**, create a file containing the definitions, like the
-following.
-
-```latex
-\newcommand{\cat}{\mathscr}
-\newcommand{\psh}{\widehat}
-\newcommand{\smcat}{\mathbb}
-\newcommand{\yo}{よ}
-```
-
-Upload the file to a publicly accessible URL (for instance,
-[gist.github.com](https://gist.github.com/)), and paste the URL for the raw text into the "Macros"
-input at the bottom of **quiver**.
-
-Currently, macros may be defined using `\newcommand`, `\newcommand*`, `\renewcommand`,
-`\renewcommand*`, `\DeclareMathOperator`, and `\DeclareMathOperator*`; and colours may be defined
-using `\definecolor` (using the colour modes: `rgb`, `RGB`, `HTML`, `gray`).
-
 ## Editor integration
 
 See [Editor integration](https://github.com/varkor/quiver/wiki/Editor-integration) on the [quiver
@@ -111,6 +95,8 @@ issue](https://github.com/varkor/quiver/issues/new) detailing the problem and I'
 aesthetic rendering of arrows.
 - [AndréC](https://tex.stackexchange.com/users/138900/andr%c3%a9c), for the custom TikZ style for
 curves of a fixed height.
+- [Andrew Stacey](https://tex.stackexchange.com/users/86/andrew-stacey), for the custom TikZ style
+for shortened curves.
 - [Nathan Corbyn](https://github.com/doctorn), for adding the ability to export embeddable diagrams
 to HTML.
 - [Paolo Brasolin](https://github.com/paolobrasolin), for adding offline support.

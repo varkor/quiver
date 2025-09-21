@@ -5,13 +5,14 @@
 % libraries, and defining new TikZ styles for curves of a fixed height and for shortening paths
 % proportionally.
 %
-% Version: 1.5.5
+% Version: 1.6.0
 % Authors:
 % - varkor (https://github.com/varkor)
 % - AndréC (https://tex.stackexchange.com/users/138900/andr%C3%A9c)
+% - Andrew Stacey (https://tex.stackexchange.com/users/86/andrew-stacey)
 
 \NeedsTeXFormat{LaTeX2e}
-\ProvidesPackage{quiver}[2025/06/24 quiver]
+\ProvidesPackage{quiver}[2025/09/20 quiver]
 
 % `tikz-cd` is necessary to draw commutative diagrams.
 \RequirePackage{tikz-cd}
@@ -34,7 +35,7 @@
     quiver/.cd,pos/.initial=0.35,height/.initial=0}
 
 % A TikZ style for shortening paths without the poor behaviour of `shorten <' and `shorten >'.
-\tikzset{between/.style n args={2}{/tikz/spath/at end path construction={
+\tikzset{between/.style n args={2}{/tikz/execute at end to={
     \tikzset{spath/split at keep middle={current}{#1}{#2}}
 }}}
 
