@@ -1663,5 +1663,3 @@ style="border-radius: 8px; border: none;">\
         };
     }
 };
-
-// vim: set ts=4 sw=4:

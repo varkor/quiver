@@ -8234,5 +8234,3 @@ document.addEventListener("DOMContentLoaded", () => {
         load_quiver_from_query_string();
     });
 });
-
-// vim: set ts=4 sw=4
