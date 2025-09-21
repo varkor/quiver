@@ -122,6 +122,12 @@ DOM.Element = class {
         return elements.map((element) => new DOM.Element(element));
     }
 
+    change_attribute(attribute, middleware = () => "") {
+        return this.set_attributes({
+          [attribute]: middleware(this.get_attribute(attribute) || '')
+        });
+    }
+
     get_attribute(attribute) {
         return this.element.getAttribute(attribute);
     }
