@@ -984,6 +984,7 @@ class UI {
                 ["Toggle diagram centring", (td) => Shortcuts.element(td, [{ key: "C" }])],
                 ["Toggle ampersand replacement", (td) => Shortcuts.element(td, [{ key: "A" }])],
                 ["Toggle cramped spacing", (td) => Shortcuts.element(td, [{ key: "R" }])],
+                ["Toggle standalone", (td) => Shortcuts.element(td, [{ key: "T" }])],
                 ["Toggle fixed size", (td) => Shortcuts.element(td, [{ key: "F" }])],
             ])));
 
@@ -4790,10 +4791,6 @@ class Panel {
                         type: "checkbox",
                         "data-setting": "export.centre_diagram",
                     });
-                    const standalone_checkbox = new DOM.Element("input", {
-                        type: "checkbox",
-                        "data-setting": "export.standalone",
-                    });
                     const ampersand_replacement = new DOM.Element("input", {
                         type: "checkbox",
                         "data-setting": "export.ampersand_replacement",
@@ -4802,14 +4799,14 @@ class Panel {
                         type: "checkbox",
                         "data-setting": "export.cramped",
                     });
+                    const standalone_checkbox = new DOM.Element("input", {
+                        type: "checkbox",
+                        "data-setting": "export.standalone",
+                    });
                     latex_options = new DOM.Div({ class: "options latex hidden" })
                         .add(new DOM.Element("label")
                             .add(centre_checkbox)
                             .add("Centre diagram")
-                        )
-                        .add(new DOM.Element("label")
-                            .add(standalone_checkbox)
-                            .add("Standalone")
                         )
                         .add(new DOM.Element("label")
                             .add(ampersand_replacement)
@@ -4818,6 +4815,10 @@ class Panel {
                         .add(new DOM.Element("label")
                             .add(cramped)
                             .add("Cramped")
+                        )
+                        .add(new DOM.Element("label")
+                            .add(standalone_checkbox)
+                            .add("Standalone")
                         )
                         .add(new DOM.Div({ class: "linked-sliders" })
                             .add(sep_sliders.column.label)
@@ -4844,7 +4845,7 @@ class Panel {
 
                     const checkboxes = [
                         [centre_checkbox, "tikz-cd", "c"],
-                        [standalone_checkbox, "tikz-cd", "s"],
+                        [standalone_checkbox, "tikz-cd", "t"],
                         [ampersand_replacement, "tikz-cd", "a"],
                         [cramped, "tikz-cd", "r"],
                         [fixed_size_checkbox, "html", "f"],
