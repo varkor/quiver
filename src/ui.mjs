@@ -1003,6 +1003,7 @@ class UI {
                 ["Toggle diagram centring", (td) => Shortcuts.element(td, [{ key: "C" }])],
                 ["Toggle ampersand replacement", (td) => Shortcuts.element(td, [{ key: "A" }])],
                 ["Toggle cramped spacing", (td) => Shortcuts.element(td, [{ key: "R" }])],
+                ["Toggle standalone", (td) => Shortcuts.element(td, [{ key: "T" }])],
                 ["Toggle fixed size", (td) => Shortcuts.element(td, [{ key: "F" }])],
             ])));
 
@@ -4874,16 +4875,16 @@ class Panel {
                             .add("Centre diagram")
                         )
                         .add(new DOM.Element("label")
-                            .add(standalone_checkbox)
-                            .add("Standalone")
-                        )
-                        .add(new DOM.Element("label")
                             .add(ampersand_replacement)
                             .add("Ampersand replacement")
                         )
                         .add(new DOM.Element("label")
                             .add(cramped)
                             .add("Cramped")
+                        )
+                        .add(new DOM.Element("label")
+                            .add(standalone_checkbox)
+                            .add("Standalone")
                         )
                         .add(new DOM.Div({ class: "linked-sliders" })
                             .add(sep_sliders.column.label)

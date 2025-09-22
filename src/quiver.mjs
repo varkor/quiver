@@ -615,11 +615,11 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                     output.split("\n").map(line => `\t${line}`).join("\n")
                 }\n` : ""
             }\\end{tikzcd}`;
-            if (settings.get("export.centre_diagram")) {
+            if (settings.get("export.centre_diagram") && !settings.get("export.standalone")) {
                 tikzcd = `\\[${tikzcd}\\]`;
             }
             if (settings.get("export.standalone")) {
-                tikzcd = `\\documentclass[crop,tikz]{standalone}\n\\usepackage{quiver}\n\\begin{document}\n${tikzcd}\n\\end{document}`
+                tikzcd = `\\documentclass[tikz]{standalone}\n\\usepackage{quiver}\n\\begin{document}\n${tikzcd}\n\\end{document}`
             }
             // URL.
             return `% ${
