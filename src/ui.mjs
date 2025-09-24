@@ -984,7 +984,7 @@ class UI {
                 ["Toggle diagram centring", (td) => Shortcuts.element(td, [{ key: "C" }])],
                 ["Toggle ampersand replacement", (td) => Shortcuts.element(td, [{ key: "A" }])],
                 ["Toggle cramped spacing", (td) => Shortcuts.element(td, [{ key: "R" }])],
-                ["Toggle standalone", (td) => Shortcuts.element(td, [{ key: "T" }])],
+                ["Toggle standalone", (td) => Shortcuts.element(td, [{ key: "S" }])],
                 ["Toggle fixed size", (td) => Shortcuts.element(td, [{ key: "F" }])],
             ])));
 
@@ -4845,7 +4845,7 @@ class Panel {
 
                     const checkboxes = [
                         [centre_checkbox, "tikz-cd", "c"],
-                        [standalone_checkbox, "tikz-cd", "t"],
+                        [standalone_checkbox, "tikz-cd", "s"],
                         [ampersand_replacement, "tikz-cd", "a"],
                         [cramped, "tikz-cd", "r"],
                         [fixed_size_checkbox, "html", "f"],
