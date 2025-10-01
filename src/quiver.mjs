@@ -222,6 +222,7 @@ export class Quiver {
     /// Return a `{ data, metadata }` object containing the graph in a specific format.
     /// Currently, the supported formats are:
     /// - "tikz-cd"
+    /// - "fletcher"
     /// - "base64"
     /// - "html"
     /// `settings` describes persistent user settings (like whether to centre the diagram);
@@ -232,6 +233,8 @@ export class Quiver {
         switch (format) {
             case "tikz-cd":
                 return QuiverImportExport.tikz_cd.export(this, settings, options, definitions);
+            case "fletcher":
+                return QuiverExport.fletcher.export(this, settings, options, definitions);
             case "base64":
                 return QuiverImportExport.base64.export(this, settings, options, definitions);
             case "html":
@@ -319,6 +322,248 @@ QuiverExport.CONSTANTS = {
     TIKZ_HORIZONTAL_MULTIPLIER: 1/4,
     TIKZ_VERTICAL_MULTIPLIER: 1/6,
 };
+
+QuiverExport.fletcher = new class extends QuiverExport {
+    export(quiver, settings, options, definitions) {
+        let output = "";
+
+        const wrap_boilerplate = (output) => {
+            const center = settings.get("export.centre_diagram");
+            return `// ${
+                QuiverImportExport.base64.export(quiver, settings, options, definitions).data
+            }\n#${center ? "align(center, " : ""}diagram({\n${output}})${center ? ")" : ""}`;
+        };
+
+        // Early exit for empty quivers.
+        if (quiver.is_empty()) {
+            return {
+                data: wrap_boilerplate(output),
+                metadata: { fletcher_incompatibilities: new Set() },
+            };
+        }
+
+        const fletcher_incompatibilities = new Set();
+
+        // Returns the coördinates of a cell, in the form `(x, y)`.
+        const cell_coords = (cell) => `(${cell.position.x}, ${cell.position.y})`;
+        // Wrap a label in a content block. If the label text is empty, return an empty string.
+        const format_label = (label) => label === "" ? "" : `[$${label}$]`;
+        // Concatenate the arguments into a string that can directly be appended to a function call,
+        // ignoring empty strings. If there is no effective argument, returns the empty string.
+        const arg_list_to_string = (list) => {
+            const result = list.filter((arg) => arg !== "").join(", ");
+            return result.length > 0 ? `, ${result}` : "";
+        };
+
+        // Get a Typst description of the colour from a colour object.
+        // Uses Typst's `color.hsl()` function.
+        const colour_to_typst_hsl = (colour) => {
+            let [h, s, l, _] = colour.hsla();
+            return `color.hsl(${h}deg, ${Math.round(s * 2.55)}, ${Math.round(l * 2.55)})`;
+        };
+
+        // Output the vertices.
+        for (const vertex of quiver.cells[0]) {
+            let label_colour = "";
+            if (vertex.label !== "" && vertex.label_colour.is_not_black()) {
+                label_colour = `text(${colour_to_typst_hsl(vertex.label_colour)})`;
+            }
+            output += `\tnode(${cell_coords(vertex)}${
+                arg_list_to_string([label_colour + format_label(vertex.label)])
+            })\n`;
+        }
+
+        // Output the edges, i.e. 1-cells and above.
+        for (let level = 1; level < quiver.cells.length; ++level) {
+            // Double arrows and higher are not yet supported in fletcher.
+            if (level > 1) {
+                fletcher_incompatibilities.add("arrows between arrows");
+                break;
+            }
+
+            for (const edge of quiver.cells[level]) {
+                // This will be the list of arguments passed to the `edge()` function after the
+                // source and target coördinates.
+                const args = [format_label(edge.label)];
+
+                if (edge.label !== "") {
+                    // We must explicitly declare that labels are on the left by default because the
+                    // default behavior for fletcher (auto) is inconsistent with quiver's rendering
+                    // otherwise.
+                    let side;
+                    switch (edge.options.label_alignment) {
+                        case "left":
+                            side = "left";
+                            break;
+                        case "centre":
+                            side = "center";
+                            break;
+                        case "over":
+                            side = "center";
+                            args.push("label-fill: false");
+                            args.push("label-angle: right");
+                            break;
+                        case "right":
+                            side = "right";
+                            break;
+                    }
+                    args.push(`label-side: ${side}`);
+
+                    if (edge.options.label_position !== 50) {
+                        args.push(`label-pos: ${edge.options.label_position / 100}`);
+                    }
+                }
+
+                // Shortened edges are not yet supported in fletcher.
+                if (edge.options.shorten.source !== 0 || edge.options.shorten.target !== 0) {
+                    fletcher_incompatibilities.add("shortened arrows");
+                }
+
+                // Apply the edge offset.
+                if (edge.options.offset !== 0) {
+                    if (edge.source !== edge.target && edge.options.curve === 0) {
+                        args.push(`shift: ${-edge.options.offset / 20}`);
+                    } else {
+                        fletcher_incompatibilities.add("offset curves and loops");
+                    }
+                }
+
+                // We will build the description of the arrow style, which will determine the tail,
+                // body, and head style of the arrow.
+                let arrow_marks = "";
+                // Additional arguments to the `edge()` function when the style isn't implemented as
+                // an arrow mark. We store this list separately because these styles must appear
+                // after the arrow marks.
+                const arrow_args = [];
+                switch (edge.options.style.name){
+                    case "arrow":
+                        // Fletcher specifies arrow styles in the form tail-body-head.
+
+                        // Arrow tail
+                        switch(edge.options.style.tail.name){
+                            case "maps to":
+                                arrow_marks += "|";
+                                break;
+                            case "mono":
+                                arrow_marks += ">";
+                                break;
+                            case "hook":
+                                arrow_marks += "hook";
+                                arrow_marks += edge.options.style.tail.side === "top" ? "" : "'";
+                                break;
+                            case "arrowhead":
+                                arrow_marks += "<";
+                                break;
+                        }
+                        // Arrow body
+                        switch (edge.options.style.body.name){
+                            case "cell":
+                                let level = edge.options.level;
+                                // Level 4 arrows have no shorthand, so we use the
+                                // level 1 arrow that we manually extrude.
+                                if (level > 3) {
+                                    level = 1;
+                                    arrow_args.push(`extrude: (-6,-2,2,6)`);
+                                    // Scale the arrowhead accordingly.
+                                    arrow_args.push(`mark-scale: 2`);
+                                }
+                                arrow_marks
+                                    += level === 1 ? "-" : "=".repeat(edge.options.level - 1);
+                                break;
+                            case "dashed":
+                                arrow_marks += "--";
+                                break;
+                            case "dotted":
+                                arrow_marks += "..";
+                                break;
+                            case "squiggly":
+                                arrow_marks += "~";
+                                break;
+                            case "barred":
+                                arrow_marks += "-|-";
+                                break;
+                            case "double barred":
+                                arrow_marks += "-||-";
+                                break;
+                            case "bullet solid":
+                                arrow_marks += "-@-";
+                                break;
+                            case "bullet hollow":
+                                arrow_marks += "-O-";
+                                break;
+                            case "none":
+                                arrow_marks += " ";
+                                break;
+                            default:
+                                arrow_marks += "-";
+                        }
+                        // Arrow head
+                        switch(edge.options.style.head.name) {
+                            case "none":
+                                break;
+                            case "arrowhead":
+                                arrow_marks += ">";
+                                break;
+                            case "epi":
+                                arrow_marks += ">>";
+                                break;
+                            case "harpoon":
+                                arrow_marks += "harpoon";
+                                arrow_marks += edge.options.style.head.side === "top" ? "" : "'";
+                                break;
+                        }
+                        break;
+
+                    case "adjunction":
+                        fletcher_incompatibilities.add("adjunctions");
+                        break;
+
+                    default:
+                        // In the future, adjunctions and corners can probably be implemented with
+                        // custom marks along with "none" body type.
+                        fletcher_incompatibilities.add("pullbacks and pushouts");
+                        break;
+                }
+
+                // We only explicitly specify the arrow style when it's not the default.
+                if (arrow_marks !== "-") {
+                    args.push(`"${arrow_marks}"`);
+                    arrow_args.forEach((style) => args.push(style));
+                }
+
+                // Colour the label if it is not black.
+                if (edge.label !== "" && edge.label_colour.is_not_black()) {
+                    args[0] = `text(${colour_to_typst_hsl(edge.label_colour)})${args[0]}`;
+                }
+                // Colour the arrow if is not black.
+                if (edge.options.colour.is_not_black()) {
+                    args.push(`stroke: ${colour_to_typst_hsl(edge.options.colour)}`);
+                }
+
+                // Handle loops. We translate the radius setting into a bend angle, mapping radii
+                // 1 – 5 to the range 130deg – 150deg.
+                if (edge.source === edge.target) {
+                    args.push(`bend: ${Math.sign(edge.options.radius) *
+                            ((Math.abs(edge.options.radius) - 1) * (150 - 130) / 4 + 130)}deg`);
+                    args.push(`loop-angle: ${90 - edge.options.angle}deg`);
+                }
+                // If the edge is curved (but not a loop), add a bend.
+                else if (edge.options.curve !== 0) {
+                    args.push(`bend: ${-edge.options.curve * 90 / 5}deg`);
+                }
+
+                output += `\tedge(${cell_coords(edge.source)}, ${cell_coords(edge.target)}${
+                    arg_list_to_string(args)
+                })\n`;
+            }
+        }
+
+        return {
+            data: wrap_boilerplate(output),
+            metadata: { fletcher_incompatibilities },
+        };
+    }
+}
 
 QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
     export(quiver, settings, options, definitions) {
@@ -495,7 +740,7 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
             dependencies.get(dependency).add(reason);
         };
 
-        // Output the edges.
+        // Output the edges, i.e. 1-cells and above.
         for (let level = 1; level < quiver.cells.length; ++level) {
             if (quiver.cells[level].size > 0) {
                 output += "\n";
@@ -661,7 +906,7 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                     }}{${
                         (100 - edge.options.shorten.target) / 100
                     }}`;
-                    add_dependency("quiver", "shortened edges");
+                    add_dependency("quiver", "shortened arrows");
                 }
 
                 // Edge styles.
@@ -1008,7 +1253,7 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
     // - An `index` is an integer indexing into the array `[...vertices, ...edges]`.
     // - Arrays may be truncated if the values of the elements are the default values.
 
-    export(quiver, _, options) {
+    export(quiver, settings, options) {
         // Remove the query string and fragment identifier from the current URL and use that as a
         // base.
         const URL_prefix = window.location.href.replace(/\?.*$/, "").replace(/#.*$/, "");
@@ -1025,8 +1270,11 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
         const macro_data = options.macro_url !== null
             ? `&macro_url=${encodeURIComponent(options.macro_url)}` : "";
 
+        const renderer = settings.get("quiver.renderer");
         return {
-            data: `${URL_prefix}#q=${
+            // We exclude the default renderer from the URL to decrease length as much as possible.
+            data: `${URL_prefix}#${renderer === CONSTANTS.DEFAULT_RENDERER ? ""
+                    : `r=${renderer}&`}q=${
                 this.export_selection(quiver, new Set(quiver.all_cells()))
             }${macro_data}`,
             metadata: {},

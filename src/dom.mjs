@@ -164,6 +164,15 @@ DOM.Element = class {
     contains(other) {
         return this.element.contains(other.element);
     }
+
+    select_contents() {
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        const range = document.createRange();
+        range.selectNodeContents(this.element);
+        selection.addRange(range);
+        return this;
+    }
 };
 
 DOM.Div = class extends DOM.Element {

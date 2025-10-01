@@ -22,7 +22,7 @@ src/Workbox/workbox-%:
 # Build service worker.
 service-worker: service-worker/build.js
 	cd $(dir $<)
-	. $$NVM_DIR/nvm.sh
+	if [ ! -z "$$NVM_DIR" ]; then . $$NVM_DIR/nvm.sh; fi
 	nvm use 20 && npm install && node build.js
 
 # Generate icons required by the webapp manifest. Requires ImageMagick.
