@@ -3989,6 +3989,7 @@ class Panel {
         this.label_input = new DOM.Element("input", {
             class: "label-input",
             type: "text",
+            spellcheck: "false",
             disabled: true,
         });
 
@@ -5886,9 +5887,9 @@ class Panel {
                     const svg_dom = new DOM.Element(label.element.children[0]);
                     const bbox = svg_dom.element.getBBox();
                     svg_dom.set_attributes({
-                        "viewBox": [bbox.x, bbox.y, bbox.width, bbox.height].join(" "),
-                        "width": bbox.width,
-                        "height": bbox.height,
+                        viewBox: [bbox.x, bbox.y, bbox.width, bbox.height].join(" "),
+                        width: bbox.width,
+                        height: bbox.height,
                     });
                     update_label_transformation(renderer);
                     // We can afford to hide the loading screen on the first render instead of the
