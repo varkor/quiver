@@ -619,7 +619,7 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                 tikzcd = `\\[${tikzcd}\\]`;
             }
             if (settings.get("export.standalone")) {
-                tikzcd = `\\documentclass[tikz]{standalone}\n\\usepackage{quiver}\n\\begin{document}\n${tikzcd}\n\\end{document}`
+                tikzcd = `\\documentclass[tikz]{standalone}\n\\usepackage{quiver}\n\\begin{document}\n${tikzcd}\n\\end{document}`;
             }
             // URL.
             return `% ${
