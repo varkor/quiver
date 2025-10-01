@@ -1003,6 +1003,7 @@ class UI {
                 ["Toggle diagram centring", (td) => Shortcuts.element(td, [{ key: "C" }])],
                 ["Toggle ampersand replacement", (td) => Shortcuts.element(td, [{ key: "A" }])],
                 ["Toggle cramped spacing", (td) => Shortcuts.element(td, [{ key: "R" }])],
+                ["Toggle standalone", (td) => Shortcuts.element(td, [{ key: "S" }])],
                 ["Toggle fixed size", (td) => Shortcuts.element(td, [{ key: "F" }])],
             ])));
 
@@ -3887,6 +3888,8 @@ class Settings {
             "export.ampersand_replacement": false,
             // Whether to export diagrams with the `cramped` option.
             "export.cramped": false,
+            // Whether to wrap the `tikz-cd` output in a standalone LaTeX document.
+            "export.standalone": false,
             // Whether to use a fixed size for the embedded `<iframe>`, or compute the size based on
             // the diagram.
             "export.embed.fixed_size": false,
@@ -4862,6 +4865,10 @@ class Panel {
                         type: "checkbox",
                         "data-setting": "export.cramped",
                     });
+                    const standalone_checkbox = new DOM.Element("input", {
+                        type: "checkbox",
+                        "data-setting": "export.standalone",
+                    });
                     latex_options = new DOM.Div({ class: "options latex hidden" })
                         .add(new DOM.Element("label")
                             .add(centre_checkbox_tikzcd)
@@ -4874,6 +4881,10 @@ class Panel {
                         .add(new DOM.Element("label")
                             .add(cramped)
                             .add("Cramped")
+                        )
+                        .add(new DOM.Element("label")
+                            .add(standalone_checkbox)
+                            .add("Standalone")
                         )
                         .add(new DOM.Div({ class: "linked-sliders" })
                             .add(sep_sliders.column.label)
@@ -4908,6 +4919,7 @@ class Panel {
                         [centre_checkbox_typst, "fletcher", "c"],
                         [ampersand_replacement, "tikz-cd", "a"],
                         [cramped, "tikz-cd", "r"],
+                        [standalone_checkbox, "tikz-cd", "s"],
                         [fixed_size_checkbox, "html", "f"],
                     ];
                     const shortcuts = [];
