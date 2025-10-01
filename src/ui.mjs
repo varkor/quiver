@@ -1112,11 +1112,14 @@ class UI {
             class: "pane" + (version_previous_use ? " hidden" : "")
         }).add(new DOM.Element("h1").add("Welcome"))
             .add(new DOM.Element("p").add(new DOM.Element("b").add("quiver")).add(
-                " is a modern, graphical editor for commutative and pasting " +
-                "diagrams, capable of rendering high-quality diagrams for screen viewing, and " +
-                "exporting to LaTeX via tikz-cd."
-            ))
-            .add(new DOM.Element("p").add(new DOM.Element("b").add("quiver")).add(
+                    " is a modern, graphical editor for commutative and pasting " +
+                    "diagrams, capable of rendering high-quality diagrams for screen viewing, " +
+                    "and exporting to LaTeX via "
+                ).add(new DOM.Code("tikz-cd"))
+                .add(" and Typst via ")
+                .add(new DOM.Code("fletcher"))
+                .add(".")
+            ).add(new DOM.Element("p").add(new DOM.Element("b").add("quiver")).add(
                 " is intended to be intuitive to use and easy to pick up. Here are a few tips to " +
                 "help you get started:"
             ))

@@ -182,8 +182,12 @@ export class Path {
     }
 
     arc_by(r, angle, large_arc, clockwise, next) {
+        // According to https://www.w3.org/TR/SVG2/paths.html#ArcOutOfRangeParameters, if `rx` or
+        // `ry` have negative signs, the signs should be ignored. However, Safari 26.0 incorrectly
+        // treats this edge case. For historical reasons, quiver draws some arcs with negative
+        // signs, so take absolute values here to fix rendering issues in Safari.
         this.commands.push(
-            `a ${r.x} ${r.y}
+            `a ${Math.abs(r.x)} ${Math.abs(r.y)}
             ${rad_to_deg(angle)} ${large_arc ? 1 : 0} ${clockwise ? 1 : 0}
             ${next.x} ${next.y}`
         );
