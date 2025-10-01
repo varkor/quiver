@@ -133,4 +133,5 @@ serve:
 cleanup:
 	git checkout master
 	git worktree remove ../quiver-worktree -f
+	rm -r ../quiver-worktree
 	git branch -D squashed
