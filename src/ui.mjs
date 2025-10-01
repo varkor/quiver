@@ -49,6 +49,12 @@ Object.assign(CONSTANTS, {
     /// Minimum and maximum zoom levels.
     MIN_ZOOM: -2.5,
     MAX_ZOOM: 1,
+    // The default engine for rendering mathematics. The options are `katex` and `typst`.
+    DEFAULT_RENDERER: "katex",
+    // Preamble used to render the Typst labels.
+    TYPST_PREAMBLE: "#set page(width: auto, height: auto, margin: 0em)\n#set text(font: \"New Computer Modern\", 32pt)\n",
+    // Fletcher version.
+    FLETCHER_VERSION: "0.5.8",
 });
 
 /// Various states for the UI (e.g. whether cells are being rearranged, or connected, etc.).
@@ -887,8 +893,11 @@ class UI {
                 ["Dismiss errors, and panels;\nCancel modification or movement;\n"
                     + "Hide focus point;\nDeselect, and dequeue cells", (td) =>
                         Shortcuts.element(td, [{ key: "Escape" }])],
-                ["Import tikz-cd", (td) => Shortcuts.element(td, [{ key: "I", modifier: true }])],
-                ["Export to LaTeX", (td) => Shortcuts.element(td, [{ key: "E", modifier: true }])]
+                ["Import from LaTeX", (td) => Shortcuts.element(td, [{ key: "I", modifier: true }])],
+                [
+                    "Export to LaTeX or Typst",
+                    (td) => Shortcuts.element(td, [{ key: "E", modifier: true }])
+                ]
             ]))
             .add(new DOM.Element("h2").add("Navigation"))
             .add(new DOM.Table([
@@ -1426,7 +1435,10 @@ class UI {
         // A helper function for creating a new vertex, as there are
         // several actions that can trigger the creation of a vertex.
         const create_vertex = (position) => {
-            const label = "\\bullet";
+            const label = {
+                "katex": "\\bullet",
+                "typst": "bullet"
+            }[this.settings.get("quiver.renderer")];
             return new Vertex(this, label, position);
         };
 
@@ -3034,6 +3046,7 @@ class UI {
     // `type` can be used to selectively dismiss such errors (using the `type` argument on
     // `dismiss_error`).
     static display_error(message, type = null) {
+        console.error(message);
         const body = new DOM.Element(document.body);
         // If there's already an error, it's not unlikely that subsequent errors will be triggered.
         // Thus, we don't display an error banner if one is already displayed.
@@ -3377,7 +3390,7 @@ class UI {
 
         // Rerender all the existing labels with the new macro definitions.
         for (const cell of this.quiver.all_cells()) {
-            this.panel.render_tex(this, cell);
+            this.panel.render_maths(this, cell);
         }
 
         // Update the LaTeX colour palette group.
@@ -3445,7 +3458,7 @@ class UI {
 
             // Rerender all the existing labels without the new macro definitions.
             for (const cell of this.quiver.all_cells()) {
-                this.panel.render_tex(this, cell);
+                this.panel.render_maths(this, cell);
             }
 
             // Update the LaTeX colour palette group.
@@ -3644,7 +3657,7 @@ class History {
                 case "label":
                     for (const label of action.labels) {
                         label.cell.label = label[to];
-                        ui.panel.render_tex(ui, label.cell);
+                        ui.panel.render_maths(ui, label.cell);
                     }
                     break;
                 case "label_colour":
@@ -3652,6 +3665,7 @@ class History {
                         label_colour.cell.label_colour = label_colour[to];
                         label_colour.cell.element.query_selector(".label").set_style({
                             color: label_colour.cell.label_colour.css(),
+                            fill: label_colour.cell.label_colour.css(),
                         });
                     }
                     update_panel = true;
@@ -3869,7 +3883,7 @@ class Settings {
         this.data = {
             // Whether to wrap the `tikz-cd` output in `\[ \]`.
             "export.centre_diagram": true,
-            // Whether to use `\&` instead of `&` for column separators in tikz-cd output.
+            // Whether to use `\&` instead of `&` for column separators in `tikz-cd` output.
             "export.ampersand_replacement": false,
             // Whether to export diagrams with the `cramped` option.
             "export.cramped": false,
@@ -3882,6 +3896,8 @@ class Settings {
             "export.embed.height": CONSTANTS.DEFAULT_EMBED_SIZE.HEIGHT,
             // Which variant of the corner to use for pullbacks/pushouts.
             "diagram.var_corner": false,
+            // Whether to use KaTeX or Typst rendering.
+            "quiver.renderer": CONSTANTS.DEFAULT_RENDERER,
         };
         try {
             // Try to update the default values with the saved settings.
@@ -4704,17 +4720,8 @@ class Panel {
                     )
                 );
 
-                let port_pane, tip, warning, error, latex_options, embed_options, note, content;
-                let textarea, parse_button, import_success;
-
-                // Select the code for easy copying.
-                const select_output = () => {
-                    const selection = window.getSelection();
-                    const range = document.createRange();
-                    range.selectNodeContents(content.element);
-                    selection.removeAllRanges();
-                    selection.addRange(range);
-                };
+                let port_pane, latex_tip, typst_tip, warning, error, latex_options, typst_options;
+                let embed_options, note, content, textarea, parse_button, import_success;
 
                 // Clear any errors and warnings.
                 const hide_errors_and_warnings = () => {
@@ -4731,10 +4738,11 @@ class Panel {
                     if (prevent_defocus) {
                         return;
                     }
-                    select_output();
+                    // Select the code for easy copying.
+                    content.select_contents();
                     // Safari seems to occasionally fail to select the text immediately, so we
                     // also select it after a delay to ensure the text is selected.
-                    delay(select_output);
+                    delay(() => content.select_contents());
                 };
 
                 if (this.port === null) {
@@ -4794,13 +4802,18 @@ class Panel {
                         this.sliders.set(`${axis}_sep`, sep_sliders[axis]);
                     }
 
-                    tip = new DOM.Element("span", { class: "tip hidden" });
-
-                    tip.add("Remember to include ")
-                        .add(new DOM.Code("\\usepackage{quiver}"))
-                        .add(" in your LaTeX preamble. You can install the package through ")
+                    latex_tip = new DOM.Element("span", { class: "tip hidden tikz-cd" });
+                    latex_tip.add("Remember to include ")
+                        .add(
+                            new DOM.Code("\\usepackage{quiver}")
+                                .listen("dblclick", (event, element) => {
+                                    event.preventDefault();
+                                    new DOM.Element(element).select_contents();
+                                })
+                        )
+                        .add(" in your LaTeX preamble. You can install the package using ")
                         .add(new DOM.Link("https://ctan.org/pkg/quiver", "CTAN", true));
-                    tip.add(", or ")
+                    latex_tip.add(", or ")
                         .add(
                             // We would like to simply use `quiver.sty` here, but,
                             // unfortunately, GitHub pages does not permit overriding the
@@ -4815,15 +4828,32 @@ class Panel {
                         )
                         .add(" to copy-and-paste.")
                         .add_to(port_pane);
-                    tip.add(new DOM.Element("span", { class: "update" })
+                    latex_tip.add(new DOM.Element("span", { class: "update" })
                         .add("updated on ")
                         .add(new DOM.Element("time").add("2025-07-05"))
                     );
 
-                    const centre_checkbox = new DOM.Element("input", {
+                    typst_tip = new DOM.Element("span", { class: "tip hidden typst" });
+                    typst_tip.add("Remember to include ")
+                        .add(new DOM.Code("fletcher"))
+                        .add(" in your Typst document with ")
+                        .add(
+                            new DOM.Code(`#import \"@preview/fletcher:${
+                                CONSTANTS.FLETCHER_VERSION
+                            }\" as fletcher: diagram, node, edge`)
+                                .listen("dblclick", (event, element) => {
+                                    event.preventDefault();
+                                    new DOM.Element(element).select_contents();
+                                })
+                        )
+                        .add(".")
+                        .add_to(port_pane);
+
+                    const centre_checkbox_tikzcd = new DOM.Element("input", {
                         type: "checkbox",
                         "data-setting": "export.centre_diagram",
                     });
+                    const centre_checkbox_typst = centre_checkbox_tikzcd.clone();
                     const ampersand_replacement = new DOM.Element("input", {
                         type: "checkbox",
                         "data-setting": "export.ampersand_replacement",
@@ -4834,7 +4864,7 @@ class Panel {
                     });
                     latex_options = new DOM.Div({ class: "options latex hidden" })
                         .add(new DOM.Element("label")
-                            .add(centre_checkbox)
+                            .add(centre_checkbox_tikzcd)
                             .add("Centre diagram")
                         )
                         .add(new DOM.Element("label")
@@ -4850,6 +4880,11 @@ class Panel {
                             .add(sep_sliders.row.label)
                         )
                         .add_to(port_pane);
+                    typst_options = new DOM.Div({ class: "options typst hidden" })
+                        .add(new DOM.Element("label")
+                            .add(centre_checkbox_typst)
+                            .add("Centre diagram")
+                        ).add_to(port_pane);
 
                     const fixed_size_checkbox = new DOM.Element("input", {
                         type: "checkbox",
@@ -4869,7 +4904,8 @@ class Panel {
                         .add_to(port_pane);
 
                     const checkboxes = [
-                        [centre_checkbox, "tikz-cd", "c"],
+                        [centre_checkbox_tikzcd, "tikz-cd", "c"],
+                        [centre_checkbox_typst, "fletcher", "c"],
                         [ampersand_replacement, "tikz-cd", "a"],
                         [cramped, "tikz-cd", "r"],
                         [fixed_size_checkbox, "html", "f"],
@@ -4938,7 +4974,7 @@ class Panel {
                         input.listen("keydown", (event) => {
                             if (event.key === "Enter") {
                                 input.element.blur();
-                                select_output();
+                                content.select_contents();
                             }
                         });
                     }
@@ -4949,7 +4985,11 @@ class Panel {
 
                     note = new DOM.Div({ class: "note" }).add_to(port_pane);
 
-                    content = new DOM.Div({ class: "code" }).add_to(port_pane);
+                    content = new DOM.Div({ class: "code" })
+                        .listen("dblclick", (event, element) => {
+                            event.preventDefault();
+                            new DOM.Element(element).select_contents();
+                        }).add_to(port_pane);
 
                     // Insert text at the cursor in the `contenteditable`.
                     const insert_text = (text) => {
@@ -5242,10 +5282,12 @@ class Panel {
                 } else {
                     // Find the existing import/export pane.
                     port_pane = ui.element.query_selector(".port");
-                    tip = port_pane.query_selector(".tip");
+                    latex_tip = port_pane.query_selector(".tip.tikz-cd");
+                    typst_tip = port_pane.query_selector(".tip.typst");
                     warning = port_pane.query_selector("div.warning");
                     error = port_pane.query_selector("div.error");
                     latex_options = port_pane.query_selector(".options.latex");
+                    typst_options = port_pane.query_selector(".options.typst");
                     embed_options = port_pane.query_selector(".options.embed");
                     note = port_pane.query_selector(".note");
                     content = port_pane.query_selector(".code");
@@ -5283,14 +5325,17 @@ class Panel {
                 hide_errors_and_warnings();
 
                 // Display a warning if necessary.
-                const unsupported_items = kind === "export" && format === "tikz-cd" ?
-                    Array.from(metadata.tikz_incompatibilities).sort() : [];
+                const unsupported_items = kind === "export"
+                        && Array.from(metadata.tikz_incompatibilities
+                            || metadata.fletcher_incompatibilities
+                            || []).sort()
+                        || [];
                 if (unsupported_items.length !== 0) {
                     warning.class_list.remove("hidden");
-                    warning.add("The exported ").add(new DOM.Code("tikz-cd"))
+                    warning.add("The exported ").add(new DOM.Code(format))
                         .add(" diagram may not match the ")
                         .add(new DOM.Element("b").add("quiver"))
-                        .add(" diagram exactly, as ").add(new DOM.Code("tikz-cd"))
+                        .add(" diagram exactly, as ").add(new DOM.Code(format))
                         .add(" does not support the following features that " +
                             "appear in this diagram:");
                     const list = new DOM.Element("ul").add_to(warning);
@@ -5347,13 +5392,18 @@ class Panel {
                 parse_button.set_attributes({ disabled: "" });
 
                 // Show/hide relevant UI elements.
-                tip.class_list.toggle("hidden", kind !== "export" || format !== "tikz-cd");
+                latex_tip.class_list.toggle("hidden", kind !== "export" || format !== "tikz-cd");
+                typst_tip.class_list.toggle("hidden", kind !== "export" || format !== "fletcher");
                 warning.class_list.toggle("hidden",
                     unsupported_items.length === 0 && dependencies.size === 0,
                 );
                 latex_options.class_list.toggle(
                     "hidden",
                     kind !== "export" || format !== "tikz-cd",
+                );
+                typst_options.class_list.toggle(
+                    "hidden",
+                    kind !== "export" || format !== "fletcher",
                 );
                 embed_options.class_list.toggle("hidden", kind !== "export" || format !== "html");
                 const import_tikz_cd = kind !== "import" || format !== "tikz-cd";
@@ -5395,36 +5445,101 @@ class Panel {
             "tikz-cd diagram",
             "tikz-cd",
             { key: "I", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always },
-            () => display_port_pane("import", "tikz-cd"),
-        ).set_attributes({ class: "short" });
+            () => {
+                if (ui.settings.get("quiver.renderer") === "katex") {
+                    display_port_pane("import", "tikz-cd");
+                }
+            },
+        ).set_attributes({ class: "short katex-only" });
 
-        // The export button.
+        // The export buttons.
         const export_to_latex = Panel.create_button_with_shortcut(
             ui,
             "LaTeX",
             "LaTeX",
             { key: "E", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always },
-            () => display_port_pane("export", "tikz-cd"),
-        );
+            () => {
+                if (ui.settings.get("quiver.renderer") === "katex") {
+                    display_port_pane("export", "tikz-cd");
+                }
+            },
+        ).set_attributes({ class: "katex-only" });
+        const export_to_typst = Panel.create_button_with_shortcut(
+            ui,
+            "Typst",
+            "Typst",
+            { key: "E", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always },
+            () => {
+                if (ui.settings.get("quiver.renderer") === "typst") {
+                    display_port_pane("export", "fletcher");
+                }
+            }
+        ).set_attributes({ class: "typst-only" });
+
+        // Create the `<select>` for the current maths renderer.
+        const renderer_select = new DOM.Element("select", { name: "renderer" })
+            .listen("change", (event) => {
+                const renderer = event.target.value;
+                ui.settings.set("quiver.renderer", renderer);
+
+                const previous_bullet = `${renderer === "typst" ? "\\" : ""}bullet`;
+                const new_bullet = `${renderer === "typst" ? "" : "\\"}bullet`;
+                if (!ui.quiver.is_empty()) {
+                    for (const vertex of ui.quiver.cells[0]) {
+                        if (vertex.label === previous_bullet) {
+                            vertex.label = new_bullet;
+                        }
+                    }
+                }
+
+                const label_rerender = () => {
+                    ui.quiver.all_cells().forEach((cell) => ui.panel.render_maths(ui, cell));
+                };
+
+                switch (renderer) {
+                    case "katex":
+                        // KaTeX is always loaded, so we can immediately rerender.
+                        label_rerender();
+                        break;
+
+                    case "typst":
+                        // We must load Typst before rendering.
+                        load_typst(ui).then((_) => {
+                            label_rerender();
+                        });
+                        break;
+                }
+            });
+
+        // Add the options to the `<select>`.
+        for (const [renderer, text] of [["katex", "LaTeX"], ["typst", "Typst"]]) {
+            const option = new DOM.Element("option").set_attributes({
+                value: renderer
+            }).add(text);
+            renderer_select.add(option);
+        }
+        renderer_select.element.value = ui.settings.get("quiver.renderer");
 
         this.global = new DOM.Div({ class: "panel global" }).add(
-            new DOM.Element("label").add("Import: ")
+            new DOM.Element("label").add("Renderer: ")
+        ).add(renderer_select).add(
+            new DOM.Element("label").add("Import: ").set_attributes({ "class": "katex-only" })
         ).add(import_from_tikz).add(
             new DOM.Element("label").add("Export: ")
         ).add(
             // The shareable link button.
-            new DOM.Element("button").add("Shareable link")
+            new DOM.Element("button").add("URL")
                 .listen("click", () => {
                     display_port_pane("export", "base64");
                 })
         ).add(
           // The embed button.
-          new DOM.Element("button").add("Embed code")
+          new DOM.Element("button").add("HTML")
               .listen("click", () => {
                   display_port_pane("export", "html");
               })
-        ).add(export_to_latex).add(
-            new DOM.Div({ class: "indicator-container" }).add(
+        ).add(export_to_latex).add(export_to_typst).add(
+            new DOM.Div({ class: "indicator-container katex-only" }).add(
                 new DOM.Element("label").add("Macros: ")
                     .add(
                         new DOM.Element("input", {
@@ -5645,7 +5760,7 @@ class Panel {
     }
 
     /// Render the TeX contained in the label of a cell.
-    render_tex(ui, cell) {
+    render_maths(ui, cell) {
         const label = cell.element.query_selector(".label");
         if (label === null) {
             // The label will be null if the edge is invalid, which may happen when bad tikz-cd has
@@ -5653,16 +5768,33 @@ class Panel {
             return;
         }
 
-        const update_label_transformation = () => {
+        const update_label_transformation = (mode = CONSTANTS.DEFAULT_RENDERER) => {
             if (cell.is_edge()) {
                 // Resize the bounding box for the label.
                 // In Firefox, the bounding rectangle for the KaTeX element seems to be sporadically
                 // available, unless we render the arrow *beforehand*.
                 cell.render(ui);
-                const katex_element = label.query_selector(".katex, .katex-error");
-                const [width, height] = [
-                    katex_element.element.offsetWidth, katex_element.element.offsetHeight
-                ];
+                let width = 0;
+                let height = 0;
+                switch (mode) {
+                    case "katex":
+                        const katex_element = label.query_selector(".katex, .katex-error");
+                        [width, height] = [
+                            katex_element.element.offsetWidth, katex_element.element.offsetHeight
+                        ];
+                        break;
+                    case "typst":
+                        const typst_svg = label.query_selector(".typst-doc");
+                        // Previously when rendering, we explicitly set the width and height
+                        // attribute on the SVG.
+                        if (typst_svg) {
+                            [width, height] = [
+                                parseInt(typst_svg.element.getAttribute("width")),
+                                parseInt(typst_svg.element.getAttribute("height")),
+                            ];
+                        }
+                        break;
+                }
                 cell.arrow.label.size = new Dimensions(
                     width + (width > 0 ? CONSTANTS.EDGE_LABEL_PADDING * 2 : 0),
                     height + (height > 0 ? CONSTANTS.EDGE_LABEL_PADDING * 2 : 0),
@@ -5683,28 +5815,74 @@ class Panel {
             }
         };
 
-        // Render the label with KaTeX.
-        // Currently all errors are disabled, so we don't wrap this in a try-catch block.
-        KaTeX.then((katex) => {
-            katex.render(
-                cell.label.replace(/\$/g, "\\$"),
-                label.element,
-                {
-                    throwOnError: false,
-                    errorColor: "hsl(0, 100%, 40%)",
-                    macros: ui.latex_macros(),
-                    trust: (context) => ["\\href", "\\url", "\\includegraphics"]
-                        .includes(context.command),
-                },
-            );
-            // KaTeX loads fonts as it needs them. After we call `render`, it will load the fonts it
-            // needs if they haven't already been loaded, then render the LaTeX asynchronously. If
-            // we calculate the label size immediately and the necessary fonts have not been loaded,
-            // the calculated dimensions will be incorrect. Therefore, we need to wait until all
-            // the fonts used in the document (i.e. the KaTeX-specific ones, which are the only
-            // ones that may not have been loaded yet) have been loaded.
-            document.fonts.ready.then(update_label_transformation);
-        });
+        const renderer = ui.settings.get("quiver.renderer");
+        switch (renderer) {
+            case "katex":
+                // Render the label with KaTeX.
+                // Currently all errors are disabled, so we don't wrap this in a try-catch block.
+                KaTeX.then((katex) => {
+                    katex.render(
+                        cell.label.replace(/\$/g, "\\$"),
+                        label.element,
+                        {
+                            throwOnError: false,
+                            errorColor: "var(--ui-error)",
+                            macros: ui.latex_macros(),
+                            trust: (context) => ["\\href", "\\url", "\\includegraphics"]
+                                .includes(context.command),
+                        },
+                    );
+                    // KaTeX loads fonts as it needs them. After we call `render`, it will load the
+                    // fonts it needs if they haven't already been loaded, then render the LaTeX
+                    // asynchronously. If we calculate the label size immediately and the necessary
+                    // fonts have not been loaded, the calculated dimensions will be incorrect.
+                    // Therefore, we need to wait until all the fonts used in the document (i.e. the
+                    // KaTeX-specific ones, which are the only ones that may not have been loaded
+                    // yet) have been loaded.
+                    document.fonts.ready.then(() => update_label_transformation());
+                });
+                break;
+
+            case "typst":
+                // First, show the raw Typst code as a placeholder. In practice, this will only be
+                // visible when Typst is loading.
+                label.clear().add(new DOM.Element("pre", { "class": "breathe" }).add(cell.label));
+                update_label_transformation(renderer);
+                // Render the label with Typst. then clause must got a svg(in text), not an error
+                TypstQueue.render(`${cell.label}`).then((result) => {
+                    const template = new DOM.Element("template");
+                    template.element.innerHTML = result;
+                    const svg = new DOM.Element(template.element.content.firstChild);
+                    // Remove extraneous HTML text, which are all generated to support text
+                    // selection in the SVG (which we are not interested in).
+                    svg.query_selector_all("foreignObject").forEach((node) => node.clear());
+                    // Remove the `fill` attribute which prevents recolouring of the SVG.
+                    svg.query_selector_all(".typst-text").forEach((node) => {
+                        node.remove_attributes("fill");
+                    });
+                    label.element.replaceChildren(svg.element);
+                    // Restore the bounding box.
+                    const svg_dom = new DOM.Element(label.element.children[0]);
+                    const bbox = svg_dom.element.getBBox();
+                    svg_dom.set_attributes({
+                        "viewBox": [bbox.x, bbox.y, bbox.width, bbox.height].join(" "),
+                        "width": bbox.width,
+                        "height": bbox.height,
+                    });
+                    update_label_transformation(renderer);
+                    // We can afford to hide the loading screen on the first render instead of the
+                    // last, because rendering is almost instantaneous (it is loading Typst for the
+                    // first time that takes a long time).
+                    ui.element.query_selector(".loading-screen").class_list.add("hidden");
+                }).catch(() => {
+                    // Display a malformed label with the `.typst-error` class, like with KaTeX.
+                    // This error must be handled outside of the Promise queue, because some visible
+                    // hint should be provided for the user.
+                    label.replace(new DOM.Div({ class: "typst-error" }).add(cell.label));
+                    update_label_transformation(renderer);
+                });
+                break;
+        }
     };
 
     /// Update the panel state (i.e. enable/disable fields as relevant).
@@ -7233,7 +7411,8 @@ class Cell {
         // Set the label colour.
         if (this.label_colour.is_not_black()) {
             this.element.query_selector(".label").set_style({
-                color: this.label_colour.css(),
+                color: this.label_colour.css(), // This is for KaTeX rendering.
+                fill: this.label_colour.css(), // This is for Typst rendering.
             });
         }
 
@@ -7594,7 +7773,7 @@ export class Vertex extends Cell {
         }
 
         // Resize the content according to the grid cell. This is just the default size: it will be
-        // updated by `render_tex`.
+        // updated by `render_maths`.
         this.content_element.set_style({
             width: `${ui.default_cell_size / 2}px`,
             height: `${ui.default_cell_size / 2}px`,
@@ -7603,7 +7782,7 @@ export class Vertex extends Cell {
         });
 
         if (construct) {
-            ui.panel.render_tex(ui, this);
+            ui.panel.render_maths(ui, this);
         } else {
             // The vertex may have moved, in which case we need to update the size of the grid cell
             // in which the vertex now lives, as the grid cell may now need to be resized.
@@ -7752,11 +7931,11 @@ export class Edge extends Cell {
             }
         }
 
-        ui.panel.render_tex(ui, this);
+        ui.panel.render_maths(ui, this);
     }
 
     /// Create the HTML element associated with the edge.
-    /// Note that `render_tex` triggers redrawing the edge, rather than the other way around.
+    /// Note that `render_maths` triggers redrawing the edge, rather than the other way around.
     render(ui, pointer_offset = null) {
         if (pointer_offset !== null) {
             const end = ui.mode.reconnect.end;
@@ -7925,6 +8104,78 @@ export class Edge extends Cell {
 
 // A `Promise` that returns the `katex` global object when it's loaded.
 let KaTeX = null;
+let Typst = null;
+
+class PromiseQueue {
+    constructor() {
+        // Start with a resolved promise.
+        this.queue = Promise.resolve();
+    }
+
+    enqueue(promise_fn) {
+        // Chain the new promise on to the existing queue.
+        this.queue = this.queue.then(() => promise_fn()).catch(() => promise_fn());
+
+        // Return the current queue.
+        return this.queue;
+    }
+}
+
+const TypstQueue = new class extends PromiseQueue {
+    render(text, template = (text) => `${CONSTANTS.TYPST_PREAMBLE}\n$${text}$`) {
+        return this.enqueue(() => Typst.then((typst) => {
+            return typst.svg({
+                mainContent: template(text),
+                // Remove extraneous style, and script, which are all generated to support text
+                // selection in the SVG (which we are not interested in).
+                data_selection: {
+                    body: true,
+                    defs: true,
+                    css: false,
+                    js: false,
+                }
+            });
+        }));
+    }
+};
+
+// Load the Typst library as an ES6 module when invoked. Unlike KaTeX, this is on the heavier side,
+// and so we don't wait for it.
+const load_typst = (ui) => {
+    if (Typst !== null) {
+        return Typst;
+    }
+    Typst = import("https://cdn.jsdelivr.net/npm/@myriaddreamin/typst.ts@0.5.5-rc7/dist/esm/contrib/all-in-one-lite.bundle.js").then((module) => {
+        const $typst = module.$typst;
+        const preloadRemoteFonts = module.preloadRemoteFonts;
+        $typst.setCompilerInitOptions({
+            beforeBuild: [
+                preloadRemoteFonts([], {
+                    assets: ["text" , "cjk" , "emoji"],
+                    // Pinned commit from the `assets-fonts` branch.
+                    assetUrlPrefix: "https://cdn.jsdelivr.net/gh/Myriad-Dreamin/typst@bcaa00ae845bfb13ca06501f30c70ab13894517c/"
+                })
+            ],
+            getModule: () => "https://cdn.jsdelivr.net/npm/@myriaddreamin/typst-ts-web-compiler@0.5.5-rc7/pkg/typst_ts_web_compiler_bg.wasm",
+        });
+        $typst.setRendererInitOptions({
+            getModule: () => "https://cdn.jsdelivr.net/npm/@myriaddreamin/typst-ts-renderer@0.5.5-rc7/pkg/typst_ts_renderer_bg.wasm",
+        });
+
+        return $typst;
+    }).catch(() => {
+        // Handle Typst not loading (somewhat) gracefully.
+        UI.display_error("Typst failed to load.");
+        // Remove the loading screen.
+        if (ui.settings.get("quiver.renderer") === "typst") {
+            ui.element.query_selector(".loading-screen").class_list.add("hidden");
+        }
+    });
+    // Load the WASM binaries into memory, to reduce the delay between the user typing something
+    // and seeing Typst render for the first time.
+    Typst.then(() => TypstQueue.render(""));
+    return Typst;
+};
 
 // We want until the (minimal) DOM content has loaded, so we have access to `document.body`.
 document.addEventListener("DOMContentLoaded", () => {
@@ -7956,9 +8207,28 @@ document.addEventListener("DOMContentLoaded", () => {
             ui.switch_mode(new UIMode.Embedded())
         }
 
+        // Set the renderer if it has been explicitly specified.
+        if (query_data.has("r")) {
+            const renderer = query_data.get("r");
+            if (["katex", "typst"].includes(renderer)) {
+                ui.settings.set("quiver.renderer", renderer);
+                ui.element.query_selector('select[name="renderer"]').element.value = renderer;
+            }
+        }
+
+        // We only load Typst if it is specified in the query parameters or if no renderer is
+        // specified in the query parameters, but user was using Typst the last time they used
+        // quiver (so that it is stored in the user settings).
+        if (ui.settings.get("quiver.renderer") === "typst") {
+            load_typst(ui);
+        }
+
         // If there is `q` parameter in the query string, try to decode it as a diagram.
         if (query_data.has("q")) {
             const dismiss_loading_screen = () => {
+                const hide_loading_screen = () => {
+                    ui.element.query_selector(".loading-screen").class_list.add("hidden");
+                };
                 // Dismiss the loading screen. We do this after a `delay` so that the loading
                 // screen captures any keyboard and pointer events that occurred during loading
                 // (since they are queued up while the diagram loading code is processing). We
@@ -7967,12 +8237,23 @@ document.addEventListener("DOMContentLoaded", () => {
                 delay(() => {
                     document.removeEventListener("keydown", cancel);
                     document.removeEventListener("keyup", cancel);
-                    // We only hide the loading screen after all the (KaTeX) fonts have been loaded.
-                    // This ensures that the diagram will have been rendered correctly by the time
-                    // we reveal it.
-                    document.fonts.ready.then(() => {
-                        ui.element.query_selector(".loading-screen").class_list.add("hidden");
-                    });
+                    switch (ui.settings.get("quiver.renderer")) {
+                        case "katex":
+                            // We only hide the loading screen after all the (KaTeX) fonts have been
+                            // loaded. This ensures that the diagram will have been rendered
+                            // correctly by the time we reveal it.
+                            document.fonts.ready.then(hide_loading_screen);
+                            break;
+
+                        case "typst":
+                            // Because Typst takes some time to load, we only hide the loading
+                            // screen if the diagram is empty; otherwise, the loading screen is
+                            // hidden when the Typst labels render.
+                            if (ui.quiver.is_empty()) {
+                                Typst.then(hide_loading_screen);
+                            }
+                            break;
+                    }
                 });
             };
 
@@ -8009,25 +8290,20 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
-    // Immediately load the KaTeX library.
-   const rendering_library = new DOM.Element("script", {
-        type: "text/javascript",
-        src: "KaTeX/katex.min.js",
-    }).listen("error", () => {
+    // Immediately load the KaTeX library as an ES6 module (regardless of the current renderer).
+    KaTeX = import("/KaTeX/katex.mjs").then((module) => {
+        // KaTeX is fast enough to be worth waiting for, but not
+        // immediately available. In this case, we delay loading
+        // the quiver until the library has loaded.
+        load_quiver_from_query_string();
+        return module.default;
+    }).catch(() => {
         // Handle KaTeX not loading (somewhat) gracefully.
         UI.display_error("KaTeX failed to load.");
         // Remove the loading screen.
-        ui.element.query_selector(".loading-screen").class_list.add("hidden");
-    });
-
-    KaTeX = new Promise((accept) => {
-        rendering_library.listen("load", () => {
-            accept(katex);
-            // KaTeX is fast enough to be worth waiting for, but not
-            // immediately available. In this case, we delay loading
-            // the quiver until the library has loaded.
-            load_quiver_from_query_string();
-        });
+        if (ui.settings.get("quiver.renderer") === "katex") {
+            ui.element.query_selector(".loading-screen").class_list.add("hidden");
+        }
     });
 
     // Load the style sheet needed for KaTeX.
@@ -8035,9 +8311,6 @@ document.addEventListener("DOMContentLoaded", () => {
         rel: "stylesheet",
         href: "KaTeX/katex.css",
     }).element);
-
-    // Trigger the script load.
-    document.head.appendChild(rendering_library.element);
 
     // Prevent clicking on the logo from having any effect other than opening the link.
     body.query_selector("#logo-link").listen("pointerdown", (event) => {

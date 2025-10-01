@@ -488,9 +488,8 @@ being. */
     left: 50%;
     bottom: 0;
     transform: translateX(-50%);
-    width: 808px;
     height: 46px;
-    padding: 8px;
+    padding: 8px 12px;
     /* Display above the import/export pane. */
     z-index: 101;
 
@@ -927,7 +926,7 @@ div.slider {
     border-color: var(--ui-blue);
 }
 
-.panel button, .pane button, .port button {
+.panel button, .pane button, .port button, .panel select {
     position: relative;
     display: block;
     width: 100%; height: 30px;
@@ -940,28 +939,27 @@ div.slider {
 
     font: inherit;
     color: var(--ui-white);
+    text-align: center;
+}
+
+.global select {
+    display: inline-block;
+    width: auto;
+    margin: 0;
 }
 
 .global button {
     display: inline-block;
-    width: 112px;
-    margin: 0;
+    width: 72px;
+    margin: 0 2px;
 }
 
 .global button.short {
     width: 56px;
 }
 
-.global button + label {
-    margin-left: 4px;
-}
-
-.global label + button {
-    margin-right: 4px;
-}
-
-.global button:last-of-type {
-    margin-left: 4px;
+.global button + label, .global select + label {
+    margin-left: 12px;
 }
 
 .panel button:hover:not(:disabled):not(:active),
@@ -1103,7 +1101,7 @@ user has already pressed semicolon, placing us in command mode. */
 
 .indicator-container {
     display: inline-block;
-    margin-left: 24px;
+    margin-left: 12px;
 }
 
 .panel .success-indicator {
@@ -1550,6 +1548,10 @@ button.flash {
     color: var(--ui-white);
 }
 
+.port .tip > code {
+    cursor: text;
+}
+
 .port .tip .update {
     padding: 0pt 4pt;
     padding-bottom: 1pt;
@@ -1788,6 +1790,10 @@ label input[type="checkbox"]:checked::before {
     font-size: 1em;
 }
 
+.typst-error {
+  color: var(--ui-error);
+}
+
 /* Embedded view */
 
 .ui.embedded .panel,
@@ -1819,3 +1825,25 @@ label input[type="checkbox"]:checked::before {
 .ui.embedded #welcome-pane {
     display: none;
 }
+
+/* Some interface elements are only relevant to certain renderers. */
+body:has(select[name="renderer"] > option[value="typst"]:checked) .katex-only,
+body:has(select[name="renderer"] > option[value="katex"]:checked) .typst-only {
+    display: none;
+}
+
+/* Animation for loading a slow renderer. */
+
+.breathe {
+    animation: breathe .5s ease-in-out infinite alternate;
+}
+
+@keyframes breathe {
+    from {
+        color: hsl(0, 0%, 0%);
+    }
+    to {
+        color: hsl(0, 0%, 60%);
+    }
+}
+
