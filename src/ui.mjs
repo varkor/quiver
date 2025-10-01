@@ -1014,13 +1014,16 @@ class UI {
                 " is a modern, graphical editor for commutative and pasting " +
                 "diagrams, capable of rendering high-quality diagrams for screen viewing, and " +
                 "exporting to LaTeX via "
-            ).add(new DOM.Code("tikz-cd")).add("."))
+            ).add(new DOM.Code("tikz-cd"))
+            .add(" and Typst via ")
+            .add(new DOM.Code("fletcher"))
+            .add("."))
             .add(new DOM.Element("p")
                 .add("Creating and modifying diagrams with ")
                 .add(new DOM.Element("b").add("quiver"))
                 .add(
-                    " is orders of magnitude faster than writing the equivalent LaTeX by hand " +
-                    "and, with a little experience, competes with pen-and-paper."
+                    " is orders of magnitude faster than writing the equivalent LaTeX or Typst " +
+                    "by hand and, with a little experience, competes with pen-and-paper."
                 )
                 .add(" To learn how to use ")
                 .add(new DOM.Element("b").add("quiver"))
@@ -1066,6 +1069,9 @@ class UI {
                     )
                 ).add(", for the custom TikZ style for shortened curves."),
                 new DOM.Element("li").add(
+                    new DOM.Link("https://github.com/tjbcg", "Théophile Cailliau", true)
+                ).add(", for implementing Typst support."),
+                new DOM.Element("li").add(
                     new DOM.Link("https://github.com/doctorn", "Nathan Corbyn", true)
                 ).add(", for adding the ability to export embeddable diagrams to HTML."),
                 new DOM.Element("li").add(
@@ -1077,7 +1083,7 @@ class UI {
                 new DOM.Element("li").add(
                     "Everyone who has improved "
                 ).add(new DOM.Element("b").add("quiver"))
-                .add(" by reporting issues or suggesting improvements.")
+                .add(" by submitting pull requests, reporting issues or suggesting improvements.")
             ]))
             .add(new DOM.Element("footer")
                 .add("Created by ")
@@ -5317,7 +5323,7 @@ class Panel {
                         slider.thumbs[0].set_value(slider.values());
                         delay(() => {
                             slider.thumbs[0].class_list.remove("no-transition");
-                        });
+                        }, 20); // A delay of 0 doesn't always appear to work for the second thumb.
                     });
                 }
 
