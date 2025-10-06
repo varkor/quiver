@@ -3040,7 +3040,12 @@ class UI {
 
     /// Returns the declared macros in a format amenable to passing to KaTeX.
     latex_macros() {
-        const macros = {};
+        const macros = {
+            // By default, we override these built-in KaTeX macros, as they are typically
+            // undesirable for category theory.
+            "\\set": null,
+            "\\Set": null,
+        };
         for (const [name, { definition }] of this.macros) {
             // Arities are implicit in KaTeX.
             macros[name] = definition;
