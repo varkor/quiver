@@ -61,9 +61,61 @@
         import { url_parameters } from "./ds.mjs";
         import { cancel, DOM, pointer_event } from "./dom.mjs";
 
+        // Function to get CLI data and modify URL before any processing
+        async function setupCliData() {
+            if (window.__TAURI__) {
+                try {
+                    // Setup commands for easier access in the future.
+                    window.invoke = window.__TAURI__.core.invoke;
+                    window.console_log = async (msg) => await window.invoke("console_log", {message: msg});
+                    window.console_error = async (msg) => await window.invoke("console_error", {message: msg});
+                    window.close_app = async (data) => await window.invoke("close_app", {data: data});
+                    window.close_app_no_output = async () => await window.invoke("close_app_no_output");
+
+                    const cliArgs = await invoke('get_cli_args');
+
+                    // Store CLI args globally for later use
+                    window.quiverCliArgs = cliArgs;
+                    if (cliArgs.output_file) {
+                        window.saveCloseMode = true;
+                    }
+
+                    // Build URL with CLI parameters
+                    const current_query = url_parameters();
+                    const url = new URL(window.location.href);
+                    let needsUpdate = false;
+
+                    // Parse existing hash parameters
+                    let hashParams = new URLSearchParams(url.hash.substring(1));
+
+                    // Add CLI data if not already present
+                    if (cliArgs.data && !current_query.has("q")) {
+                        hashParams.set("q", cliArgs.data);
+                        needsUpdate = true;
+                    }
+
+                    // Store macro content for loading after UI is ready
+                    if (cliArgs.macro_content) {
+                        window.pendingMacroContent = cliArgs.macro_content;
+                    }
+
+                    // Update the URL if needed
+                    if (needsUpdate) {
+                        url.hash = hashParams.toString();
+                        history.replaceState({}, "", url.toString());
+                    }
+                } catch (err) {
+                    await window.console_error(`Failed to get CLI args: ${err}`);
+                }
+            }
+        }
+
+        // Set up CLI data first, then continue with loading screen logic
+        await setupCliData();
+
         // If we are loading a diagram, display a loading screen to prevent a flash of empty canvas.
         // We do this in a `<script>` tag here to make sure that it loads immediately.
-        const query_data = url_parameters();
+        let query_data = url_parameters();
 
         // If we're running in embedded view, update the logo so that clicking it opens the
         // the current diagram in the app.
