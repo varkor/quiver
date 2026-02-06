@@ -34,10 +34,25 @@
         \def\pv##1{\pgfkeysvalueof{/tikz/quiver/##1}}},
     quiver/.cd,pos/.initial=0.35,height/.initial=0}
 
-% A TikZ style for shortening paths without the poor behaviour of `shorten <' and `shorten >'.
-\tikzset{between/.style n args={2}{/tikz/execute at end to={
-    \tikzset{spath/split at keep middle={current}{#1}{#2}}
-}}}
+\makeatletter
+\tikzset{between/.style n args={2}{
+    /tikz/spath/at end path construction={
+        % 1. Get the current soft path and store it in \quiver@temppath
+        \pgfsyssoftpath@getcurrentpath{\pgf@temp}%
+        % Check if the path is empty (equal to \pgfutil@empty)
+        \ifx\pgf@temp\pgfutil@empty
+            % The path is empty (likely a tikz-cd calculation phase); do nothing.
+        \else
+            % The path exists; perform the shortening.
+            \tikzset{
+                spath/save=current,
+                spath/split at keep middle={current}{#1}{#2},
+                spath/restore=current
+            }%
+        \fi
+    }
+}}
+\makeatother
 
 % TikZ arrowhead/tail styles.
 \tikzset{tail reversed/.code={\pgfsetarrowsstart{tikzcd to}}}
