@@ -429,11 +429,15 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
         //    (1-cells)
         //    (2-cells)
         //    ...
+        // Note that if, in any given row, we have fewer vertices than columns, we will not output
+        // trailing ampersands, *except* in the first row. It is necessary for the first row to
+        // contain the correct number of columns due to interactions with `between origins`.
 
         // Output the vertices.
         // Note that currently vertices may not share the same position,
         // as in that case they will be overwritten.
         let offset = new Position(Infinity, Infinity);
+        let extent = new Position(-Infinity, -Infinity);
         // Construct a grid for the vertices.
         const rows = new Map();
         for (const vertex of quiver.cells[0]) {
@@ -442,6 +446,7 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
             }
             rows.get(vertex.position.y).set(vertex.position.x, vertex);
             offset = offset.min(vertex.position);
+            extent = extent.max(vertex.position);
         }
         // Iterate through the rows and columns in order, outputting the tikz-cd code.
         const prev = new Position(offset.x, offset.y);
@@ -466,6 +471,11 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                 }
                 prev.x = x;
                 first_in_row = false;
+            }
+            // Add trailing ampersands on the first row to ensure the column count is correct (see
+            // note above).
+            if (y === offset.y && prev.x < extent.x) {
+                output += ` ${ampersand.repeat(extent.x - prev.x)}`;
             }
             prev.x = offset.x;
             prev.y = y;
