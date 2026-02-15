@@ -4,9 +4,27 @@
     box-sizing: border-box;
 }
 
+@media (prefers-color-scheme: light) {
+  :root {
+    /* Colors to use if system uses a light theme */
+    --theme-black: hsla(0, 0%, 0%, 0.8); /* In place black (almost black) */
+    --theme-white: hsl(0, 0%, 96%); /* In place of white white (almost white) */
+    --theme-background: hsl(0, 0%, 96%); /* Background (almost white) */
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Colors to use if system uses a dark theme */
+    --theme-black: hsl(0, 0%, 96%); /* In place of black (almost white) */
+    --theme-white: hsla(0, 0%, 0%, 0.8); /* In place of white (almost black) */
+    --theme-background: hsla(0, 0%, 0%, 0.65); /* Background (grey) */
+  }
+}
+
 :root {
     /* UI colours. */
-    --ui-black: hsla(0, 0%, 0%, 0.9); /* Almost black. */
+    --ui-black: hsla(0, 0%, 0%, 0.8); /* Almost black. */
     --ui-white: hsl(0, 0%, 96%); /* Almost white. */
     --ui-blue: hsl(200, 100%, 50%); /* Selection blue. */
     --ui-orange: hsl(30, 100%, 50%); /* Highlight orange. */
@@ -33,7 +51,7 @@ body {
     margin: 0;
     overflow: hidden;
 
-    background: white;
+    background: var(--theme-background);
 
     font-family: Arial, sans-serif;
 
@@ -102,7 +120,7 @@ noscript {
     outline: none;
 
     text-align: center;
-    color: white;
+    color: var(--theme-white);
     font-size: 20px;
 }
 
@@ -223,7 +241,7 @@ kbd {
 }
 
 .embedded .loading-screen {
-    background: white;
+    background: var(--theme-white);
 }
 
 .embedded .loading-screen .logo {
@@ -510,6 +528,11 @@ being. */
     border-radius: 16px;
 }
 
+.panel option {
+  color: var(--theme-black);
+  background: var(--theme-white);
+}
+
 .side label {
     display: block;
     margin-bottom: 8px;
@@ -623,7 +646,7 @@ label.inline {
 }
 
 .label-input::selection {
-    background-color: white;
+    background-color: var(--theme-white);
 }
 
 .label-input-container .colour-indicator {
@@ -1777,7 +1800,7 @@ label input[type="checkbox"]:checked::before {
     position: absolute;
     z-index: 3;
 
-    background: white;
+    background: var(--theme-white);
 }
 
 .arrow-endpoint:hover {
