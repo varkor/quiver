@@ -3098,6 +3098,37 @@ class UI {
         return false;
     }
 
+    /// Save the current diagram and close the application (when output file is specified)
+    save_and_close() {
+        if (!window.__TAURI__) return;
+
+        try {
+            // Generate tikzcd code for output
+            const tikzcd_export = this.quiver.export(
+                "tikz-cd",
+                this.settings,
+                this.options(),
+                this.definitions(),
+            );
+
+            if (tikzcd_export && tikzcd_export.data) {
+                console.log('Saving diagram and closing (immediate mode)...');
+                // Copy to clipboard (for backward compatibility)
+                window.__TAURI__.core.invoke('copy_to_clipboard', { text: tikzcd_export.data });
+                // Close app with tikzcd code for output file
+                window.__TAURI__.core.invoke('close_app', { tikzcd_code: tikzcd_export.data });
+            } else {
+                console.error('Could not generate tikzcd code from diagram');
+                // Close without tikzcd code
+                window.__TAURI__.core.invoke('close_app', { tikzcd_code: null });
+            }
+        } catch (error) {
+            console.error('Error in save-close operation:', error);
+            // Close without tikzcd code on error
+            window.__TAURI__.core.invoke('close_app', { tikzcd_code: null });
+        }
+    }
+
     /// Create the canvas upon which the grid will be drawn.
     initialise_grid(element) {
         const [width, height] = [document.body.offsetWidth, document.body.offsetHeight];
@@ -3439,30 +3470,36 @@ class UI {
             // are hoping that the service never becomes malicious.
             const CORS_PROXY = "https://api.allorigins.win/raw?url=";
 
-            const attempt_to_fetch_macros = (url, prefix = "", repeat = true) => {
-                fetch(`${prefix}${url}`, { credentials: "omit" })
-                    .then((response) => response.text())
-                    .then((text) => {
-                        this.load_macros(text);
-                        this.macro_url = url;
-                        success_indicator.class_list.remove("unknown");
-                        success_indicator.class_list.add("success");
-                        macro_input.element.blur();
-                    })
-                    .catch(() => {
-                        if (repeat && !url.startsWith(CORS_PROXY)) {
-                            // Attempt to fetch using cors-anywhere.
-                            attempt_to_fetch_macros(url, CORS_PROXY, false);
-                            return;
-                        }
-                        UI.display_error(
-                            "Macro definitions could not be loaded " +
-                            "from the given URL.",
-                            "macro-load",
-                        );
-                        success_indicator.class_list.remove("unknown");
-                        success_indicator.class_list.add("failure");
-                    });
+            const attempt_to_fetch_macros = async (url, prefix = "", repeat = true) => {
+                try {
+                    let text;
+
+                    // Handle regular URLs (HTTP/HTTPS)
+                    const response = await fetch(`${prefix}${url}`, { credentials: "omit" });
+                    text = await response.text();
+
+                    await window.console_log(`Loaded macros file ${text}`);
+
+                    this.load_macros(text);
+                    this.macro_url = url;
+                    success_indicator.class_list.remove("unknown");
+                    success_indicator.class_list.add("success");
+                    macro_input.element.blur();
+                } catch (error) {
+                    console.error("Error loading macros:", error);
+                    if (repeat && !url.startsWith(CORS_PROXY)) {
+                        // Attempt to fetch using cors-anywhere.
+                        attempt_to_fetch_macros(url, CORS_PROXY, false);
+                        return;
+                    }
+                    UI.display_error(
+                        "Macro definitions could not be loaded " +
+                        "from the given URL. Error: " + error.message,
+                        "macro-load",
+                    );
+                    success_indicator.class_list.remove("unknown");
+                    success_indicator.class_list.add("failure");
+                }
             };
             attempt_to_fetch_macros(url);
         } else {
@@ -6677,7 +6714,7 @@ class Toolbar {
             "Save",
             "save",
             [{ key: "S", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always }],
-            () => {
+            async () => {
                 const { data } = ui.quiver.export(
                     "base64",
                     ui.settings,
@@ -6686,6 +6723,33 @@ class Toolbar {
                 );
                 // `data` is the new URL.
                 history.pushState({}, "", data);
+
+                // Check if we should close after save (when output file is specified)
+                if (window.__TAURI__ && window.saveCloseMode) {
+                    try {
+                        // Generate tikzcd code for output
+                        const tikzcd_export = ui.quiver.export(
+                            "tikz-cd",
+                            ui.settings,
+                            ui.options(),
+                            ui.definitions(),
+                        );
+
+                        if (tikzcd_export && tikzcd_export.data) {
+                            // Close app with tikzcd code for output file
+                            await window.close_app(tikzcd_export.data);
+                        } else {
+                            await window.console_error("Could not generate tikzcd code from diagram");
+                            // Close without tikzcd code
+                            await window.close_app_no_output();
+                        }
+                    } catch (error) {
+                        await window.console_error("Error in save-close operation: ${error}");
+                        // console.error('Error in save-close operation:', error);
+                        // Close without tikzcd code on error
+                        await window.close_app_no_output();
+                    }
+                }
             },
         );
 
@@ -8314,6 +8378,38 @@ document.addEventListener("DOMContentLoaded", () => {
                 // Rethrow the error so that it can be reported in the console.
                 throw error;
             }
+        }
+
+        // Load macros from CLI if provided (after KaTeX is ready)
+        if (window.pendingMacroContent) {
+            const macroContent = window.pendingMacroContent;
+
+            // Check if it's a URL or actual content
+            if (macroContent.startsWith("http://") || macroContent.startsWith("https://")) {
+                // It's a URL, use the existing URL loading mechanism
+                ui.load_macros_from_url(macroContent);
+            } else {
+                // It's file content, load directly
+                ui.load_macros(macroContent);
+                ui.macro_url = "LOADED_FROM_FILE";
+
+                // Update the macro input field to show it's loaded from file
+                try {
+                    const macro_input = ui.panel.global.query_selector("input");
+                    if (macro_input) {
+                        macro_input.element.value = "LOADED_FROM_FILE";
+                        const success_indicator = macro_input.parent.query_selector(".success-indicator");
+                        if (success_indicator) {
+                            success_indicator.class_list.remove("unknown", "failure");
+                            success_indicator.class_list.add("success");
+                        }
+                    }
+                } catch (uiError) {
+                    // UI might not be ready yet, that's ok
+                }
+            }
+
+            delete window.pendingMacroContent;
         }
     };
 
