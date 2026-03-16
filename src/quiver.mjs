@@ -402,6 +402,9 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
         // readable. In general, we need to use curly brackets to avoid LaTeX errors. For instance,
         // `[a]` is invalid: we must use `{[a]}` instead.
         const simple_label = /^\\?[a-zA-Z0-9]+$/;
+        // In tikz-cd, the quoted string in \arrow only requires outer braces when it contains
+        // characters that would break parsing: "[", "]", or "\"".
+        const needs_braces = (s) => /[\[\]"]/.test(s);
 
         // Adapt a label to be appropriate for TikZ output, by surrounding it in curly brackets when
         // necessary, and using `\array` for newlines.
@@ -411,7 +414,7 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                 // which is permitted to contain newlines.
                 return `\\begin{array}{c} ${label} \\end{array}`;
             }
-            if (!simple_label.test(label)) {
+            if (needs_braces(label)) {
                 return `{${label}}`;
             }
             return label;

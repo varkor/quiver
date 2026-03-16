@@ -646,6 +646,22 @@ export class Parser {
     /// Parse the options in the square brackets in `\arrow[...]`.
     parse_edge_option(edge) {
         let start = this.position;
+        // Strip redundant outer brace layers from a tikz-cd arrow label so round-trip export/import
+        // does not accumulate braces (e.g. "{f^{X}}" → "f^{X}").
+        const strip_outer_braces = (s) => {
+            while (s.length >= 2 && s[0] === "{" && s[s.length - 1] === "}") {
+                let depth = 0;
+                let i = 0;
+                for (; i < s.length; i++) {
+                    if (s[i] === "{") depth++;
+                    else if (s[i] === "}") depth--;
+                    if (depth === 0) break;
+                }
+                if (i !== s.length - 1) break;
+                s = s.slice(1, -1);
+            }
+            return s;
+        };
         // We special case adjunctions, pullbacks, and barred arrows, since quiver encodes them in a
         // certain way.
         if (this.eat("\"\\dashv\"{anchor=center")) {
@@ -726,7 +742,7 @@ export class Parser {
         if (this.eat("\"")) {
             const label = this.eat(/[^"]*/);
             this.eat("\"", true);
-            edge.label = label;
+            edge.label = strip_outer_braces(label);
             while (this.eat("'")) {
                 swap_label_alignment();
             }
