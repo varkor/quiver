@@ -724,8 +724,14 @@ export class Parser {
         }
         // Parse label.
         if (this.eat("\"")) {
-            const label = this.eat(/[^"]*/);
+            let label = this.eat(/[^"]*/);
             this.eat("\"", true);
+            // Strip extra opening and closing brackets if present (as these are required to be
+            // present in LaTeX to prevent parsing issues, but are added automatically when
+            // exported).
+            if (label.length >= 2 && label[0] === "{" && label[label.length - 1] === "}") {
+                label = label.replaceAll(/^\{|\}$/g, "");
+            }
             edge.label = label;
             while (this.eat("'")) {
                 swap_label_alignment();
