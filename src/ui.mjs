@@ -732,6 +732,9 @@ class UI {
         // The URL from which the macros have been fetched (if at all).
         this.macro_url = null;
 
+        // The macro definitions inserted by the user.
+        this.macro_text = null;
+
         // The user settings, which are stored persistently across sessions in `localStorage`.
         this.settings = new Settings();
     }
@@ -793,9 +796,10 @@ class UI {
     /// Returns options that are not saved persistently in `settings`, but are used to modify
     /// export output.
     options() {
-        const { macro_url } = this;
+        const { macro_url, macro_text } = this;
         return {
             macro_url,
+            macro_text,
             dimensions: this.diagram_size(),
             sep: this.panel.sep,
         };
@@ -8290,6 +8294,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 // If there is a `macro_url`, load the macros from it.
                 if (query_data.has("macro_url")) {
                     ui.load_macros_from_url(decodeURIComponent(query_data.get("macro_url")));
+                }
+                // If there are directly embedded macros, load them.
+                if (query_data.has("macros")) {
+                    ui.macro_text = decodeURIComponent(query_data.get("macros"));
+                    ui.load_macros(ui.macro_text);
                 }
                 // Adjust the diagram scale to fit the screen in embedded view.
                 // However, we have to be careful to only do this if the user
