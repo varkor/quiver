@@ -5604,23 +5604,47 @@ class Panel {
             new DOM.Div({ class: "indicator-container katex-only" }).add(
                 new DOM.Element("label").add("Macros: ")
                     .add(
-                        new DOM.Element("input", {
-                            type: "text",
-                            placeholder: "Paste URL here",
-                        }).listen("wheel", (event) => {
-                            event.stopImmediatePropagation();
-                        }, { passive: true }).listen("keydown", (event, input) => {
-                            if (event.key === "Enter") {
-                                event.stopPropagation();
-                                ui.load_macros_from_url(input.value);
-                                input.blur();
-                            }
-                        }).listen("paste", (_, input) => {
-                            delay(() => ui.load_macros_from_url(input.value));
-                        })
-                    ).add(
-                        new DOM.Div({ class: "success-indicator" })
+                        new DOM.Element("a", { class: "help-button", title: "Help", href: "#", style: "margin-left: 4px; color: var(--ui-grey); text-decoration: none;" }).add("(?)")
+                            .listen("click", (event) => {
+                                event.preventDefault();
+                                const pane = ui.element.query_selector("#macros-help-pane");
+                                const is_hidden = pane.class_list.contains("hidden");
+                                ui.dismiss_pane();
+                                ui.panel.dismiss_port_pane(ui);
+                                if (is_hidden) {
+                                    pane.class_list.remove("hidden");
+                                }
+                            })
                     )
+            ).add(
+                new DOM.Element("input", {
+                    type: "text",
+                    placeholder: "Paste URL here",
+                }).listen("wheel", (event) => {
+                    event.stopImmediatePropagation();
+                }, { passive: true }).listen("keydown", (event, input) => {
+                    if (event.key === "Enter") {
+                        event.stopPropagation();
+                        ui.load_macros_from_url(input.value);
+                        input.blur();
+                    }
+                }).listen("paste", (_, input) => {
+                    delay(() => ui.load_macros_from_url(input.value));
+                })
+            ).add(
+                new DOM.Element("button", { style: "margin-left: 4px; padding: 2px 6px;" }).add("Edit")
+                    .listen("click", () => {
+                        const pane = ui.element.query_selector("#macros-pane");
+                        const is_hidden = pane.class_list.contains("hidden");
+                        ui.dismiss_pane();
+                        ui.panel.dismiss_port_pane(ui);
+                        if (is_hidden) {
+                            ui.macros_input.element.value = ui.macro_text || "";
+                            pane.class_list.remove("hidden");
+                        }
+                    })
+            ).add(
+                new DOM.Div({ class: "success-indicator" })
             )
         );
 
