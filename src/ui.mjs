@@ -1146,6 +1146,37 @@ class UI {
                 .add(".")
             );
         panes.push(welcome_pane);
+
+        // Set up the macros pane.
+        this.macros_input = new DOM.Element("textarea", {
+            placeholder: "\\newcommand{\\A}{\\mathbb{A}}\\definecolor{mycolor}{RGB}{205,92,92}",
+            class: "macros-textarea",
+            style: "width: 100%; height: 200px; font-family: monospace; padding: 0.5rem; margin-bottom: 1rem; box-sizing: border-box;",
+        }).listen("wheel", (event) => {
+            event.stopImmediatePropagation();
+        }, { passive: true });
+
+        const macros_pane = new DOM.Div({ id: "macros-pane", class: "pane hidden" })
+            .add(new DOM.Element("h1").add("Custom Macros"))
+            .add(new DOM.Element("p").add("Use this editor to define custom LaTeX commands and colours."))
+            .add(this.macros_input)
+            .add(new DOM.Element("button").add("Apply Definitions").listen("click", () => {
+                this.macro_text = this.macros_input.element.value;
+                this.load_macros(this.macro_text);
+                this.dismiss_pane();
+            }));
+        panes.push(macros_pane);
+
+        // Set up the macros help pop up.
+        const macros_help_pane = new DOM.Div({ id: "macros-help-pane", class: "pane hidden" })
+            .add(new DOM.Element("h1").add("Custom Macros"))
+            .add(new DOM.Element("p").add("This feature allows you to use custom macros in quiver."))
+            .add(new DOM.Element("p").add("Refer to ").add(new DOM.Link("https://github.com/varkor/quiver/blob/master/tutorial.md#importing-macros-and-colours", "the documentation", true)).add(" for more details."))
+            .add(new DOM.Element("button").add("Close").listen("click", () => {
+                this.dismiss_pane();
+            }));
+        panes.push(macros_help_pane);
+
         new DOM.Element("button").add("Get started").listen("click", () => {
             // There are technically other ways to dismiss the welcome pane (e.g. opening the
             // keyboard shortcuts pane without clicking this button). We choose not to set the
