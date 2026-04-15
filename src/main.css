@@ -171,7 +171,7 @@ kbd {
     white-space: pre;
 }
 
-.tooltip kbd, .pane kbd, .port kbd {
+.tooltip kbd, .pane kbd, .port kbd, .pane textarea {
     padding: 1px 6px;
 
     border-radius: 4px;
