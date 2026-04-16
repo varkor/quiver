@@ -1148,20 +1148,50 @@ class UI {
         panes.push(welcome_pane);
 
         // Set up the macros pane.
-        this.macros_input = new DOM.Element("textarea", {
-            placeholder: "\\newcommand{\\A}{\\mathbb{A}}\\definecolor{mycolor}{RGB}{205,92,92}",
-            class: "macros-textarea",
-            style: "width: 100%; height: 200px; font-family: monospace; padding: 0.5rem; margin-bottom: 1rem; box-sizing: border-box;",
+        const insert_macro_text = (text) => {
+            const selection = window.getSelection();
+            const range = selection.getRangeAt(0);
+            range.deleteContents();
+            range.insertNode(document.createTextNode(text));
+            selection.collapseToEnd();
+        };
+
+        this.macros_input = new DOM.Div({
+            contenteditable: "true",
+            spellcheck: "false",
+            class: "macros-input",
         }).listen("wheel", (event) => {
             event.stopImmediatePropagation();
-        }, { passive: true });
+        }, { passive: true }).listen("keydown", (event) => {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                event.stopPropagation();
+
+                const text = this.macros_input.element.textContent;
+                const selection = window.getSelection();
+                if (selection.rangeCount > 0) {
+                    const range = selection.getRangeAt(0);
+                    const total_range = range.cloneRange();
+                    total_range.selectNodeContents(this.macros_input.element);
+                    total_range.setEnd(range.startContainer, range.startOffset);
+                    const caret = total_range.toString().length;
+                    if (caret === text.length && !/\n$/.test(text)) {
+                        insert_macro_text("\n");
+                    }
+                }
+                insert_macro_text("\n");
+            }
+        }).listen("paste", (event) => {
+            event.preventDefault();
+            insert_macro_text(event.clipboardData.getData("text/plain"));
+        });
 
         const macros_pane = new DOM.Div({ id: "macros-pane", class: "pane hidden" })
             .add(new DOM.Element("h1").add("Custom Macros"))
             .add(new DOM.Element("p").add("Use this editor to define custom LaTeX commands and colours."))
             .add(this.macros_input)
             .add(new DOM.Element("button").add("Apply Definitions").listen("click", () => {
-                this.macro_text = this.macros_input.element.value;
+                this.macro_text = this.macros_input.element.textContent;
                 this.load_macros(this.macro_text);
                 this.dismiss_pane();
             }));
@@ -3010,7 +3040,7 @@ class UI {
     /// actions (primarily keyboard shortcuts) will be disabled.)
     input_is_active() {
         // This may not be the label input, e.g. it may be the macros input.
-        return document.activeElement.matches('input[type="text"], div[contenteditable], textarea')
+        return document.activeElement.matches('input[type="text"], div[contenteditable]')
             && document.activeElement;
     }
 
