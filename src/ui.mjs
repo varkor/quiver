@@ -3010,7 +3010,7 @@ class UI {
     /// actions (primarily keyboard shortcuts) will be disabled.)
     input_is_active() {
         // This may not be the label input, e.g. it may be the macros input.
-        return document.activeElement.matches('input[type="text"], div[contenteditable]')
+        return document.activeElement.matches('input[type="text"], div[contenteditable], textarea')
             && document.activeElement;
     }
 
