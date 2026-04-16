@@ -1279,9 +1279,12 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
             };
         }
 
-        // Encode the macro URL if it's not null.
-        const macro_data = options.macro_url !== null
-            ? `&macro_url=${encodeURIComponent(options.macro_url)}` : "";
+        // Encode exactly one macro source: inline definitions take precedence over URL macros.
+        const macro_data = options.macro_text !== null && options.macro_text !== ""
+            ? `&macros=${encodeURIComponent(options.macro_text)}`
+            : (options.macro_url !== null
+                ? `&macro_url=${encodeURIComponent(options.macro_url)}`
+                : "");
 
         const renderer = settings.get("quiver.renderer");
         return {

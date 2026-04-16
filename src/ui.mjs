@@ -732,6 +732,15 @@ class UI {
         // The URL from which the macros have been fetched (if at all).
         this.macro_url = null;
 
+        // The macro definitions inserted by the user.
+        this.macro_text = null;
+
+        // The macro definitions most recently loaded from `macro_url`.
+        this.macro_url_text = null;
+
+        // A monotonically increasing ID used to ignore stale macro URL fetch results.
+        this.macro_load_version = 0;
+
         // The user settings, which are stored persistently across sessions in `localStorage`.
         this.settings = new Settings();
     }
@@ -793,9 +802,10 @@ class UI {
     /// Returns options that are not saved persistently in `settings`, but are used to modify
     /// export output.
     options() {
-        const { macro_url } = this;
+        const { macro_url, macro_text } = this;
         return {
             macro_url,
+            macro_text,
             dimensions: this.diagram_size(),
             sep: this.panel.sep,
         };
@@ -1142,6 +1152,82 @@ class UI {
                 .add(".")
             );
         panes.push(welcome_pane);
+
+        // Set up the macros pane.
+        const insert_macro_text = (text) => {
+            const selection = window.getSelection();
+            const range = selection.getRangeAt(0);
+            range.deleteContents();
+            range.insertNode(document.createTextNode(text));
+            selection.collapseToEnd();
+        };
+
+        this.macros_input = new DOM.Div({
+            contenteditable: "true",
+            spellcheck: "false",
+            class: "macros-input",
+        }).listen("wheel", (event) => {
+            event.stopImmediatePropagation();
+        }, { passive: true }).listen("keydown", (event) => {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                event.stopPropagation();
+
+                const text = this.macros_input.element.textContent;
+                const selection = window.getSelection();
+                if (selection.rangeCount > 0) {
+                    const range = selection.getRangeAt(0);
+                    const total_range = range.cloneRange();
+                    total_range.selectNodeContents(this.macros_input.element);
+                    total_range.setEnd(range.startContainer, range.startOffset);
+                    const caret = total_range.toString().length;
+                    if (caret === text.length && !/\n$/.test(text)) {
+                        insert_macro_text("\n");
+                    }
+                }
+                insert_macro_text("\n");
+            }
+        }).listen("paste", (event) => {
+            event.preventDefault();
+            insert_macro_text(event.clipboardData.getData("text/plain"));
+        });
+
+        const macros_pane = new DOM.Div({ id: "macros-pane", class: "pane hidden" })
+            .add(new DOM.Element("h1").add("Custom Macros"))
+            .add(new DOM.Element("p").add("Use this editor to define custom LaTeX commands and colours."))
+            .add(this.macros_input)
+            .add(new DOM.Element("button").add("Apply Definitions").listen("click", () => {
+                const text = this.macros_input.element.textContent;
+                const edited_url_macros = this.macro_url !== null
+                    && this.macro_url_text !== null
+                    && text !== this.macro_url_text;
+
+                if (edited_url_macros || this.macro_url === null) {
+                    // Inline edits take precedence and invalidate URL fetches in flight.
+                    ++this.macro_load_version;
+                    this.macro_text = text;
+                    this.macro_url = null;
+                    this.macro_url_text = null;
+                } else {
+                    // URL macros are unchanged, so keep URL as the canonical source.
+                    this.macro_text = null;
+                }
+
+                this.load_macros(text);
+                this.dismiss_pane();
+            }));
+        panes.push(macros_pane);
+
+        // Set up the macros help pop up.
+        const macros_help_pane = new DOM.Div({ id: "macros-help-pane", class: "pane hidden" })
+            .add(new DOM.Element("h1").add("Custom Macros"))
+            .add(new DOM.Element("p").add("This feature allows you to use custom macros in quiver."))
+            .add(new DOM.Element("p").add("Refer to ").add(new DOM.Link("https://github.com/varkor/quiver/blob/master/tutorial.md#importing-macros-and-colours", "the documentation", true)).add(" for more details."))
+            .add(new DOM.Element("button").add("Close").listen("click", () => {
+                this.dismiss_pane();
+            }));
+        panes.push(macros_help_pane);
+
         new DOM.Element("button").add("Get started").listen("click", () => {
             // There are technically other ways to dismiss the welcome pane (e.g. opening the
             // keyboard shortcuts pane without clicking this button). We choose not to set the
@@ -3418,6 +3504,7 @@ class UI {
         // want to store invalid URLs, so we'll set `this.macro_url` when we succeed in fetching the
         // definitions.
         this.macro_url = null;
+        this.macro_url_text = null;
 
         const macro_input = this.panel.global.query_selector("input");
         url = url.trim();
@@ -3431,6 +3518,7 @@ class UI {
         UI.dismiss_error("macro-load");
 
         if (url !== "") {
+            const load_version = ++this.macro_load_version;
             success_indicator.class_list.add("unknown");
             // CORS is terribly frustrating. We simply want to fetch some text, but are often
             // unable to do so, because CORS is opt-in and most sites have not. To alleviate this
@@ -3443,13 +3531,22 @@ class UI {
                 fetch(`${prefix}${url}`, { credentials: "omit" })
                     .then((response) => response.text())
                     .then((text) => {
+                        if (load_version !== this.macro_load_version) {
+                            return;
+                        }
                         this.load_macros(text);
+                        this.macro_text = null;
                         this.macro_url = url;
+                        this.macro_url_text = text;
+                        this.macros_input.element.textContent = text;
                         success_indicator.class_list.remove("unknown");
                         success_indicator.class_list.add("success");
                         macro_input.element.blur();
                     })
                     .catch(() => {
+                        if (load_version !== this.macro_load_version) {
+                            return;
+                        }
                         if (repeat && !url.startsWith(CORS_PROXY)) {
                             // Attempt to fetch using cors-anywhere.
                             attempt_to_fetch_macros(url, CORS_PROXY, false);
@@ -3466,6 +3563,12 @@ class UI {
             };
             attempt_to_fetch_macros(url);
         } else {
+            // Cancel any in-flight URL fetch and reset macro source state.
+            ++this.macro_load_version;
+            this.macro_text = null;
+            this.macro_url_text = null;
+            this.macros_input.element.textContent = "";
+
             // If the URL is empty, we simply reset all macro and colour definitions (as if the user
             // had never loaded any macros or colours).
             this.macros = new Map();
@@ -5569,23 +5672,49 @@ class Panel {
             new DOM.Div({ class: "indicator-container katex-only" }).add(
                 new DOM.Element("label").add("Macros: ")
                     .add(
-                        new DOM.Element("input", {
-                            type: "text",
-                            placeholder: "Paste URL here",
-                        }).listen("wheel", (event) => {
-                            event.stopImmediatePropagation();
-                        }, { passive: true }).listen("keydown", (event, input) => {
-                            if (event.key === "Enter") {
-                                event.stopPropagation();
-                                ui.load_macros_from_url(input.value);
-                                input.blur();
-                            }
-                        }).listen("paste", (_, input) => {
-                            delay(() => ui.load_macros_from_url(input.value));
-                        })
-                    ).add(
-                        new DOM.Div({ class: "success-indicator" })
+                        new DOM.Element("a", { class: "help-button", title: "Help", href: "#", style: "margin-left: 4px; color: var(--ui-grey); text-decoration: none;" }).add("(?)")
+                            .listen("click", (event) => {
+                                event.preventDefault();
+                                const pane = ui.element.query_selector("#macros-help-pane");
+                                const is_hidden = pane.class_list.contains("hidden");
+                                ui.dismiss_pane();
+                                ui.panel.dismiss_port_pane(ui);
+                                if (is_hidden) {
+                                    pane.class_list.remove("hidden");
+                                }
+                            })
                     )
+            ).add(
+                new DOM.Element("input", {
+                    type: "text",
+                    placeholder: "Paste URL here",
+                }).listen("wheel", (event) => {
+                    event.stopImmediatePropagation();
+                }, { passive: true }).listen("keydown", (event, input) => {
+                    if (event.key === "Enter") {
+                        event.stopPropagation();
+                        ui.load_macros_from_url(input.value);
+                        input.blur();
+                    }
+                }).listen("paste", (_, input) => {
+                    delay(() => ui.load_macros_from_url(input.value));
+                })
+            ).add(
+                new DOM.Element("button", { style: "margin-left: 4px; padding: 2px 6px;" }).add("Edit")
+                    .listen("click", () => {
+                        const pane = ui.element.query_selector("#macros-pane");
+                        const is_hidden = pane.class_list.contains("hidden");
+                        ui.dismiss_pane();
+                        ui.panel.dismiss_port_pane(ui);
+                        if (is_hidden) {
+                            ui.macros_input.element.textContent = ui.macro_text
+                                || ui.macro_url_text
+                                || "";
+                            pane.class_list.remove("hidden");
+                        }
+                    })
+            ).add(
+                new DOM.Div({ class: "success-indicator" })
             )
         );
 
@@ -8287,8 +8416,16 @@ document.addEventListener("DOMContentLoaded", () => {
             try {
                 // Decode the diagram.
                 QuiverImportExport.base64.import(ui, query_data.get("q"));
-                // If there is a `macro_url`, load the macros from it.
-                if (query_data.has("macro_url")) {
+                // If there are directly embedded macros, prefer them to avoid URL import races.
+                if (query_data.has("macros")) {
+                    ++ui.macro_load_version;
+                    ui.macro_text = decodeURIComponent(query_data.get("macros"));
+                    ui.macro_url = null;
+                    ui.macro_url_text = null;
+                    ui.macros_input.element.textContent = ui.macro_text;
+                    ui.load_macros(ui.macro_text);
+                // Otherwise, if there is a `macro_url`, load the macros from it.
+                } else if (query_data.has("macro_url")) {
                     ui.load_macros_from_url(decodeURIComponent(query_data.get("macro_url")));
                 }
                 // Adjust the diagram scale to fit the screen in embedded view.
