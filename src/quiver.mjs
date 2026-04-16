@@ -1279,13 +1279,12 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
             };
         }
 
-        // Encode the macro URL if it's not null.
-        const macro_url_data = options.macro_url !== null
-            ? `&macro_url=${encodeURIComponent(options.macro_url)}` : "";
-
-        // Encode the custom macro text if it's not null and not empty.
-        const macro_text_data = options.macro_text !== null && options.macro_text !== ""
-            ? `&macros=${encodeURIComponent(options.macro_text)}` : "";
+        // Encode exactly one macro source: inline definitions take precedence over URL macros.
+        const macro_data = options.macro_text !== null && options.macro_text !== ""
+            ? `&macros=${encodeURIComponent(options.macro_text)}`
+            : (options.macro_url !== null
+                ? `&macro_url=${encodeURIComponent(options.macro_url)}`
+                : "");
 
         const renderer = settings.get("quiver.renderer");
         return {
@@ -1293,7 +1292,7 @@ QuiverImportExport.base64 = new class extends QuiverImportExport {
             data: `${URL_prefix}#${renderer === CONSTANTS.DEFAULT_RENDERER ? ""
                     : `r=${renderer}&`}q=${
                 this.export_selection(quiver, new Set(quiver.all_cells()))
-            }${macro_url_data}${macro_text_data}`,
+            }${macro_data}`,
             metadata: {},
         };
     }

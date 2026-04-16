@@ -735,6 +735,12 @@ class UI {
         // The macro definitions inserted by the user.
         this.macro_text = null;
 
+        // The macro definitions most recently loaded from `macro_url`.
+        this.macro_url_text = null;
+
+        // A monotonically increasing ID used to ignore stale macro URL fetch results.
+        this.macro_load_version = 0;
+
         // The user settings, which are stored persistently across sessions in `localStorage`.
         this.settings = new Settings();
     }
@@ -1191,8 +1197,23 @@ class UI {
             .add(new DOM.Element("p").add("Use this editor to define custom LaTeX commands and colours."))
             .add(this.macros_input)
             .add(new DOM.Element("button").add("Apply Definitions").listen("click", () => {
-                this.macro_text = this.macros_input.element.textContent;
-                this.load_macros(this.macro_text);
+                const text = this.macros_input.element.textContent;
+                const edited_url_macros = this.macro_url !== null
+                    && this.macro_url_text !== null
+                    && text !== this.macro_url_text;
+
+                if (edited_url_macros || this.macro_url === null) {
+                    // Inline edits take precedence and invalidate URL fetches in flight.
+                    ++this.macro_load_version;
+                    this.macro_text = text;
+                    this.macro_url = null;
+                    this.macro_url_text = null;
+                } else {
+                    // URL macros are unchanged, so keep URL as the canonical source.
+                    this.macro_text = null;
+                }
+
+                this.load_macros(text);
                 this.dismiss_pane();
             }));
         panes.push(macros_pane);
@@ -3483,6 +3504,7 @@ class UI {
         // want to store invalid URLs, so we'll set `this.macro_url` when we succeed in fetching the
         // definitions.
         this.macro_url = null;
+        this.macro_url_text = null;
 
         const macro_input = this.panel.global.query_selector("input");
         url = url.trim();
@@ -3496,6 +3518,7 @@ class UI {
         UI.dismiss_error("macro-load");
 
         if (url !== "") {
+            const load_version = ++this.macro_load_version;
             success_indicator.class_list.add("unknown");
             // CORS is terribly frustrating. We simply want to fetch some text, but are often
             // unable to do so, because CORS is opt-in and most sites have not. To alleviate this
@@ -3508,13 +3531,22 @@ class UI {
                 fetch(`${prefix}${url}`, { credentials: "omit" })
                     .then((response) => response.text())
                     .then((text) => {
+                        if (load_version !== this.macro_load_version) {
+                            return;
+                        }
                         this.load_macros(text);
+                        this.macro_text = null;
                         this.macro_url = url;
+                        this.macro_url_text = text;
+                        this.macros_input.element.textContent = text;
                         success_indicator.class_list.remove("unknown");
                         success_indicator.class_list.add("success");
                         macro_input.element.blur();
                     })
                     .catch(() => {
+                        if (load_version !== this.macro_load_version) {
+                            return;
+                        }
                         if (repeat && !url.startsWith(CORS_PROXY)) {
                             // Attempt to fetch using cors-anywhere.
                             attempt_to_fetch_macros(url, CORS_PROXY, false);
@@ -3531,6 +3563,12 @@ class UI {
             };
             attempt_to_fetch_macros(url);
         } else {
+            // Cancel any in-flight URL fetch and reset macro source state.
+            ++this.macro_load_version;
+            this.macro_text = null;
+            this.macro_url_text = null;
+            this.macros_input.element.textContent = "";
+
             // If the URL is empty, we simply reset all macro and colour definitions (as if the user
             // had never loaded any macros or colours).
             this.macros = new Map();
@@ -5669,7 +5707,9 @@ class Panel {
                         ui.dismiss_pane();
                         ui.panel.dismiss_port_pane(ui);
                         if (is_hidden) {
-                            ui.macros_input.element.value = ui.macro_text || "";
+                            ui.macros_input.element.textContent = ui.macro_text
+                                || ui.macro_url_text
+                                || "";
                             pane.class_list.remove("hidden");
                         }
                     })
@@ -8376,14 +8416,17 @@ document.addEventListener("DOMContentLoaded", () => {
             try {
                 // Decode the diagram.
                 QuiverImportExport.base64.import(ui, query_data.get("q"));
-                // If there is a `macro_url`, load the macros from it.
-                if (query_data.has("macro_url")) {
-                    ui.load_macros_from_url(decodeURIComponent(query_data.get("macro_url")));
-                }
-                // If there are directly embedded macros, load them.
+                // If there are directly embedded macros, prefer them to avoid URL import races.
                 if (query_data.has("macros")) {
+                    ++ui.macro_load_version;
                     ui.macro_text = decodeURIComponent(query_data.get("macros"));
+                    ui.macro_url = null;
+                    ui.macro_url_text = null;
+                    ui.macros_input.element.textContent = ui.macro_text;
                     ui.load_macros(ui.macro_text);
+                // Otherwise, if there is a `macro_url`, load the macros from it.
+                } else if (query_data.has("macro_url")) {
+                    ui.load_macros_from_url(decodeURIComponent(query_data.get("macro_url")));
                 }
                 // Adjust the diagram scale to fit the screen in embedded view.
                 // However, we have to be careful to only do this if the user
