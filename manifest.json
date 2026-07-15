@@ -1,0 +1,20 @@
+{
+  "name": "quiver",
+  "description": "A modern commutative diagram editor.",
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#1a1a1a",
+  "background_color": "#ffffff",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ]
+}
