@@ -2241,21 +2241,23 @@ class UI {
                     document.body.offsetWidth / 2 ** this.scale,
                     document.body.offsetHeight / 2 ** this.scale,
                 ).sub(Dimensions.diag(CONSTANTS.VIEW_PADDING * 2));
+
                 const pan = Offset.zero();
-                // We only adjust in the direction of movement, to avoid issues with edge cases,
-                // e.g. where the height of the screen is too small, which can cause panning
-                // vertically back and forth with each key press.
-                if (position_delta.x !== 0) {
-                    // Left.
-                    pan.x += Math.min(offset.x - (this.view.x - view.width / 2), 0);
-                    // Right.
-                    pan.x += Math.max(offset.x + width - (this.view.x + view.width / 2), 0);
+                // Left.
+                pan.x += Math.min(offset.x - (this.view.x - view.width / 2), 0);
+                // Right.
+                pan.x += Math.max(offset.x + width - (this.view.x + view.width / 2), 0);
+                // Top.
+                pan.y += Math.min(offset.y - (this.view.y - view.height / 2), 0);
+                // Bottom.
+                pan.y += Math.max(offset.y + height - (this.view.y + view.height / 2), 0);
+                // Special behaviour for extremely small views: in this case, simply centre the
+                // focus point.
+                if (view.width <= CONSTANTS.VIEW_PADDING) {
+                    pan.x = offset.x - this.view.x + width / 2;
                 }
-                if (position_delta.y !== 0) {
-                    // Top.
-                    pan.y += Math.min(offset.y - (this.view.y - view.height / 2), 0);
-                    // Bottom.
-                    pan.y += Math.max(offset.y + height - (this.view.y + view.height / 2), 0);
+                if (view.height <= CONSTANTS.VIEW_PADDING) {
+                    pan.y = offset.y - this.view.y + height / 2;
                 }
 
                 const start = performance.now();
