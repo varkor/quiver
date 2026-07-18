@@ -4051,7 +4051,7 @@ class Panel {
                     [{
                         kind: "label",
                         value: this.label_input.element.value,
-                        cells: selection.map((cell) => ({
+                        cells: Array.from(ui.selection).map((cell) => ({
                             cell,
                             from: cell.label,
                             to: this.label_input.element.value,
