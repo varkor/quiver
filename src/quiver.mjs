@@ -701,11 +701,16 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                             } else {
                                 parameters.Rightarrow = "";
                             }
+                            if (settings.package_version_is_at_least("1.6.1")) {
+                                parameters["nfold"] = "";
+                            }
                         } else if (edge.options.level > 2) {
                             // So for n-cells for n > 2, we make use of tikz-nfold.
                             parameters.Rightarrow = "";
                             parameters["scaling nfold"] = edge.options.level;
-                            add_dependency("tikz-nfold", "triple arrows or higher");
+                            if (!settings.package_version_is_at_least("1.6.1")) {
+                                add_dependency("tikz-nfold", "triple arrows or higher");
+                            }
                         }
 
                         const midpoint = (edge.options.shorten.source

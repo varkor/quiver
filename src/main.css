@@ -926,7 +926,7 @@ div.slider {
     border-color: var(--ui-blue);
 }
 
-.panel button, .pane button, .port button, .panel select {
+.panel button, .pane button, .port button, select {
     position: relative;
     display: block;
     width: 100%; height: 30px;
@@ -942,10 +942,12 @@ div.slider {
     text-align: center;
 }
 
-.global select {
+select {
     display: inline-block;
     width: auto;
     margin: 0;
+
+    text-align: left;
 }
 
 .global button {
@@ -958,7 +960,7 @@ div.slider {
     width: 56px;
 }
 
-.global button + label, .global select + label {
+.global button + label, select + label {
     margin-left: 12px;
 }
 
@@ -1602,6 +1604,7 @@ button.flash {
 .port .options {
     margin-bottom: 8pt;
     padding: 6pt 4pt;
+    line-height: 18pt;
 
     background: var(--ui-black);
     border-radius: 2px;
@@ -1643,6 +1646,10 @@ button.flash {
 .port .options input[type="number"] {
     width: 64px;
     margin-right: -12pt;
+}
+
+.port .options select {
+    margin-left: 8pt;
 }
 
 /* Disable the up/down buttons for `type="number"` inputs. */

@@ -5,14 +5,14 @@
 % libraries, and defining new TikZ styles for curves of a fixed height and for shortening paths
 % proportionally.
 %
-% Version: 1.6.0
+% Version: 1.6.1
 % Authors:
 % - varkor (https://github.com/varkor)
 % - AndréC (https://tex.stackexchange.com/users/138900/andr%C3%A9c)
 % - Andrew Stacey (https://tex.stackexchange.com/users/86/andrew-stacey)
 
 \NeedsTeXFormat{LaTeX2e}
-\ProvidesPackage{quiver}[2025/09/20 quiver]
+\ProvidesPackage{quiver}[2026/07/18 quiver]
 
 % `tikz-cd` is necessary to draw commutative diagrams.
 \RequirePackage{tikz-cd}
@@ -24,6 +24,8 @@
 \usetikzlibrary{decorations.pathmorphing}
 % `spath3` is necessary to draw shortened edges.
 \usetikzlibrary{spath3}
+% `nfold' renders better double arrows, and is necessary to draw triple arrows and higher.
+\usetikzlibrary{nfold}
 
 % A TikZ style for curved arrows of a fixed height, due to AndréC.
 \tikzset{curve/.style={settings={#1},to path={(\tikztostart)

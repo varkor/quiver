@@ -277,6 +277,22 @@ DOM.Link = class extends DOM.Element {
     }
 };
 
+// A class for conveniently dealing with `<select>`.
+DOM.Select = class extends DOM.Element {
+    constructor(options, default_value = null, attributes = {}, style = {}) {
+        super("select", attributes, style);
+
+        for (let [value, text] of options) {
+            const option = new DOM.Element("option").set_attributes({ value }).add(text);
+            this.add(option);
+        }
+
+        if (default_value !== null) {
+            this.element.value = default_value;
+        }
+    }
+};
+
 // A custom `input[type="range"]` that permits multiple thumbs.
 DOM.Multislider = class extends DOM.Element {
     constructor(name, min, max, step = 1, thumbs = 1, spacing = 0, attributes = {}, style = {}) {

@@ -8,9 +8,9 @@ import { Quiver, QuiverImportExport } from "./quiver.mjs";
 /// Various parameters.
 Object.assign(CONSTANTS, {
     /// The current quiver version.
-    VERSION: "1.6.0",
-    /// When the `quiver.sty` package was last modified.
-    PACKAGE_VERSION: "2025/09/20",
+    VERSION: "1.6.1",
+    /// For which quiver version the `quiver.sty` package was last modified.
+    PACKAGE_VERSION: "1.6.1",
     /// We currently only support n-cells for (n ≤ 4). This restriction is not technical: it can be
     /// lifted in the editor without issue. Rather, this is for usability: a user is unlikely to
     /// want to draw a higher cell. For n-cells for n ≥ 3, we make use of tikz-nfold in exported
@@ -3915,6 +3915,8 @@ class Settings {
             "diagram.var_corner": false,
             // Whether to use KaTeX or Typst rendering.
             "quiver.renderer": CONSTANTS.DEFAULT_RENDERER,
+            // Which quiver.sty version to target.
+            "quiver.package_version": CONSTANTS.PACKAGE_VERSION,
         };
         try {
             // Try to update the default values with the saved settings.
@@ -3936,6 +3938,23 @@ class Settings {
     set(setting, value) {
         this.data[setting] = value;
         window.localStorage.setItem("settings", JSON.stringify(this.data));
+    }
+
+    /// Returns whether `quiver.package_version` is at least the specified version string.
+    package_version_is_at_least(version) {
+        const valuesA = this.get("quiver.package_version").split(".");
+        const valuesB = version.split(".");
+        while (valuesA.length > 0) {
+            if (valuesB.length === 0) {
+                return true;
+            }
+            const a = parseInt(valuesA.shift());
+            const b = parseInt(valuesB.shift());
+            if (a !== b) {
+                return a > b;
+            }
+        }
+        return valuesB.length === 0;
     }
 }
 
@@ -4750,9 +4769,65 @@ class Panel {
                     import_success.class_list.add("hidden");
                 };
 
-                const update_output = (data, prevent_defocus = false) => {
+                // Display warnings and dependencies.
+                const display_metadata = (metadata) => {
+                    warning.clear();
+
+                    const unsupported_items = kind === "export"
+                        && Array.from(metadata.tikz_incompatibilities
+                            || metadata.fletcher_incompatibilities
+                            || []).sort()
+                        || [];
+                    if (unsupported_items.length !== 0) {
+                        warning.add("The exported ").add(new DOM.Code(format))
+                            .add(" diagram may not match the ")
+                            .add(new DOM.Element("b").add("quiver"))
+                            .add(" diagram exactly, as ").add(new DOM.Code(format))
+                            .add(" does not support the following features that " +
+                                "appear in this diagram:");
+                        const list = new DOM.Element("ul").add_to(warning);
+                        for (const [index, item] of unsupported_items.entries()) {
+                            list.add(new DOM.Element("li")
+                                .add(`${item}${index + 1 < unsupported_items.length ? ";" : "."}`)
+                            );
+                        }
+                    }
+
+                    const dependencies = kind === "export" && format === "tikz-cd" ?
+                        metadata.dependencies : new Map();
+                    if (dependencies.size !== 0) {
+                        if (unsupported_items.length !== 0) {
+                            warning.add(new DOM.Element("br"));
+                        }
+                        warning.add("The exported ").add(new DOM.Code("tikz-cd"))
+                            .add(" diagram relies upon additional packages " +
+                            " that you may have to install for the diagram to render " +
+                            "correctly:");
+                        const list = new DOM.Element("ul").add_to(warning);
+                        for (const [library, reasons] of dependencies) {
+                            const li = new DOM.Element("li").add_to(list);
+                            const url = {
+                                "tikz-nfold": "https://ctan.org/pkg/tikz-nfold",
+                                "quiver": "https://ctan.org/pkg/quiver",
+                            }[library];
+                            if (library === "quiver") {
+                                li.add("The latest version of ");
+                            }
+                            li.add(new DOM.Element("a", { href: url, target: "_blank" })
+                                .add(new DOM.Code(library)));
+                            li.add(`, for ${Array.from(reasons).join("; ")}.`);
+                        }
+                    }
+
+                    warning.class_list.toggle("hidden",
+                        unsupported_items.length === 0 && dependencies.size === 0,
+                    );
+                };
+
+                const update_output = (data, metadata, prevent_defocus = false) => {
                     // At present, the data is always a string.
                     content.replace(data);
+                    display_metadata(metadata);
                     if (prevent_defocus) {
                         return;
                     }
@@ -4761,6 +4836,18 @@ class Panel {
                     // Safari seems to occasionally fail to select the text immediately, so we
                     // also select it after a delay to ensure the text is selected.
                     delay(() => content.select_contents());
+                };
+
+                const modify_and_update_output = () => {
+                    // Update the output. We ignore `metadata`, which currently does not
+                    // change in response to the settings.
+                    const { data, metadata } = modify(ui.quiver.export(
+                        format,
+                        ui.settings,
+                        ui.options(),
+                        ui.definitions(),
+                    ));
+                    update_output(data, metadata);
                 };
 
                 if (this.port === null) {
@@ -4792,15 +4879,7 @@ class Panel {
                     const sep_sliders = {};
                     const update_sep_slider = (axis) => {
                         this.sep[axis] = sep_sliders[axis].values();
-                        // Update the output. We ignore `metadata`, which currently does not
-                        // change in response to the settings.
-                        const { data } = modify(ui.quiver.export(
-                            format,
-                            ui.settings,
-                            ui.options(),
-                            ui.definitions(),
-                        ));
-                        update_output(data);
+                        modify_and_update_output();
                         // Update the label.
                         update_sep_label(sep_sliders[axis]);
                     };
@@ -4819,6 +4898,16 @@ class Panel {
                         update_sep_label(sep_sliders[axis]);
                         this.sliders.set(`${axis}_sep`, sep_sliders[axis]);
                     }
+                    const quiver_package_version = new DOM.Select([
+                            ["1.6.1", "1.6.1 (latest)"],
+                            ["1.6.0", "1.6.0 (TeX Live 2026)"]
+                        ],
+                        ui.settings.get("quiver.package_version"),
+                        { name: "quiver_package_version" }).listen("change", (event) => {
+                            const package_version = event.target.value;
+                            ui.settings.set("quiver.package_version", package_version);
+                            modify_and_update_output();
+                        });
 
                     latex_tip = new DOM.Element("span", { class: "tip hidden tikz-cd" });
                     latex_tip.add("Remember to include ")
@@ -4848,7 +4937,7 @@ class Panel {
                         .add_to(port_pane);
                     latex_tip.add(new DOM.Element("span", { class: "update" })
                         .add("updated on ")
-                        .add(new DOM.Element("time").add("2025-07-05"))
+                        .add(new DOM.Element("time").add("2026-07-18"))
                     );
 
                     typst_tip = new DOM.Element("span", { class: "tip hidden typst" });
@@ -4904,6 +4993,12 @@ class Panel {
                         .add(new DOM.Div({ class: "linked-sliders" })
                             .add(sep_sliders.column.label)
                             .add(sep_sliders.row.label)
+                        )
+                        .add(
+                            new DOM.Element("label")
+                                .add(new DOM.Element("code").add("quiver.sty"))
+                                .add(" version:")
+                                .add(quiver_package_version)
                         )
                         .add_to(port_pane);
                     typst_options = new DOM.Div({ class: "options typst hidden" })
@@ -4963,15 +5058,14 @@ class Panel {
                                 checkbox.get_attribute("data-setting"),
                                 checkbox.element.checked,
                             );
-                            // Update the output. We ignore `metadata`, which currently does not
-                            // change in response to the settings.
-                            const { data } = modify(ui.quiver.export(
+                            // Update the output.
+                            const { data, metadata } = modify(ui.quiver.export(
                                 format,
                                 ui.settings,
                                 ui.options(),
                                 ui.definitions(),
                             ));
-                            update_output(data);
+                            update_output(data, metadata);
                         });
                         // Prevent the highlighted output from being deselected when changing a
                         // setting.
@@ -4984,13 +5078,13 @@ class Panel {
                             value = CONSTANTS.DEFAULT_EMBED_SIZE[dimension.toUpperCase()];
                         }
                         ui.settings.set(`export.embed.${dimension}`, value);
-                        const { data } = modify(ui.quiver.export(
+                        const { data, metadata } = modify(ui.quiver.export(
                             "html",
                             ui.settings,
                             ui.options(),
                             ui.definitions(),
                         ));
-                        update_output(data, true);
+                        update_output(data, metadata, true);
                     };
 
                     for (const dimension of ["width", "height"]) {
@@ -5351,53 +5445,8 @@ class Panel {
                 // Clear any existing errors, which do not persist between tabs.
                 hide_errors_and_warnings();
 
-                // Display a warning if necessary.
-                const unsupported_items = kind === "export"
-                        && Array.from(metadata.tikz_incompatibilities
-                            || metadata.fletcher_incompatibilities
-                            || []).sort()
-                        || [];
-                if (unsupported_items.length !== 0) {
-                    warning.class_list.remove("hidden");
-                    warning.add("The exported ").add(new DOM.Code(format))
-                        .add(" diagram may not match the ")
-                        .add(new DOM.Element("b").add("quiver"))
-                        .add(" diagram exactly, as ").add(new DOM.Code(format))
-                        .add(" does not support the following features that " +
-                            "appear in this diagram:");
-                    const list = new DOM.Element("ul").add_to(warning);
-                    for (const [index, item] of unsupported_items.entries()) {
-                        list.add(new DOM.Element("li")
-                            .add(`${item}${index + 1 < unsupported_items.length ? ";" : "."}`)
-                        );
-                    }
-                }
-                const dependencies = kind === "export" && format === "tikz-cd" ?
-                    metadata.dependencies : new Map();
-                if (dependencies.size !== 0) {
-                    warning.class_list.remove("hidden");
-                    if (unsupported_items.length !== 0) {
-                        warning.add(new DOM.Element("br"));
-                    }
-                    warning.add("The exported ").add(new DOM.Code("tikz-cd"))
-                        .add(" diagram relies upon additional packages " +
-                        " that you may have to install for the diagram to render " +
-                        "correctly:");
-                    const list = new DOM.Element("ul").add_to(warning);
-                    for (const [library, reasons] of dependencies) {
-                        const li = new DOM.Element("li").add_to(list);
-                        const url = {
-                            "tikz-nfold": "https://ctan.org/pkg/tikz-nfold",
-                            "quiver": "https://ctan.org/pkg/quiver",
-                        }[library];
-                        if (library === "quiver") {
-                            li.add("The latest version of ");
-                        }
-                        li.add(new DOM.Element("a", { href: url, target: "_blank" })
-                            .add(new DOM.Code(library)));
-                        li.add(`, for ${Array.from(reasons).join("; ")}.`);
-                    }
-                }
+                // Display warnings and dependencies.
+                display_metadata(metadata);
 
                 // Update the note.
                 note.clear();
@@ -5421,9 +5470,6 @@ class Panel {
                 // Show/hide relevant UI elements.
                 latex_tip.class_list.toggle("hidden", kind !== "export" || format !== "tikz-cd");
                 typst_tip.class_list.toggle("hidden", kind !== "export" || format !== "fletcher");
-                warning.class_list.toggle("hidden",
-                    unsupported_items.length === 0 && dependencies.size === 0,
-                );
                 latex_options.class_list.toggle(
                     "hidden",
                     kind !== "export" || format !== "tikz-cd",
@@ -5455,7 +5501,7 @@ class Panel {
                 port_pane.class_list.remove("import", "export");
                 port_pane.class_list.add(kind);
 
-                update_output(data);
+                update_output(data, metadata);
                 if (kind === "import" && format === "tikz-cd") {
                     delay(() => textarea.element.focus());
                 }
@@ -5504,48 +5550,42 @@ class Panel {
         ).set_attributes({ class: "typst-only" });
 
         // Create the `<select>` for the current maths renderer.
-        const renderer_select = new DOM.Element("select", { name: "renderer" })
-            .listen("change", (event) => {
-                const renderer = event.target.value;
-                ui.settings.set("quiver.renderer", renderer);
+        const renderer_select = new DOM.Select(
+            [["katex", "LaTeX"], ["typst", "Typst"]],
+            ui.settings.get("quiver.renderer"),
+            { name: "renderer" },
+        ).listen("change", (event) => {
+            const renderer = event.target.value;
+            ui.settings.set("quiver.renderer", renderer);
 
-                const previous_bullet = `${renderer === "typst" ? "\\" : ""}bullet`;
-                const new_bullet = `${renderer === "typst" ? "" : "\\"}bullet`;
-                if (!ui.quiver.is_empty()) {
-                    for (const vertex of ui.quiver.cells[0]) {
-                        if (vertex.label === previous_bullet) {
-                            vertex.label = new_bullet;
-                        }
+            const previous_bullet = `${renderer === "typst" ? "\\" : ""}bullet`;
+            const new_bullet = `${renderer === "typst" ? "" : "\\"}bullet`;
+            if (!ui.quiver.is_empty()) {
+                for (const vertex of ui.quiver.cells[0]) {
+                    if (vertex.label === previous_bullet) {
+                        vertex.label = new_bullet;
                     }
                 }
+            }
 
-                const label_rerender = () => {
-                    ui.quiver.all_cells().forEach((cell) => ui.panel.render_maths(ui, cell));
-                };
+            const label_rerender = () => {
+                ui.quiver.all_cells().forEach((cell) => ui.panel.render_maths(ui, cell));
+            };
 
-                switch (renderer) {
-                    case "katex":
-                        // KaTeX is always loaded, so we can immediately rerender.
+            switch (renderer) {
+                case "katex":
+                    // KaTeX is always loaded, so we can immediately rerender.
+                    label_rerender();
+                    break;
+
+                case "typst":
+                    // We must load Typst before rendering.
+                    load_typst(ui).then((_) => {
                         label_rerender();
-                        break;
-
-                    case "typst":
-                        // We must load Typst before rendering.
-                        load_typst(ui).then((_) => {
-                            label_rerender();
-                        });
-                        break;
-                }
-            });
-
-        // Add the options to the `<select>`.
-        for (const [renderer, text] of [["katex", "LaTeX"], ["typst", "Typst"]]) {
-            const option = new DOM.Element("option").set_attributes({
-                value: renderer
-            }).add(text);
-            renderer_select.add(option);
-        }
-        renderer_select.element.value = ui.settings.get("quiver.renderer");
+                    });
+                    break;
+            }
+        });
 
         this.global = new DOM.Div({ class: "panel global" }).add(
             new DOM.Element("label").add("Renderer: ")
@@ -8175,13 +8215,11 @@ const load_typst = (ui) => {
     Typst = import("https://cdn.jsdelivr.net/npm/@myriaddreamin/typst.ts@0.7.0/dist/esm/contrib/all-in-one-lite.bundle.js").then((module) => {
         const $typst = module.$typst;
         $typst.setCompilerInitOptions({
-            // beforeBuild: [module.loadFonts(fontInfo)],
             getModule: () => "https://cdn.jsdelivr.net/npm/@myriaddreamin/typst-ts-web-compiler@0.7.0/pkg/typst_ts_web_compiler_bg.wasm",
         });
         $typst.setRendererInitOptions({
             getModule: () => "https://cdn.jsdelivr.net/npm/@myriaddreamin/typst-ts-renderer@0.7.0/pkg/typst_ts_renderer_bg.wasm",
         });
-
         return $typst;
     }).catch(() => {
         // Handle Typst not loading (somewhat) gracefully.
