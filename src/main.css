@@ -171,7 +171,7 @@ kbd {
     white-space: pre;
 }
 
-.tooltip kbd, .pane kbd, .port kbd {
+.tooltip kbd, .pane kbd, .port kbd, .pane textarea {
     padding: 1px 6px;
 
     border-radius: 4px;
@@ -1692,7 +1692,7 @@ label input[type="checkbox"]:checked::before {
     color: var(--ui-black);
 }
 
-.port .code, .port div[contenteditable] {
+.port .code, .port div[contenteditable], .macros-input {
     font: 16px monospace;
     color: var(--ui-white);
 
@@ -1702,7 +1702,7 @@ label input[type="checkbox"]:checked::before {
     -moz-tab-size: 4;
 }
 
-.port div[contenteditable] {
+.port div[contenteditable], .macros-input {
     width: 100%;
     height: 252pt;
     resize: none;
