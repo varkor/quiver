@@ -239,6 +239,8 @@ export class Quiver {
                 return QuiverImportExport.base64.export(this, settings, options, definitions);
             case "html":
                 return QuiverExport.html.export(this, settings, options, definitions);
+            case "svg":
+                return QuiverExport.svg.export(this, settings, options, definitions);
             default:
                 throw new Error(`unknown export format \`${format}\``);
         }
@@ -253,7 +255,7 @@ export class Quiver {
             case "tikz-cd":
                 return QuiverImportExport.tikz_cd.import(ui, data, settings);
             default:
-                throw new Error(`unknown export format \`${format}\``);
+                throw new Error(`unknown import format \`${format}\``);
         }
     }
 }
@@ -1693,6 +1695,54 @@ height="${height}" \
 style="border-radius: 8px; border: none;">\
 </iframe>`,
             metadata: {},
+        };
+    }
+};
+
+QuiverExport.svg = new class extends QuiverExport {
+    export (quiver, settings, options, definitions) {
+        const promise = fetch("https://corsproxy.io/?url=https://www.quicklatex.com/latex3.f", {
+            method: "POST",
+            headers: { "Content-Type": "text/plain" },
+            credentials: "omit",
+            body: `preamble=${encodeURIComponent(String.raw`
+                    \usepackage{tikz-cd,amsmath,amssymb}
+                    \usetikzlibrary{calc,spath3,nfold,decorations.pathmorphing}
+                    \tikzset{curve/.style={settings={#1},to path={(\tikztostart)
+                        .. controls ($(\tikztostart)!\pv{pos}!(\tikztotarget)!\pv{height}!270:(\tikztotarget)$)
+                        and ($(\tikztostart)!1-\pv{pos}!(\tikztotarget)!\pv{height}!270:(\tikztotarget)$)
+                        .. (\tikztotarget)\tikztonodes}},
+                        settings/.code={\tikzset{quiver/.cd,#1}
+                            \def\pv##1{\pgfkeysvalueof{/tikz/quiver/##1}}},
+                        quiver/.cd,pos/.initial=0.35,height/.initial=0}
+                    \tikzset{between/.style n args={2}{/tikz/execute at end to={
+                        \tikzset{spath/split at keep middle={current}{#1}{#2}}
+                    }}}
+                    \tikzset{tail reversed/.code={\pgfsetarrowsstart{tikzcd to}}}
+                    \tikzset{2tail/.code={\pgfsetarrowsstart{Implies[reversed]}}}
+                    \tikzset{2tail reversed/.code={\pgfsetarrowsstart{Implies}}}
+                    \tikzset{no body/.style={/tikz/dash pattern=on 0 off 1mm}}
+                `)}&formula=${encodeURIComponent(
+                    QuiverImportExport.tikz_cd.export(quiver, settings, options, definitions).data
+                )}`
+        }).then((response) => response.text()).then((text) => {
+            // The QuickLaTeX API is undocumented, so the following has been extracted from the homepage.
+            // We ignore the image alignment, width, height, and error message.
+            const response_format = /^(-?\d+)\r\n(\S+)/;
+            if (!response_format.test(text)) {
+                throw new Error("invalid response format");
+            }
+            const [status, url] = text.match(response_format).slice(1);
+            if (parseInt(status) !== 0
+                || !url.startsWith("https://quicklatex.com") || !url.endsWith(".png")
+            ) {
+                throw new Error(`unsuccessful request (status: ${status}, url: ${url})`);
+            }
+            return url.replace(/\.png$/, ".svg");
+        });
+        return {
+            data: "",
+            metadata: { promise },
         };
     }
 };

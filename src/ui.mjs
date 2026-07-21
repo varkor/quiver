@@ -4759,8 +4759,27 @@ class Panel {
                     )
                 );
 
+                // To export an SVG requires a request to an external website, so we have to wait
+                // for the response.
+                if (metadata.hasOwnProperty("promise")) {
+                    // At the moment, the only format that produces a `Promise` is SVG.
+                    metadata.promise.then((text) => {
+                        // TODO: check port pane is still open
+                        console.log("success");
+                        preview.clear().add(new DOM.Element("img", { src: text }));
+                        // TODO: add attribution for QuickLatex
+                        // TODO: loading message
+                        // TODO: download button
+                        // TODO: get free license for cors proxy site
+                        // TODO: check if image actually exists
+                    }).catch((error) => {
+                        console.log("failure", error);
+                        // TODO
+                    });
+                }
+
                 let port_pane, latex_tip, typst_tip, warning, error, latex_options, typst_options;
-                let embed_options, note, content, textarea, parse_button, import_success;
+                let embed_options, note, content, preview, textarea, parse_button, import_success;
 
                 // Clear any errors and warnings.
                 const hide_errors_and_warnings = () => {
@@ -5114,6 +5133,8 @@ class Panel {
                             new DOM.Element(element).select_contents();
                         }).add_to(port_pane);
 
+                    preview = new DOM.Div({ class: "preview" }).add_to(port_pane);
+
                     // Insert text at the cursor in the `contenteditable`.
                     const insert_text = (text) => {
                         const selection = window.getSelection();
@@ -5414,6 +5435,7 @@ class Panel {
                     embed_options = port_pane.query_selector(".options.embed");
                     note = port_pane.query_selector(".note");
                     content = port_pane.query_selector(".code");
+                    preview = port_pane.query_selector(".preview");
                     textarea = port_pane.query_selector('div[contenteditable]');
                     parse_button = port_pane.query_selector('div[contenteditable] + button');
                     import_success = port_pane.query_selector("button + .note");
@@ -5452,13 +5474,16 @@ class Panel {
 
                 // Update the note.
                 note.clear();
+                note.class_list.add("hidden");
                 if (kind === "import" && format === "tikz-cd") {
+                    note.class_list.remove("hidden");
                     note.add("Paste a ").add(new DOM.Code("tikz-cd"))
                         .add(" diagram below to load it into ")
                         .add(new DOM.Element("b").add("quiver"))
                         .add(" ↴");
                 }
-                if (kind === "export") {
+                if (kind === "export" && ["url", "html", "tikz-cd", "fletcher"].includes(format)) {
+                    note.class_list.remove("hidden");
                     note.add("If you need to edit this diagram, you can open it again in ")
                         .add(new DOM.Element("b").add("quiver"))
                         .add(" using the URL below ↴");
@@ -5607,7 +5632,14 @@ class Panel {
               .listen("click", () => {
                   display_port_pane("export", "html");
               })
-        ).add(export_to_latex).add(export_to_typst).add(
+        ).add(
+            // The SVG button.
+            new DOM.Element("button", { class: "katex-only" }).add("SVG")
+                .listen("click", () => {
+                    display_port_pane("export", "svg")
+                })
+        )
+        .add(export_to_latex).add(export_to_typst).add(
             new DOM.Div({ class: "indicator-container katex-only" }).add(
                 new DOM.Element("label").add("Macros: ")
                     .add(
