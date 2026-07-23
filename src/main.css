@@ -640,6 +640,7 @@ label.inline {
 }
 
 .panel input[type="text"],
+.pane input[type="text"],
 .port .options input[type="number"] {
     padding: 2px 4px;
 
@@ -654,16 +655,19 @@ label.inline {
 }
 
 .panel input[type="text"]::placeholder,
+.pane input[type="text"]::placeholder,
 .port .options input[type="number"]::placeholder {
     color: hsla(0, 0%, 100%, 0.4);
 }
 
 .panel input[type="text"]:hover:not(:disabled):not(:focus),
+.pane input[type="text"]:hover:not(:disabled):not(:focus),
 .port .options input[type="number"]:hover:not(:disabled):not(:focus) {
     background: var(--ui-hover);
 }
 
 .panel input[type="text"]:focus,
+.pane input[type="text"]:focus,
 .port .options input[type="number"]:focus {
     background: var(--ui-focus);
     border-color: var(--ui-focus);
@@ -672,6 +676,7 @@ label.inline {
 }
 
 .panel input[type="text"]:focus::placeholder,
+.pane input[type="text"]:focus::placeholder,
 .port .options input[type="number"]:focus::placeholder {
     color: hsla(0, 0%, 0%, 0.4);
 }
@@ -1097,43 +1102,6 @@ user has already pressed semicolon, placing us in command mode. */
 /* When cells are queued, we can press Tab to select them. */
 .ui:not(.command).show-queue .cell kbd.queue.hint::before {
     content: "⇥";
-}
-
-.indicator-container {
-    display: inline-block;
-    margin-left: 12px;
-}
-
-.panel .success-indicator {
-    display: inline-block;
-    vertical-align: middle;
-    margin-left: 8px;
-    width: 18px; height: 18px;
-
-    background: hsl(0, 0%, 36%);
-    border-radius: 100%;
-
-    color: hsl(0, 0%, 16%);
-    text-align: center;
-    line-height: 18px;
-
-    transform: scale(0);
-
-    transition: transform 0.2s;
-}
-
-.panel .success-indicator.unknown,
-.panel .success-indicator.success,
-.panel .success-indicator.failure {
-    transform: scale(1);
-}
-
-.panel .success-indicator.success::before {
-    content: "✓";
-}
-
-.panel .success-indicator.failure::before {
-    content: "✕";
 }
 
 /* The colour picker */
@@ -1685,7 +1653,7 @@ label input[type="checkbox"]:checked::before {
     color: var(--ui-black);
 }
 
-.port .code, .port div[contenteditable], .macros-input {
+.port .code, .port div[contenteditable], .pane textarea {
     font: 16px monospace;
     color: var(--ui-white);
 
@@ -1695,17 +1663,24 @@ label input[type="checkbox"]:checked::before {
     -moz-tab-size: 4;
 }
 
-.port div[contenteditable], .macros-input {
+.port div[contenteditable], .pane textarea {
     width: 100%;
-    height: 252pt;
     resize: none;
     padding: 6pt 8pt;
-    overflow-y: auto;
 
     background: hsla(0, 0%, 0%, 0.2);
 
     border: none;
     outline: none;
+}
+
+.port div[contenteditable] {
+    height: 252pt;
+    overflow-y: auto;
+}
+
+.pane textarea {
+    height: 180pt;
 }
 
 /* We pad empty fragments so that we can see their highlight. */

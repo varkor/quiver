@@ -1154,79 +1154,81 @@ class UI {
         panes.push(welcome_pane);
 
         // Set up the macros pane.
-        const insert_macro_text = (text) => {
-            const selection = window.getSelection();
-            const range = selection.getRangeAt(0);
-            range.deleteContents();
-            range.insertNode(document.createTextNode(text));
-            selection.collapseToEnd();
-        };
 
-        this.macros_input = new DOM.Div({
-            contenteditable: "true",
+        const macro_url_input = new DOM.Element("input", {
+            type: "text",
+            placeholder: "Paste URL here",
+        });
+        const macros_input = new DOM.Element("textarea", {
             spellcheck: "false",
             class: "macros-input",
-        }).listen("wheel", (event) => {
+        });
+
+        macro_url_input.listen("wheel", (event) => {
+            event.stopImmediatePropagation();
+        }, { passive: true }).listen("keydown", (event, input) => {
+            if (event.key === "Enter") {
+                event.stopPropagation();
+                this.load_macros_from_url(input.value);
+                input.blur();
+            }
+            if (event.key === "Tab") {
+                macros_input.element.focus();
+            }
+        }).listen("paste", (_, input) => {
+            delay(() => this.load_macros_from_url(input.value));
+        });
+
+        macros_input.listen("wheel", (event) => {
             event.stopImmediatePropagation();
         }, { passive: true }).listen("keydown", (event) => {
             if (event.key === "Enter") {
-                event.preventDefault();
                 event.stopPropagation();
-
-                const text = this.macros_input.element.textContent;
-                const selection = window.getSelection();
-                if (selection.rangeCount > 0) {
-                    const range = selection.getRangeAt(0);
-                    const total_range = range.cloneRange();
-                    total_range.selectNodeContents(this.macros_input.element);
-                    total_range.setEnd(range.startContainer, range.startOffset);
-                    const caret = total_range.toString().length;
-                    if (caret === text.length && !/\n$/.test(text)) {
-                        insert_macro_text("\n");
-                    }
-                }
-                insert_macro_text("\n");
             }
-        }).listen("paste", (event) => {
-            event.preventDefault();
-            insert_macro_text(event.clipboardData.getData("text/plain"));
+            if (event.key === "Tab") {
+                macro_url_input.element.focus();
+            }
+        }).listen("input", (event) => {
+            const text = macros_input.element.value;
+            const edited_url_macros = this.macro_url !== null
+                && this.macro_url_text !== null
+                && text !== this.macro_url_text;
+
+            if (edited_url_macros || this.macro_url === null) {
+                // Inline edits take precedence and invalidate URL fetches in flight.
+                ++this.macro_load_version;
+                this.macro_text = text;
+                this.macro_url = null;
+                this.macro_url_text = null;
+            } else {
+                // URL macros are unchanged, so keep URL as the canonical source.
+                this.macro_text = null;
+            }
+
+            this.load_macros(text);
         });
 
-        const macros_pane = new DOM.Div({ id: "macros-pane", class: "pane hidden" })
-            .add(new DOM.Element("h1").add("Custom Macros"))
-            .add(new DOM.Element("p").add("Use this editor to define custom LaTeX commands and colours."))
-            .add(this.macros_input)
-            .add(new DOM.Element("button").add("Apply Definitions").listen("click", () => {
-                const text = this.macros_input.element.textContent;
-                const edited_url_macros = this.macro_url !== null
-                    && this.macro_url_text !== null
-                    && text !== this.macro_url_text;
-
-                if (edited_url_macros || this.macro_url === null) {
-                    // Inline edits take precedence and invalidate URL fetches in flight.
-                    ++this.macro_load_version;
-                    this.macro_text = text;
-                    this.macro_url = null;
-                    this.macro_url_text = null;
-                } else {
-                    // URL macros are unchanged, so keep URL as the canonical source.
-                    this.macro_text = null;
-                }
-
-                this.load_macros(text);
-                this.dismiss_pane();
-            }));
-        panes.push(macros_pane);
-
-        // Set up the macros help pop up.
-        const macros_help_pane = new DOM.Div({ id: "macros-help-pane", class: "pane hidden" })
-            .add(new DOM.Element("h1").add("Custom Macros"))
-            .add(new DOM.Element("p").add("This feature allows you to use custom macros in quiver."))
-            .add(new DOM.Element("p").add("Refer to ").add(new DOM.Link("https://github.com/varkor/quiver/blob/master/tutorial.md#importing-macros-and-colours", "the documentation", true)).add(" for more details."))
-            .add(new DOM.Element("button").add("Close").listen("click", () => {
-                this.dismiss_pane();
-            }));
-        panes.push(macros_help_pane);
+        this.macros_pane = new DOM.Div({ id: "macros-pane", class: "pane hidden" })
+            .add(new DOM.Element("h1").add("Custom macros"))
+            .add(new DOM.Element("p")
+                .add("Paste a URL here to load custom macros and colours:")
+            )
+            .add(macro_url_input)
+            .add(new DOM.Div({ class: "success-indicator" }))
+            .add(new DOM.Element("p")
+                .add("Or input them manually below (one definition per line):")
+            ).add(macros_input)
+            .add(
+                new DOM.Element("p")
+                    .add("See the ")
+                    .add(new DOM.Link(
+                        "https://github.com/varkor/quiver/blob/master/tutorial.md#importing-macros-and-colours",
+                        "documentation",
+                        true,
+                    ))
+                    .add(" for more information.")
+            );
+        panes.push(this.macros_pane);
 
         new DOM.Element("button").add("Get started").listen("click", () => {
             // There are technically other ways to dismiss the welcome pane (e.g. opening the
@@ -3061,7 +3063,7 @@ class UI {
     /// actions (primarily keyboard shortcuts) will be disabled.)
     input_is_active() {
         // This may not be the label input, e.g. it may be the macros input.
-        return document.activeElement.matches('input[type="text"], div[contenteditable]')
+        return document.activeElement.matches('input[type="text"], div[contenteditable], textarea')
             && document.activeElement;
     }
 
@@ -3506,11 +3508,13 @@ class UI {
         this.macro_url = null;
         this.macro_url_text = null;
 
-        const macro_input = this.panel.global.query_selector("input");
+        const macro_url_input = this.macros_pane.query_selector('input[type="text"]');
         url = url.trim();
-        macro_input.element.value = url;
+        macro_url_input.element.value = url;
 
-        const success_indicator = macro_input.parent.query_selector(".success-indicator");
+        const macro_input = this.macros_pane.query_selector("textarea");
+
+        const success_indicator = macro_url_input.parent.query_selector(".success-indicator");
         success_indicator.class_list.remove("success", "failure");
 
         // Clear the error banner if it's an error caused by a previous failure of
@@ -3525,11 +3529,16 @@ class UI {
             // problem, we try to prefix URLs that failed to load with the following service
             // (which should surely not be necessary with `credentials: "omit"`). In doing so, we
             // are hoping that the service never becomes malicious.
-            const CORS_PROXY = "https://api.allorigins.win/raw?url=";
+            const CORS_PROXY = "https://corsproxy.io/?url=";
 
             const attempt_to_fetch_macros = (url, prefix = "", repeat = true) => {
                 fetch(`${prefix}${url}`, { credentials: "omit" })
-                    .then((response) => response.text())
+                    .then((response) => {
+                        if (response.ok) {
+                            return response.text();
+                        }
+                        return Response.error();
+                    })
                     .then((text) => {
                         if (load_version !== this.macro_load_version) {
                             return;
@@ -3538,12 +3547,12 @@ class UI {
                         this.macro_text = null;
                         this.macro_url = url;
                         this.macro_url_text = text;
-                        this.macros_input.element.textContent = text;
+                        macro_input.element.value = text;
                         success_indicator.class_list.remove("unknown");
                         success_indicator.class_list.add("success");
-                        macro_input.element.blur();
+                        macro_url_input.element.blur();
                     })
-                    .catch(() => {
+                    .catch((e) => {
                         if (load_version !== this.macro_load_version) {
                             return;
                         }
@@ -3567,7 +3576,7 @@ class UI {
             ++this.macro_load_version;
             this.macro_text = null;
             this.macro_url_text = null;
-            this.macros_input.element.textContent = "";
+            macro_input.element.value = "";
 
             // If the URL is empty, we simply reset all macro and colour definitions (as if the user
             // had never loaded any macros or colours).
@@ -5650,11 +5659,25 @@ class Panel {
         }
         renderer_select.element.value = ui.settings.get("quiver.renderer");
 
-        this.global = new DOM.Div({ class: "panel global" }).add(
-            new DOM.Element("label").add("Renderer: ")
-        ).add(renderer_select).add(
+        this.global = new DOM.Div({ class: "panel global" })
+        .add(renderer_select).add(
             new DOM.Element("label").add("Import: ").set_attributes({ "class": "katex-only" })
-        ).add(import_from_tikz).add(
+        ).add(import_from_tikz)
+        .add(new DOM.Element("button", { class: "katex-only" }).add("Macros")
+            .listen("click", () => {
+                const is_hidden = ui.macros_pane.class_list.contains("hidden");
+                if (!ui.panel.dismiss_port_pane(ui)) {
+                    ui.dismiss_pane();
+                }
+                if (is_hidden) {
+                    ui.macros_pane.query_selector("textarea").element.value = ui.macro_text
+                        || ui.macro_url_text
+                        || "";
+                    ui.macros_pane.class_list.remove("hidden");
+                    ui.macros_pane.query_selector('input[type="text"]').element.focus();
+                }
+            })
+        ).add(
             new DOM.Element("label").add("Export: ")
         ).add(
             // The shareable link button.
@@ -5668,55 +5691,8 @@ class Panel {
               .listen("click", () => {
                   display_port_pane("export", "html");
               })
-        ).add(export_to_latex).add(export_to_typst).add(
-            new DOM.Div({ class: "indicator-container katex-only" }).add(
-                new DOM.Element("label").add("Macros: ")
-                    .add(
-                        new DOM.Element("a", { class: "help-button", title: "Help", href: "#", style: "margin-left: 4px; color: var(--ui-grey); text-decoration: none;" }).add("(?)")
-                            .listen("click", (event) => {
-                                event.preventDefault();
-                                const pane = ui.element.query_selector("#macros-help-pane");
-                                const is_hidden = pane.class_list.contains("hidden");
-                                ui.dismiss_pane();
-                                ui.panel.dismiss_port_pane(ui);
-                                if (is_hidden) {
-                                    pane.class_list.remove("hidden");
-                                }
-                            })
-                    )
-            ).add(
-                new DOM.Element("input", {
-                    type: "text",
-                    placeholder: "Paste URL here",
-                }).listen("wheel", (event) => {
-                    event.stopImmediatePropagation();
-                }, { passive: true }).listen("keydown", (event, input) => {
-                    if (event.key === "Enter") {
-                        event.stopPropagation();
-                        ui.load_macros_from_url(input.value);
-                        input.blur();
-                    }
-                }).listen("paste", (_, input) => {
-                    delay(() => ui.load_macros_from_url(input.value));
-                })
-            ).add(
-                new DOM.Element("button", { style: "margin-left: 4px; padding: 2px 6px;" }).add("Edit")
-                    .listen("click", () => {
-                        const pane = ui.element.query_selector("#macros-pane");
-                        const is_hidden = pane.class_list.contains("hidden");
-                        ui.dismiss_pane();
-                        ui.panel.dismiss_port_pane(ui);
-                        if (is_hidden) {
-                            ui.macros_input.element.textContent = ui.macro_text
-                                || ui.macro_url_text
-                                || "";
-                            pane.class_list.remove("hidden");
-                        }
-                    })
-            ).add(
-                new DOM.Div({ class: "success-indicator" })
-            )
-        );
+        ).add(export_to_latex)
+        .add(export_to_typst);
 
         // Prevent propagation of pointer events when interacting with the global options.
         this.global.listen(pointer_event("down"), (event) => {
@@ -8422,7 +8398,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     ui.macro_text = decodeURIComponent(query_data.get("macros"));
                     ui.macro_url = null;
                     ui.macro_url_text = null;
-                    ui.macros_input.element.textContent = ui.macro_text;
+                    ui.macros_pane.query_selector("textarea").element.value = ui.macro_text;
                     ui.load_macros(ui.macro_text);
                 // Otherwise, if there is a `macro_url`, load the macros from it.
                 } else if (query_data.has("macro_url")) {
