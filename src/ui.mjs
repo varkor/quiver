@@ -17,7 +17,7 @@ Object.assign(CONSTANTS, {
     /// diagrams.
     MAXIMUM_CELL_LEVEL: 4,
     /// The width of the dashed grid lines.
-    GRID_BORDER_WIDTH: 2,
+    GRID_BORDER_WIDTH: 1,
     /// The padding of the content area of a vertex.
     CONTENT_PADDING: 8,
     /// How much (horizontal and vertical) space (in pixels) in the SVG to give around the arrow
