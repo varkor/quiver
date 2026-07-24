@@ -130,16 +130,14 @@ Note that you will need to have the [`quiver.sty` package](https://raw.githubuse
 
 ## Importing macros and colours
 
-To use custom macros and colours in **quiver**, create a text file containing the definitions (for instance, the following), one definition per line.
+To use custom macros and colours in **quiver**, create a text file containing each of definitions, one per line. For instance:
 
 ```latex
-\newcommand{\cat}{\mathscr}
-\newcommand{\psh}{\widehat}
-\newcommand{\smcat}{\mathbb}
 \newcommand{\yo}{よ}
+\definecolor{redchalk}{RGB}{214, 92, 92}
 ```
 
-Upload the file to a publicly accessible URL (for instance, [gist.github.com](https://gist.github.com/)). Next, click the **Edit macros** button in the toolbar at the bottom, and paste the URL for the raw text into the input field. Alternatively, you can paste the definitions directly into the text area.
+Upload the file to a publicly accessible URL (for instance, [gist.github.com](https://gist.github.com/)). Next, click the **Macros** button in the toolbar at the bottom, and paste the URL for the raw text into the input field. Alternatively, you can type or paste the definitions directly into the text area.
 
 Currently, macros may be defined using `\newcommand`, `\newcommand*`, `\renewcommand`, `\renewcommand*`, `\DeclareMathOperator`, and `\DeclareMathOperator*`; and colours may be defined using `\definecolor` (using the colour modes: `rgb`, `RGB`, `HTML`, `gray`).
 

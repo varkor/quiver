@@ -739,7 +739,7 @@ class UI {
         this.macro_url_text = null;
 
         // A monotonically increasing ID used to ignore stale macro URL fetch results.
-        this.macro_load_version = 0;
+        this.macro_update_number = 0;
 
         // The user settings, which are stored persistently across sessions in `localStorage`.
         this.settings = new Settings();
@@ -1154,15 +1154,11 @@ class UI {
         panes.push(welcome_pane);
 
         // Set up the macros pane.
-
         const macro_url_input = new DOM.Element("input", {
             type: "text",
             placeholder: "Paste URL here",
         });
-        const macros_input = new DOM.Element("textarea", {
-            spellcheck: "false",
-            class: "macros-input",
-        });
+        const macros_input = new DOM.Element("textarea", { spellcheck: "false" });
 
         macro_url_input.listen("wheel", (event) => {
             event.stopImmediatePropagation();
@@ -1189,35 +1185,28 @@ class UI {
                 macro_url_input.element.focus();
             }
         }).listen("input", (event) => {
-            const text = macros_input.element.value;
-            const edited_url_macros = this.macro_url !== null
-                && this.macro_url_text !== null
-                && text !== this.macro_url_text;
-
-            if (edited_url_macros || this.macro_url === null) {
+            const macro_text = macros_input.element.value.trim();
+            if (macro_text !== this.macro_url_text) {
                 // Inline edits take precedence and invalidate URL fetches in flight.
-                ++this.macro_load_version;
-                this.macro_text = text;
-                this.macro_url = null;
-                this.macro_url_text = null;
+                ++this.macro_update_number;
+                this.macro_text = macro_text;
+                // We deliberately do not reset `this.macro_url` and `this.macro_url_text`, so that
+                // if the user edits the macros manually, but then reverts the changes, we can
+                // simply export the macro URL instead of all the text.
+                this.load_macros(macro_text);
             } else {
-                // URL macros are unchanged, so keep URL as the canonical source.
                 this.macro_text = null;
             }
-
-            this.load_macros(text);
         });
 
-        this.macros_pane = new DOM.Div({ id: "macros-pane", class: "pane hidden" })
+        this.macros_pane = new DOM.Div({ class: "pane hidden" })
             .add(new DOM.Element("h1").add("Custom macros"))
             .add(new DOM.Element("p")
-                .add("Paste a URL here to load custom macros and colours:")
+                .add("Paste a URL below to load custom macros and colours:")
             )
             .add(macro_url_input)
-            .add(new DOM.Div({ class: "success-indicator" }))
-            .add(new DOM.Element("p")
-                .add("Or input them manually below (one definition per line):")
-            ).add(macros_input)
+            .add(new DOM.Element("p").add("Or input them below (one definition per line):"))
+            .add(macros_input)
             .add(
                 new DOM.Element("p")
                     .add("See the ")
@@ -3502,6 +3491,8 @@ class UI {
 
     /// Load macros from a URL.
     load_macros_from_url(url) {
+        // Cancel any in-flight URL fetches.
+        const macro_update_number = ++this.macro_update_number;
         // Reset the stored macro URL. We don't want to store outdated URLs, but we also don't
         // want to store invalid URLs, so we'll set `this.macro_url` when we succeed in fetching the
         // definitions.
@@ -3511,25 +3502,19 @@ class UI {
         const macro_url_input = this.macros_pane.query_selector('input[type="text"]');
         url = url.trim();
         macro_url_input.element.value = url;
-
         const macro_input = this.macros_pane.query_selector("textarea");
-
-        const success_indicator = macro_url_input.parent.query_selector(".success-indicator");
-        success_indicator.class_list.remove("success", "failure");
 
         // Clear the error banner if it's an error caused by a previous failure of
         // `load_macros`.
         UI.dismiss_error("macro-load");
 
         if (url !== "") {
-            const load_version = ++this.macro_load_version;
-            success_indicator.class_list.add("unknown");
             // CORS is terribly frustrating. We simply want to fetch some text, but are often
             // unable to do so, because CORS is opt-in and most sites have not. To alleviate this
             // problem, we try to prefix URLs that failed to load with the following service
             // (which should surely not be necessary with `credentials: "omit"`). In doing so, we
             // are hoping that the service never becomes malicious.
-            const CORS_PROXY = "https://corsproxy.io/?url=";
+            const CORS_PROXY = "https://proxy.cors.sh/";
 
             const attempt_to_fetch_macros = (url, prefix = "", repeat = true) => {
                 fetch(`${prefix}${url}`, { credentials: "omit" })
@@ -3540,20 +3525,18 @@ class UI {
                         return Response.error();
                     })
                     .then((text) => {
-                        if (load_version !== this.macro_load_version) {
+                        if (macro_update_number !== this.macro_update_number) {
                             return;
                         }
                         this.load_macros(text);
                         this.macro_text = null;
                         this.macro_url = url;
-                        this.macro_url_text = text;
-                        macro_input.element.value = text;
-                        success_indicator.class_list.remove("unknown");
-                        success_indicator.class_list.add("success");
+                        this.macro_url_text = text.trim();
+                        macro_input.element.value = this.macro_url_text;
                         macro_url_input.element.blur();
                     })
-                    .catch((e) => {
-                        if (load_version !== this.macro_load_version) {
+                    .catch(() => {
+                        if (macro_update_number !== this.macro_update_number) {
                             return;
                         }
                         if (repeat && !url.startsWith(CORS_PROXY)) {
@@ -3566,16 +3549,11 @@ class UI {
                             "from the given URL.",
                             "macro-load",
                         );
-                        success_indicator.class_list.remove("unknown");
-                        success_indicator.class_list.add("failure");
                     });
             };
             attempt_to_fetch_macros(url);
         } else {
-            // Cancel any in-flight URL fetch and reset macro source state.
-            ++this.macro_load_version;
             this.macro_text = null;
-            this.macro_url_text = null;
             macro_input.element.value = "";
 
             // If the URL is empty, we simply reset all macro and colour definitions (as if the user
@@ -4239,12 +4217,11 @@ class Panel {
             }
         });
 
-        const add_button = (title, label, key, action) => {
-            const button
-                = Panel.create_button_with_shortcut(ui, title, label, { key }, (event) => {
-                    this.unqueue_selected(ui);
-                    return action(event);
-                });
+        const add_button = (label, key, action) => {
+            const button = Panel.create_button_with_shortcut(ui, label, { key }, (event) => {
+                this.unqueue_selected(ui);
+                return action(event);
+            });
             button.set_attributes({ disabled: true });
             button.add_to(wrapper);
         };
@@ -5581,7 +5558,6 @@ class Panel {
         // The import button.
         const import_from_tikz = Panel.create_button_with_shortcut(
             ui,
-            "tikz-cd diagram",
             "tikz-cd",
             { key: "I", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always },
             () => {
@@ -5595,7 +5571,6 @@ class Panel {
         const export_to_latex = Panel.create_button_with_shortcut(
             ui,
             "LaTeX",
-            "LaTeX",
             { key: "E", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always },
             () => {
                 if (ui.settings.get("quiver.renderer") === "katex") {
@@ -5605,7 +5580,6 @@ class Panel {
         ).set_attributes({ class: "katex-only" });
         const export_to_typst = Panel.create_button_with_shortcut(
             ui,
-            "Typst",
             "Typst",
             { key: "E", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always },
             () => {
@@ -5703,10 +5677,8 @@ class Panel {
     }
 
     /// Creates a UI button with an associated keyboard shortcut.
-    static create_button_with_shortcut(ui, title, label, shortcut, action) {
-        const button = new DOM.Element("button", { title })
-            .add(label)
-            .listen("click", action);
+    static create_button_with_shortcut(ui, label, shortcut, action) {
+        const button = new DOM.Element("button").add(label).listen("click", action);
         ui.shortcuts.add([shortcut], (event) => {
             if (!button.element.disabled) {
                 action(event);
@@ -8392,13 +8364,10 @@ document.addEventListener("DOMContentLoaded", () => {
             try {
                 // Decode the diagram.
                 QuiverImportExport.base64.import(ui, query_data.get("q"));
-                // If there are directly embedded macros, prefer them to avoid URL import races.
+                // If there are directly embedded macros, prefer them, to avoid URL fetch races.
                 if (query_data.has("macros")) {
-                    ++ui.macro_load_version;
-                    ui.macro_text = decodeURIComponent(query_data.get("macros"));
-                    ui.macro_url = null;
-                    ui.macro_url_text = null;
-                    ui.macros_pane.query_selector("textarea").element.value = ui.macro_text;
+                    ++ui.macro_update_number;
+                    ui.macro_text = decodeURIComponent(query_data.get("macros")).trim();
                     ui.load_macros(ui.macro_text);
                 // Otherwise, if there is a `macro_url`, load the macros from it.
                 } else if (query_data.has("macro_url")) {
