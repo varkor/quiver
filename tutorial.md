@@ -126,7 +126,7 @@ When you are done with your diagram, you are ready to export it. You have a few 
 
 When you export, the text will helpfully be highlighted for you, ready to copy-and-paste. Note that the text includes a link to the **quiver** diagram. This makes it easy to modify the diagram in the future, without having to create the diagram again from scratch: just open the link, and edit away.
 
-Note that you will need to have the [`quiver.sty` package](https://raw.githubusercontent.com/varkor/quiver/master/package/quiver.sty) for diagrams exported by **quiver** to render correctly in LaTeX.
+Note that you will need to have the [`quiver.sty` package](https://raw.githubusercontent.com/varkor/quiver/master/package/quiver.sty) for diagrams exported by **quiver** to render correctly in LaTeX (see below for more information).
 
 ## Importing macros and colours
 
@@ -154,6 +154,14 @@ You can find all the keyboard shortcuts listed in the **Shortcuts** pane, which 
 For example, you can cut, copy, and paste using the usual keyboard shortcuts.
 
 If anything is unclear, or you encounter any problems, you can report it in the [Issue Tracker](https://github.com/varkor/quiver/issues).
+
+## The `quiver.sty` package
+
+The `quiver.sty` package is available [on GitHub](https://raw.githubusercontent.com/varkor/quiver/master/package/quiver.sty) and [on CTAN](https://ctan.org/pkg/quiver). It has consequently been available through [TeXLive](https://www.tug.org/texlive/) from TeXLive 2024, and is available through [MiKTeX](https://miktex.org/). Note that the version distributed through the annual TeXLive distributions is often out of date, in which case you will need to update `quiver.sty` manually.
+
+### Compatibility information
+
+- To use [`babel`](https://ctan.org/pkg/babel) with **quiver**, you will need add `\usetikzlibrary{babel}` to your preamble.
 
 ## Query parameters
 
