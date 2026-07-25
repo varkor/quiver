@@ -1231,7 +1231,7 @@ export class Arrow {
                 path.move_to(point);
                 path.arc_by(
                     new Point(start_sign * head_width, head_width),
-                    // We're drawing a semicircle, so the angle is *actually* unimportant.
+                    // We're drawing a semicircle, so the angle is actually unimportant.
                     angle,
                     // This argument appears to be unimportant.
                     false,
@@ -1272,7 +1272,7 @@ export class Arrow {
                 path.move_to(point);
                 path.arc_by(
                     new Point(start_sign * head_width, head_width),
-                    // We're drawing a semicircle, so the angle is *actually* unimportant.
+                    // We're drawing a semicircle, so the angle is actually unimportant.
                     angle,
                     // This argument appears to be unimportant.
                     false,
@@ -1287,7 +1287,8 @@ export class Arrow {
                     side_sign === 1 ? end_ind : 1 - end_ind,
                     new Point(head_width, -head_width * side_sign).rotate(angle),
                 );
-                path.line_by(new Point(0, -head_width * 3 * side_sign).rotate(angle));
+                path.line_by(new Point(0, -(head_width + CONSTANTS.LINE_SPACING * 2) * side_sign)
+                    .rotate(angle));
             }
 
             // Coils are drawn at the end of edges and therefore aren't considered to take up any
