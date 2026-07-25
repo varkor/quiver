@@ -106,6 +106,8 @@ export const CONSTANTS = {
         HARPOON_TOP: ["harpoon-top"],
         /// A harpoon: just the lower part of the arrow head (⇁).
         HARPOON_BOTTOM: ["harpoon-bottom"],
+        /// A multimap (⊸).
+        MULTIMAP: ["multimap"],
         /// A hook (↪).
         HOOK_TOP: ["hook-top"],
         /// A hook.
@@ -603,12 +605,12 @@ export class Arrow {
         // When we draw squiggly arrows, we have straight line padding near the tail and head, which
         // we need to account for when drawing dashed lines.
         const adjust_dash_padding = (heads, endpoint, is_start) => {
-            if (heads.length > 0 && heads[0] === "mono") {
-                // The "mono" style is special in that its angle is not based on an endpoint, but is
-                // offset from an endpoint. When we draw n-cells, if we simply the dashes to the
-                // endpoint offset, these will be too short when the rotation of the head is
-                // different to the rotation of the endpoint. We therefore have to add some padding
-                // at the endpoint to make sure we always draw enough line.
+            if (heads.length > 0 && (heads[0] === "mono" || heads[0] === "multimap")) {
+                // The "mono"/"multimap" styles is special in that its angle is not based on an
+                // endpoint, but is offset from an endpoint. When we draw n-cells, if we simply the
+                // dashes to the endpoint offset, these will be too short when the rotation of the
+                // head is different to the rotation of the endpoint. We therefore have to add some
+                // padding at the endpoint to make sure we always draw enough line.
                 const head_angle = curve.tangent(t_after_length(
                     curve.arc_length(endpoint.t) + head_width * (is_start ? 1 : -1)
                 ));
@@ -1311,11 +1313,13 @@ export class Arrow {
                 let margin_left, margin_right, margin_begin;
                 switch (heads[i]) {
                     case "epi":
+                    case "multimap":
                     case "corner":
                     case "corner-inverse":
                         [margin_left, margin_right, margin_begin] = [0, head_width, 0];
                         break;
                     case "mono":
+                    case "multimap":
                         [margin_left, margin_right, margin_begin] = [0, head_width, head_width];
                         break;
                     case "maps to":
@@ -1377,11 +1381,11 @@ export class Arrow {
                                             = -start_sign * (head_width + CONSTANTS.MASK_PADDING);
                                         break;
                                     case "mono":
-                                        // We have to pad the mask for "mono" for the same reason we
-                                        // add `dash_padding`. In this case, we have to add twice as
-                                        // much, because the padding is added everywhere, even where
-                                        // it is not needed, so we need to make sure we cover it
-                                        // with the mask.
+                                        // We have to pad the mask for "mono" for the
+                                        // same reason we add `dash_padding`. In this case, we have
+                                        // to add twice as much, because the padding is added
+                                        // everywhere, even where it is not needed, so we need to
+                                        // make sure we cover it with the mask.
                                         const padding
                                             = (is_start ? dash_padding.start : dash_padding.end)
                                                 * 2;
@@ -1394,6 +1398,12 @@ export class Arrow {
                                 );
                             }
                         }
+                        break;
+                    case "multimap":
+                        const r = head_height / 2;
+                        path.move_to(point.sub(new Point(r, 0)));
+                        path.arc_by(new Point(r, r), 0, true, false, new Point(r * 2, 0));
+                        path.arc_by(new Point(r, r), 0, true, false, new Point(-r * 2, 0));
                         break;
 
                     // The corner symbol used for pullbacks and pushouts.

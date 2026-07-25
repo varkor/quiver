@@ -1109,6 +1109,10 @@ export class Parser {
             edge.options.style.head.side = this.eat("'") ? "bottom" : "top";
             return;
         }
+        if (this.eat("multimap")) {
+            edge.options.style.head.name = "multimap";
+            return;
+        }
         // Colour.
         let ate_color;
         if (this.eat("draw") || ((ate_color = true) && this.eat("color"))) {

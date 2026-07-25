@@ -3317,6 +3317,9 @@ class UI {
                             "bottom": "HARPOON_BOTTOM",
                         }[options.style.head.side]];
                         break;
+                    case "multimap":
+                        style.heads = CONSTANTS.ARROW_HEAD_STYLE.MULTIMAP;
+                        break;
                 }
                 break;
 
@@ -4637,11 +4640,12 @@ class Panel {
             [
                 ["arrowhead", "Arrowhead", { name: "arrowhead" }, `${key_index++}`],
                 ["none", "No arrowhead", { name: "none" }, `${key_index++}`],
-                ["epi", "Epi", { name: "epi"}, `${key_index++}`],
+                ["epi", "Epi", { name: "epi" }, `${key_index++}`],
                 ["top-harpoon", "Top harpoon",
                     { name: "harpoon", side: "top" }, `${key_index++}`, ["short", "start-of-line"]],
                 ["bottom-harpoon", "Bottom harpoon",
                     { name: "harpoon", side: "bottom" }, `${key_index++}`, ["short"]],
+                ["multimap", "Multimap", { name: "multimap"}, `${key_index++}`],
             ],
             "head-type",
             ["vertical", "short", "arrow-style", "kbd-requires-focus"],
@@ -5969,8 +5973,7 @@ class Panel {
                     }
 
                     const left = options_list.class_list.contains("vertical")
-                        ? ((i % 2 === 0 && classes.includes("short"))
-                            ? option.element.offsetWidth : 0)
+                        ? option.bounding_rect().x - options_list.bounding_rect().x
                         : option.element.offsetLeft;
                     options_list.add(new DOM.Element("kbd", { class: "hint button" }, {
                         left: `${left}px`,

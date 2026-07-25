@@ -883,6 +883,18 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                                     );
                                 }
                                 break;
+
+                            case "multimap":
+                                parameters["multimap"] = "";
+                                if (edge.options.level > 1) {
+                                    tikz_incompatibilities.add(
+                                        "double arrows or higher with multimap heads"
+                                    );
+                                }
+                                if (!settings.package_version_is_at_least("1.7.0")) {
+                                    add_dependency("quiver 1.7.0", "multimap heads");
+                                }
+                                break;
                         }
 
                         break;
@@ -1134,6 +1146,9 @@ QuiverExport.fletcher = new class extends QuiverExport {
                             case "arrowhead":
                                 arrow_marks += "<";
                                 break;
+                            case "coil":
+                                fletcher_incompatibilities.add("coil tails");
+                                break;
                         }
                         // Arrow body
                         switch (edge.options.style.body.name){
@@ -1190,6 +1205,9 @@ QuiverExport.fletcher = new class extends QuiverExport {
                             case "harpoon":
                                 arrow_marks += "harpoon";
                                 arrow_marks += edge.options.style.head.side === "top" ? "" : "'";
+                                break;
+                            case "multimap":
+                                arrow_marks += "O";
                                 break;
                         }
                         break;

@@ -830,8 +830,12 @@ input[type="text"].flash {
     border-bottom-right-radius: 2px;
 }
 
-.panel input[type="radio"]:hover:not(:disabled):not(:active):not(:checked) {
+.panel .options:not(.focused) input[type="radio"]:hover:not(:disabled):not(:active):not(:checked) {
     background-color: var(--ui-hover);
+}
+
+.panel .options.focused input[type="radio"]:active:not(:disabled) {
+    background-color: var(--ui-blue);
 }
 
 .panel input[type="radio"]:active:not(:disabled) {
