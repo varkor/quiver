@@ -3521,7 +3521,8 @@ class UI {
 class History {
     constructor() {
         // A list of all actions taken by the user.
-        // Each "action" actually comprises a list of atomic actions.
+        // Each "action" actually comprises a list of atomic actions. Each action is of the form
+        // `{ group, actions }`.
         this.actions = [];
 
         // The index after the last taken action (usually equal to `this.actions.length`).
@@ -3534,8 +3535,15 @@ class History {
         this.states = [new History.State(new Set(), Position.zero())];
 
         // We allow history events to be collapsed if two consecutive events have the same
-        // (elementwise) `collapse` array. This tracks the previous one.
+        // (elementwise) `collapse` array. For instance, if a user edits a label twice in a row, it
+        // should record the overall change, rather than both edits as individual events. This
+        // variable tracks the previous one.
         this.collapse = null;
+
+        // We also allow history events to be grouped, so they are executed and undone together.
+        // This is distinct from collapsing, which modifies history events, rather than groups them.
+        this.is_grouping = false;
+        this.group = 0;
     }
 
     /// Add a reversible event to the history. Its effect will not be invoked (i.e. one should
@@ -3552,7 +3560,7 @@ class History {
         const state = new History.State(selection, ui.focus_position);
         this.states[this.present] = state;
         this.actions.splice(this.present, this.actions.length - this.present);
-        this.actions.push(actions);
+        this.actions.push({ actions, group: this.is_grouping ? this.group : null });
 
         if (invoke) {
             this.redo(ui);
@@ -3588,12 +3596,13 @@ class History {
 
     /// Adds a new history event, or collapses it into the previous event if the two match.
     add_or_modify_previous(ui, collapse, new_actions) {
+        // Currently, collapsing and grouping do not interact, so we simply ignore the group.
         const actions = this.get_collapsible_actions(collapse);
         if (actions !== null) {
             // If the previous history event was to modify the property `kind`, then we're just
             // going to modify that event rather than add a new one.
             let unchanged = true;
-            outer: for (const action of actions) {
+            outer: for (const action of actions.actions) {
                 // We require that each `kind` in `new_actions` is unique.
                 for (const new_action of new_actions) {
                     if (action.kind === new_action.kind) {
@@ -3609,7 +3618,7 @@ class History {
                 }
             }
             // Invoke the new property changes immediately.
-            this.effect(ui, actions, false);
+            this.effect(ui, actions.actions, false);
             if (unchanged) {
                 this.pop(ui);
             }
@@ -3635,6 +3644,17 @@ class History {
         ui.quiver.flush(this.present);
         this.states.splice(this.present + 1, 1);
         this.actions.splice(this.present, 1);
+    }
+
+    /// Start grouping actions.
+    begin_group() {
+        this.is_grouping = true;
+    }
+
+    /// Stop grouping actions.
+    end_group() {
+        this.is_grouping = false;
+        ++this.group;
     }
 
     /// Trigger an action. Returns whether the panel should be updated after the action.
@@ -3869,8 +3889,20 @@ class History {
             --this.present;
             this.permanentise();
 
-            // Trigger the reverse of the previous action.
-            const update_panel = this.effect(ui, this.actions[this.present], true);
+            let update_panel = false;
+
+            const group = this.actions[this.present].group;
+            while (true) {
+                // Trigger the reverse of the previous action.
+                update_panel
+                    = this.effect(ui, this.actions[this.present].actions, true) || update_panel;
+                if (this.present === 0 || group === null
+                    || this.actions[this.present - 1].group !== group) {
+                    break;
+                }
+                --this.present;
+            }
+
             ui.deselect();
             const state = this.states[this.present];
             ui.select(...state.selection);
@@ -3891,8 +3923,21 @@ class History {
 
     redo(ui) {
         if (this.present < this.actions.length) {
-            // Trigger the next action.
-            const update_panel = this.effect(ui, this.actions[this.present], false);
+            let update_panel = false;
+
+            const group = this.actions[this.present].group;
+            while (true) {
+                // Trigger the next action.
+                update_panel
+                    = this.effect(ui, this.actions[this.present].actions, false) || update_panel;
+                if (this.present + 1 === this.actions.length || group === null
+                    || this.actions[this.present + 1].group !== group
+                ) {
+                    break;
+                }
+                ++this.present;
+            }
+
 
             ++this.present;
             this.permanentise();
@@ -6839,16 +6884,13 @@ class Toolbar {
 
         const transform = add_subtoolbar("Transform", "transform");
 
-        add_action(
-            "Flip hor.",
-            "flip-hor",
-            [],
-            () => {
+        const transform_actions = {
+            flip_hor: () => {
                 const vertices = ui.quiver.all_cells().filter((cell) => cell.is_vertex());
                 const bounding_rect = ui.quiver.bounding_rect();
                 if (bounding_rect !== null) {
                     const [[x_min,], [x_max,]] = bounding_rect;
-                    ui.history.add(ui, [{
+                    return [{
                         kind: "move",
                         displacements: vertices.map((vertex) => ({
                             vertex,
@@ -6878,21 +6920,16 @@ class Toolbar {
                                     to: 180 - edge.options.angle,
                                 };
                             }),
-                    }], true);
+                    }];
                 }
+                return [];
             },
-            transform
-        );
-        add_action(
-            "Flip ver.",
-            "flip-ver",
-            [],
-            () => {
+            flip_ver: () => {
                 const vertices = ui.quiver.all_cells().filter((cell) => cell.is_vertex());
                 const bounding_rect = ui.quiver.bounding_rect();
                 if (bounding_rect !== null) {
                     const [[, y_min], [, y_max]] = bounding_rect;
-                    ui.history.add(ui, [{
+                    return [{
                         kind: "move",
                         displacements: vertices.map((vertex) => ({
                             vertex,
@@ -6922,21 +6959,16 @@ class Toolbar {
                                     to: -edge.options.angle,
                                 };
                             }),
-                    }], true);
+                    }];
                 }
+                return [];
             },
-            transform
-        );
-        add_action(
-            "Rotate",
-            "rotate",
-            [],
-            () => {
+            rotate: () => {
                 const vertices = ui.quiver.all_cells().filter((cell) => cell.is_vertex());
                 const bounding_rect = ui.quiver.bounding_rect();
                 if (bounding_rect !== null) {
                     const [[x_min, y_min], [x_max,]] = bounding_rect;
-                    ui.history.add(ui, [{
+                    return [{
                         kind: "move",
                         displacements: vertices.map((vertex) => ({
                             vertex,
@@ -6955,9 +6987,68 @@ class Toolbar {
                             }
                             return { edge, from: edge.options.angle, to };
                         }),
-                    }], true);
+                    }];
                 }
+                return [];
             },
+        }
+
+        add_action(
+            "Flip hor.",
+            "flip-hor",
+            [],
+            () => ui.history.add(ui, transform_actions.flip_hor(), true),
+            transform
+        );
+        add_action(
+            "Flip ver.",
+            "flip-ver",
+            [],
+            () => ui.history.add(ui, transform_actions.flip_ver(), true),
+            transform
+        );
+        add_action(
+            "Flip diag.",
+            "flip-diag-nw",
+            [],
+            () => {
+                ui.history.begin_group();
+                ui.history.add(ui, transform_actions.rotate(), true);
+                ui.history.add(ui, transform_actions.flip_hor(), true);
+                ui.history.end_group();
+            },
+            transform
+        );
+        add_action(
+            "Flip diag.",
+            "flip-diag-ne",
+            [],
+            () => {
+                ui.history.begin_group();
+                ui.history.add(ui, transform_actions.flip_hor(), true);
+                ui.history.add(ui, transform_actions.rotate(), true);
+                ui.history.end_group();
+            },
+            transform
+        );
+        add_action(
+            "Rotate",
+            "rotate-cw",
+            [],
+            () => {
+                ui.history.begin_group();
+                for (let i = 0; i < 3; ++i) {
+                    ui.history.add(ui, transform_actions.rotate(), true);
+                }
+                ui.history.end_group();
+            },
+            transform
+        );
+        add_action(
+            "Rotate",
+            "rotate-acw",
+            [],
+            () => ui.history.add(ui, transform_actions.rotate(), true),
             transform
         );
 
