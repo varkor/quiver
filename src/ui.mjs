@@ -55,6 +55,11 @@ Object.assign(CONSTANTS, {
     TYPST_PREAMBLE: "#set page(width: auto, height: auto, margin: 0em)\n#set text(font: \"New Computer Modern\", 32pt)\n",
     // Fletcher version.
     FLETCHER_VERSION: "0.5.8",
+    // Themes.
+    THEMES: {
+        LIGHT: "light",
+        DARK: "dark",
+    },
 });
 
 /// Various states for the UI (e.g. whether cells are being rearranged, or connected, etc.).
@@ -734,6 +739,9 @@ class UI {
 
         // The user settings, which are stored persistently across sessions in `localStorage`.
         this.settings = new Settings();
+
+        // The theme (e.g. light or dark).
+        this.theme = this.settings.get("quiver.theme");
     }
 
     /// Clear the current diagram. This also clears the history.
@@ -1080,6 +1088,11 @@ class UI {
                 new DOM.Element("li").add(
                     new DOM.Link("https://github.com/davidson16807", "Carl Davidson", true)
                 ).add(", for discussing and prototyping loop rendering."),
+                new DOM.Element("li").add(
+                    new DOM.Link("https://github.com/plp13", "Pantelis Panayiotou", true)
+                ).add(" and ").add(
+                    new DOM.Link("https://github.com/BinaryQuantumSoul", "QuantumSoul", true)
+                ).add(", for prototyping dark themes."),
                 new DOM.Element("li").add(
                     "Everyone who has improved "
                 ).add(new DOM.Element("b").add("quiver"))
@@ -3113,8 +3126,6 @@ class UI {
         // Constants for parameters of the grid pattern.
         // The (average) length of the dashes making up the cell border lines.
         const DASH_LENGTH = this.default_cell_size / 16;
-        // The border colour.
-        const BORDER_COLOUR = "lightgrey";
 
         const [width, height] = [document.body.offsetWidth, document.body.offsetHeight];
         const canvas = this.grid;
@@ -3123,7 +3134,7 @@ class UI {
         const scale = 2 ** this.scale;
 
         const context = canvas.context;
-        context.strokeStyle = BORDER_COLOUR;
+        context.strokeStyle = "currentColor";
         context.lineWidth = Math.max(1, CONSTANTS.GRID_BORDER_WIDTH * scale);
         context.setLineDash([DASH_LENGTH * scale]);
 
@@ -3164,6 +3175,15 @@ class UI {
         context.stroke();
     }
 
+    /// Switch the theme of the interface.
+    switch_theme(theme) {
+        this.theme = theme;
+        this.element.class_list.toggle("dark-theme", this.theme === CONSTANTS.THEMES.DARK);
+        this.update_grid();
+        this.toolbar.element.query_selector('.action[data-name="dark-theme"] .name')
+            .replace((this.theme === CONSTANTS.THEMES.DARK ? "Light" : "Dark") + " theme");
+    }
+
     /// Get an `ArrowStyle` from the `options` associated to an edge.
     /// `ArrowStyle` is used simply for styling: we don't use it as an internal data representation
     /// for quivers. This helps keep a separation between structure and drawing, which makes it
@@ -3175,7 +3195,15 @@ class UI {
         // All arrow styles support labels, shifting, and colour.
         style.label_position = options.label_position / 100;
         style.shift = options.offset * CONSTANTS.EDGE_OFFSET_DISTANCE;
-        style.colour = options.colour.css();
+        // We only manually set the arrow colour if it's not the default colour, because in dark
+        // themes we wish to have a lighter appearance, even though the colour that will be exported
+        // is black.
+        if (options.colour.is_not_black()) {
+            style.colour = options.colour.css();
+        } else {
+            style.colour = null;
+        }
+
 
         switch (options.style.name) {
             case "arrow":
@@ -3680,9 +3708,11 @@ class History {
                 case "label_colour":
                     for (const label_colour of action.label_colours) {
                         label_colour.cell.label_colour = label_colour[to];
+                        const colour = label_colour.cell.label_colour.is_not_black()
+                            ? label_colour.cell.label_colour.css() : null;
                         label_colour.cell.element.query_selector(".label").set_style({
-                            color: label_colour.cell.label_colour.css(),
-                            fill: label_colour.cell.label_colour.css(),
+                            color: colour, // For KaTeX rendering.
+                            fill: colour, // For Typst rendering.
                         });
                     }
                     update_panel = true;
@@ -3909,6 +3939,8 @@ class Settings {
             // Whether to use a fixed size for the embedded `<iframe>`, or compute the size based on
             // the diagram.
             "export.embed.fixed_size": false,
+            // With which theme to export the embedded diagram.
+            "export.embed.theme": CONSTANTS.THEMES.LIGHT,
             // The width of an HTML embedded diagram in pixels.
             "export.embed.width": CONSTANTS.DEFAULT_EMBED_SIZE.WIDTH,
             // The height of an HTML embedded diagram in pixels.
@@ -3919,6 +3951,8 @@ class Settings {
             "quiver.renderer": CONSTANTS.DEFAULT_RENDERER,
             // Which quiver.sty version to target.
             "quiver.package_version": CONSTANTS.PACKAGE_VERSION,
+            // Whether to use light theme or dark theme.
+            "quiver.theme": CONSTANTS.THEMES.LIGHT,
         };
         try {
             // Try to update the default values with the saved settings.
@@ -4906,8 +4940,7 @@ class Panel {
                         ],
                         ui.settings.get("quiver.package_version"),
                         { name: "quiver_package_version" }).listen("change", (event) => {
-                            const package_version = event.target.value;
-                            ui.settings.set("quiver.package_version", package_version);
+                            ui.settings.set("quiver.package_version", event.target.value);
                             modify_and_update_output();
                         });
 
@@ -5017,6 +5050,19 @@ class Panel {
                         width: new DOM.Element("input", { type: "number", min: "0" }),
                         height: new DOM.Element("input", { type: "number", min: "0" }),
                     };
+                    const dark_mode_select = new DOM.Select([
+                        [CONSTANTS.THEMES.LIGHT, "Light"],
+                        [CONSTANTS.THEMES.DARK, "Dark"]
+                    ], ui.settings.get("export.embed.theme")).listen("change", (event) => {
+                        ui.settings.set("export.embed.theme", event.target.value);
+                        const { data, metadata } = modify(ui.quiver.export(
+                            "html",
+                            ui.settings,
+                            ui.options(),
+                            ui.definitions(),
+                        ));
+                        update_output(data, metadata, true);
+                    });
                     embed_options = new DOM.Div({ class: "options embed hidden" })
                         .add(new DOM.Element("label")
                             .add(fixed_size_checkbox)
@@ -5024,6 +5070,7 @@ class Panel {
                         )
                         .add(new DOM.Element("label").add("Width: ").add(embed_size.width))
                         .add(new DOM.Element("label").add("Height: ").add(embed_size.height))
+                        .add(new DOM.Element("label").add("Theme:").add(dark_mode_select))
                         .add_to(port_pane);
 
                     const checkboxes = [
@@ -7015,6 +7062,19 @@ class Toolbar {
         );
 
         add_action(
+            "Dark theme",
+            "dark-theme",
+            [],
+            function () {
+                ui.switch_theme(ui.theme === CONSTANTS.THEMES.LIGHT
+                    ? CONSTANTS.THEMES.DARK : CONSTANTS.THEMES.LIGHT);
+                ui.settings.set("quiver.theme", ui.theme);
+            },
+            settings,
+        );
+        ui.switch_theme(ui.theme);
+
+        add_action(
             "Shortcuts",
             "shortcuts",
             [{
@@ -8258,13 +8318,29 @@ document.addEventListener("DOMContentLoaded", () => {
             const scale = parseFloat(decodeURIComponent(query_data.get("scale")));
             if (!Number.isNaN(scale)) {
                 ui.pan_view(Offset.zero(), scale);
+            } else {
+                UI.display_error("Invalid scale amount.");
             }
         }
 
         // The `embed` parameter means that we should disable all UI elements and user interaction,
         // because the diagram is being displayed in an `<iframe>`.
         if (query_data.has("embed")) {
-            ui.switch_mode(new UIMode.Embedded())
+            ui.switch_mode(new UIMode.Embedded());
+            // By default, embedded diagrams will open in light mode, unless forced otherwise by the
+            // `theme` query parameter.
+            ui.switch_theme(CONSTANTS.THEMES.LIGHT);
+        }
+
+        // Allow the theme to be forced. The use case for this is embedded diagrams, but we
+        // currently permit the query parameter regardless.
+        if (query_data.has("theme")) {
+            const theme = query_data.get("theme");
+            if (Object.values(CONSTANTS.THEMES).includes(theme)) {
+                ui.switch_theme(theme);
+            } else {
+                UI.display_error("Unknown theme.");
+            }
         }
 
         // Set the renderer if it has been explicitly specified.
@@ -8273,6 +8349,8 @@ document.addEventListener("DOMContentLoaded", () => {
             if (["katex", "typst"].includes(renderer)) {
                 ui.settings.set("quiver.renderer", renderer);
                 ui.element.query_selector('select[name="renderer"]').element.value = renderer;
+            } else {
+                UI.display_error("Unknown renderer.");
             }
         }
 

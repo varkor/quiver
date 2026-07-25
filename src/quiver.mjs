@@ -1684,10 +1684,13 @@ QuiverExport.html = new class extends QuiverExport {
             options.dimensions.width + 2 * CONSTANTS.EMBED_PADDING,
             options.dimensions.height + 2 * CONSTANTS.EMBED_PADDING,
         ];
+        const theme = settings.get("export.embed.theme");
         return {
             data: `<!-- ${url} -->
 <iframe class="quiver-embed" \
-src="${url}${!quiver.is_empty() ? "&" : "#"}embed" \
+src="${url}${!quiver.is_empty() ? "&" : "#"}embed${
+    theme !== CONSTANTS.THEMES.LIGHT ? `&theme=${theme}` : ""
+}" \
 width="${width}" \
 height="${height}" \
 style="border-radius: 8px; border: none;">\

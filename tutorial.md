@@ -143,6 +143,10 @@ Upload the file to a publicly accessible URL (for instance, [gist.github.com](ht
 
 Currently, macros may be defined using `\newcommand`, `\newcommand*`, `\renewcommand`, `\renewcommand*`, `\DeclareMathOperator`, and `\DeclareMathOperator*`; and colours may be defined using `\definecolor` (using the colour modes: `rgb`, `RGB`, `HTML`, `gray`).
 
+## Themes
+
+The default theme is light. A dark theme, which alters the colour scheme of the interface elements, may be selected through the **Settings** menu. Note that the dark theme has special behaviour for the colours of object labels, arrows, and arrow labels: if the colour is the default (i.e. black), then it will display in the dark theme as a light colour. However, this is a purely aesthetic effect: when exporting, the original colour will be preserved.
+
 ## Other tips
 
 You can find all the keyboard shortcuts listed in the **Shortcuts** pane, which may be opened from the toolbar at the top of the window.
@@ -150,3 +154,14 @@ You can find all the keyboard shortcuts listed in the **Shortcuts** pane, which 
 For example, you can cut, copy, and paste using the usual keyboard shortcuts.
 
 If anything is unclear, or you encounter any problems, you can report it in the [Issue Tracker](https://github.com/varkor/quiver/issues).
+
+## Query parameters
+
+For convenience, the query parameters supported by **quiver** are the following.
+
+- `embed`: enables embedded mode, for displaying in an `<iframe>`. Expects no value. In this mode, editing the diagram is disabled, as well as various interface elements.
+- `macro_url`: a URL to load macros from. Expects a URL.
+- `q`: the diagram to load. Expects an encoded diagram, as exported by **quiver**.
+- `r`: sets the renderer. Expects either `katex` or `typst`.
+- `scale`: sets the initial zoom level. Expects any integer. For instance: `0` corresponds to the default zoom; `1` is zoomed in 2x; `-1` is zoomed out 2x. This is primarily intended to be used with embedded mode.
+- `theme`: sets the initial theme. Expects either `light` (the default) or `dark`. This is primarily intended to be used with embedded mode.

@@ -27,8 +27,6 @@ export const CONSTANTS = {
     STROKE_WIDTH: 1.5,
     /// The extra padding (in pixels) of the background around an edge.
     BACKGROUND_PADDING: 16,
-    /// The opacity (0 to 1) of the background.
-    BACKGROUND_OPACITY: 0.2,
     /// How much padding (in pixels) to give to masks to ensure they crop sufficiently.
     MASK_PADDING: 4,
     /// How much spacing (in pixels) to leave between arrowheads of the same type.
@@ -154,7 +152,8 @@ export class ArrowStyle {
         this.heads = CONSTANTS.ARROW_HEAD_STYLE.NORMAL;
         this.tails = CONSTANTS.ARROW_HEAD_STYLE.NONE;
         // The colour of the arrow.
-        this.colour = "black";
+        // `null` denotes the default colour, i.e. a colour that has not been explicitly assigned.
+        this.colour = null;
     }
 }
 
@@ -202,7 +201,8 @@ export class Arrow {
         this.id = Arrow.NEXT_ID++;
         this.element = new DOM.Div({ class: "arrow" });
         // The background to the edge, with which the user may interact.
-        this.background = new DOM.SVGElement("svg").add_to(this.element);
+        this.background = new DOM.SVGElement("svg", { class: "arrow-background" })
+            .add_to(this.element);
         // The SVG containing the edge itself, including the arrow head and tail.
         this.svg = new DOM.SVGElement("svg").add_to(this.element);
         // The mask to be used for any edges having this edge as a source or target.
@@ -482,10 +482,6 @@ export class Arrow {
         }
 
         // Redraw the background.
-        // First, set the opacity.
-        this.background.set_style({
-            opacity: CONSTANTS.BACKGROUND_OPACITY,
-        });
 
         // Draw the actual background. We only want to draw the background from endpoint to
         // endpoint, so we use `stroke-dasharray` to control where the background starts and ends.
@@ -493,10 +489,10 @@ export class Arrow {
         const arclen_to_end = curve.arc_length(end.t);
         const arclen = curve.arc_length(1);
         const bg_path = new Path().move_to(offset);
-        this.requisition_element(this.background, "path.arrow-background", {
+        this.requisition_element(this.background, "path", {
             d: `${ curve.render(bg_path) }`,
             fill: "none",
-            stroke: "black",
+            stroke: "currentColor",
             "stroke-width": edge_width + CONSTANTS.BACKGROUND_PADDING * 2,
             "stroke-dasharray": `0 ${arclen_to_start} ${
                 arclen_to_end - arclen_to_start} ${Math.ceil(arclen - arclen_to_end)}`,
@@ -512,11 +508,11 @@ export class Arrow {
                 const point = offset.add(endpoint);
                 const name = is_start ? "source" : "target";
                 // Draw the semicircle (actually a circle, but half of it is idempotent).
-                this.requisition_element(this.background, `circle.${name}.arrow-background`, {
+                this.requisition_element(this.background, `circle.${name}`, {
                     cx: point.x,
                     cy: point.y,
                     r: edge_width / 2 + CONSTANTS.BACKGROUND_PADDING,
-                    fill: "black",
+                    fill: "currentColor",
                 });
                 // Add a handle to the endpoint.
                 const origin = Point.diag(CONSTANTS.HANDLE_RADIUS).sub(endpoint);
@@ -541,6 +537,8 @@ export class Arrow {
         round_bg_end(end, false);
 
         // Redraw the arrow itself.
+
+        this.svg.set_style({ color: this.style.colour });
 
         // Hooks are drawn at the end of the line, so we must adjust the length of the line
         // to account for them. All other arrowhead styles are drawn within the bounds of the
@@ -587,7 +585,7 @@ export class Arrow {
         const edge = this.requisition_element(this.svg, "path.arrow-edge", {
             mask: `url(#arrow${this.id}-clipping-mask)`,
             fill: "none",
-            stroke: this.style.colour,
+            stroke: "currentColor",
             "stroke-width": stroke_width,
             // We use the default `stroke-linecap` option of `butt`. We'd prefer to use `round`,
             // especially for dashed and dotted lines, but unfortunately this doesn't work well with
@@ -674,7 +672,7 @@ export class Arrow {
                     d: `${path}`,
                     mask: `url(#arrow${this.id}-label-clipping-mask)`,
                     fill: "none",
-                    stroke: this.style.colour,
+                    stroke: "currentColor",
                     "stroke-width": CONSTANTS.STROKE_WIDTH,
                     "stroke-linecap": "round",
                 });
@@ -690,7 +688,7 @@ export class Arrow {
                     cy: centre.y,
                     r: head_height / 2,
                     mask: `url(#arrow${this.id}-label-clipping-mask)`,
-                    fill: this.style.colour,
+                    fill: "currentColor",
                     stroke: "none",
                 });
                 }
@@ -707,7 +705,7 @@ export class Arrow {
                     r: head_height / 2,
                     mask: `url(#arrow${this.id}-label-clipping-mask)`,
                     fill: "none",
-                    stroke: this.style.colour,
+                    stroke: "currentColor",
                     "stroke-width": CONSTANTS.STROKE_WIDTH,
                 });
                 // Crop the inside out of the bullet.
@@ -1386,7 +1384,7 @@ export class Arrow {
                 d: `${path}`,
                 mask: !is_mask ? `url(#arrow${this.id}-label-clipping-mask)` : null,
                 fill: is_mask ? "black" : "none",
-                stroke: !is_mask ? this.style.colour : "none",
+                stroke: !is_mask ? "currentColor" : "none",
                 "stroke-width": CONSTANTS.STROKE_WIDTH,
                 "stroke-linecap": "round",
             }),

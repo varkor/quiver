@@ -106,5 +106,6 @@ for shortened curves.
 to HTML.
 - [Paolo Brasolin](https://github.com/paolobrasolin), for adding offline support.
 - [Carl Davidson](https://github.com/davidson16807), for discussing and prototyping loop rendering.
+- [Pantelis Panayiotou](https://github.com/plp13) and [QuantumSoul](https://github.com/BinaryQuantumSoul), for prototyping dark themes.
 - Everyone who has improved **quiver** by submitting pull requests, reporting issues or suggesting
   improvements.

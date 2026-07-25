@@ -12,6 +12,8 @@
     --ui-orange: hsl(30, 100%, 50%); /* Highlight orange. */
 
     --ui-background: transparent;
+    --ui-canvas: white;
+    --ui-grid: hsl(0 0% 80%);
     --ui-border: hsla(0, 0%, 100%, 0.2);
     --ui-hover: hsla(0, 0%, 100%, 0.1);
     --ui-active: hsla(0, 0%, 100%, 0.2);
@@ -21,10 +23,23 @@
     --ui-warning: hsl(50, 100%, 70%);
 
     /* Cell states. */
+    /* The default colour for labels and arrows, if no explicit colour has been set by the user. */
+    --cell-colour: black;
     --cell-hover: hsla(0, 0%, 0%, 0.1);
     --cell-selected: hsla(0, 0%, 0%, 0.2);
-    --cell-source: hsla(0, 0%, 0%, 0.2);
-    --cell-target: hsla(0, 0%, 0%, 0.2);
+    --cell-source: var(--cell-selected);
+    --cell-target: var(--cell-source);
+}
+
+.dark-theme {
+    --ui-canvas: hsl(250 20% 10%);
+    --ui-grid: hsl(250 20% 25%);
+
+    --cell-colour: hsl(250 20% 95%);
+    --cell-hover: hsl(250 30% 60% / 0.25);
+    --cell-selected: hsl(250 30% 60% / 0.5);
+    --cell-source: var(--cell-selected);
+    --cell-target: var(--cell-source);
 }
 
 body {
@@ -33,7 +48,7 @@ body {
     margin: 0;
     overflow: hidden;
 
-    background: white;
+    background: var(--ui-canvas);
 
     font-family: Arial, sans-serif;
 
@@ -125,6 +140,10 @@ a > .logo {
     z-index: 90;
 
     opacity: 0.8;
+}
+
+.dark-theme a > .logo {
+    filter: invert(1);
 }
 
 a > .logo:hover {
@@ -265,6 +284,8 @@ kbd {
     position: fixed;
     pointer-events: none;
     z-index: -100;
+
+    color: var(--ui-grid);
 }
 
 .grid.hidden {
@@ -284,8 +305,16 @@ kbd {
     color: hsla(0, 0%, 0%, 0.4);
 }
 
+.dark-theme .focus-point {
+    color: hsl(250 20% 60%);
+}
+
 .focus-point.revealed {
     background: hsla(0, 0%, 0%, 0.1);
+}
+
+.dark-theme .focus-point.revealed {
+    background: hsl(250 20% 20%);
 }
 
 .focus-point.focused {
@@ -439,13 +468,15 @@ being. */
     font-family: inherit;
     font-size: 26px;
     white-space: nowrap;
+    color: var(--cell-colour);
+    fill: var(--cell-colour);
 
     pointer-events: none;
     user-select: none;
 }
 
 /* The overlay edge drawn while connecting cells. */
-.overlay, .overlay .arrow-background  {
+.overlay, .overlay .arrow-background, .overlay .arrow-background > *  {
     pointer-events: none !important;
 }
 
@@ -1740,6 +1771,10 @@ label input[type="checkbox"]:checked::before {
 
 /* Arrows */
 
+.arrow {
+    color: var(--cell-colour);
+}
+
 .arrow > svg {
     position: absolute;
     left: 0;
@@ -1760,18 +1795,33 @@ label input[type="checkbox"]:checked::before {
     z-index: 4;
 }
 
-.arrow:not(.reconnecting) > svg:first-child > .arrow-background {
+.arrow-background {
+    color: hsla(0 0% 0%); /* --cell-selected, but with no alpha. */
+    opacity: 0.2;
+}
+
+.dark-theme .arrow-background {
+    color: hsl(250 30% 60%); /* --cell-selected, but with no alpha. */
+    opacity: 0.5;
+}
+
+.arrow:not(.reconnecting) > .arrow-background > path,
+.arrow:not(.reconnecting) > .arrow-background > circle {
     pointer-events: stroke;
 }
 
-.arrow:not(.target):not(.selected) > svg:first-child:not(:hover) > .arrow-background,
-.ui.connect .cell:not(.target):not(.selected) > svg:first-child:hover > .arrow-background,
-.ui.pointer-move .cell:not(.selected) > svg:first-child:hover > .arrow-background {
+.arrow:not(.target):not(.selected) > .arrow-background:not(:hover),
+.ui.connect .cell:not(.target):not(.selected) > .arrow-background:hover,
+.ui.pointer-move .cell:not(.selected) > .arrow-background:hover {
     opacity: 0;
 }
 
-.arrow:not(.target):not(.selected) > svg:first-child:hover {
-    opacity: 0.1 !important;
+.arrow:not(.target):not(.selected) > .arrow-background:hover {
+    opacity: 0.1;
+}
+
+.dark-theme .arrow:not(.target):not(.selected) > .arrow-background:hover {
+    opacity: 0.25;
 }
 
 .arrow-endpoint {
@@ -1786,7 +1836,7 @@ label input[type="checkbox"]:checked::before {
     position: absolute;
     z-index: 3;
 
-    background: white;
+    background: var(--ui-canvas);
 }
 
 .arrow-endpoint:hover {
