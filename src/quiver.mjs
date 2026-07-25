@@ -1690,6 +1690,8 @@ QuiverExport.html = new class extends QuiverExport {
 <iframe class="quiver-embed" \
 src="${url}${!quiver.is_empty() ? "&" : "#"}embed${
     theme !== CONSTANTS.THEMES.LIGHT ? `&theme=${theme}` : ""
+}${
+    options.scale !== 0 ? `&scale=${options.scale}` : ""
 }" \
 width="${width}" \
 height="${height}" \

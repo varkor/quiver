@@ -801,11 +801,16 @@ class UI {
     /// Returns options that are not saved persistently in `settings`, but are used to modify
     /// export output.
     options() {
-        const { macro_url } = this;
+        let scale = 0;
+        const port = this.panel.port;
+        if (port !== null && port.kind === "export" && port.format === "html") {
+            scale = this.panel.sliders.get("scale").thumbs[0].value;
+        }
         return {
-            macro_url,
+            macro_url: this.macro_url,
             dimensions: this.diagram_size(),
             sep: this.panel.sep,
+            scale
         };
     }
 
@@ -4874,16 +4879,15 @@ class Panel {
                     delay(() => content.select_contents());
                 };
 
-                const modify_and_update_output = () => {
-                    // Update the output. We ignore `metadata`, which currently does not
-                    // change in response to the settings.
+                const modify_and_update_output = (prevent_defocus = false) => {
+                    // Update the output.
                     const { data, metadata } = modify(ui.quiver.export(
                         format,
                         ui.settings,
                         ui.options(),
                         ui.definitions(),
                     ));
-                    update_output(data, metadata);
+                    update_output(data, metadata, prevent_defocus);
                 };
 
                 if (this.port === null) {
@@ -5050,18 +5054,18 @@ class Panel {
                         width: new DOM.Element("input", { type: "number", min: "0" }),
                         height: new DOM.Element("input", { type: "number", min: "0" }),
                     };
+                    const scale_slider = new DOM.Multislider("Scale", -1, 1, 0.25)
+                        .listen("input", () => {
+                            modify_and_update_output(true);
+                        });
+                    this.sliders.set("scale", scale_slider);
+                    delay(() => scale_slider.thumbs[0].set_value(0));
                     const dark_mode_select = new DOM.Select([
                         [CONSTANTS.THEMES.LIGHT, "Light"],
                         [CONSTANTS.THEMES.DARK, "Dark"]
                     ], ui.settings.get("export.embed.theme")).listen("change", (event) => {
                         ui.settings.set("export.embed.theme", event.target.value);
-                        const { data, metadata } = modify(ui.quiver.export(
-                            "html",
-                            ui.settings,
-                            ui.options(),
-                            ui.definitions(),
-                        ));
-                        update_output(data, metadata, true);
+                        modify_and_update_output(true);
                     });
                     embed_options = new DOM.Div({ class: "options embed hidden" })
                         .add(new DOM.Element("label")
@@ -5070,6 +5074,7 @@ class Panel {
                         )
                         .add(new DOM.Element("label").add("Width: ").add(embed_size.width))
                         .add(new DOM.Element("label").add("Height: ").add(embed_size.height))
+                        .add(scale_slider.label)
                         .add(new DOM.Element("label").add("Theme:").add(dark_mode_select))
                         .add_to(port_pane);
 
@@ -5107,14 +5112,7 @@ class Panel {
                                 checkbox.get_attribute("data-setting"),
                                 checkbox.element.checked,
                             );
-                            // Update the output.
-                            const { data, metadata } = modify(ui.quiver.export(
-                                format,
-                                ui.settings,
-                                ui.options(),
-                                ui.definitions(),
-                            ));
-                            update_output(data, metadata);
+                            modify_and_update_output();
                         });
                         // Prevent the highlighted output from being deselected when changing a
                         // setting.
@@ -5127,13 +5125,7 @@ class Panel {
                             value = CONSTANTS.DEFAULT_EMBED_SIZE[dimension.toUpperCase()];
                         }
                         ui.settings.set(`export.embed.${dimension}`, value);
-                        const { data, metadata } = modify(ui.quiver.export(
-                            "html",
-                            ui.settings,
-                            ui.options(),
-                            ui.definitions(),
-                        ));
-                        update_output(data, metadata, true);
+                        modify_and_update_output(true);
                     };
 
                     for (const dimension of ["width", "height"]) {
