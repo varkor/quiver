@@ -698,7 +698,7 @@ input[type="text"].flash {
 }
 
 .panel input[type="radio"] {
-    -webkit-appearance: none;
+    appearance: none;
     display: inline-block;
     width: 48px; height: 48px;
 
@@ -1659,7 +1659,7 @@ input::-webkit-inner-spin-button {
     margin: 0;
 }
 input[type="number"] {
-    -moz-appearance: textfield;
+    appearance: textfield;
 }
 
 label input[type="checkbox"] {
