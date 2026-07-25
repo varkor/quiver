@@ -742,6 +742,11 @@ class UI {
 
         // The theme (e.g. light or dark).
         this.theme = this.settings.get("quiver.theme");
+
+        // If autosave is enabled when we load the page, then the first time the user takes an
+        // action, we will push a new history state rather than replacing, so that the initial
+        // diagram is kept in the history.
+        this.start_new_history = this.settings.get("quiver.autosave");
     }
 
     /// Clear the current diagram. This also clears the history.
@@ -3515,6 +3520,40 @@ class UI {
             this.colour_picker.update_latex_colours(this);
         }
     }
+
+    /// Save the current diagram in the URL.
+    save_diagram(is_necessary = true) {
+        // `data` is the new URL.
+        const { data } = this.quiver.export(
+            "base64",
+            this.settings,
+            this.options(),
+            this.definitions(),
+        );
+        if (is_necessary || data !== window.location.href) {
+            history.pushState({}, "", data);
+        }
+    }
+
+    /// Save the current diagram if it is not currently saved.
+    autosave_diagram() {
+        if (this.start_new_history) {
+            this.start_new_history = false;
+            this.save_diagram();
+            return;
+        }
+        if (this.settings.get("quiver.autosave")) {
+            const { data } = this.quiver.export(
+                "base64",
+                this.settings,
+                this.options(),
+                this.definitions(),
+            );
+            if (data !== window.location.href) {
+                history.replaceState({}, "", data);
+            }
+        }
+    }
 }
 
 /// The history system (i.e. undo and redo).
@@ -3565,6 +3604,7 @@ class History {
         if (invoke) {
             this.redo(ui);
         } else {
+            ui.autosave_diagram();
             ++this.present;
         }
 
@@ -3621,6 +3661,8 @@ class History {
             this.effect(ui, actions.actions, false);
             if (unchanged) {
                 this.pop(ui);
+            } else {
+                ui.autosave_diagram();
             }
         } else {
             // If this is the start of our property modification, we need to add a new history
@@ -3914,6 +3956,7 @@ class History {
             }
 
             ui.toolbar.update(ui);
+            ui.autosave_diagram();
 
             return true;
         }
@@ -3956,6 +3999,7 @@ class History {
             }
 
             ui.toolbar.update(ui);
+            ui.autosave_diagram();
 
             return true;
         }
@@ -4003,6 +4047,8 @@ class Settings {
             "quiver.package_version": CONSTANTS.PACKAGE_VERSION,
             // Whether to use light theme or dark theme.
             "quiver.theme": CONSTANTS.THEMES.LIGHT,
+            // Whether to autosave.
+            "quiver.autosave": false,
         };
         try {
             // Try to update the default values with the saved settings.
@@ -6803,16 +6849,7 @@ class Toolbar {
             "Save",
             "save",
             [{ key: "S", modifier: true, context: Shortcuts.SHORTCUT_PRIORITY.Always }],
-            () => {
-                const { data } = ui.quiver.export(
-                    "base64",
-                    ui.settings,
-                    ui.options(),
-                    ui.definitions(),
-                );
-                // `data` is the new URL.
-                history.pushState({}, "", data);
-            },
+            () => ui.save_diagram(),
         );
 
         add_action(
@@ -7143,6 +7180,38 @@ class Toolbar {
             },
             settings,
         );
+
+        const update_autosave_action = () => {
+            const autosave = ui.settings.get("quiver.autosave");
+            const element = this.element.query_selector('.action[data-name="autosave"]');
+            let name = element.query_selector(".name").clear();
+            if (autosave) {
+                name = new DOM.Element("s").add_to(name);
+            }
+            name.add("Autosave");
+            element.query_selector(".symbol img").set_attributes({
+                src: `icons/autosave-${autosave ? "off" : "on"}.svg`,
+            });
+        };
+
+        add_action(
+            "",
+            "autosave",
+            [],
+            function () {
+                const autosave = !ui.settings.get("quiver.autosave")
+                ui.settings.set("quiver.autosave", autosave);
+                if (autosave) {
+                    // If the diagram has not been saved manually, then we save the diagram: in
+                    // essence, switching autosave on acts like a manual save.
+                    ui.save_diagram(false);
+                    ui.start_new_history = true;
+                }
+                update_autosave_action();
+            },
+            settings,
+        );
+        update_autosave_action();
 
         add_action(
             "Dark theme",

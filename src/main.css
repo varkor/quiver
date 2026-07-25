@@ -1361,6 +1361,10 @@ user has already pressed semicolon, placing us in command mode. */
     content: "▾";
 }
 
+.toolbar .action .name s {
+    text-decoration-thickness: 2px;
+}
+
 .toolbar .action .subtoolbar {
     display: none;
     position: absolute;
