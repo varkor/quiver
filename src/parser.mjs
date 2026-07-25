@@ -1086,6 +1086,11 @@ export class Parser {
             edge.options.style.tail.side = this.eat("'") ? "bottom" : "top";
             return;
         }
+        if (this.eat("coil")) {
+            edge.options.style.tail.name = "coil";
+            edge.options.style.tail.side = this.eat("'") ? "bottom" : "top";
+            return;
+        }
         // Head styles.
         if (this.eat("to head")) {
             edge.options.style.head.name = "cell";

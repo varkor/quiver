@@ -5,7 +5,7 @@
 % libraries, and defining new TikZ styles for curves of a fixed height and for shortening paths
 % proportionally.
 %
-% Version: 1.6.1
+% Version: 1.7.0
 % Authors:
 % - varkor (https://github.com/varkor)
 % - AndréC (https://tex.stackexchange.com/users/138900/andr%C3%A9c)
@@ -45,6 +45,11 @@
 \tikzset{tail reversed/.code={\pgfsetarrowsstart{tikzcd to}}}
 \tikzset{2tail/.code={\pgfsetarrowsstart{Implies[reversed]}}}
 \tikzset{2tail reversed/.code={\pgfsetarrowsstart{Implies}}}
+\tikzset{
+    quiver coil/.tip={Glyph[glyph math command=looparrowleft]},
+    coil/.code={\pgfsetarrowsstart{quiver coil}},
+    coil'/.code={\pgfsetarrowsstart{quiver coil[swap]}},
+}
 % TikZ arrow styles.
 \tikzset{no body/.style={/tikz/dash pattern=on 0 off 1mm}}
 

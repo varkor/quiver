@@ -8,9 +8,9 @@ import { Quiver, QuiverImportExport } from "./quiver.mjs";
 /// Various parameters.
 Object.assign(CONSTANTS, {
     /// The current quiver version.
-    VERSION: "1.6.1",
+    VERSION: "1.7.0",
     /// For which quiver version the `quiver.sty` package was last modified.
-    PACKAGE_VERSION: "1.6.1",
+    PACKAGE_VERSION: "1.7.0",
     /// We currently only support n-cells for (n ≤ 4). This restriction is not technical: it can be
     /// lifted in the editor without issue. Rather, this is for usability: a user is unlikely to
     /// want to draw a higher cell. For n-cells for n ≥ 3, we make use of tikz-nfold in exported
@@ -3292,6 +3292,12 @@ class UI {
                     case "arrowhead":
                         style.tails = CONSTANTS.ARROW_HEAD_STYLE.NORMAL;
                         break;
+                    case "coil":
+                        style.tails = CONSTANTS.ARROW_HEAD_STYLE[{
+                            "top": "COIL_TOP",
+                            "bottom": "COIL_BOTTOM",
+                        }[options.style.tail.side]];
+                        break;
                 }
 
                 // Head style.
@@ -4073,8 +4079,8 @@ class Settings {
     }
 
     /// Returns whether `quiver.package_version` is at least the specified version string.
-    package_version_is_at_least(version) {
-        const valuesA = this.get("quiver.package_version").split(".");
+    package_version_is_at_least(version, base_version = this.get("quiver.package_version")) {
+        const valuesA = base_version.split(".");
         const valuesB = version.split(".");
         while (valuesA.length > 0) {
             if (valuesB.length === 0) {
@@ -4566,6 +4572,10 @@ class Panel {
                 ["bottom-hook", "Bottom hook",
                     { name: "hook", side: "bottom" }, `${key_index++}`, ["short"]],
                 ["arrowhead", "Arrowhead", { name: "arrowhead"}, `${key_index++}`],
+                ["top-coil", "Top coil",
+                    { name: "coil", side: "top" }, `${key_index++}`, ["short", "start-of-line"]],
+                ["bottom-coil", "Bottom coil",
+                    { name: "coil", side: "bottom" }, `${key_index++}`, ["short"]],
             ],
             "tail-type",
             ["vertical", "short", "arrow-style", "kbd-requires-focus"],
@@ -4926,8 +4936,8 @@ class Panel {
                     }
 
                     const dependencies = kind === "export" && format === "tikz-cd" ?
-                        metadata.dependencies : new Map();
-                    if (dependencies.size !== 0) {
+                        Array.from(metadata.dependencies) : [];
+                    if (dependencies.length !== 0) {
                         if (unsupported_items.length !== 0) {
                             warning.add(new DOM.Element("br"));
                         }
@@ -4936,23 +4946,42 @@ class Panel {
                             " that you may have to install for the diagram to render " +
                             "correctly:");
                         const list = new DOM.Element("ul").add_to(warning);
-                        for (const [library, reasons] of dependencies) {
+                        // Sort dependencies on quiver versions to the top of the list, with later
+                        // versions higher than older versions.
+                        dependencies.sort(([a,], [b,]) => {
+                            if (a !== b && a.startsWith("quiver ")) {
+                                if (!b.startsWith("quiver ")) {
+                                    return -1;
+                                }
+                                return ui.settings.package_version_is_at_least(
+                                    b.replace("quiver ", ""),
+                                    a.replace("quiver ", ""),
+                                ) ? -1 : 1;
+                            }
+                            return 0;
+                        });
+                        for (let [library, reasons] of dependencies) {
                             const li = new DOM.Element("li").add_to(list);
+                            let quiver_version = null;
+                            if (library.startsWith("quiver ")) {
+                                quiver_version = library.replace("quiver ", "");
+                                library = "quiver";
+                            }
                             const url = {
                                 "tikz-nfold": "https://ctan.org/pkg/tikz-nfold",
                                 "quiver": "https://ctan.org/pkg/quiver",
                             }[library];
-                            if (library === "quiver") {
-                                li.add("The latest version of ");
-                            }
                             li.add(new DOM.Element("a", { href: url, target: "_blank" })
                                 .add(new DOM.Code(library)));
+                            if (quiver_version !== null) {
+                                li.add(` version ${quiver_version} or later`);
+                            }
                             li.add(`, for ${Array.from(reasons).join("; ")}.`);
                         }
                     }
 
                     warning.class_list.toggle("hidden",
-                        unsupported_items.length === 0 && dependencies.size === 0,
+                        unsupported_items.length === 0 && dependencies.length === 0,
                     );
                 };
 
@@ -5030,8 +5059,9 @@ class Panel {
                         this.sliders.set(`${axis}_sep`, sep_sliders[axis]);
                     }
                     const quiver_package_version = new DOM.Select([
-                            ["1.6.1", "1.6.1 (latest)"],
-                            ["1.6.0", "1.6.0 (TeX Live 2026)"]
+                            ["1.7.0", "1.7.0 (latest)"],
+                            ["1.6.0", "1.6.0 (TeX Live 2026)"],
+                            ["1.2.0", "1.2.0 (TeX Live 2024 – 2025)"]
                         ],
                         ui.settings.get("quiver.package_version"),
                         { name: "quiver_package_version" }).listen("change", (event) => {
@@ -5876,12 +5906,12 @@ class Panel {
             svg.set_attributes({ xmlns: DOM.SVGElement.NAMESPACE });
 
             for (const colour of ["black", "grey"]) {
-                arrow.style.colour = colour;
                 arrow.redraw();
                 // The `style` transforms the position of the arrow, which we don't want here,
                 // where we're trying to automatically position the arrows in the centre of the
                 // buttons.
                 svg.remove_attributes("style");
+                svg.set_attributes({ color: colour });
                 if (draw_label) {
                     arrow.label.element.set_style({
                         width: `${LABEL_SIZE - LABEL_MARGIN * 2}px`,
@@ -6227,14 +6257,15 @@ class Panel {
                         for (const component of ["tail", "body", "head"]) {
                             let value;
                             // The following makes the assumption that the distinguished names
-                            // `cell`, `hook` and `harpoon` are unique, even between different
-                            // components.
+                            // `cell`, `hook`, `harpoon`, and `coil` are unique, even between
+                            // different components.
                             switch (cell.options.style[component].name) {
                                 case "cell":
                                     value = "solid";
                                     break;
                                 case "hook":
                                 case "harpoon":
+                                case "coil":
                                     value = `${
                                         cell.options.style[component].side
                                     }-${cell.options.style[component].name}`;
@@ -8339,7 +8370,7 @@ export class Edge extends Cell {
             }
             if (this.options.style.name === "arrow") {
                 const swap_sides = { top: "bottom", bottom: "top" };
-                if (this.options.style.tail.name === "hook") {
+                if (["hook", "coil"].includes(this.options.style.tail.name)) {
                     this.options.style.tail.side = swap_sides[this.options.style.tail.side];
                 }
                 if (this.options.style.head.name === "harpoon") {

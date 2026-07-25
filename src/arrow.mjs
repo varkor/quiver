@@ -108,8 +108,12 @@ export const CONSTANTS = {
         HARPOON_BOTTOM: ["harpoon-bottom"],
         /// A hook (↪).
         HOOK_TOP: ["hook-top"],
-        /// A hook (↩).
+        /// A hook.
         HOOK_BOTTOM: ["hook-bottom"],
+        /// A coil.
+        COIL_TOP: ["coil-top"],
+        /// A coil (↬).
+        COIL_BOTTOM: ["coil-bottom"],
         /// The corner of a square, used for pullbacks and pushouts.
         CORNER: ["corner"],
         /// The corner of a square, used for an alternate style for pullbacks and pushouts.
@@ -415,7 +419,7 @@ export class Arrow {
         // the curve is very high, the tangent near the source/target can become essentially
         // vertical. We always pad enough for the arrowhead (plus its stroke width).
         const padding = CONSTANTS.BACKGROUND_PADDING +
-            + Math.max(head_height, CONSTANTS.STROKE_WIDTH) / 2;
+            + Math.max(head_height * 2, CONSTANTS.STROKE_WIDTH) / 2;
 
         // The distance from the source to the target.
         const length = this.length();
@@ -544,10 +548,12 @@ export class Arrow {
         // to account for them. All other arrowhead styles are drawn within the bounds of the
         // edge.
         const shorten = {
-            start: this.style.tails.length > 0 && this.style.tails[0].startsWith("hook")
-                ? head_width : 0,
-            end: this.style.heads.length > 0 && this.style.heads[0].startsWith("hook")
-                ? head_width : 0,
+            start: this.style.tails.length > 0 && (
+                this.style.tails[0].startsWith("hook") || this.style.tails[0].startsWith("coil")
+            ) ? head_width : 0,
+            end: this.style.heads.length > 0 && (
+                this.style.heads[0].startsWith("hook") || this.style.heads[0].startsWith("coil")
+            ) ? head_width : 0,
         };
 
         // Create a clipping mask for the edge. We use this to cut out the gaps in an n-cell,
@@ -1124,13 +1130,12 @@ export class Arrow {
         return new Arc(origin, chord, chord <= inner_dis, r, angle);
     }
 
-    /// Redraw the heads or tails attached to an end of the edge.
-    /// In general, we can draw arbitrary sequences of different arrowheads and they will compose
-    /// nicely. However, we don't account for harpoons or hooks in combination with other arrowheads
-    /// (even with others of the same kind), as I cannot see how to make these look good in
-    /// combination. Thus, passing a non-singleton array containing "harpoon" or "hook" will likely
-    /// have unexpected effects, as it has not been tested (likely defaulting to just drawing a
-    /// harpoon or hook).
+    /// Redraw the heads or tails attached to an end of the edge. In general, we can draw arbitrary
+    /// sequences of different arrowheads and they will compose nicely. However, we don't account
+    /// for harpoons/hooks/coils in combination with other arrowheads (even with others of the same
+    /// kind), as I cannot see how to make these look good in combination. Thus, passing a
+    /// non-singleton array containing "harpoon"/"hook"/"coil" will likely have unexpected effects,
+    /// as it has not been tested (likely defaulting to just drawing a harpoon/hook/coil).
     /// Returns `{ path, total_width }`.
     redraw_heads(constants, heads, endpoint, is_start, is_mask) {
         // Note that, throughout, we use `head` as a contraction of `arrowhead`, which can be drawn
@@ -1236,6 +1241,56 @@ export class Arrow {
             }
 
             // Hooks are drawn at the end of edges and therefore aren't considered to take up any
+            // space on the edge itself.
+            total_width = 0;
+        } else if (includes_any(heads, "coil-top", "coil-bottom")) {
+            // The following is very similar to the case of hooks.
+            if (is_mask) {
+                // We don't need masks for coils, because they're simply drawn perfectly at the
+                // ends.
+                return { path: null, total_width: 0 };
+            }
+
+            const t = t_after_length(arclen_to_endpoint);
+            const base_point = curve.point(t);
+            const angle = curve.tangent(t);
+            const side_sign
+                = heads.find((head) => head.startsWith("coil")).endsWith("top") ? 1 : -1;
+            // To avoid artefacts elsewhere, we mask a little overenthusiastically (see
+            // `ENDPOINT_PADDING`). To avoid a line of transparent pixels, we adjust the tail here.
+            const MASK_ADJUSTMENT = 0.5;
+            // We draw a coil connecting to the ends of each of the n lines forming the n-cell.
+            for (let i = 0; i < this.style.level; ++i) {
+                const point = base_point
+                    .add(offset)
+                    .add(new Point(
+                        MASK_ADJUSTMENT,
+                        side_sign * stroke_width / 2
+                            - side_sign * CONSTANTS.STROKE_WIDTH / 2
+                            - side_sign * (CONSTANTS.LINE_SPACING + CONSTANTS.STROKE_WIDTH) * i,
+                    ).rotate(angle));
+                path.move_to(point);
+                path.arc_by(
+                    new Point(start_sign * head_width, head_width),
+                    // We're drawing a semicircle, so the angle is *actually* unimportant.
+                    angle,
+                    // This argument appears to be unimportant.
+                    false,
+                    side_sign === 1 ? end_ind : 1 - end_ind,
+                    new Point(0, side_sign * head_width * 2).rotate(angle),
+                );
+                // Draw another semicircle.
+                path.arc_by(
+                    new Point(start_sign * head_width, head_width),
+                    angle,
+                    false,
+                    side_sign === 1 ? end_ind : 1 - end_ind,
+                    new Point(head_width, -head_width * side_sign).rotate(angle),
+                );
+                path.line_by(new Point(0, -head_width * 3 * side_sign).rotate(angle));
+            }
+
+            // Coils are drawn at the end of edges and therefore aren't considered to take up any
             // space on the edge itself.
             total_width = 0;
         } else {

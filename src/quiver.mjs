@@ -677,7 +677,9 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                     }}{${
                         (100 - edge.options.shorten.target) / 100
                     }}`;
-                    add_dependency("quiver", "shortened arrows");
+                    if (!settings.package_version_is_at_least("1.6.0")) {
+                        add_dependency("quiver 1.6.0", "shortened arrows");
+                    }
                 }
 
                 // Edge styles.
@@ -701,14 +703,14 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                             } else {
                                 parameters.Rightarrow = "";
                             }
-                            if (settings.package_version_is_at_least("1.6.1")) {
+                            if (settings.package_version_is_at_least("1.7.0")) {
                                 parameters["nfold"] = "";
                             }
                         } else if (edge.options.level > 2) {
                             // So for n-cells for n > 2, we make use of tikz-nfold.
                             parameters.Rightarrow = "";
                             parameters["scaling nfold"] = edge.options.level;
-                            if (!settings.package_version_is_at_least("1.6.1")) {
+                            if (!settings.package_version_is_at_least("1.7.0")) {
                                 add_dependency("tikz-nfold", "triple arrows or higher");
                             }
                         }
@@ -830,6 +832,20 @@ QuiverImportExport.tikz_cd = new class extends QuiverImportExport {
                                         // the correct tail for 1-cells.
                                         parameters["tail reversed"] = "";
                                         break;
+                                }
+                                break;
+
+                            case "coil":
+                                parameters[`coil${
+                                    edge.options.style.tail.side === "top" ? "" : "'"
+                                }`] = "";
+                                if (edge.options.level > 1) {
+                                    tikz_incompatibilities.add(
+                                        "double arrows or higher with coil tails"
+                                    );
+                                }
+                                if (!settings.package_version_is_at_least("1.7.0")) {
+                                    add_dependency("quiver 1.7.0", "coil tails");
                                 }
                                 break;
 
