@@ -943,9 +943,11 @@ div.slider {
 }
 
 select {
+    appearance: none;
     display: inline-block;
     width: auto;
     margin: 0;
+    padding: 0 8pt;
 
     text-align: left;
 }
