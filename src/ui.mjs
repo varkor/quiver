@@ -3148,9 +3148,7 @@ class UI {
             label.style.fontSize = "";
             // Ensure that the label fits within the cell by dynamically resizing it.
             while (label.offsetWidth > max_width) {
-                const new_size = parseFloat(
-                    window.getComputedStyle(label).fontSize,
-                ) * LABEL_SCALE_STEP;
+                const new_size = parseFloat(getComputedStyle(label).fontSize) * LABEL_SCALE_STEP;
                 label.style.fontSize = `${new_size}px`;
             }
         }
@@ -3239,7 +3237,8 @@ class UI {
         const scale = 2 ** this.scale;
 
         const context = canvas.context;
-        context.strokeStyle = "currentColor";
+        // We should be able to simply use "currentColor" here, but Safari is buggy.
+        context.strokeStyle = getComputedStyle(canvas.element).getPropertyValue("color");
         context.lineWidth = Math.max(1, CONSTANTS.GRID_BORDER_WIDTH * scale);
         context.setLineDash([DASH_LENGTH * scale]);
 
@@ -3278,6 +3277,13 @@ class UI {
         context.lineDashOffset
             = offset.x * scale - dash_offset - width % (this.default_cell_size * scale) / 2;
         context.stroke();
+
+        // Safari is buggy and does not update the body background colour without, for instance, the
+        // user resizing the page. This was one method that seemed to address the issue.
+        if (/^((?!chrome|android).)*safari/i.test(navigator.userAgent)) {
+            document.body.style.visibility = "hidden";
+            delay(() => document.body.style.visibility = "visible");
+        }
     }
 
     /// Switch the theme of the interface.
@@ -7312,7 +7318,7 @@ class Toolbar {
 
         const update_autosave_action = () => {
             const autosave = ui.settings.get("quiver.autosave");
-            const element = this.element.query_selector('.action[data-name="autosave"]');
+            const element = this.element.query_selector('.action[data-name="autosave-on"]');
             let name = element.query_selector(".name").clear();
             if (autosave) {
                 name = new DOM.Element("s").add_to(name);
@@ -7325,7 +7331,7 @@ class Toolbar {
 
         add_action(
             "",
-            "autosave",
+            "autosave-on",
             [],
             function () {
                 const autosave = !ui.settings.get("quiver.autosave")
