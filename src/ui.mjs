@@ -1109,6 +1109,9 @@ class UI {
                     new DOM.Link("https://github.com/davidson16807", "Carl Davidson", true)
                 ).add(", for discussing and prototyping loop rendering."),
                 new DOM.Element("li").add(
+                    new DOM.Link("https://github.com/HuangxinDong", "Huangxin Dong", true)
+                ).add(", for improving the interface for custom macros."),
+                new DOM.Element("li").add(
                     new DOM.Link("https://github.com/plp13", "Pantelis Panayiotou", true)
                 ).add(" and ").add(
                     new DOM.Link("https://github.com/BinaryQuantumSoul", "QuantumSoul", true)

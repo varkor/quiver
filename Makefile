@@ -8,7 +8,7 @@ all: src/KaTeX src/icon-192.png src/icon-512.png src/Workbox/workbox-window.prod
 # Vendor KaTeX dependencies.
 src/KaTeX:
 	set -e
-	curl -L -O "https://github.com/KaTeX/KaTeX/releases/download/v0.16.9/katex.zip"
+	curl -L -O "https://github.com/KaTeX/KaTeX/releases/download/v0.18.1/katex.zip"
 	unzip katex.zip
 	rm katex.zip
 	mv katex src/KaTeX

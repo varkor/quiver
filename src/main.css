@@ -165,6 +165,10 @@ a > .logo:hover {
     pointer-events: none;
 }
 
+.dark-theme .version {
+    color: var(--ui-white);
+}
+
 .tooltip {
     display: block;
     position: absolute;
