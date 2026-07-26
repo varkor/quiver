@@ -1121,6 +1121,21 @@ class UI {
                 ).add(new DOM.Element("b").add("quiver"))
                 .add(" by submitting pull requests, reporting issues or suggesting improvements.")
             ]))
+            .add(new DOM.Element("h2").add("Dependencies"))
+            .add(new DOM.List(false, [
+                new DOM.Element("li").add(
+                    new DOM.Link("https://katex.org/", "KaTeX", true)
+                ).add(", for rendering the LaTeX labels."),
+                new DOM.Element("li").add(
+                    new DOM.Link("https://github.com/Myriad-Dreamin/typst.ts/", "typst.ts", true)
+                ).add(", for rendering the Typst labels."),
+                new DOM.Element("li").add(
+                    new DOM.Link("https://developer.chrome.com/docs/workbox", "Workbox", true)
+                ).add(", for facilitating offline support."),
+                new DOM.Element("li").add(
+                    new DOM.Link("https://proxy.cors.sh", "proxy.cors.sh", true)
+                ).add(", for the CORS proxy used for loading macros from URLs.")
+            ]))
             .add(new DOM.Element("footer")
                 .add("Created by ")
                 .add(new DOM.Link("https://github.com/varkor", "varkor", true))
