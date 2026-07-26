@@ -130,16 +130,14 @@ Note that you will need to have the [`quiver.sty` package](https://raw.githubuse
 
 ## Importing macros and colours
 
-To use custom macros and colours in **quiver**, create a text file containing the definitions (for instance, the following).
+To use custom macros and colours in **quiver**, create a text file containing each of definitions, one per line. For instance:
 
 ```latex
-\newcommand{\cat}{\mathscr}
-\newcommand{\psh}{\widehat}
-\newcommand{\smcat}{\mathbb}
 \newcommand{\yo}{よ}
+\definecolor{redchalk}{RGB}{214, 92, 92}
 ```
 
-Upload the file to a publicly accessible URL (for instance, [gist.github.com](https://gist.github.com/)), and paste the URL for the raw text into the **Macros** input at the bottom of **quiver**.
+Upload the file to a publicly accessible URL (for instance, [gist.github.com](https://gist.github.com/)). Next, click the **Macros** button in the toolbar at the bottom, and paste the URL for the raw text into the input field. Alternatively, you can type or paste the definitions directly into the text area.
 
 Currently, macros may be defined using `\newcommand`, `\newcommand*`, `\renewcommand`, `\renewcommand*`, `\DeclareMathOperator`, and `\DeclareMathOperator*`; and colours may be defined using `\definecolor` (using the colour modes: `rgb`, `RGB`, `HTML`, `gray`).
 
@@ -168,7 +166,8 @@ The `quiver.sty` package is available [on GitHub](https://raw.githubusercontent.
 For convenience, the query parameters supported by **quiver** are the following.
 
 - `embed`: enables embedded mode, for displaying in an `<iframe>`. Expects no value. In this mode, editing the diagram is disabled, as well as various interface elements.
-- `macro_url`: a URL to load macros from. Expects a URL.
+- `macros`: a string containing macro definitions. If both `macros` and `macro_url` are present, `macros` takes precedence.
+- `macro_url`: a URL to load macros from.
 - `q`: the diagram to load. Expects an encoded diagram, as exported by **quiver**.
 - `r`: sets the renderer. Expects either `katex` or `typst`.
 - `scale`: sets the initial zoom level. Expects any integer. For instance: `0` corresponds to the default zoom; `1` is zoomed in 2x; `-1` is zoomed out 2x. This is primarily intended to be used with embedded mode.
