@@ -4411,7 +4411,7 @@ class Panel {
         };
 
         // The button to reverse an edge.
-        add_button("Reverse arrows", "⇌ Reverse", "r", () => {
+        add_button("Reverse arrows", "r", () => {
             ui.history.add(ui, [{
                 kind: "reverse",
                 cells: ui.selection,
@@ -4419,7 +4419,7 @@ class Panel {
         });
 
         // The button to flip an edge.
-        add_button("Flip arrows", "⥮ Flip", "e", () => {
+        add_button("Flip arrows", "e", () => {
             ui.history.add(ui, [{
                 kind: "flip",
                 cells: ui.selection,
@@ -4427,7 +4427,7 @@ class Panel {
         });
 
         // The button to flip a label.
-        add_button("Flip labels", "⥮ Flip labels", "f", () => {
+        add_button("Flip labels", "f", () => {
             ui.history.add(ui, [{
                 kind: "flip labels",
                 cells: ui.selection,
