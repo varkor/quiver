@@ -5214,7 +5214,7 @@ class Panel {
                         .add_to(port_pane);
                     latex_tip.add(new DOM.Element("span", { class: "update" })
                         .add("updated on ")
-                        .add(new DOM.Element("time").add("2026-07-18"))
+                        .add(new DOM.Element("time").add("2026-07-27"))
                     );
 
                     typst_tip = new DOM.Element("span", { class: "tip hidden typst" });
