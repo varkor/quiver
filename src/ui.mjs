@@ -3277,13 +3277,6 @@ class UI {
         context.lineDashOffset
             = offset.x * scale - dash_offset - width % (this.default_cell_size * scale) / 2;
         context.stroke();
-
-        // Safari is buggy and does not update the body background colour without, for instance, the
-        // user resizing the page. This was one method that seemed to address the issue.
-        if (/^((?!chrome|android).)*safari/i.test(navigator.userAgent)) {
-            document.body.style.visibility = "hidden";
-            delay(() => document.body.style.visibility = "visible");
-        }
     }
 
     /// Switch the theme of the interface.
@@ -3291,6 +3284,12 @@ class UI {
         this.theme = theme;
         this.element.class_list.toggle("dark-theme", this.theme === CONSTANTS.THEMES.DARK);
         this.update_grid();
+        // Safari is buggy and does not update the body background colour without, for instance, the
+        // user resizing the page. This was one method that seemed to address the issue.
+        if (/^((?!chrome|android).)*safari/i.test(navigator.userAgent)) {
+            document.body.style.visibility = "hidden";
+            delay(() => document.body.style.visibility = "visible");
+        }
         this.toolbar.element.query_selector('.action[data-name="dark-theme"] .name')
             .replace((this.theme === CONSTANTS.THEMES.DARK ? "Light" : "Dark") + " theme");
     }
