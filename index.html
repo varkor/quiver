@@ -2,12 +2,119 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>quiver</title>
+    <title>quiver: a modern commutative diagram editor</title>
+    <link rel="icon" href="icon.png">
+    <!-- Prevent zooming on mobile -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no">
+    <!-- Metadata for Open Graph -->
+    <meta name="description" content="A modern commutative diagram editor with support for tikz-cd.">
+    <meta property="og:title" content="quiver">
+    <meta property="og:url" content="https://varkor.github.io/quiver">
+    <meta property="og:description" content="A modern commutative diagram editor with support for tikz-cd.">
+    <meta property="og:image" content="icon.png">
+    <meta property="og:type" content="website">
+    <meta property="og:locale" content="en_GB">
+    <!-- Viewport -->
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" type="text/css" media="screen" href="main.css" />
-    <script type="text/javascript" src="ui.js"></script>
-    <script type="text/javascript" async src="MathJax/MathJax.js"></script>
+    <!-- Preload images that we want to display immediately. -->
+    <link rel="preload" href="quiver-blue.svg" as="image">
+    <link rel="preload" href="icons/about.svg" as="image">
+    <link rel="preload" href="icons/centre-view.svg" as="image">
+    <link rel="preload" href="icons/delete.svg" as="image">
+    <link rel="preload" href="icons/deselect-all.svg" as="image">
+    <link rel="preload" href="icons/hide-grid.svg" as="image">
+    <link rel="preload" href="icons/redo.svg" as="image">
+    <link rel="preload" href="icons/reset-zoom.svg" as="image">
+    <link rel="preload" href="icons/save.svg" as="image">
+    <link rel="preload" href="icons/select-all.svg" as="image">
+    <link rel="preload" href="icons/shortcuts.svg" as="image">
+    <link rel="preload" href="icons/show-hints.svg" as="image">
+    <link rel="preload" href="icons/show-queue.svg" as="image">
+    <link rel="preload" href="icons/undo.svg" as="image">
+    <link rel="preload" href="icons/zoom-in.svg" as="image">
+    <link rel="preload" href="icons/zoom-out.svg" as="image">
+    <!-- Style sheets and scripts -->
+    <link rel="stylesheet" type="text/css" media="screen" href="main.css">
+    <script type="module" src="ds.mjs"></script>
+    <script type="module" src="dom.mjs"></script>
+    <script type="module" src="quiver.mjs"></script>
+    <script type="module" src="curve.mjs"></script>
+    <script type="module" src="arrow.mjs"></script>
+    <script type="module" src="parser.mjs"></script>
+    <script type="module" src="ui.mjs"></script>
+    <!-- Web app manifest -->
+    <link rel="manifest" href="manifest.json">
+    <!-- Service worker -->
+    <script type="module">
+        import { Workbox } from "./Workbox/workbox-window.prod.mjs";
+        if ("serviceWorker" in navigator) {
+            new Workbox("service-worker.js").register();
+        }
+    </script>
 </head>
 <body>
+    <a id="logo-link" href="https://github.com/varkor/quiver" target="_blank">
+        <img src="quiver.svg" class="logo">
+    </a>
+    <noscript>JavaScript must be enabled to use quiver.</noscript>
+    <script type="module">
+        import { url_parameters } from "./ds.mjs";
+        import { cancel, DOM, pointer_event } from "./dom.mjs";
+
+        // If we are loading a diagram, display a loading screen to prevent a flash of empty canvas.
+        // We do this in a `<script>` tag here to make sure that it loads immediately.
+        const query_data = url_parameters();
+
+        // If we're running in embedded view, update the logo so that clicking it opens the
+        // the current diagram in the app.
+        if (query_data.has("embed")) {
+            // If the `embed` query parameter is present, we'll automatically switch to
+            // `UIMode.Embedded` in `ui.mjs`, which will add the `embedded` class to the body.
+            // However, we pre-empt this here by adding `embedded` immediately upon loading, so
+            // that the `loading_screen` will have the correct CSS applied from the start.
+            document.body.classList.add("embedded");
+
+            document.querySelector("#logo-link").href = reconstruct_URL(query_data, [
+                "embed",
+                "scale",
+            ]);
+        }
+
+        const loading_screen = new DOM.Div({ class: "loading-screen hidden" })
+            .add(new DOM.Element("img", { src: "quiver-blue.svg", class: "logo" }))
+            .add(new DOM.Element("span").add("Loading diagram..."))
+            // Prevent pointer events effected during loading from taking place after loading
+            // has completed.
+            .listen(pointer_event("down"), cancel)
+            .listen(pointer_event("move"), cancel)
+            .listen(pointer_event("up"), cancel)
+            .listen("wheel", cancel, { passive: true });
+
+        if (query_data.has("q")) {
+            // Prevent keyboard events effected during loading from taking place after loading
+            // has completed.
+            document.addEventListener("keydown", cancel);
+            document.addEventListener("keyup", cancel);
+
+            loading_screen.class_list.remove("hidden");
+        }
+
+        document.body.appendChild(loading_screen.element);
+
+        // Takes a `Map` containing a collection of query parameters and reconstructs a
+        // corresponding URL. An array containing parameters to `ignore` is used to delete unwanted
+        // query parameters.
+        function reconstruct_URL(query_data, ignore) {
+            const URL_prefix = new URL(window.location.href);
+            URL_prefix.search = "";
+            URL_prefix.hash = "";
+            return `${URL_prefix}#${
+                Array.from(query_data.entries())
+                    .filter(([key,]) => !ignore.includes(key))
+                    // We do not `encodeURIComponent`s, because they are already encoded.
+                    .map(([key, value]) => `${key}=${value}`).join("&")
+            }`;
+        }
+    </script>
 </body>
 </html>
