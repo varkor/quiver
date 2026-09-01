@@ -126,7 +126,7 @@ When you are done with your diagram, you are ready to export it. You have a few 
 
 When you export, the text will helpfully be highlighted for you, ready to copy-and-paste. Note that the text includes a link to the **quiver** diagram. This makes it easy to modify the diagram in the future, without having to create the diagram again from scratch: just open the link, and edit away.
 
-Note that you will need to have the [`quiver.sty` package](https://raw.githubusercontent.com/varkor/quiver/master/package/quiver.sty) for diagrams exported by **quiver** to render correctly in LaTeX (see below for more information).
+Note that you will need to have the latest version of the [`quiver.sty` package](https://raw.githubusercontent.com/varkor/quiver/master/package/quiver.sty), and import the package with `\usepackage{quiver}`, for diagrams exported by **quiver** to render correctly in LaTeX (see below for more information).
 
 ## Importing macros and colours
 
